@@ -1,0 +1,22 @@
+{
+  "name": "@macupdater/pipeline",
+  "version": "0.0.1",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@macupdater/schema": "workspace:*",
+    "@macupdater/db": "workspace:*",
+    "@macupdater/parsers": "workspace:*",
+    "@macupdater/versioning": "workspace:*",
+    "@macupdater/cache": "workspace:*",
+    "drizzle-orm": "^0.38.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

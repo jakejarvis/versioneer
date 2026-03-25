@@ -1,0 +1,41 @@
+export interface MatchCandidate {
+  appId: string;
+  appName: string;
+  method: MatchMethod;
+  confidence: number;
+}
+
+export type MatchMethod =
+  | "exact_bundle_id"
+  | "alias_bundle_id"
+  | "team_id_name"
+  | "alias_name"
+  | "match_rule"
+  | "none";
+
+export interface MatchResult {
+  matched: boolean;
+  appId: string | null;
+  appName: string | null;
+  method: MatchMethod;
+  confidence: number;
+  candidates: MatchCandidate[];
+  ambiguous: boolean;
+}
+
+export interface MatchInput {
+  appName: string;
+  bundleId?: string | null;
+  teamId?: string | null;
+  version?: string | null;
+}
+
+export interface AliasRecord {
+  appId: string;
+  appName: string;
+  aliasType: string;
+  value: string;
+  normalizedValue: string;
+  isExact: boolean;
+  confidenceWeight: number;
+}

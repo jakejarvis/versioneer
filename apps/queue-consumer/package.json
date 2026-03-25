@@ -1,0 +1,25 @@
+{
+  "name": "@macupdater/queue-consumer",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@macupdater/schema": "workspace:*",
+    "@macupdater/db": "workspace:*",
+    "@macupdater/parsers": "workspace:*",
+    "@macupdater/pipeline": "workspace:*",
+    "@macupdater/versioning": "workspace:*",
+    "@macupdater/cache": "workspace:*",
+    "drizzle-orm": "^0.38.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.105.0",
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "typescript": "^5.7.0"
+  }
+}

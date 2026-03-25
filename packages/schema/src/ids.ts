@@ -1,0 +1,31 @@
+import { customAlphabet } from "nanoid";
+
+// Using a custom alphabet without ambiguous characters
+const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
+const generate = customAlphabet(alphabet, 20);
+
+export function generateId(prefix: string): string {
+  return `${prefix}_${generate()}`;
+}
+
+export const idPrefixes = {
+  app: "app",
+  alias: "alias",
+  matchRule: "mr",
+  source: "src",
+  sourceFetch: "fetch",
+  parserRun: "parse",
+  release: "rel",
+  releaseObservation: "obs",
+  artifact: "art",
+  artifactContent: "artc",
+  appLatestRelease: "alr",
+  installRule: "ir",
+  client: "cli",
+  clientInventorySnapshot: "snap",
+  clientInventoryApp: "cia",
+  adminOverride: "ovr",
+  jobFailure: "jf",
+  reviewQueue: "rq",
+  auditLog: "al",
+} as const;
