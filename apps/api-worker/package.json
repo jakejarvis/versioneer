@@ -15,13 +15,13 @@
     "@macupdater/versioning": "workspace:*",
     "@macupdater/cache": "workspace:*",
     "@macupdater/api-contracts": "workspace:*",
-    "drizzle-orm": "^0.38.0",
-    "hono": "^4.7.0",
-    "zod": "^3.24.0"
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.12.9",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "wrangler": "^3.105.0",
-    "@cloudflare/workers-types": "^4.20250109.0",
-    "typescript": "^5.7.0"
+    "wrangler": "^4.77.0",
+    "@cloudflare/workers-types": "^4.20260317.1",
+    "typescript": "^6.0.2"
   }
 }
