@@ -1,0 +1,91 @@
+import {
+  LayoutDashboard,
+  Box,
+  Radio,
+  Package,
+  ClipboardList,
+  AlertTriangle,
+  Shield,
+  ScrollText,
+  type LucideIcon,
+} from "lucide-react";
+
+export interface NavItem {
+  label: string;
+  path: string;
+  icon: LucideIcon;
+}
+
+export const navItems: NavItem[] = [
+  { label: "Dashboard", path: "/", icon: LayoutDashboard },
+  { label: "Apps", path: "/apps", icon: Box },
+  { label: "Sources", path: "/sources", icon: Radio },
+  { label: "Releases", path: "/releases", icon: Package },
+  { label: "Review Queue", path: "/review-queue", icon: ClipboardList },
+  { label: "Job Failures", path: "/job-failures", icon: AlertTriangle },
+  { label: "Overrides", path: "/overrides", icon: Shield },
+  { label: "Audit Log", path: "/audit-log", icon: ScrollText },
+];
+
+export const statusColors: Record<string, string> = {
+  active: "bg-emerald-100 text-emerald-800",
+  deprecated: "bg-amber-100 text-amber-800",
+  merged: "bg-blue-100 text-blue-800",
+  unlisted: "bg-zinc-100 text-zinc-800",
+  paused: "bg-amber-100 text-amber-800",
+  disabled: "bg-zinc-100 text-zinc-800",
+  error: "bg-red-100 text-red-800",
+  success: "bg-emerald-100 text-emerald-800",
+  pending: "bg-amber-100 text-amber-800",
+  in_progress: "bg-blue-100 text-blue-800",
+  resolved: "bg-emerald-100 text-emerald-800",
+  dismissed: "bg-zinc-100 text-zinc-800",
+  open: "bg-red-100 text-red-800",
+  retrying: "bg-amber-100 text-amber-800",
+  abandoned: "bg-zinc-100 text-zinc-800",
+  stable: "bg-emerald-100 text-emerald-800",
+  beta: "bg-blue-100 text-blue-800",
+  nightly: "bg-purple-100 text-purple-800",
+  retracted: "bg-red-100 text-red-800",
+  superseded: "bg-zinc-100 text-zinc-800",
+  draft: "bg-amber-100 text-amber-800",
+  unknown: "bg-zinc-100 text-zinc-800",
+  up_to_date: "bg-emerald-100 text-emerald-800",
+  update_available: "bg-blue-100 text-blue-800",
+  ambiguous: "bg-amber-100 text-amber-800",
+  unsupported: "bg-zinc-100 text-zinc-800",
+  ignored: "bg-zinc-100 text-zinc-800",
+};
+
+export const statusLabels: Record<string, string> = {
+  active: "Active",
+  deprecated: "Deprecated",
+  merged: "Merged",
+  unlisted: "Unlisted",
+  paused: "Paused",
+  disabled: "Disabled",
+  error: "Error",
+  success: "Success",
+  pending: "Pending",
+  in_progress: "In Progress",
+  resolved: "Resolved",
+  dismissed: "Dismissed",
+  open: "Open",
+  retrying: "Retrying",
+  abandoned: "Abandoned",
+  stable: "Stable",
+  beta: "Beta",
+  nightly: "Nightly",
+  retracted: "Retracted",
+  superseded: "Superseded",
+  draft: "Draft",
+  unknown: "Unknown",
+  up_to_date: "Up to Date",
+  update_available: "Update Available",
+  ambiguous: "Ambiguous",
+  unsupported: "Unsupported",
+  ignored: "Ignored",
+  not_modified: "Not Modified",
+  timeout: "Timeout",
+  partial: "Partial",
+};
