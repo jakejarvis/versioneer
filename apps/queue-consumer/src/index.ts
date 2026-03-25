@@ -1,7 +1,12 @@
 import { createDb } from "@versioneer/db";
-import { handleSourceFetch, handleSourceParse, handleRecomputeLatest } from "@versioneer/pipeline";
+import {
+  handleSourceFetch,
+  handleSourceParse,
+  handleRecomputeLatest,
+  handleComputeScorecard,
+} from "@versioneer/pipeline";
 import type { SourceFetchJob, SourceParseJob, RecomputeLatestJob } from "@versioneer/pipeline";
-import { jobFailures, generateId, idPrefixes } from "@versioneer/schema";
+import { apps, jobFailures, generateId, idPrefixes } from "@versioneer/schema";
 
 import type { Env } from "./env";
 // Import parsers to trigger auto-registration
@@ -96,6 +101,24 @@ export default {
 
     const now = new Date();
     const dueSources = await db.select().from(sources).where(eq(sources.status, "active")).all();
+
+    // Recompute scorecards for all active apps
+    const { eq: eqOp } = await import("drizzle-orm");
+    const allApps = await db
+      .select({ id: apps.id })
+      .from(apps)
+      .where(eqOp(apps.status, "active"))
+      .all();
+    for (const app of allApps) {
+      try {
+        await handleComputeScorecard(
+          app.id,
+          env as unknown as Parameters<typeof handleComputeScorecard>[1],
+        );
+      } catch (error) {
+        console.error(`Failed to compute scorecard for ${app.id}:`, error);
+      }
+    }
 
     for (const source of dueSources) {
       // Check if source is due for polling

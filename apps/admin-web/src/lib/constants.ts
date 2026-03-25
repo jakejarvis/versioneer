@@ -8,6 +8,8 @@ import {
   Shield,
   ScrollText,
   PlusCircle,
+  MessageSquare,
+  Play,
   type LucideIcon,
 } from "lucide-react";
 
@@ -26,6 +28,8 @@ export const navItems: NavItem[] = [
   { label: "Job Failures", path: "/job-failures", icon: AlertTriangle },
   { label: "Overrides", path: "/overrides", icon: Shield },
   { label: "Audit Log", path: "/audit-log", icon: ScrollText },
+  { label: "Feedback", path: "/feedback", icon: MessageSquare },
+  { label: "Executions", path: "/executions", icon: Play },
   { label: "Onboarding", path: "/onboarding", icon: PlusCircle },
 ];
 

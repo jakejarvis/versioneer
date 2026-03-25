@@ -31,4 +31,7 @@ export const idPrefixes = {
   appScorecard: "asc",
   sourceHealthMetric: "shm",
   onboardingChecklist: "onb",
+  feedback: "fb",
+  artifactObservation: "arto",
+  updateExecution: "exec",
 } as const;

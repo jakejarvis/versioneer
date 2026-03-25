@@ -3,6 +3,7 @@ import {
   releases,
   artifacts,
   releaseObservations,
+  adminOverrides,
   auditLog,
   generateId,
   idPrefixes,
@@ -103,6 +104,78 @@ releasesRoutes.post("/artifacts/:id/verify", async (c) => {
   const artifactId = c.req.param("id");
   await c.env.ARTIFACT_VERIFY_QUEUE.send({ artifactId });
   return c.json({ status: "queued", artifactId });
+});
+
+// POST /releases/:id/pin
+releasesRoutes.post("/:id/pin", async (c) => {
+  const id = c.req.param("id");
+  const db = createDb(c.env.DB);
+  const release = await db.select().from(releases).where(eq(releases.id, id)).get();
+  if (!release) return c.json({ error: "Release not found" }, 404);
+
+  const now = new Date().toISOString();
+  const targetId = `${release.appId}:${release.channel}`;
+
+  // Deactivate existing pin overrides for this app+channel
+  const existing = await db
+    .select()
+    .from(adminOverrides)
+    .where(
+      and(
+        eq(adminOverrides.targetType, "app_latest"),
+        eq(adminOverrides.targetId, targetId),
+        eq(adminOverrides.isActive, true),
+      ),
+    )
+    .all();
+  for (const ovr of existing) {
+    await db.update(adminOverrides).set({ isActive: false }).where(eq(adminOverrides.id, ovr.id));
+  }
+
+  await db.insert(adminOverrides).values({
+    id: generateId(idPrefixes.adminOverride),
+    overrideType: "pin_latest_release",
+    targetType: "app_latest",
+    targetId,
+    payloadJson: JSON.stringify({ releaseId: id }),
+    reason: "Pinned via admin UI",
+    createdBy: "admin",
+    isActive: true,
+    createdAt: now,
+  });
+
+  await c.env.RECOMPUTE_LATEST_QUEUE.send({ appId: release.appId, channel: release.channel });
+
+  return c.json({ status: "pinned" });
+});
+
+// POST /releases/:id/unpin
+releasesRoutes.post("/:id/unpin", async (c) => {
+  const id = c.req.param("id");
+  const db = createDb(c.env.DB);
+  const release = await db.select().from(releases).where(eq(releases.id, id)).get();
+  if (!release) return c.json({ error: "Release not found" }, 404);
+
+  const targetId = `${release.appId}:${release.channel}`;
+  const overrides = await db
+    .select()
+    .from(adminOverrides)
+    .where(
+      and(
+        eq(adminOverrides.targetType, "app_latest"),
+        eq(adminOverrides.targetId, targetId),
+        eq(adminOverrides.isActive, true),
+      ),
+    )
+    .all();
+
+  for (const ovr of overrides) {
+    await db.update(adminOverrides).set({ isActive: false }).where(eq(adminOverrides.id, ovr.id));
+  }
+
+  await c.env.RECOMPUTE_LATEST_QUEUE.send({ appId: release.appId, channel: release.channel });
+
+  return c.json({ status: "unpinned" });
 });
 
 // GET /releases/:id/observations

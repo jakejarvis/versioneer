@@ -9,10 +9,12 @@ import {
   clients,
   clientInventorySnapshots,
   clientInventoryApps,
+  clientFeedback,
+  reviewQueue,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
-import { inventoryCheckRequestSchema } from "@versioneer/validation";
+import { inventoryCheckRequestSchema, clientFeedbackSubmitSchema } from "@versioneer/validation";
 import type { AppDecision } from "@versioneer/validation";
 import { normalizeVersion } from "@versioneer/versioning";
 import { compareVersionStrings } from "@versioneer/versioning";
@@ -275,4 +277,79 @@ publicRoutes.get("/apps/:appId/releases", async (c) => {
   const appReleases = await db.select().from(releases).where(eq(releases.appId, appId)).all();
 
   return c.json({ releases: appReleases });
+});
+
+// POST /v1/feedback
+publicRoutes.post("/feedback", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const parsed = clientFeedbackSubmitSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Invalid request", details: parsed.error.issues }, 400);
+  }
+
+  const db = createDb(c.env.DB);
+  const now = new Date().toISOString();
+
+  // Look up client
+  const client = await db
+    .select()
+    .from(clients)
+    .where(eq(clients.anonymousInstallId, parsed.data.installId))
+    .get();
+
+  if (!client) {
+    return c.json({ error: "Unknown client. Submit inventory first." }, 400);
+  }
+
+  const feedbackId = generateId(idPrefixes.feedback);
+  const targetAppId = parsed.data.matchedAppId ?? null;
+
+  // Determine priority by type
+  const priorityMap: Record<string, number> = {
+    wrong_match: 2,
+    wrong_version: 1,
+    app_request: 1,
+    general: 0,
+  };
+
+  // Create review queue item
+  const rqId = generateId(idPrefixes.reviewQueue);
+  await db.insert(reviewQueue).values({
+    id: rqId,
+    reviewType: `client_feedback:${parsed.data.feedbackType}`,
+    relatedId: feedbackId,
+    payloadJson: JSON.stringify({
+      feedbackType: parsed.data.feedbackType,
+      appName: parsed.data.appName,
+      bundleId: parsed.data.bundleId,
+      targetAppId,
+    }),
+    priority: priorityMap[parsed.data.feedbackType] ?? 0,
+    status: "pending",
+    createdAt: now,
+  });
+
+  // Insert feedback record
+  await db.insert(clientFeedback).values({
+    id: feedbackId,
+    clientId: client.id,
+    snapshotId: parsed.data.snapshotId ?? null,
+    inventoryAppId: parsed.data.inventoryAppId ?? null,
+    feedbackType: parsed.data.feedbackType,
+    targetAppId,
+    bundleId: parsed.data.bundleId ?? null,
+    appName: parsed.data.appName ?? null,
+    payloadJson: parsed.data.payload ? JSON.stringify(parsed.data.payload) : null,
+    status: "new",
+    reviewQueueItemId: rqId,
+    createdAt: now,
+  });
+
+  return c.json({ id: feedbackId, status: "received" });
 });

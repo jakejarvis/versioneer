@@ -16,6 +16,7 @@ export interface DashboardStats {
   greenApps: number;
   yellowApps: number;
   redApps: number;
+  pendingFeedback: number;
 }
 
 export interface App {
@@ -271,6 +272,23 @@ export interface SourceHealthMetric {
   createdAt: string;
 }
 
+export interface UpdateExecution {
+  id: string;
+  clientId: string;
+  appId: string;
+  releaseId: string;
+  artifactId: string | null;
+  actionType: "view_notes" | "download" | "assisted_replace" | "automation";
+  actionStatus: "initiated" | "in_progress" | "completed" | "failed" | "cancelled";
+  clientVersionBefore: string | null;
+  clientVersionAfter: string | null;
+  installabilityClass: string | null;
+  errorMessage: string | null;
+  durationMs: number | null;
+  initiatedAt: string;
+  completedAt: string | null;
+}
+
 export interface MatchExplanation {
   method: string;
   confidence: number;
@@ -290,4 +308,20 @@ export interface DecisionExplanation {
   candidateCount: number;
   alternatesRejected: { releaseId: string; version: string; reason: string }[];
   sourceConfidence: number | null;
+}
+
+export interface FeedbackItem {
+  id: string;
+  clientId: string;
+  snapshotId: string | null;
+  inventoryAppId: string | null;
+  feedbackType: "wrong_match" | "wrong_version" | "app_request" | "general";
+  targetAppId: string | null;
+  bundleId: string | null;
+  appName: string | null;
+  payloadJson: string | null;
+  status: "new" | "triaged" | "resolved" | "dismissed";
+  reviewQueueItemId: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
 }

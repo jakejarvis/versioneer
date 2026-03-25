@@ -27,3 +27,42 @@ export function useUpdateReviewItem() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["review-queue"] }),
   });
 }
+
+export function useResolveMatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      appId,
+      aliasType,
+      value,
+    }: {
+      id: string;
+      appId: string;
+      aliasType: string;
+      value: string;
+    }) =>
+      apiClient<{ status: string; aliasId: string }>(`/review-queue/${id}/resolve-match`, {
+        method: "POST",
+        body: { appId, aliasType, value },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["review-queue"] });
+      void qc.invalidateQueries({ queryKey: ["apps"] });
+    },
+  });
+}
+
+export function useApprovePublication() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<{ status: string; overrideId: string }>(`/review-queue/${id}/approve-publication`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["review-queue"] });
+      void qc.invalidateQueries({ queryKey: ["apps"] });
+    },
+  });
+}

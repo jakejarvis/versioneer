@@ -18,3 +18,5 @@ export {
 export type { ScorecardData, QualityState } from "./scorecard";
 export { checkVerificationRequirements, autoPromoteVerification } from "./verification";
 export type { VerificationCheckResult, VerificationRequirement } from "./verification";
+export { classifyInstallability } from "./installability";
+export type { InstallabilityClass } from "./installability";

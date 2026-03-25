@@ -4,6 +4,8 @@ import type { Env } from "../../env";
 import { aliasesRoutes } from "./aliases";
 import { appsRoutes } from "./apps";
 import { auditLogRoutes } from "./audit-log";
+import { executionsRoutes } from "./executions";
+import { feedbackRoutes } from "./feedback";
 import { installRulesRoutes } from "./install-rules";
 import { jobFailuresRoutes } from "./job-failures";
 import { onboardingRoutes } from "./onboarding";
@@ -28,6 +30,8 @@ internalRoutes.route("/audit-log", auditLogRoutes);
 internalRoutes.route("/install-rules", installRulesRoutes);
 internalRoutes.route("/scorecards", scorecardsRoutes);
 internalRoutes.route("/onboarding", onboardingRoutes);
+internalRoutes.route("/feedback", feedbackRoutes);
+internalRoutes.route("/executions", executionsRoutes);
 
 // Recompute latest (kept at top level for backwards compat)
 internalRoutes.post("/apps/:id/recompute-latest", async (c) => {

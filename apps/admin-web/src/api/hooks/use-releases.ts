@@ -57,3 +57,26 @@ export function useReleaseObservations(releaseId: string) {
     enabled: !!releaseId,
   });
 }
+
+export function usePinRelease() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (releaseId: string) => apiClient(`/releases/${releaseId}/pin`, { method: "POST" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["releases"] });
+      void qc.invalidateQueries({ queryKey: ["apps"] });
+    },
+  });
+}
+
+export function useUnpinRelease() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (releaseId: string) =>
+      apiClient(`/releases/${releaseId}/unpin`, { method: "POST" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["releases"] });
+      void qc.invalidateQueries({ queryKey: ["apps"] });
+    },
+  });
+}

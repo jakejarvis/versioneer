@@ -1,5 +1,12 @@
 import { createDb } from "@versioneer/db";
-import { apps, sources, reviewQueue, jobFailures, releases } from "@versioneer/schema";
+import {
+  apps,
+  sources,
+  reviewQueue,
+  jobFailures,
+  releases,
+  clientFeedback,
+} from "@versioneer/schema";
 import { sql } from "drizzle-orm";
 import { Hono } from "hono";
 
@@ -49,6 +56,11 @@ statsRoutes.get("/", async (c) => {
     .from(apps)
     .where(sql`${apps.qualityState} = 'red'`);
 
+  const [pendingFeedbackCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(clientFeedback)
+    .where(sql`${clientFeedback.status} = 'new'`);
+
   return c.json({
     totalApps: appCount?.count ?? 0,
     activeSources: activeSourceCount?.count ?? 0,
@@ -60,5 +72,6 @@ statsRoutes.get("/", async (c) => {
     greenApps: greenCount?.count ?? 0,
     yellowApps: yellowCount?.count ?? 0,
     redApps: redCount?.count ?? 0,
+    pendingFeedback: pendingFeedbackCount?.count ?? 0,
   });
 });

@@ -35,3 +35,15 @@ export function useRetryJobFailure() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["job-failures"] }),
   });
 }
+
+export function useRetryAllJobFailures() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (jobType?: string) =>
+      apiClient<{ status: string; count: number }>("/job-failures/retry-all", {
+        method: "POST",
+        body: jobType ? { jobType } : {},
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["job-failures"] }),
+  });
+}

@@ -105,3 +105,51 @@ jobFailuresRoutes.post("/:id/retry", async (c) => {
 
   return c.json({ status: "retrying" });
 });
+
+// POST /job-failures/retry-all - re-enqueue all open failures of a given type
+jobFailuresRoutes.post("/retry-all", async (c) => {
+  const body = await c.req.json();
+  const jobType = (body as Record<string, string>).jobType;
+
+  const db = createDb(c.env.DB);
+  const failures = await db.select().from(jobFailures).where(eq(jobFailures.status, "open")).all();
+
+  const matching = jobType ? failures.filter((f) => f.jobType === jobType) : failures;
+  let retried = 0;
+
+  for (const failure of matching) {
+    switch (failure.jobType) {
+      case "source-fetch":
+        if (failure.relatedId) {
+          await c.env.SOURCE_FETCH_QUEUE.send({
+            sourceId: failure.relatedId,
+            reason: "retry",
+            force: true,
+          });
+          retried++;
+        }
+        break;
+      case "source-parse":
+        if (failure.relatedId) {
+          await c.env.SOURCE_PARSE_QUEUE.send({ sourceFetchId: failure.relatedId });
+          retried++;
+        }
+        break;
+      case "artifact-verify":
+        if (failure.relatedId) {
+          await c.env.ARTIFACT_VERIFY_QUEUE.send({ artifactId: failure.relatedId });
+          retried++;
+        }
+        break;
+      case "recompute-latest":
+        if (failure.relatedId) {
+          await c.env.RECOMPUTE_LATEST_QUEUE.send({ appId: failure.relatedId });
+          retried++;
+        }
+        break;
+    }
+    await db.update(jobFailures).set({ status: "retrying" }).where(eq(jobFailures.id, failure.id));
+  }
+
+  return c.json({ status: "retrying", count: retried });
+});

@@ -16,6 +16,8 @@ import { Route as ReleasesIndexRouteImport } from './routes/releases/index'
 import { Route as OverridesIndexRouteImport } from './routes/overrides/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
 import { Route as JobFailuresIndexRouteImport } from './routes/job-failures/index'
+import { Route as FeedbackIndexRouteImport } from './routes/feedback/index'
+import { Route as ExecutionsIndexRouteImport } from './routes/executions/index'
 import { Route as AuditLogIndexRouteImport } from './routes/audit-log/index'
 import { Route as AppsIndexRouteImport } from './routes/apps/index'
 import { Route as SourcesSourceIdRouteImport } from './routes/sources/$sourceId'
@@ -57,6 +59,16 @@ const JobFailuresIndexRoute = JobFailuresIndexRouteImport.update({
   path: '/job-failures/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
+  id: '/feedback/',
+  path: '/feedback/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExecutionsIndexRoute = ExecutionsIndexRouteImport.update({
+  id: '/executions/',
+  path: '/executions/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuditLogIndexRoute = AuditLogIndexRouteImport.update({
   id: '/audit-log/',
   path: '/audit-log/',
@@ -90,6 +102,8 @@ export interface FileRoutesByFullPath {
   '/sources/$sourceId': typeof SourcesSourceIdRoute
   '/apps/': typeof AppsIndexRoute
   '/audit-log/': typeof AuditLogIndexRoute
+  '/executions/': typeof ExecutionsIndexRoute
+  '/feedback/': typeof FeedbackIndexRoute
   '/job-failures/': typeof JobFailuresIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/overrides/': typeof OverridesIndexRoute
@@ -104,6 +118,8 @@ export interface FileRoutesByTo {
   '/sources/$sourceId': typeof SourcesSourceIdRoute
   '/apps': typeof AppsIndexRoute
   '/audit-log': typeof AuditLogIndexRoute
+  '/executions': typeof ExecutionsIndexRoute
+  '/feedback': typeof FeedbackIndexRoute
   '/job-failures': typeof JobFailuresIndexRoute
   '/onboarding': typeof OnboardingIndexRoute
   '/overrides': typeof OverridesIndexRoute
@@ -119,6 +135,8 @@ export interface FileRoutesById {
   '/sources/$sourceId': typeof SourcesSourceIdRoute
   '/apps/': typeof AppsIndexRoute
   '/audit-log/': typeof AuditLogIndexRoute
+  '/executions/': typeof ExecutionsIndexRoute
+  '/feedback/': typeof FeedbackIndexRoute
   '/job-failures/': typeof JobFailuresIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/overrides/': typeof OverridesIndexRoute
@@ -135,6 +153,8 @@ export interface FileRouteTypes {
     | '/sources/$sourceId'
     | '/apps/'
     | '/audit-log/'
+    | '/executions/'
+    | '/feedback/'
     | '/job-failures/'
     | '/onboarding/'
     | '/overrides/'
@@ -149,6 +169,8 @@ export interface FileRouteTypes {
     | '/sources/$sourceId'
     | '/apps'
     | '/audit-log'
+    | '/executions'
+    | '/feedback'
     | '/job-failures'
     | '/onboarding'
     | '/overrides'
@@ -163,6 +185,8 @@ export interface FileRouteTypes {
     | '/sources/$sourceId'
     | '/apps/'
     | '/audit-log/'
+    | '/executions/'
+    | '/feedback/'
     | '/job-failures/'
     | '/onboarding/'
     | '/overrides/'
@@ -178,6 +202,8 @@ export interface RootRouteChildren {
   SourcesSourceIdRoute: typeof SourcesSourceIdRoute
   AppsIndexRoute: typeof AppsIndexRoute
   AuditLogIndexRoute: typeof AuditLogIndexRoute
+  ExecutionsIndexRoute: typeof ExecutionsIndexRoute
+  FeedbackIndexRoute: typeof FeedbackIndexRoute
   JobFailuresIndexRoute: typeof JobFailuresIndexRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
   OverridesIndexRoute: typeof OverridesIndexRoute
@@ -237,6 +263,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JobFailuresIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/feedback/': {
+      id: '/feedback/'
+      path: '/feedback'
+      fullPath: '/feedback/'
+      preLoaderRoute: typeof FeedbackIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/executions/': {
+      id: '/executions/'
+      path: '/executions'
+      fullPath: '/executions/'
+      preLoaderRoute: typeof ExecutionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/audit-log/': {
       id: '/audit-log/'
       path: '/audit-log'
@@ -282,6 +322,8 @@ const rootRouteChildren: RootRouteChildren = {
   SourcesSourceIdRoute: SourcesSourceIdRoute,
   AppsIndexRoute: AppsIndexRoute,
   AuditLogIndexRoute: AuditLogIndexRoute,
+  ExecutionsIndexRoute: ExecutionsIndexRoute,
+  FeedbackIndexRoute: FeedbackIndexRoute,
   JobFailuresIndexRoute: JobFailuresIndexRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
   OverridesIndexRoute: OverridesIndexRoute,
