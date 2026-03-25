@@ -1,5 +1,5 @@
 {
-  "name": "@macupdater/schema",
+  "name": "@versioneer/schema",
   "version": "0.0.1",
   "private": true,
   "main": "src/index.ts",
@@ -16,7 +16,7 @@
     "nanoid": "^5.1.7"
   },
   "devDependencies": {
-    "@macupdater/typescript-config": "workspace:*",
+    "@versioneer/typescript-config": "workspace:*",
     "typescript": "^6.0.2"
   }
 }

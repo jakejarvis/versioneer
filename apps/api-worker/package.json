@@ -1,5 +1,5 @@
 {
-  "name": "@macupdater/api-worker",
+  "name": "@versioneer/api-worker",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -12,20 +12,20 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@macupdater/api-contracts": "workspace:*",
-    "@macupdater/cache": "workspace:*",
-    "@macupdater/db": "workspace:*",
-    "@macupdater/identity": "workspace:*",
-    "@macupdater/schema": "workspace:*",
-    "@macupdater/validation": "workspace:*",
-    "@macupdater/versioning": "workspace:*",
+    "@versioneer/api-contracts": "workspace:*",
+    "@versioneer/cache": "workspace:*",
+    "@versioneer/db": "workspace:*",
+    "@versioneer/identity": "workspace:*",
+    "@versioneer/schema": "workspace:*",
+    "@versioneer/validation": "workspace:*",
+    "@versioneer/versioning": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.12.9",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260317.1",
-    "@macupdater/typescript-config": "workspace:*",
+    "@versioneer/typescript-config": "workspace:*",
     "typescript": "^6.0.2",
     "wrangler": "^4.77.0"
   }

@@ -1,5 +1,5 @@
-import { createDb } from "@macupdater/db";
-import { apps, sources, reviewQueue, jobFailures, releases } from "@macupdater/schema";
+import { createDb } from "@versioneer/db";
+import { apps, sources, reviewQueue, jobFailures, releases } from "@versioneer/schema";
 import { sql } from "drizzle-orm";
 import { Hono } from "hono";
 

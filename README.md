@@ -1,1 +1,1 @@
-# macupdater
+# Versioneer

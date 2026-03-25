@@ -1,5 +1,5 @@
 {
-  "name": "@macupdater/pipeline",
+  "name": "@versioneer/pipeline",
   "version": "0.0.1",
   "private": true,
   "main": "src/index.ts",
@@ -12,16 +12,16 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@macupdater/cache": "workspace:*",
-    "@macupdater/db": "workspace:*",
-    "@macupdater/parsers": "workspace:*",
-    "@macupdater/schema": "workspace:*",
-    "@macupdater/versioning": "workspace:*",
+    "@versioneer/cache": "workspace:*",
+    "@versioneer/db": "workspace:*",
+    "@versioneer/parsers": "workspace:*",
+    "@versioneer/schema": "workspace:*",
+    "@versioneer/versioning": "workspace:*",
     "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260317.1",
-    "@macupdater/typescript-config": "workspace:*",
+    "@versioneer/typescript-config": "workspace:*",
     "typescript": "^6.0.2"
   }
 }

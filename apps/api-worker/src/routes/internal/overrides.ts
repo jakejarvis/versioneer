@@ -1,6 +1,6 @@
-import { createDb } from "@macupdater/db";
-import { adminOverrides, auditLog, generateId, idPrefixes } from "@macupdater/schema";
-import { paginationSchema, overrideCreateSchema } from "@macupdater/validation";
+import { createDb } from "@versioneer/db";
+import { adminOverrides, auditLog, generateId, idPrefixes } from "@versioneer/schema";
+import { paginationSchema, overrideCreateSchema } from "@versioneer/validation";
 import { eq, sql, desc } from "drizzle-orm";
 import { Hono } from "hono";
 

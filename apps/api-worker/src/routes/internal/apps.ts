@@ -1,4 +1,4 @@
-import { createDb } from "@macupdater/db";
+import { createDb } from "@versioneer/db";
 import {
   apps,
   appAliases,
@@ -9,14 +9,14 @@ import {
   auditLog,
   generateId,
   idPrefixes,
-} from "@macupdater/schema";
+} from "@versioneer/schema";
 import {
   paginationSchema,
   appCreateSchema,
   appUpdateSchema,
   aliasCreateSchema,
   installRuleCreateSchema,
-} from "@macupdater/validation";
+} from "@versioneer/validation";
 import { eq, like, sql, and, desc } from "drizzle-orm";
 import { Hono } from "hono";
 

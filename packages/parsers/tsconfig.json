@@ -1,5 +1,5 @@
 {
-  "extends": "@macupdater/typescript-config/library.json",
+  "extends": "@versioneer/typescript-config/library.json",
   "compilerOptions": {
     "noEmit": true
   },

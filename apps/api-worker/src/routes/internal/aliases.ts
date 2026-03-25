@@ -1,6 +1,6 @@
-import { createDb } from "@macupdater/db";
-import { appAliases, auditLog, generateId, idPrefixes } from "@macupdater/schema";
-import { aliasUpdateSchema } from "@macupdater/validation";
+import { createDb } from "@versioneer/db";
+import { appAliases, auditLog, generateId, idPrefixes } from "@versioneer/schema";
+import { aliasUpdateSchema } from "@versioneer/validation";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 

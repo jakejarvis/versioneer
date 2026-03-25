@@ -1,5 +1,5 @@
 {
-  "name": "@macupdater/cache",
+  "name": "@versioneer/cache",
   "version": "0.0.1",
   "private": true,
   "main": "src/index.ts",
@@ -12,7 +12,7 @@
     "check-types": "tsc --noEmit"
   },
   "devDependencies": {
-    "@macupdater/typescript-config": "workspace:*",
+    "@versioneer/typescript-config": "workspace:*",
     "typescript": "^6.0.2"
   }
 }

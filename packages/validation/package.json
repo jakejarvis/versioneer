@@ -1,5 +1,5 @@
 {
-  "name": "@macupdater/validation",
+  "name": "@versioneer/validation",
   "version": "0.0.1",
   "private": true,
   "main": "src/index.ts",
@@ -15,7 +15,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@macupdater/typescript-config": "workspace:*",
+    "@versioneer/typescript-config": "workspace:*",
     "typescript": "^6.0.2"
   }
 }

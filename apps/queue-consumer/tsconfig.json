@@ -1,8 +1,8 @@
 {
-  "extends": "@macupdater/typescript-config/worker.json",
+  "extends": "@versioneer/typescript-config/worker.json",
   "compilerOptions": {
     "paths": {
-      "@macupdater/*": ["../../packages/*/src"]
+      "@versioneer/*": ["../../packages/*/src"]
     }
   },
   "include": ["src"],

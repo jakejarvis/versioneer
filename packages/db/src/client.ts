@@ -1,4 +1,4 @@
-import * as schema from "@macupdater/schema";
+import * as schema from "@versioneer/schema";
 import { drizzle } from "drizzle-orm/d1";
 
 export type Database = ReturnType<typeof createDb>;

@@ -3,7 +3,7 @@ export type {
   InventoryCheckRequest,
   InventoryCheckResponse,
   AppDecision,
-} from "@macupdater/validation";
+} from "@versioneer/validation";
 
 // Internal API types
 

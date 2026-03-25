@@ -1,6 +1,6 @@
-import { createDb } from "@macupdater/db";
-import { installRules } from "@macupdater/schema";
-import { installRuleUpdateSchema } from "@macupdater/validation";
+import { createDb } from "@versioneer/db";
+import { installRules } from "@versioneer/schema";
+import { installRuleUpdateSchema } from "@versioneer/validation";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 

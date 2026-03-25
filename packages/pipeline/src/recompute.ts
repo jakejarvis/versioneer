@@ -1,6 +1,6 @@
-import { setCachedLatest } from "@macupdater/cache";
-import type { CacheKV } from "@macupdater/cache";
-import { createDb } from "@macupdater/db";
+import { setCachedLatest } from "@versioneer/cache";
+import type { CacheKV } from "@versioneer/cache";
+import { createDb } from "@versioneer/db";
 import {
   releases,
   artifacts,
@@ -8,8 +8,8 @@ import {
   adminOverrides,
   generateId,
   idPrefixes,
-} from "@macupdater/schema";
-import { compareVersionStrings } from "@macupdater/versioning";
+} from "@versioneer/schema";
+import { compareVersionStrings } from "@versioneer/versioning";
 import { eq, and } from "drizzle-orm";
 
 import type { Env, RecomputeLatestJob } from "./types";

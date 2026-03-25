@@ -1,5 +1,5 @@
 {
-  "name": "@macupdater/admin-web",
+  "name": "@versioneer/admin-web",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -27,12 +27,12 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
-    "@macupdater/typescript-config": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
     "@tanstack/react-query-devtools": "^5.95.2",
     "@tanstack/react-router-devtools": "^1.166.11",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@versioneer/typescript-config": "workspace:*",
     "@vitejs/plugin-react": "^6.0.1",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
