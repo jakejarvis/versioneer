@@ -10,7 +10,10 @@
     "fmt:check": "turbo run fmt:check",
     "check-types": "turbo run check-types",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:generate": "pnpm --filter @versioneer/db db:generate",
+    "db:migrate:local": "pnpm --filter @versioneer/db db:migrate:local",
+    "db:migrate:remote": "pnpm --filter @versioneer/db db:migrate:remote"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260317.1",

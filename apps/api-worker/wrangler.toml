@@ -8,7 +8,7 @@ ENVIRONMENT = "dev"
 [[d1_databases]]
 binding = "DB"
 database_name = "versioneer-db-dev"
-database_id = "placeholder-dev-db-id"
+database_id = "0af7b90f-a8b3-4392-8dd9-73b12e3e48ff"
 
 [[r2_buckets]]
 binding = "RAW_BUCKET"
@@ -16,11 +16,11 @@ bucket_name = "versioneer-raw-dev"
 
 [[kv_namespaces]]
 binding = "CACHE_KV"
-id = "placeholder-cache-kv-id"
+id = "59fffb96b80a45d586051951e8043f3f"
 
 [[kv_namespaces]]
 binding = "CONFIG_KV"
-id = "placeholder-config-kv-id"
+id = "6d27b272dbd9466fb1d7bcc2ce83f501"
 
 [[queues.producers]]
 binding = "SOURCE_FETCH_QUEUE"

@@ -11,7 +11,8 @@
     "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
     "check-types": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate:local": "wrangler d1 migrations apply versioneer-db-dev --local",
+    "db:migrate:remote": "wrangler d1 migrations apply versioneer-db-dev --remote"
   },
   "dependencies": {
     "@versioneer/schema": "workspace:*",
@@ -21,6 +22,7 @@
     "@cloudflare/workers-types": "^4.20260317.1",
     "@versioneer/typescript-config": "workspace:*",
     "drizzle-kit": "^0.31.10",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "wrangler": "^4.77.0"
   }
 }
