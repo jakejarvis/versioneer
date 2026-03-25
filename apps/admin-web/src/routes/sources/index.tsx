@@ -1,4 +1,4 @@
-import { createRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -17,11 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { rootRoute } from "../__root";
-
-export const sourcesIndexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/sources",
+export const Route = createFileRoute("/sources/")({
   component: SourcesPage,
 });
 

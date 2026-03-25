@@ -77,12 +77,10 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: apps/queue-consumer
 
-      - name: Build admin web
-        run: pnpm --filter @versioneer/admin-web build
-
-      - name: Deploy admin web to Pages
+      - name: Deploy admin web
         uses: cloudflare/wrangler-action@v3
         with:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: pages deploy apps/admin-web/dist --project-name=versioneer-admin
+          workingDirectory: apps/admin-web
+          command: deploy

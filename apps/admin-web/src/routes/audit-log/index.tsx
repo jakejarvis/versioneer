@@ -1,4 +1,4 @@
-import { createRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useState } from "react";
 
@@ -12,11 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
-import { rootRoute } from "../__root";
-
-export const auditLogIndexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/audit-log",
+export const Route = createFileRoute("/audit-log/")({
   component: AuditLogPage,
 });
 

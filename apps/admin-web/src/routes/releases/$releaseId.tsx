@@ -1,4 +1,4 @@
-import { createRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,16 +22,12 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { rootRoute } from "../__root";
-
-export const releaseDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/releases/$releaseId",
+export const Route = createFileRoute("/releases/$releaseId")({
   component: ReleaseDetailPage,
 });
 
 function ReleaseDetailPage() {
-  const { releaseId } = releaseDetailRoute.useParams();
+  const { releaseId } = Route.useParams();
   const { data: release, isLoading } = useRelease(releaseId);
   const updateRelease = useUpdateRelease(releaseId);
   const { data: artifactsData, isLoading: artifactsLoading } = useReleaseArtifacts(releaseId);

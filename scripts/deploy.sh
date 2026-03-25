@@ -30,10 +30,7 @@ pnpm --filter @versioneer/api-worker run deploy
 echo "==> Deploying queue consumer"
 pnpm --filter @versioneer/queue-consumer run deploy
 
-echo "==> Building admin web"
-pnpm --filter @versioneer/admin-web build
-
-echo "==> Deploying admin web to Pages"
-npx wrangler pages deploy apps/admin-web/dist --project-name=versioneer-admin
+echo "==> Deploying admin web"
+pnpm --filter @versioneer/admin-web run deploy
 
 echo "==> Deploy complete"

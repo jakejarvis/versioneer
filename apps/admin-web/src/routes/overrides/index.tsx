@@ -1,4 +1,4 @@
-import { createRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -23,11 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-import { rootRoute } from "../__root";
-
-export const overridesIndexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/overrides",
+export const Route = createFileRoute("/overrides/")({
   component: OverridesPage,
 });
 

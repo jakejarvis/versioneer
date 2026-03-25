@@ -1,4 +1,4 @@
-import { createRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { MoreHorizontal, RefreshCw, CheckCircle, Ban } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -29,11 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { rootRoute } from "../__root";
-
-export const jobFailuresIndexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/job-failures",
+export const Route = createFileRoute("/job-failures/")({
   component: JobFailuresPage,
 });
 

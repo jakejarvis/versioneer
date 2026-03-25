@@ -1,4 +1,4 @@
-import { createRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { useReleases } from "@/api/hooks/use-releases";
@@ -15,11 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { rootRoute } from "../__root";
-
-export const releasesIndexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/releases",
+export const Route = createFileRoute("/releases/")({
   component: ReleasesPage,
 });
 

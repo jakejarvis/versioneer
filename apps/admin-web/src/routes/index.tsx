@@ -1,4 +1,4 @@
-import { createRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Box, Radio, AlertTriangle, ClipboardList, Package, Activity } from "lucide-react";
 
 import { useAuditLog } from "@/api/hooks/use-audit-log";
@@ -6,11 +6,7 @@ import { useStats } from "@/api/hooks/use-stats";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { rootRoute } from "./__root";
-
-export const indexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/",
+export const Route = createFileRoute("/")({
   component: DashboardPage,
 });
 

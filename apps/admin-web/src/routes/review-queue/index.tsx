@@ -1,4 +1,4 @@
-import { createRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { MoreHorizontal, CheckCircle, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -26,11 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { rootRoute } from "../__root";
-
-export const reviewQueueIndexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/review-queue",
+export const Route = createFileRoute("/review-queue/")({
   component: ReviewQueuePage,
 });
 

@@ -1,4 +1,4 @@
-import { createRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -27,11 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-import { rootRoute } from "../__root";
-
-export const appsIndexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/apps",
+export const Route = createFileRoute("/apps/")({
   component: AppsPage,
 });
 

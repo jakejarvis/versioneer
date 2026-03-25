@@ -12,8 +12,7 @@ pnpm lint                 # Lint all packages with oxlint (turbo)
 pnpm lint:fix             # Lint + autofix (turbo)
 pnpm fmt                  # Format all files with oxfmt (turbo)
 pnpm fmt:check            # Check formatting (turbo)
-pnpm test                 # Run all tests (vitest, from root)
-pnpm test:watch           # Watch mode tests
+pnpm test                 # Run all tests (vitest per-package, via turbo)
 
 pnpm db:generate          # Generate Drizzle migrations from schema
 pnpm db:migrate:local     # Apply migrations to local D1

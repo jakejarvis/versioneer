@@ -9,7 +9,8 @@
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt --config ../../.oxfmtrc.json",
     "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@versioneer/schema": "workspace:*",
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@versioneer/typescript-config": "workspace:*",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.1"
   }
 }

@@ -1,4 +1,4 @@
-import { createRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, ExternalLink, Plus, RefreshCw, Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -41,16 +41,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { rootRoute } from "../__root";
-
-export const appDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/apps/$appId",
+export const Route = createFileRoute("/apps/$appId")({
   component: AppDetailPage,
 });
 
 function AppDetailPage() {
-  const { appId } = appDetailRoute.useParams();
+  const { appId } = Route.useParams();
   const { data: app, isLoading } = useApp(appId);
   const [tab, setTab] = useState("overview");
 

@@ -1,4 +1,4 @@
-import { createRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Zap, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -26,16 +26,12 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { rootRoute } from "../__root";
-
-export const sourceDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/sources/$sourceId",
+export const Route = createFileRoute("/sources/$sourceId")({
   component: SourceDetailPage,
 });
 
 function SourceDetailPage() {
-  const { sourceId } = sourceDetailRoute.useParams();
+  const { sourceId } = Route.useParams();
   const { data: source, isLoading } = useSource(sourceId);
   const triggerFetch = useTriggerSourceFetch();
   const updateSource = useUpdateSource(sourceId);

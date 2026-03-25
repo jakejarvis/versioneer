@@ -16,6 +16,8 @@
     "fmt:check": {},
     "check-types": {
       "dependsOn": ["^check-types"]
-    }
+    },
+    "test": {}
+
   }
 }
