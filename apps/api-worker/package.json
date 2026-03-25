@@ -19,14 +19,14 @@
     "@versioneer/schema": "workspace:*",
     "@versioneer/validation": "workspace:*",
     "@versioneer/versioning": "workspace:*",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "catalog:",
     "hono": "^4.12.9",
-    "zod": "^4.3.6"
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260317.1",
+    "@cloudflare/workers-types": "catalog:",
     "@versioneer/typescript-config": "workspace:*",
-    "typescript": "^6.0.2",
-    "wrangler": "^4.77.0"
+    "typescript": "catalog:",
+    "wrangler": "catalog:"
   }
 }

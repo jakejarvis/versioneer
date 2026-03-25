@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@versioneer/typescript-config": "workspace:*",
-    "typescript": "^6.0.2",
-    "vitest": "^4.1.1"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

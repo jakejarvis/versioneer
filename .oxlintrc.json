@@ -31,5 +31,12 @@
       }
     }
   ],
-  "ignorePatterns": ["dist", "node_modules", ".turbo", ".wrangler", "**/routeTree.gen.ts", "packages/db/migrations"]
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    ".turbo",
+    ".wrangler",
+    "**/routeTree.gen.ts",
+    "packages/db/migrations"
+  ]
 }

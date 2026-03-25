@@ -4,12 +4,33 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@cloudflare/workers-types':
+      specifier: ^4.20260317.1
+      version: 4.20260317.1
+    drizzle-orm:
+      specifier: ^0.45.1
+      version: 0.45.1
+    typescript:
+      specifier: ^6.0.2
+      version: 6.0.2
+    vitest:
+      specifier: ^4.1.1
+      version: 4.1.1
+    wrangler:
+      specifier: ^4.77.0
+      version: 4.77.0
+    zod:
+      specifier: ^4.3.6
+      version: 4.3.6
+
 importers:
 
   .:
     devDependencies:
       '@cloudflare/workers-types':
-        specifier: ^4.20260317.1
+        specifier: 'catalog:'
         version: 4.20260317.1
       '@types/node':
         specifier: ^25.5.0
@@ -24,10 +45,10 @@ importers:
         specifier: ^2.8.20
         version: 2.8.20
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
       vitest:
-        specifier: ^4.1.1
+        specifier: 'catalog:'
         version: 4.1.1(@types/node@25.5.0)(vite@8.0.2(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0))
 
   apps/admin-web:
@@ -97,13 +118,13 @@ importers:
         specifier: ^4.2.2
         version: 4.2.2
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
       vite:
         specifier: ^8.0.2
         version: 8.0.2(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)
       wrangler:
-        specifier: ^4.77.0
+        specifier: 'catalog:'
         version: 4.77.0(@cloudflare/workers-types@4.20260317.1)
 
   apps/api-worker:
@@ -130,26 +151,26 @@ importers:
         specifier: workspace:*
         version: link:../../packages/versioning
       drizzle-orm:
-        specifier: ^0.45.1
+        specifier: 'catalog:'
         version: 0.45.1(@cloudflare/workers-types@4.20260317.1)(gel@2.2.0)
       hono:
         specifier: ^4.12.9
         version: 4.12.9
       zod:
-        specifier: ^4.3.6
+        specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
       '@cloudflare/workers-types':
-        specifier: ^4.20260317.1
+        specifier: 'catalog:'
         version: 4.20260317.1
       '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
       wrangler:
-        specifier: ^4.77.0
+        specifier: 'catalog:'
         version: 4.77.0(@cloudflare/workers-types@4.20260317.1)
 
   apps/queue-consumer:
@@ -173,23 +194,23 @@ importers:
         specifier: workspace:*
         version: link:../../packages/versioning
       drizzle-orm:
-        specifier: ^0.45.1
+        specifier: 'catalog:'
         version: 0.45.1(@cloudflare/workers-types@4.20260317.1)(gel@2.2.0)
       zod:
-        specifier: ^4.3.6
+        specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
       '@cloudflare/workers-types':
-        specifier: ^4.20260317.1
+        specifier: 'catalog:'
         version: 4.20260317.1
       '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
       wrangler:
-        specifier: ^4.77.0
+        specifier: 'catalog:'
         version: 4.77.0(@cloudflare/workers-types@4.20260317.1)
 
   packages/api-contracts:
@@ -198,14 +219,14 @@ importers:
         specifier: workspace:*
         version: link:../validation
       zod:
-        specifier: ^4.3.6
+        specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
       '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
 
   packages/cache:
@@ -214,7 +235,7 @@ importers:
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
 
   packages/db:
@@ -223,11 +244,11 @@ importers:
         specifier: workspace:*
         version: link:../schema
       drizzle-orm:
-        specifier: ^0.45.1
+        specifier: 'catalog:'
         version: 0.45.1(@cloudflare/workers-types@4.20260317.1)(gel@2.2.0)
     devDependencies:
       '@cloudflare/workers-types':
-        specifier: ^4.20260317.1
+        specifier: 'catalog:'
         version: 4.20260317.1
       '@versioneer/typescript-config':
         specifier: workspace:*
@@ -236,10 +257,10 @@ importers:
         specifier: ^0.31.10
         version: 0.31.10
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
       wrangler:
-        specifier: ^4.77.0
+        specifier: 'catalog:'
         version: 4.77.0(@cloudflare/workers-types@4.20260317.1)
 
   packages/identity:
@@ -258,10 +279,10 @@ importers:
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
       vitest:
-        specifier: ^4.1.1
+        specifier: 'catalog:'
         version: 4.1.1(@types/node@25.5.0)(vite@8.0.2(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0))
 
   packages/parsers:
@@ -273,17 +294,17 @@ importers:
         specifier: workspace:*
         version: link:../versioning
       zod:
-        specifier: ^4.3.6
+        specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
       '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
       vitest:
-        specifier: ^4.1.1
+        specifier: 'catalog:'
         version: 4.1.1(@types/node@25.5.0)(vite@8.0.2(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0))
 
   packages/pipeline:
@@ -307,26 +328,26 @@ importers:
         specifier: workspace:*
         version: link:../versioning
       drizzle-orm:
-        specifier: ^0.45.1
+        specifier: 'catalog:'
         version: 0.45.1(@cloudflare/workers-types@4.20260317.1)(gel@2.2.0)
     devDependencies:
       '@cloudflare/workers-types':
-        specifier: ^4.20260317.1
+        specifier: 'catalog:'
         version: 4.20260317.1
       '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
       vitest:
-        specifier: ^4.1.1
+        specifier: 'catalog:'
         version: 4.1.1(@types/node@25.5.0)(vite@8.0.2(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0))
 
   packages/schema:
     dependencies:
       drizzle-orm:
-        specifier: ^0.45.1
+        specifier: 'catalog:'
         version: 0.45.1(@cloudflare/workers-types@4.20260317.1)(gel@2.2.0)
       nanoid:
         specifier: ^5.1.7
@@ -336,7 +357,7 @@ importers:
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
 
   packages/typescript-config: {}
@@ -344,14 +365,14 @@ importers:
   packages/validation:
     dependencies:
       zod:
-        specifier: ^4.3.6
+        specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
       '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
 
   packages/versioning:
@@ -360,10 +381,10 @@ importers:
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
-        specifier: ^6.0.2
+        specifier: 'catalog:'
         version: 6.0.2
       vitest:
-        specifier: ^4.1.1
+        specifier: 'catalog:'
         version: 4.1.1(@types/node@25.5.0)(vite@8.0.2(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0))
 
 packages:

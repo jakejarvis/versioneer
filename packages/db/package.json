@@ -16,13 +16,13 @@
   },
   "dependencies": {
     "@versioneer/schema": "workspace:*",
-    "drizzle-orm": "^0.45.1"
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260317.1",
+    "@cloudflare/workers-types": "catalog:",
     "@versioneer/typescript-config": "workspace:*",
     "drizzle-kit": "^0.31.10",
-    "typescript": "^6.0.2",
-    "wrangler": "^4.77.0"
+    "typescript": "catalog:",
+    "wrangler": "catalog:"
   }
 }

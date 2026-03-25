@@ -33,27 +33,27 @@ Cloudflare-native monorepo. pnpm workspaces + Turborepo.
 
 ### Apps
 
-| App | Stack | Deploys to |
-|-----|-------|------------|
-| `apps/api-worker` | Hono on CF Workers | Cloudflare Workers |
+| App                   | Stack                     | Deploys to         |
+| --------------------- | ------------------------- | ------------------ |
+| `apps/api-worker`     | Hono on CF Workers        | Cloudflare Workers |
 | `apps/queue-consumer` | CF Workers queue consumer | Cloudflare Workers |
-| `apps/admin-web` | React + Vite SPA | Cloudflare Pages |
+| `apps/admin-web`      | React + Vite SPA          | Cloudflare Pages   |
 
 ### Packages
 
 All packages are consumed via source (`main: "src/index.ts"`) — no build step. Apps bundle them via Wrangler/Vite.
 
-| Package | Purpose |
-|---------|---------|
-| `schema` | Drizzle ORM table definitions (D1/SQLite) |
-| `db` | Drizzle client, migrations, D1 binding config |
-| `validation` | Zod schemas (inventory, admin, common) |
-| `api-contracts` | Shared API request/response types |
-| `identity` | App matching logic (bundle ID, team ID, aliases) |
-| `versioning` | Version parsing, normalization, comparison |
-| `parsers` | Source parsers (Sparkle, GitHub releases) |
-| `pipeline` | Queue job handlers (fetch, parse, recompute) |
-| `cache` | KV read/write helpers |
+| Package             | Purpose                                                   |
+| ------------------- | --------------------------------------------------------- |
+| `schema`            | Drizzle ORM table definitions (D1/SQLite)                 |
+| `db`                | Drizzle client, migrations, D1 binding config             |
+| `validation`        | Zod schemas (inventory, admin, common)                    |
+| `api-contracts`     | Shared API request/response types                         |
+| `identity`          | App matching logic (bundle ID, team ID, aliases)          |
+| `versioning`        | Version parsing, normalization, comparison                |
+| `parsers`           | Source parsers (Sparkle, GitHub releases)                 |
+| `pipeline`          | Queue job handlers (fetch, parse, recompute)              |
+| `cache`             | KV read/write helpers                                     |
 | `typescript-config` | Shared tsconfig bases (base, library, worker, react-vite) |
 
 ### Cloudflare Bindings
@@ -85,6 +85,7 @@ All entities use prefixed nanoid text IDs: `app_xxx`, `src_xxx`, `rel_xxx`, etc.
 ### TypeScript Config
 
 Shared configs in `packages/typescript-config/`. Each package extends one:
+
 - **library.json**: declaration + sourceMap (packages)
 - **worker.json**: CF Workers types + noEmit (api-worker, queue-consumer)
 - **react-vite.json**: DOM + JSX + noEmit (admin-web)

@@ -13,10 +13,10 @@
   },
   "dependencies": {
     "@versioneer/validation": "workspace:*",
-    "zod": "^4.3.6"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@versioneer/typescript-config": "workspace:*",
-    "typescript": "^6.0.2"
+    "typescript": "catalog:"
   }
 }

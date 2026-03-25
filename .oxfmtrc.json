@@ -21,5 +21,13 @@
       }
     }
   ],
-  "ignorePatterns": ["dist", "node_modules", ".turbo", ".wrangler", "pnpm-lock.yaml", "**/routeTree.gen.ts", "packages/db/migrations"]
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    ".turbo",
+    ".wrangler",
+    "pnpm-lock.yaml",
+    "**/routeTree.gen.ts",
+    "packages/db/migrations"
+  ]
 }
