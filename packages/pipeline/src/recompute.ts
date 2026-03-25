@@ -1,4 +1,5 @@
-import { eq, and, desc } from "drizzle-orm";
+import { setCachedLatest } from "@macupdater/cache";
+import type { CacheKV } from "@macupdater/cache";
 import { createDb } from "@macupdater/db";
 import {
   releases,
@@ -8,9 +9,9 @@ import {
   generateId,
   idPrefixes,
 } from "@macupdater/schema";
-import { setCachedLatest } from "@macupdater/cache";
-import type { CacheKV } from "@macupdater/cache";
 import { compareVersionStrings } from "@macupdater/versioning";
+import { eq, and } from "drizzle-orm";
+
 import type { Env, RecomputeLatestJob } from "./types";
 
 const CHANNELS = ["stable", "beta", "nightly"] as const;
@@ -40,18 +41,11 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
       const existing = await db
         .select()
         .from(appLatestReleases)
-        .where(
-          and(
-            eq(appLatestReleases.appId, job.appId),
-            eq(appLatestReleases.channel, channel),
-          ),
-        )
+        .where(and(eq(appLatestReleases.appId, job.appId), eq(appLatestReleases.channel, channel)))
         .get();
 
       if (existing) {
-        await db
-          .delete(appLatestReleases)
-          .where(eq(appLatestReleases.id, existing.id));
+        await db.delete(appLatestReleases).where(eq(appLatestReleases.id, existing.id));
       }
       continue;
     }
@@ -92,24 +86,14 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
     const primaryArtifact = await db
       .select()
       .from(artifacts)
-      .where(
-        and(
-          eq(artifacts.releaseId, winningRelease.id),
-          eq(artifacts.isPrimary, true),
-        ),
-      )
+      .where(and(eq(artifacts.releaseId, winningRelease.id), eq(artifacts.isPrimary, true)))
       .get();
 
     // Upsert app_latest_releases
     const existing = await db
       .select()
       .from(appLatestReleases)
-      .where(
-        and(
-          eq(appLatestReleases.appId, job.appId),
-          eq(appLatestReleases.channel, channel),
-        ),
-      )
+      .where(and(eq(appLatestReleases.appId, job.appId), eq(appLatestReleases.channel, channel)))
       .get();
 
     if (existing) {

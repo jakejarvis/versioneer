@@ -1,11 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { apiClient } from "../client";
-import type {
-  Release,
-  Artifact,
-  ReleaseObservation,
-  PaginatedResponse,
-} from "../types";
+import type { Release, Artifact, ReleaseObservation, PaginatedResponse } from "../types";
 
 interface UseReleasesParams {
   appId?: string;
@@ -48,8 +44,7 @@ export function useUpdateRelease(id: string) {
 export function useReleaseArtifacts(releaseId: string) {
   return useQuery({
     queryKey: ["releases", releaseId, "artifacts"],
-    queryFn: () =>
-      apiClient<{ items: Artifact[] }>(`/releases/${releaseId}/artifacts`),
+    queryFn: () => apiClient<{ items: Artifact[] }>(`/releases/${releaseId}/artifacts`),
     enabled: !!releaseId,
   });
 }
@@ -58,9 +53,7 @@ export function useReleaseObservations(releaseId: string) {
   return useQuery({
     queryKey: ["releases", releaseId, "observations"],
     queryFn: () =>
-      apiClient<{ items: ReleaseObservation[] }>(
-        `/releases/${releaseId}/observations`,
-      ),
+      apiClient<{ items: ReleaseObservation[] }>(`/releases/${releaseId}/observations`),
     enabled: !!releaseId,
   });
 }

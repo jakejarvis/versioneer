@@ -1,6 +1,8 @@
-import { useState } from "react";
 import { createRoute, Link } from "@tanstack/react-router";
-import { rootRoute } from "../__root";
+import { ArrowLeft, Zap, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+
 import {
   useSource,
   useSourceFetches,
@@ -11,10 +13,9 @@ import {
 } from "@/api/hooks/use-sources";
 import type { SourceFetch, ParserRun } from "@/api/types";
 import { DataTable, type Column } from "@/components/shared/data-table";
+import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
-import { IdDisplay } from "@/components/shared/id-display";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -23,8 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Zap, RefreshCw } from "lucide-react";
-import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+
+import { rootRoute } from "../__root";
 
 export const sourceDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -38,10 +40,10 @@ function SourceDetailPage() {
   const triggerFetch = useTriggerSourceFetch();
   const updateSource = useUpdateSource(sourceId);
   const [fetchOffset, setFetchOffset] = useState(0);
-  const { data: fetches, isLoading: fetchesLoading } = useSourceFetches(
-    sourceId,
-    { limit: 20, offset: fetchOffset },
-  );
+  const { data: fetches, isLoading: fetchesLoading } = useSourceFetches(sourceId, {
+    limit: 20,
+    offset: fetchOffset,
+  });
   const [expandedFetch, setExpandedFetch] = useState<string | null>(null);
 
   if (isLoading) {
@@ -125,9 +127,7 @@ function SourceDetailPage() {
         <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm sm:grid-cols-4">
           <div>
             <dt className="text-muted-foreground">Base URL</dt>
-            <dd className="mt-0.5 font-mono text-xs break-all">
-              {source.baseUrl ?? "--"}
-            </dd>
+            <dd className="mt-0.5 font-mono text-xs break-all">{source.baseUrl ?? "--"}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Poll Interval</dt>
@@ -155,9 +155,7 @@ function SourceDetailPage() {
             fetches={fetches?.items ?? []}
             isLoading={fetchesLoading}
             expandedFetch={expandedFetch}
-            onToggleFetch={(id) =>
-              setExpandedFetch(expandedFetch === id ? null : id)
-            }
+            onToggleFetch={(id) => setExpandedFetch(expandedFetch === id ? null : id)}
             pagination={
               fetches
                 ? {
@@ -204,18 +202,14 @@ function FetchHistoryTable({
     {
       key: "httpStatus",
       header: "HTTP",
-      cell: (row) => (
-        <span className="font-mono text-sm">{row.httpStatus ?? "--"}</span>
-      ),
+      cell: (row) => <span className="font-mono text-sm">{row.httpStatus ?? "--"}</span>,
     },
     {
       key: "contentHash",
       header: "Content Hash",
       cell: (row) =>
         row.contentHash ? (
-          <span className="font-mono text-xs">
-            {row.contentHash.slice(0, 12)}...
-          </span>
+          <span className="font-mono text-xs">{row.contentHash.slice(0, 12)}...</span>
         ) : (
           "--"
         ),
@@ -302,9 +296,7 @@ function ParserRunsPanel({ fetchId }: { fetchId: string }) {
       header: "Error",
       cell: (row) =>
         row.errorMessage ? (
-          <span className="text-red-600 text-xs truncate max-w-48 block">
-            {row.errorMessage}
-          </span>
+          <span className="text-red-600 text-xs truncate max-w-48 block">{row.errorMessage}</span>
         ) : (
           "--"
         ),
@@ -318,9 +310,7 @@ function ParserRunsPanel({ fetchId }: { fetchId: string }) {
 
   return (
     <div className="ml-4 rounded-lg border bg-muted/30 p-4">
-      <h4 className="mb-2 text-sm font-medium">
-        Parser Runs for fetch {fetchId.slice(0, 15)}...
-      </h4>
+      <h4 className="mb-2 text-sm font-medium">Parser Runs for fetch {fetchId.slice(0, 15)}...</h4>
       <DataTable
         columns={columns}
         data={data?.items ?? []}

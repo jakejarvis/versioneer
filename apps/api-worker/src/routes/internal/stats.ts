@@ -1,8 +1,9 @@
-import { Hono } from "hono";
-import { sql } from "drizzle-orm";
-import type { Env } from "../../env";
 import { createDb } from "@macupdater/db";
 import { apps, sources, reviewQueue, jobFailures, releases } from "@macupdater/schema";
+import { sql } from "drizzle-orm";
+import { Hono } from "hono";
+
+import type { Env } from "../../env";
 
 export const statsRoutes = new Hono<{ Bindings: Env }>();
 

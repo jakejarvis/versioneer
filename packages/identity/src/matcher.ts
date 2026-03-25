@@ -1,5 +1,5 @@
-import type { MatchInput, MatchResult, MatchCandidate, AliasRecord } from "./types";
 import { normalizeBundleId, normalizeName } from "./normalize";
+import type { MatchInput, MatchResult, MatchCandidate, AliasRecord } from "./types";
 
 const CONFIDENCE_EXACT_BUNDLE = 100;
 const CONFIDENCE_ALIAS_BUNDLE = 95;
@@ -58,9 +58,7 @@ export function matchApp(input: MatchInput, aliases: AliasRecord[]): MatchResult
     const teamAppIds = new Set(teamMatches.map((a) => a.appId));
 
     for (const appId of teamAppIds) {
-      const nameAliases = aliases.filter(
-        (a) => a.appId === appId && a.aliasType === "name",
-      );
+      const nameAliases = aliases.filter((a) => a.appId === appId && a.aliasType === "name");
       for (const nameAlias of nameAliases) {
         if (nameAlias.normalizedValue === normalizedInputName) {
           candidates.push({
@@ -122,8 +120,7 @@ function buildResult(candidates: MatchCandidate[]): MatchResult {
 
   // Check ambiguity: if second-best is close to best
   const ambiguous =
-    deduped.length > 1 &&
-    (best.confidence - deduped[1]!.confidence) < AMBIGUITY_THRESHOLD;
+    deduped.length > 1 && best.confidence - deduped[1]!.confidence < AMBIGUITY_THRESHOLD;
 
   return {
     matched: true,

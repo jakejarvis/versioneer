@@ -99,9 +99,7 @@ function buildNormalized(
   preReleaseNumber: number | null,
 ): string {
   // Pad each segment to 10 digits for lexicographic comparison
-  let norm = [major, minor, patch, ...extra]
-    .map((n) => String(n).padStart(10, "0"))
-    .join(".");
+  let norm = [major, minor, patch, ...extra].map((n) => String(n).padStart(10, "0")).join(".");
 
   if (preReleaseTag) {
     const tagOrder = PRE_RELEASE_TAGS[preReleaseTag] ?? 1;

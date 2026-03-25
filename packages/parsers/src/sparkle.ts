@@ -1,5 +1,6 @@
+import { inferChannel } from "@macupdater/versioning";
+
 import type { SourceParser, ParserOutput, ParsedRelease, ParsedArtifact } from "./types";
-import { inferChannel, isPreRelease } from "@macupdater/versioning";
 
 /**
  * Minimal XML-like parser for Sparkle appcast feeds.
@@ -43,15 +44,16 @@ export const sparkleParser: SourceParser = {
 };
 
 function parseSparkleItem(xml: string): ParsedRelease | null {
-  const version = extractTag(xml, "sparkle:shortVersionString") ??
+  const version =
+    extractTag(xml, "sparkle:shortVersionString") ??
     extractTag(xml, "sparkle:version") ??
     extractAttr(xml, "enclosure", "sparkle:shortVersionString") ??
     extractAttr(xml, "enclosure", "sparkle:version");
 
   if (!version) return null;
 
-  const buildNumber = extractTag(xml, "sparkle:version") ??
-    extractAttr(xml, "enclosure", "sparkle:version");
+  const buildNumber =
+    extractTag(xml, "sparkle:version") ?? extractAttr(xml, "enclosure", "sparkle:version");
 
   const publishedAt = extractTag(xml, "pubDate");
   const releaseNotesUrl = extractTag(xml, "sparkle:releaseNotesLink");
@@ -72,11 +74,13 @@ function parseSparkleItem(xml: string): ParsedRelease | null {
       const length = extractAttrValue(encAttrs, "length");
       if (length) artifact.sizeBytes = parseInt(length, 10);
 
-      const signature = extractAttrValue(encAttrs, "sparkle:edSignature") ??
+      const signature =
+        extractAttrValue(encAttrs, "sparkle:edSignature") ??
         extractAttrValue(encAttrs, "sparkle:dsaSignature");
       if (signature) artifact.signature = signature;
 
-      const osVersion = extractAttrValue(encAttrs, "sparkle:minimumSystemVersion") ??
+      const osVersion =
+        extractAttrValue(encAttrs, "sparkle:minimumSystemVersion") ??
         extractTag(xml, "sparkle:minimumSystemVersion");
       if (osVersion) artifact.minOsVersion = osVersion;
 
@@ -88,9 +92,9 @@ function parseSparkleItem(xml: string): ParsedRelease | null {
 
   return {
     versionRaw: version,
-    buildNumber: buildNumber !== version ? buildNumber : undefined,
+    buildNumber: buildNumber !== version ? (buildNumber ?? undefined) : undefined,
     channel: inferChannel(version),
-    isPrerelease: isPreRelease(version),
+    isPrerelease: /alpha|beta|rc|dev|canary|nightly/i.test(version),
     publishedAt: publishedAt ?? undefined,
     releaseNotesUrl: releaseNotesUrl ?? undefined,
     downloadUrl: downloadUrl ?? undefined,

@@ -5,14 +5,18 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt --config ../../.oxfmtrc.json",
+    "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.1",
     "nanoid": "^5.1.7"
   },
   "devDependencies": {
+    "@macupdater/typescript-config": "workspace:*",
     "typescript": "^6.0.2"
   }
 }

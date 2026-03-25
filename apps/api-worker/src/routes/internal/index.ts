@@ -1,15 +1,16 @@
 import { Hono } from "hono";
+
 import type { Env } from "../../env";
-import { statsRoutes } from "./stats";
-import { appsRoutes } from "./apps";
 import { aliasesRoutes } from "./aliases";
-import { sourcesRoutes } from "./sources";
-import { releasesRoutes } from "./releases";
-import { reviewQueueRoutes } from "./review-queue";
-import { jobFailuresRoutes } from "./job-failures";
-import { overridesRoutes } from "./overrides";
+import { appsRoutes } from "./apps";
 import { auditLogRoutes } from "./audit-log";
 import { installRulesRoutes } from "./install-rules";
+import { jobFailuresRoutes } from "./job-failures";
+import { overridesRoutes } from "./overrides";
+import { releasesRoutes } from "./releases";
+import { reviewQueueRoutes } from "./review-queue";
+import { sourcesRoutes } from "./sources";
+import { statsRoutes } from "./stats";
 
 export const internalRoutes = new Hono<{ Bindings: Env }>();
 

@@ -1,9 +1,6 @@
 import { formatDistanceToNow, format } from "date-fns";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface TimeAgoProps {
   date: string | null | undefined;

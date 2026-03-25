@@ -1,5 +1,5 @@
-import type { ParsedVersion, ComparisonResult } from "./types";
 import { parseVersion } from "./parse";
+import type { ParsedVersion, ComparisonResult } from "./types";
 
 /**
  * Compare two parsed versions.

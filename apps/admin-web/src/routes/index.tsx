@@ -1,17 +1,12 @@
 import { createRoute, Link } from "@tanstack/react-router";
-import { rootRoute } from "./__root";
-import { useStats } from "@/api/hooks/use-stats";
+import { Box, Radio, AlertTriangle, ClipboardList, Package, Activity } from "lucide-react";
+
 import { useAuditLog } from "@/api/hooks/use-audit-log";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useStats } from "@/api/hooks/use-stats";
 import { TimeAgo } from "@/components/shared/time-ago";
-import {
-  Box,
-  Radio,
-  AlertTriangle,
-  ClipboardList,
-  Package,
-  Activity,
-} from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+
+import { rootRoute } from "./__root";
 
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -26,9 +21,7 @@ function DashboardPage() {
   return (
     <div>
       <h2 className="text-2xl font-semibold tracking-tight">Dashboard</h2>
-      <p className="mt-1 text-muted-foreground">
-        Overview of the Versioneer system.
-      </p>
+      <p className="mt-1 text-muted-foreground">Overview of the Versioneer system.</p>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
@@ -79,9 +72,7 @@ function DashboardPage() {
         </h3>
         <div className="mt-3 rounded-lg border">
           {recentActivity?.items.length === 0 && (
-            <p className="p-6 text-center text-sm text-muted-foreground">
-              No recent activity.
-            </p>
+            <p className="p-6 text-center text-sm text-muted-foreground">No recent activity.</p>
           )}
           {recentActivity?.items.map((entry) => (
             <div
@@ -99,10 +90,7 @@ function DashboardPage() {
                   </span>
                 )}
               </div>
-              <TimeAgo
-                date={entry.createdAt}
-                className="text-sm text-muted-foreground"
-              />
+              <TimeAgo date={entry.createdAt} className="text-sm text-muted-foreground" />
             </div>
           ))}
         </div>
@@ -136,10 +124,7 @@ function StatCard({
           : "";
 
   return (
-    <Link
-      to={href}
-      className="rounded-lg border bg-card p-5 transition-colors hover:bg-accent/50"
-    >
+    <Link to={href} className="rounded-lg border bg-card p-5 transition-colors hover:bg-accent/50">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-muted-foreground">{title}</p>
         <Icon className="h-4 w-4 text-muted-foreground" />
@@ -147,9 +132,7 @@ function StatCard({
       {isLoading ? (
         <Skeleton className="mt-2 h-8 w-16" />
       ) : (
-        <p className={`mt-2 text-3xl font-bold ${accentClass}`}>
-          {value ?? 0}
-        </p>
+        <p className={`mt-2 text-3xl font-bold ${accentClass}`}>{value ?? 0}</p>
       )}
     </Link>
   );

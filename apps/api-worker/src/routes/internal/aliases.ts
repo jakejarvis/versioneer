@@ -1,9 +1,10 @@
-import { Hono } from "hono";
-import { eq } from "drizzle-orm";
-import type { Env } from "../../env";
 import { createDb } from "@macupdater/db";
 import { appAliases, auditLog, generateId, idPrefixes } from "@macupdater/schema";
 import { aliasUpdateSchema } from "@macupdater/validation";
+import { eq } from "drizzle-orm";
+import { Hono } from "hono";
+
+import type { Env } from "../../env";
 
 export const aliasesRoutes = new Hono<{ Bindings: Env }>();
 
@@ -21,7 +22,8 @@ aliasesRoutes.patch("/:id", async (c) => {
   const updates: Record<string, unknown> = {};
   if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
   if (parsed.data.priority !== undefined) updates.priority = parsed.data.priority;
-  if (parsed.data.confidenceWeight !== undefined) updates.confidenceWeight = parsed.data.confidenceWeight;
+  if (parsed.data.confidenceWeight !== undefined)
+    updates.confidenceWeight = parsed.data.confidenceWeight;
 
   await db.update(appAliases).set(updates).where(eq(appAliases.id, id));
 
@@ -46,7 +48,11 @@ aliasesRoutes.delete("/:id", async (c) => {
     actorId: null,
     targetType: "alias",
     targetId: id,
-    payloadJson: JSON.stringify({ appId: existing.appId, aliasType: existing.aliasType, value: existing.value }),
+    payloadJson: JSON.stringify({
+      appId: existing.appId,
+      aliasType: existing.aliasType,
+      value: existing.value,
+    }),
     createdAt: now,
   });
 

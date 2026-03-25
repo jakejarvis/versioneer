@@ -1,11 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { apiClient } from "../client";
-import type {
-  Source,
-  SourceFetch,
-  ParserRun,
-  PaginatedResponse,
-} from "../types";
+import type { Source, SourceFetch, ParserRun, PaginatedResponse } from "../types";
 
 interface UseSourcesParams {
   status?: string;
@@ -68,10 +64,9 @@ export function useSourceFetches(
   return useQuery({
     queryKey: ["sources", sourceId, "fetches", params],
     queryFn: () =>
-      apiClient<PaginatedResponse<SourceFetch>>(
-        `/sources/${sourceId}/fetches`,
-        { params: { ...params } },
-      ),
+      apiClient<PaginatedResponse<SourceFetch>>(`/sources/${sourceId}/fetches`, {
+        params: { ...params },
+      }),
     enabled: !!sourceId,
   });
 }
@@ -87,10 +82,7 @@ export function useSourceFetch(id: string) {
 export function useParserRuns(fetchId: string) {
   return useQuery({
     queryKey: ["source-fetches", fetchId, "parser-runs"],
-    queryFn: () =>
-      apiClient<{ items: ParserRun[] }>(
-        `/sources/fetches/${fetchId}/parser-runs`,
-      ),
+    queryFn: () => apiClient<{ items: ParserRun[] }>(`/sources/fetches/${fetchId}/parser-runs`),
     enabled: !!fetchId,
   });
 }
@@ -98,13 +90,7 @@ export function useParserRuns(fetchId: string) {
 export function useTriggerSourceFetch() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      sourceId,
-      force,
-    }: {
-      sourceId: string;
-      force?: boolean;
-    }) =>
+    mutationFn: ({ sourceId, force }: { sourceId: string; force?: boolean }) =>
       apiClient(`/sources/${sourceId}/fetch`, {
         method: "POST",
         body: { reason: "manual", force: force ?? false },

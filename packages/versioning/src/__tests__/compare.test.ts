@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { compareVersionStrings, isNewer, sortVersions, latestVersion } from "../compare";
 
 describe("compareVersionStrings", () => {

@@ -1,12 +1,9 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "@macupdater/typescript-config/library.json",
   "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "paths": {
-      "@macupdater/*": ["../../packages/*/src"]
-    }
+    "noEmit": true,
+    "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src"],
   "exclude": ["node_modules", "dist"]
 }

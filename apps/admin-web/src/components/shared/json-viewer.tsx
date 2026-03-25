@@ -17,10 +17,7 @@ export function JsonViewer({ data, className }: JsonViewerProps) {
 
   return (
     <pre
-      className={cn(
-        "max-h-64 overflow-auto rounded-md bg-muted p-3 font-mono text-xs",
-        className,
-      )}
+      className={cn("max-h-64 overflow-auto rounded-md bg-muted p-3 font-mono text-xs", className)}
     >
       {formatted}
     </pre>

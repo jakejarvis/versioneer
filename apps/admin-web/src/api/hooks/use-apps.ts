@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { apiClient } from "../client";
 import type {
   App,
@@ -28,9 +29,7 @@ export function useApp(id: string) {
   return useQuery({
     queryKey: ["apps", id],
     queryFn: () =>
-      apiClient<App & { latestReleases: AppLatestRelease[]; sourceCount: number }>(
-        `/apps/${id}`,
-      ),
+      apiClient<App & { latestReleases: AppLatestRelease[]; sourceCount: number }>(`/apps/${id}`),
     enabled: !!id,
   });
 }
@@ -85,8 +84,7 @@ export function useCreateAlias(appId: string) {
         method: "POST",
         body: input,
       }),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["apps", appId, "aliases"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["apps", appId, "aliases"] }),
   });
 }
 
@@ -109,8 +107,7 @@ export function useUpdateAlias() {
 export function useDeleteAlias() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      apiClient(`/aliases/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => apiClient(`/aliases/${id}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["apps"] }),
   });
 }
@@ -144,8 +141,7 @@ export function useAppReleases(appId: string, params: UseAppReleasesParams = {})
 export function useAppLatest(appId: string) {
   return useQuery({
     queryKey: ["apps", appId, "latest"],
-    queryFn: () =>
-      apiClient<{ items: AppLatestRelease[] }>(`/apps/${appId}/latest`),
+    queryFn: () => apiClient<{ items: AppLatestRelease[] }>(`/apps/${appId}/latest`),
     enabled: !!appId,
   });
 }
@@ -153,8 +149,7 @@ export function useAppLatest(appId: string) {
 export function useAppInstallRules(appId: string) {
   return useQuery({
     queryKey: ["apps", appId, "install-rules"],
-    queryFn: () =>
-      apiClient<{ items: InstallRule[] }>(`/apps/${appId}/install-rules`),
+    queryFn: () => apiClient<{ items: InstallRule[] }>(`/apps/${appId}/install-rules`),
     enabled: !!appId,
   });
 }
@@ -167,8 +162,7 @@ export function useCreateInstallRule(appId: string) {
         method: "POST",
         body: input,
       }),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["apps", appId, "install-rules"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["apps", appId, "install-rules"] }),
   });
 }
 

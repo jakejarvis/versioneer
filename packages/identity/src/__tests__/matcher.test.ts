@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { matchApp } from "../matcher";
 import type { AliasRecord } from "../types";
 
@@ -52,10 +53,7 @@ const aliases: AliasRecord[] = [
 
 describe("matchApp", () => {
   it("matches by exact bundle ID", () => {
-    const result = matchApp(
-      { appName: "Firefox", bundleId: "org.mozilla.firefox" },
-      aliases,
-    );
+    const result = matchApp({ appName: "Firefox", bundleId: "org.mozilla.firefox" }, aliases);
     expect(result.matched).toBe(true);
     expect(result.appId).toBe("app_firefox");
     expect(result.method).toBe("exact_bundle_id");
@@ -63,10 +61,7 @@ describe("matchApp", () => {
   });
 
   it("matches case-insensitively by bundle ID", () => {
-    const result = matchApp(
-      { appName: "VS Code", bundleId: "com.microsoft.VSCode" },
-      aliases,
-    );
+    const result = matchApp({ appName: "VS Code", bundleId: "com.microsoft.VSCode" }, aliases);
     expect(result.matched).toBe(true);
     expect(result.appId).toBe("app_vscode");
   });
@@ -79,19 +74,13 @@ describe("matchApp", () => {
   });
 
   it("returns no match for unknown app", () => {
-    const result = matchApp(
-      { appName: "Unknown App", bundleId: "com.unknown.app" },
-      aliases,
-    );
+    const result = matchApp({ appName: "Unknown App", bundleId: "com.unknown.app" }, aliases);
     expect(result.matched).toBe(false);
     expect(result.appId).toBeNull();
   });
 
   it("matches by team ID + name", () => {
-    const result = matchApp(
-      { appName: "Firefox", teamId: "43AQ936H96" },
-      aliases,
-    );
+    const result = matchApp({ appName: "Firefox", teamId: "43AQ936H96" }, aliases);
     expect(result.matched).toBe(true);
     expect(result.appId).toBe("app_firefox");
     expect(result.method).toBe("team_id_name");

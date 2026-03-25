@@ -12,10 +12,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
   const label = statusLabels[status] ?? status;
 
   return (
-    <Badge
-      variant="secondary"
-      className={cn("font-medium", colorClass, className)}
-    >
+    <Badge variant="secondary" className={cn("font-medium", colorClass, className)}>
       {label}
     </Badge>
   );

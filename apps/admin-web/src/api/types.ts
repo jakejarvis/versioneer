@@ -30,7 +30,14 @@ export interface App {
 export interface AppAlias {
   id: string;
   appId: string;
-  aliasType: "bundle_id" | "name" | "team_id" | "sparkle_feed" | "homepage" | "download_pattern" | "github_repo";
+  aliasType:
+    | "bundle_id"
+    | "name"
+    | "team_id"
+    | "sparkle_feed"
+    | "homepage"
+    | "download_pattern"
+    | "github_repo";
   value: string;
   normalizedValue: string;
   isExact: boolean;

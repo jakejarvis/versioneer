@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+
 import type { Env } from "./env";
-import { publicRoutes } from "./routes/public";
 import { internalRoutes } from "./routes/internal";
+import { publicRoutes } from "./routes/public";
 
 const app = new Hono<{ Bindings: Env }>();
 

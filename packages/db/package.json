@@ -5,18 +5,22 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "generate": "drizzle-kit generate",
-    "migrate": "drizzle-kit migrate"
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt --config ../../.oxfmtrc.json",
+    "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
+    "check-types": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.1",
-    "@macupdater/schema": "workspace:*"
+    "@macupdater/schema": "workspace:*",
+    "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260317.1",
+    "@macupdater/typescript-config": "workspace:*",
     "drizzle-kit": "^0.31.10",
-    "typescript": "^6.0.2",
-    "@cloudflare/workers-types": "^4.20260317.1"
+    "typescript": "^6.0.2"
   }
 }

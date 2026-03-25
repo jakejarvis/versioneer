@@ -1,9 +1,10 @@
-import { Hono } from "hono";
-import { eq, sql, desc } from "drizzle-orm";
-import type { Env } from "../../env";
 import { createDb } from "@macupdater/db";
 import { jobFailures } from "@macupdater/schema";
 import { paginationSchema } from "@macupdater/validation";
+import { eq, sql, desc } from "drizzle-orm";
+import { Hono } from "hono";
+
+import type { Env } from "../../env";
 
 export const jobFailuresRoutes = new Hono<{ Bindings: Env }>();
 
@@ -76,7 +77,11 @@ jobFailuresRoutes.post("/:id/retry", async (c) => {
   switch (failure.jobType) {
     case "source-fetch":
       if (failure.relatedId) {
-        await c.env.SOURCE_FETCH_QUEUE.send({ sourceId: failure.relatedId, reason: "retry", force: true });
+        await c.env.SOURCE_FETCH_QUEUE.send({
+          sourceId: failure.relatedId,
+          reason: "retry",
+          force: true,
+        });
       }
       break;
     case "source-parse":

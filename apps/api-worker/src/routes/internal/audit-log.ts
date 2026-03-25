@@ -1,9 +1,10 @@
-import { Hono } from "hono";
-import { eq, and, sql, desc } from "drizzle-orm";
-import type { Env } from "../../env";
 import { createDb } from "@macupdater/db";
 import { auditLog } from "@macupdater/schema";
 import { paginationSchema } from "@macupdater/validation";
+import { eq, and, sql, desc } from "drizzle-orm";
+import { Hono } from "hono";
+
+import type { Env } from "../../env";
 
 export const auditLogRoutes = new Hono<{ Bindings: Env }>();
 
@@ -23,7 +24,10 @@ auditLogRoutes.get("/", async (c) => {
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(auditLog).where(where);
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(auditLog)
+    .where(where);
   const items = await db
     .select()
     .from(auditLog)

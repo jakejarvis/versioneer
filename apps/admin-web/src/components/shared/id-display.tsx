@@ -1,10 +1,7 @@
-import { useState } from "react";
 import { Check, Copy } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { useState } from "react";
+
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 interface IdDisplayProps {
@@ -32,11 +29,7 @@ export function IdDisplay({ id, className }: IdDisplayProps) {
           )}
         >
           {id.length > 20 ? `${id.slice(0, 20)}...` : id}
-          {copied ? (
-            <Check className="h-3 w-3 text-emerald-600" />
-          ) : (
-            <Copy className="h-3 w-3" />
-          )}
+          {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
         </button>
       </TooltipTrigger>
       <TooltipContent>{copied ? "Copied!" : "Click to copy"}</TooltipContent>

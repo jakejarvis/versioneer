@@ -1,6 +1,8 @@
-import { useState } from "react";
 import { createRoute, Link } from "@tanstack/react-router";
-import { rootRoute } from "../__root";
+import { ArrowLeft, ExternalLink, Plus, RefreshCw, Zap } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+
 import {
   useApp,
   useAppAliases,
@@ -15,22 +17,10 @@ import {
 } from "@/api/hooks/use-apps";
 import type { AppAlias, Source, Release, AppLatestRelease, InstallRule } from "@/api/types";
 import { DataTable, type Column } from "@/components/shared/data-table";
+import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
-import { IdDisplay } from "@/components/shared/id-display";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -38,8 +28,20 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ArrowLeft, ExternalLink, Plus, RefreshCw, Zap } from "lucide-react";
-import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+import { rootRoute } from "../__root";
 
 export const appDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -79,9 +81,7 @@ function AppDetailPage() {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {app.canonicalName}
-            </h2>
+            <h2 className="text-2xl font-semibold tracking-tight">{app.canonicalName}</h2>
             <StatusBadge status={app.status} />
           </div>
           <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
@@ -143,9 +143,7 @@ function OverviewTab({
       <div className="rounded-lg border p-4">
         <h3 className="font-medium">Latest Releases</h3>
         {app.latestReleases.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">
-            No published releases yet.
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">No published releases yet.</p>
         ) : (
           <div className="mt-3 space-y-2">
             {app.latestReleases.map((lr) => (
@@ -155,12 +153,8 @@ function OverviewTab({
               >
                 <div className="flex items-center gap-3">
                   <StatusBadge status={lr.channel} />
-                  <span className="font-mono text-sm font-medium">
-                    {lr.versionRaw}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    via {lr.decisionSource}
-                  </span>
+                  <span className="font-mono text-sm font-medium">{lr.versionRaw}</span>
+                  <span className="text-xs text-muted-foreground">via {lr.decisionSource}</span>
                 </div>
                 <TimeAgo date={lr.releasedAt} className="text-sm text-muted-foreground" />
               </div>
@@ -217,12 +211,14 @@ function AliasesTab({ appId }: { appId: string }) {
       key: "aliasType",
       header: "Type",
       cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-          {row.aliasType}
-        </span>
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.aliasType}</span>
       ),
     },
-    { key: "value", header: "Value", cell: (row) => <span className="font-mono text-sm">{row.value}</span> },
+    {
+      key: "value",
+      header: "Value",
+      cell: (row) => <span className="font-mono text-sm">{row.value}</span>,
+    },
     { key: "priority", header: "Priority", cell: (row) => row.priority },
     { key: "confidence", header: "Weight", cell: (row) => row.confidenceWeight },
     {
@@ -368,9 +364,7 @@ function SourcesTab({ appId }: { appId: string }) {
       key: "sourceType",
       header: "Type",
       cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-          {row.sourceType}
-        </span>
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.sourceType}</span>
       ),
     },
     {
@@ -473,9 +467,7 @@ function InstallRulesTab({ appId }: { appId: string }) {
       key: "strategy",
       header: "Strategy",
       cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-          {row.strategy}
-        </span>
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.strategy}</span>
       ),
     },
     { key: "requiresQuit", header: "Quit", cell: (row) => (row.requiresQuit ? "Yes" : "No") },

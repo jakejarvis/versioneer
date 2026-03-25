@@ -1,4 +1,5 @@
 import { Inbox } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
 interface EmptyStateProps {
@@ -6,10 +7,7 @@ interface EmptyStateProps {
   className?: string;
 }
 
-export function EmptyState({
-  message = "No data found.",
-  className,
-}: EmptyStateProps) {
+export function EmptyState({ message = "No data found.", className }: EmptyStateProps) {
   return (
     <div
       className={cn(

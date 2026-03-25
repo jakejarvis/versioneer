@@ -1,13 +1,17 @@
 {
   "name": "@macupdater/admin-web",
-  "private": true,
   "version": "0.0.1",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt --config ../../.oxfmtrc.json",
+    "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.95.2",
@@ -23,6 +27,7 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@macupdater/typescript-config": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
     "@tanstack/react-query-devtools": "^5.95.2",
     "@tanstack/react-router-devtools": "^1.166.11",

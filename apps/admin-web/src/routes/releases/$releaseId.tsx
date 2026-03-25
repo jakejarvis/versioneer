@@ -1,5 +1,7 @@
 import { createRoute, Link } from "@tanstack/react-router";
-import { rootRoute } from "../__root";
+import { ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
+
 import {
   useRelease,
   useUpdateRelease,
@@ -8,10 +10,9 @@ import {
 } from "@/api/hooks/use-releases";
 import type { Artifact, ReleaseObservation } from "@/api/types";
 import { DataTable, type Column } from "@/components/shared/data-table";
+import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
-import { IdDisplay } from "@/components/shared/id-display";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -19,8 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft } from "lucide-react";
-import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+
+import { rootRoute } from "../__root";
 
 export const releaseDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -32,10 +34,8 @@ function ReleaseDetailPage() {
   const { releaseId } = releaseDetailRoute.useParams();
   const { data: release, isLoading } = useRelease(releaseId);
   const updateRelease = useUpdateRelease(releaseId);
-  const { data: artifactsData, isLoading: artifactsLoading } =
-    useReleaseArtifacts(releaseId);
-  const { data: obsData, isLoading: obsLoading } =
-    useReleaseObservations(releaseId);
+  const { data: artifactsData, isLoading: artifactsLoading } = useReleaseArtifacts(releaseId);
+  const { data: obsData, isLoading: obsLoading } = useReleaseObservations(releaseId);
 
   if (isLoading) {
     return (
@@ -55,9 +55,7 @@ function ReleaseDetailPage() {
       key: "artifactType",
       header: "Type",
       cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-          {row.artifactType}
-        </span>
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.artifactType}</span>
       ),
     },
     {
@@ -77,16 +75,13 @@ function ReleaseDetailPage() {
     {
       key: "sizeBytes",
       header: "Size",
-      cell: (row) =>
-        row.sizeBytes ? `${(row.sizeBytes / 1024 / 1024).toFixed(1)} MB` : "--",
+      cell: (row) => (row.sizeBytes ? `${(row.sizeBytes / 1024 / 1024).toFixed(1)} MB` : "--"),
     },
     { key: "architecture", header: "Arch", cell: (row) => row.architecture ?? "--" },
     {
       key: "signatureStatus",
       header: "Signature",
-      cell: (row) => (
-        <StatusBadge status={row.signatureStatus ?? "unknown"} />
-      ),
+      cell: (row) => <StatusBadge status={row.signatureStatus ?? "unknown"} />,
     },
     {
       key: "isPrimary",
@@ -104,17 +99,12 @@ function ReleaseDetailPage() {
     {
       key: "observedVersionRaw",
       header: "Version",
-      cell: (row) => (
-        <span className="font-mono text-sm">
-          {row.observedVersionRaw ?? "--"}
-        </span>
-      ),
+      cell: (row) => <span className="font-mono text-sm">{row.observedVersionRaw ?? "--"}</span>,
     },
     {
       key: "confidence",
       header: "Confidence",
-      cell: (row) =>
-        row.confidence != null ? `${row.confidence}%` : "--",
+      cell: (row) => (row.confidence != null ? `${row.confidence}%` : "--"),
     },
     {
       key: "observedDownloadUrl",
@@ -165,9 +155,7 @@ function ReleaseDetailPage() {
             <span>
               App: <IdDisplay id={release.appId} />
             </span>
-            {release.buildNumber && (
-              <span>Build: {release.buildNumber}</span>
-            )}
+            {release.buildNumber && <span>Build: {release.buildNumber}</span>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -211,9 +199,7 @@ function ReleaseDetailPage() {
           <div>
             <dt className="text-muted-foreground">Confidence</dt>
             <dd className="mt-0.5">
-              {release.sourceConfidence != null
-                ? `${release.sourceConfidence}%`
-                : "--"}
+              {release.sourceConfidence != null ? `${release.sourceConfidence}%` : "--"}
             </dd>
           </div>
           <div>

@@ -1,19 +1,25 @@
 {
   "name": "macupdater",
   "private": true,
-  "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "build": "pnpm -r build",
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "fmt": "turbo run fmt",
+    "fmt:check": "turbo run fmt:check",
+    "check-types": "turbo run check-types",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint",
-    "db:generate": "pnpm --filter @macupdater/db generate",
-    "db:migrate": "pnpm --filter @macupdater/db migrate"
+    "test:watch": "vitest"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260317.1",
+    "@types/node": "^25.5.0",
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
+    "turbo": "^2.8.20",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.1",
-    "@cloudflare/workers-types": "^4.20260317.1"
-  }
+    "vitest": "^4.1.1"
+  },
+  "packageManager": "pnpm@10.33.0"
 }

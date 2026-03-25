@@ -1,25 +1,30 @@
 {
   "name": "@macupdater/queue-consumer",
-  "private": true,
   "version": "0.0.1",
+  "private": true,
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt --config ../../.oxfmtrc.json",
+    "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@macupdater/schema": "workspace:*",
+    "@macupdater/cache": "workspace:*",
     "@macupdater/db": "workspace:*",
     "@macupdater/parsers": "workspace:*",
     "@macupdater/pipeline": "workspace:*",
+    "@macupdater/schema": "workspace:*",
     "@macupdater/versioning": "workspace:*",
-    "@macupdater/cache": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "wrangler": "^4.77.0",
     "@cloudflare/workers-types": "^4.20260317.1",
-    "typescript": "^6.0.2"
+    "@macupdater/typescript-config": "workspace:*",
+    "typescript": "^6.0.2",
+    "wrangler": "^4.77.0"
   }
 }

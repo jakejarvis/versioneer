@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+
 import { navItems } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -9,17 +10,13 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-border bg-sidebar">
       <div className="flex h-14 items-center border-b border-border px-4">
-        <h1 className="text-lg font-semibold tracking-tight text-sidebar-foreground">
-          Versioneer
-        </h1>
+        <h1 className="text-lg font-semibold tracking-tight text-sidebar-foreground">Versioneer</h1>
       </div>
       <nav className="flex-1 overflow-y-auto p-3">
         <ul className="space-y-1">
           {navItems.map((item) => {
             const isActive =
-              item.path === "/"
-                ? currentPath === "/"
-                : currentPath.startsWith(item.path);
+              item.path === "/" ? currentPath === "/" : currentPath.startsWith(item.path);
             return (
               <li key={item.path}>
                 <Link

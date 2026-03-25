@@ -1,6 +1,8 @@
-import { useState } from "react";
 import { createRoute, useNavigate } from "@tanstack/react-router";
-import { rootRoute } from "../__root";
+import { Zap } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+
 import { useSources, useTriggerSourceFetch } from "@/api/hooks/use-sources";
 import type { Source } from "@/api/types";
 import { DataTable, type Column } from "@/components/shared/data-table";
@@ -14,8 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Zap } from "lucide-react";
-import { toast } from "sonner";
+
+import { rootRoute } from "../__root";
 
 export const sourcesIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -41,25 +43,19 @@ function SourcesPage() {
     {
       key: "label",
       header: "Label",
-      cell: (row) => (
-        <span className="font-medium">{row.label ?? row.sourceType}</span>
-      ),
+      cell: (row) => <span className="font-medium">{row.label ?? row.sourceType}</span>,
     },
     {
       key: "sourceType",
       header: "Type",
       cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-          {row.sourceType}
-        </span>
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.sourceType}</span>
       ),
     },
     {
       key: "parserKey",
       header: "Parser",
-      cell: (row) => (
-        <span className="font-mono text-xs">{row.parserKey}</span>
-      ),
+      cell: (row) => <span className="font-mono text-xs">{row.parserKey}</span>,
     },
     {
       key: "status",

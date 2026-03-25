@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { sparkleParser } from "../sparkle";
 
 const SAMPLE_APPCAST = `<?xml version="1.0" encoding="utf-8"?>

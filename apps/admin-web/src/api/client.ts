@@ -16,10 +16,7 @@ interface RequestOptions {
   params?: { [key: string]: string | number | boolean | undefined };
 }
 
-export async function apiClient<T>(
-  path: string,
-  options: RequestOptions = {},
-): Promise<T> {
+export async function apiClient<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const url = new URL(`${API_BASE}/internal${path}`, window.location.origin);
 
   if (options.params) {
@@ -43,10 +40,7 @@ export async function apiClient<T>(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Unknown error" }));
-    throw new ApiError(
-      response.status,
-      (error as { error?: string }).error ?? "Request failed",
-    );
+    throw new ApiError(response.status, (error as { error?: string }).error ?? "Request failed");
   }
 
   return response.json() as Promise<T>;
