@@ -1,0 +1,83 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "versioneer-api",
+  "main": "src/index.ts",
+
+  "compatibility_date": "2026-02-24",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "routes": [
+    {
+      "pattern": "api.versioneer.app",
+      "zone_name": "versioneer.app",
+      "custom_domain": true
+    }
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+
+  "vars": {
+    "ENVIRONMENT": "dev",
+    "CF_ACCESS_TEAM_DOMAIN": "",
+    "CF_ACCESS_AUD": "",
+    "ADMIN_ORIGIN": "http://localhost:5173"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "versioneer-db-dev",
+      "database_id": "0af7b90f-a8b3-4392-8dd9-73b12e3e48ff"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "RAW_BUCKET",
+      "bucket_name": "versioneer-raw-dev"
+    }
+  ],
+
+  "kv_namespaces": [
+    {
+      "binding": "CACHE_KV",
+      "id": "59fffb96b80a45d586051951e8043f3f"
+    },
+    {
+      "binding": "CONFIG_KV",
+      "id": "6d27b272dbd9466fb1d7bcc2ce83f501"
+    }
+  ],
+
+  "queues": {
+    "producers": [
+      {
+        "binding": "SOURCE_FETCH_QUEUE",
+        "queue": "versioneer-source-fetch-dev"
+      },
+      {
+        "binding": "SOURCE_PARSE_QUEUE",
+        "queue": "versioneer-source-parse-dev"
+      },
+      {
+        "binding": "ARTIFACT_VERIFY_QUEUE",
+        "queue": "versioneer-artifact-verify-dev"
+      },
+      {
+        "binding": "RECOMPUTE_LATEST_QUEUE",
+        "queue": "versioneer-recompute-latest-dev"
+      }
+    ]
+  },
+
+  "env": {
+    "production": {
+      "vars": {
+        "ENVIRONMENT": "production",
+        "CF_ACCESS_TEAM_DOMAIN": "jarvis.cloudflareaccess.com",
+        "CF_ACCESS_AUD": "f6885050299ad0f289bee3b07bc38226c1082b4086dd90dcdde57426a8dabad7",
+        "ADMIN_ORIGIN": "https://dash.versioneer.app"
+      }
+    }
+  }
+}

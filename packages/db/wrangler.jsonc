@@ -1,0 +1,14 @@
+{
+  // Minimal wrangler config for D1 migrations only.
+  // This is NOT a deployable worker — it just provides the D1 binding
+  // so that `wrangler d1 migrations apply` works from this package.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "versioneer-db-dev",
+      "database_id": "0af7b90f-a8b3-4392-8dd9-73b12e3e48ff",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

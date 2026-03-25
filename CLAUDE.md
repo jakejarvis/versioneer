@@ -104,7 +104,7 @@ React 19 + Vite 8 + TanStack Router (manual route tree, not codegen) + TanStack 
 
 ### Database Migrations
 
-Owned by `packages/db`. Drizzle Kit generates from `packages/schema/src/*.ts`. Migrations live in `packages/db/migrations/`. The `packages/db/wrangler.toml` has a minimal D1 binding just for running `wrangler d1 migrations apply`.
+Owned by `packages/db`. Drizzle Kit generates from `packages/schema/src/*.ts`. Migrations live in `packages/db/migrations/`. The `packages/db/wrangler.jsonc` has a minimal D1 binding just for running `wrangler d1 migrations apply`.
 
 ## Quality Gates
 

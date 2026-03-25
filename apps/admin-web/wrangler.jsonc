@@ -1,7 +1,31 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "versioneer-admin",
-  "compatibility_date": "2025-04-01",
+  "main": "@tanstack/react-start/server-entry",
+
+  "compatibility_date": "2026-02-24",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "@tanstack/react-start/server-entry"
+
+  "routes": [
+    {
+      "pattern": "dash.versioneer.app",
+      "zone_name": "versioneer.app",
+      "custom_domain": true
+    }
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+
+  "vars": {
+    "ENVIRONMENT": "dev"
+  },
+
+  "env": {
+    "production": {
+      "vars": {
+        "ENVIRONMENT": "production",
+        "VITE_API_BASE_URL": "https://api.versioneer.app"
+      }
+    }
+  }
 }

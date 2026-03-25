@@ -1,0 +1,92 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "versioneer-queue-consumer",
+  "main": "src/index.ts",
+
+  "compatibility_date": "2026-02-24",
+
+  "vars": {
+    "ENVIRONMENT": "dev"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "versioneer-db-dev",
+      "database_id": "0af7b90f-a8b3-4392-8dd9-73b12e3e48ff"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "RAW_BUCKET",
+      "bucket_name": "versioneer-raw-dev"
+    }
+  ],
+
+  "kv_namespaces": [
+    {
+      "binding": "CACHE_KV",
+      "id": "59fffb96b80a45d586051951e8043f3f"
+    },
+    {
+      "binding": "CONFIG_KV",
+      "id": "6d27b272dbd9466fb1d7bcc2ce83f501"
+    }
+  ],
+
+  "queues": {
+    "producers": [
+      {
+        "binding": "SOURCE_FETCH_QUEUE",
+        "queue": "versioneer-source-fetch-dev"
+      },
+      {
+        "binding": "SOURCE_PARSE_QUEUE",
+        "queue": "versioneer-source-parse-dev"
+      },
+      {
+        "binding": "ARTIFACT_VERIFY_QUEUE",
+        "queue": "versioneer-artifact-verify-dev"
+      },
+      {
+        "binding": "RECOMPUTE_LATEST_QUEUE",
+        "queue": "versioneer-recompute-latest-dev"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "versioneer-source-fetch-dev",
+        "max_batch_size": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "versioneer-dlq-dev"
+      },
+      {
+        "queue": "versioneer-source-parse-dev",
+        "max_batch_size": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "versioneer-dlq-dev"
+      },
+      {
+        "queue": "versioneer-artifact-verify-dev",
+        "max_batch_size": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "versioneer-dlq-dev"
+      },
+      {
+        "queue": "versioneer-recompute-latest-dev",
+        "max_batch_size": 10,
+        "max_retries": 3,
+        "dead_letter_queue": "versioneer-dlq-dev"
+      }
+    ]
+  },
+
+  "env": {
+    "production": {
+      "vars": {
+        "ENVIRONMENT": "production"
+      }
+    }
+  }
+}
