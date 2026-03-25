@@ -229,6 +229,9 @@ importers:
       typescript:
         specifier: ^6.0.2
         version: 6.0.2
+      wrangler:
+        specifier: ^4.77.0
+        version: 4.77.0(@cloudflare/workers-types@4.20260317.1)
 
   packages/identity:
     dependencies:
