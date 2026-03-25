@@ -1,0 +1,71 @@
+name = "macupdater-queue-consumer"
+main = "src/index.ts"
+compatibility_date = "2025-01-13"
+
+[vars]
+ENVIRONMENT = "dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "macupdater-db-dev"
+database_id = "placeholder-dev-db-id"
+
+[[r2_buckets]]
+binding = "RAW_BUCKET"
+bucket_name = "macupdater-raw-dev"
+
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "placeholder-cache-kv-id"
+
+[[kv_namespaces]]
+binding = "CONFIG_KV"
+id = "placeholder-config-kv-id"
+
+[[queues.producers]]
+binding = "SOURCE_FETCH_QUEUE"
+queue = "macupdater-source-fetch-dev"
+
+[[queues.producers]]
+binding = "SOURCE_PARSE_QUEUE"
+queue = "macupdater-source-parse-dev"
+
+[[queues.producers]]
+binding = "ARTIFACT_VERIFY_QUEUE"
+queue = "macupdater-artifact-verify-dev"
+
+[[queues.producers]]
+binding = "RECOMPUTE_LATEST_QUEUE"
+queue = "macupdater-recompute-latest-dev"
+
+[[queues.consumers]]
+queue = "macupdater-source-fetch-dev"
+max_batch_size = 5
+max_retries = 3
+dead_letter_queue = "macupdater-dlq-dev"
+
+[[queues.consumers]]
+queue = "macupdater-source-parse-dev"
+max_batch_size = 5
+max_retries = 3
+dead_letter_queue = "macupdater-dlq-dev"
+
+[[queues.consumers]]
+queue = "macupdater-artifact-verify-dev"
+max_batch_size = 5
+max_retries = 3
+dead_letter_queue = "macupdater-dlq-dev"
+
+[[queues.consumers]]
+queue = "macupdater-recompute-latest-dev"
+max_batch_size = 10
+max_retries = 3
+dead_letter_queue = "macupdater-dlq-dev"
+
+[env.staging]
+[env.staging.vars]
+ENVIRONMENT = "staging"
+
+[env.production]
+[env.production.vars]
+ENVIRONMENT = "production"
