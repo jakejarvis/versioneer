@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   useSource,
   useSourceFetches,
+  useSourceHealth,
   useParserRuns,
   useTriggerSourceFetch,
   useUpdateSource,
@@ -13,6 +14,7 @@ import {
 } from "@/api/hooks/use-sources";
 import type { SourceFetch, ParserRun } from "@/api/types";
 import { DataTable, type Column } from "@/components/shared/data-table";
+import { HealthChart } from "@/components/shared/health-chart";
 import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
@@ -41,6 +43,7 @@ function SourceDetailPage() {
     offset: fetchOffset,
   });
   const [expandedFetch, setExpandedFetch] = useState<string | null>(null);
+  const { data: healthData } = useSourceHealth(sourceId);
 
   if (isLoading) {
     return (
@@ -143,6 +146,12 @@ function SourceDetailPage() {
           </div>
         </dl>
       </div>
+
+      {healthData && (
+        <div className="mt-4">
+          <HealthChart metrics={healthData.items} />
+        </div>
+      )}
 
       <div className="mt-6">
         <h3 className="text-lg font-medium">Fetch History</h3>

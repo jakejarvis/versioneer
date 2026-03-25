@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ExternalLink, Plus, RefreshCw, Zap } from "lucide-react";
+import { ArrowLeft, ExternalLink, Plus, RefreshCw, Zap, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -15,11 +15,22 @@ import {
   useTriggerFetch,
   useRecomputeLatest,
 } from "@/api/hooks/use-apps";
+import { useOnboardingChecklist, useUpdateOnboardingChecklist } from "@/api/hooks/use-onboarding";
+import {
+  useScorecard,
+  useRecomputeScorecard,
+  usePromoteVerification,
+} from "@/api/hooks/use-scorecards";
 import type { AppAlias, Source, Release, AppLatestRelease, InstallRule } from "@/api/types";
 import { DataTable, type Column } from "@/components/shared/data-table";
+import { DecisionExplanationCard } from "@/components/shared/decision-explanation";
 import { IdDisplay } from "@/components/shared/id-display";
+import { OnboardingChecklistCard } from "@/components/shared/onboarding-checklist";
+import { QualityBadge } from "@/components/shared/quality-badge";
+import { ScorecardCard } from "@/components/shared/scorecard-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
+import { VerificationBadge } from "@/components/shared/verification-badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -79,6 +90,8 @@ function AppDetailPage() {
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-semibold tracking-tight">{app.canonicalName}</h2>
             <StatusBadge status={app.status} />
+            <QualityBadge state={app.qualityState} />
+            <VerificationBadge tier={app.verificationTier} />
           </div>
           <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
             <IdDisplay id={app.id} />
@@ -104,6 +117,7 @@ function AppDetailPage() {
           <TabsTrigger value="sources">Sources</TabsTrigger>
           <TabsTrigger value="releases">Releases</TabsTrigger>
           <TabsTrigger value="install-rules">Install Rules</TabsTrigger>
+          <TabsTrigger value="quality">Quality</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="mt-4">
           <OverviewTab appId={appId} app={app} />
@@ -119,6 +133,13 @@ function AppDetailPage() {
         </TabsContent>
         <TabsContent value="install-rules" className="mt-4">
           <InstallRulesTab appId={appId} />
+        </TabsContent>
+        <TabsContent value="quality" className="mt-4">
+          <QualityTab
+            appId={appId}
+            verificationTier={app.verificationTier}
+            latestReleases={app.latestReleases ?? []}
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -452,6 +473,92 @@ function ReleasesTab({ appId }: { appId: string }) {
           : undefined
       }
     />
+  );
+}
+
+function QualityTab({
+  appId,
+  verificationTier,
+  latestReleases,
+}: {
+  appId: string;
+  verificationTier: string;
+  latestReleases: AppLatestRelease[];
+}) {
+  const { data: scorecard, isLoading: scorecardLoading } = useScorecard(appId);
+  const { data: checklist } = useOnboardingChecklist(appId);
+  const recomputeScorecard = useRecomputeScorecard();
+  const promoteVerification = usePromoteVerification();
+  const updateChecklist = useUpdateOnboardingChecklist(appId);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="font-medium">Quality & Verification</h3>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              recomputeScorecard.mutate(appId, {
+                onSuccess: () => toast.success("Scorecard recomputed"),
+                onError: (err) => toast.error(err.message),
+              })
+            }
+            disabled={recomputeScorecard.isPending}
+          >
+            <BarChart3 className="mr-2 h-3 w-3" />
+            Recompute Scorecard
+          </Button>
+          {verificationTier !== "verified" && (
+            <Button
+              size="sm"
+              onClick={() =>
+                promoteVerification.mutate(appId, {
+                  onSuccess: (data) => toast.success(`Promoted to ${data.verificationTier}`),
+                  onError: (err) => toast.error(err.message),
+                })
+              }
+              disabled={promoteVerification.isPending}
+            >
+              Promote Verification
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {scorecardLoading ? (
+        <Skeleton className="h-48 w-full" />
+      ) : scorecard ? (
+        <ScorecardCard scorecard={scorecard} />
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No scorecard data yet. Click "Recompute Scorecard" to generate.
+        </p>
+      )}
+
+      {/* Decision explanation for latest releases */}
+      {latestReleases.map(
+        (lr: AppLatestRelease) =>
+          lr.decisionExplanationJson && (
+            <div key={lr.id}>
+              <h4 className="mb-2 text-sm font-medium">Decision Explanation ({lr.channel})</h4>
+              <DecisionExplanationCard
+                explanation={JSON.parse(lr.decisionExplanationJson).publication}
+              />
+            </div>
+          ),
+      )}
+
+      {checklist && (
+        <OnboardingChecklistCard
+          checklist={checklist}
+          onToggle={(key, value) =>
+            updateChecklist.mutate({ [key]: value }, { onError: (err) => toast.error(err.message) })
+          }
+        />
+      )}
+    </div>
   );
 }
 

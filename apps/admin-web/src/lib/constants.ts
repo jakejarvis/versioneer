@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Shield,
   ScrollText,
+  PlusCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -25,6 +26,7 @@ export const navItems: NavItem[] = [
   { label: "Job Failures", path: "/job-failures", icon: AlertTriangle },
   { label: "Overrides", path: "/overrides", icon: Shield },
   { label: "Audit Log", path: "/audit-log", icon: ScrollText },
+  { label: "Onboarding", path: "/onboarding", icon: PlusCircle },
 ];
 
 export const statusColors: Record<string, string> = {
@@ -55,6 +57,23 @@ export const statusColors: Record<string, string> = {
   ambiguous: "bg-amber-100 text-amber-800",
   unsupported: "bg-zinc-100 text-zinc-800",
   ignored: "bg-zinc-100 text-zinc-800",
+  green: "bg-emerald-100 text-emerald-800",
+  yellow: "bg-amber-100 text-amber-800",
+  red: "bg-red-100 text-red-800",
+  verified: "bg-emerald-100 text-emerald-800",
+  provisional: "bg-blue-100 text-blue-800",
+  unverified: "bg-zinc-100 text-zinc-800",
+  publication_gated: "bg-amber-100 text-amber-800",
+  new: "bg-blue-100 text-blue-800",
+  triaged: "bg-amber-100 text-amber-800",
+  notify_only: "bg-zinc-100 text-zinc-800",
+  assisted_download: "bg-blue-100 text-blue-800",
+  assisted_replace: "bg-emerald-100 text-emerald-800",
+  automation_candidate: "bg-purple-100 text-purple-800",
+  initiated: "bg-blue-100 text-blue-800",
+  completed: "bg-emerald-100 text-emerald-800",
+  failed: "bg-red-100 text-red-800",
+  cancelled: "bg-zinc-100 text-zinc-800",
 };
 
 export const statusLabels: Record<string, string> = {
@@ -88,4 +107,21 @@ export const statusLabels: Record<string, string> = {
   not_modified: "Not Modified",
   timeout: "Timeout",
   partial: "Partial",
+  green: "Green",
+  yellow: "Yellow",
+  red: "Red",
+  verified: "Verified",
+  provisional: "Provisional",
+  unverified: "Unverified",
+  publication_gated: "Publication Gated",
+  new: "New",
+  triaged: "Triaged",
+  notify_only: "Notify Only",
+  assisted_download: "Assisted Download",
+  assisted_replace: "Assisted Replace",
+  automation_candidate: "Automation Candidate",
+  initiated: "Initiated",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
 };

@@ -1,5 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Box, Radio, AlertTriangle, ClipboardList, Package, Activity } from "lucide-react";
+import {
+  Box,
+  Radio,
+  AlertTriangle,
+  ClipboardList,
+  Package,
+  Activity,
+  ShieldCheck,
+  CircleDot,
+} from "lucide-react";
 
 import { useAuditLog } from "@/api/hooks/use-audit-log";
 import { useStats } from "@/api/hooks/use-stats";
@@ -58,6 +67,41 @@ function DashboardPage() {
           href="/job-failures"
           isLoading={isLoading}
           accent={stats?.openFailures ? "red" : undefined}
+        />
+      </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Verified Apps"
+          value={stats?.verifiedApps}
+          icon={ShieldCheck}
+          href="/apps"
+          isLoading={isLoading}
+          accent="emerald"
+        />
+        <StatCard
+          title="Green Quality"
+          value={stats?.greenApps}
+          icon={CircleDot}
+          href="/apps"
+          isLoading={isLoading}
+          accent="emerald"
+        />
+        <StatCard
+          title="Yellow Quality"
+          value={stats?.yellowApps}
+          icon={CircleDot}
+          href="/apps"
+          isLoading={isLoading}
+          accent="amber"
+        />
+        <StatCard
+          title="Red Quality"
+          value={stats?.redApps}
+          icon={CircleDot}
+          href="/apps"
+          isLoading={isLoading}
+          accent={stats?.redApps ? "red" : undefined}
         />
       </div>
 

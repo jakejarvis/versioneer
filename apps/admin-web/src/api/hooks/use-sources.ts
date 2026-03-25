@@ -1,7 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "../client";
-import type { Source, SourceFetch, ParserRun, PaginatedResponse } from "../types";
+import type {
+  Source,
+  SourceFetch,
+  SourceHealthMetric,
+  ParserRun,
+  PaginatedResponse,
+} from "../types";
 
 interface UseSourcesParams {
   status?: string;
@@ -103,5 +109,13 @@ export function useReparse() {
   return useMutation({
     mutationFn: (fetchId: string) =>
       apiClient(`/sources/fetches/${fetchId}/reparse`, { method: "POST" }),
+  });
+}
+
+export function useSourceHealth(sourceId: string) {
+  return useQuery({
+    queryKey: ["sources", sourceId, "health"],
+    queryFn: () => apiClient<{ items: SourceHealthMetric[] }>(`/sources/${sourceId}/health`),
+    enabled: !!sourceId,
   });
 }

@@ -6,8 +6,10 @@ import { toast } from "sonner";
 import { useApps, useCreateApp } from "@/api/hooks/use-apps";
 import type { App } from "@/api/types";
 import { DataTable, type Column } from "@/components/shared/data-table";
+import { QualityBadge } from "@/components/shared/quality-badge";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
+import { VerificationBadge } from "@/components/shared/verification-badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -65,6 +67,16 @@ function AppsPage() {
       key: "status",
       header: "Status",
       cell: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: "qualityState",
+      header: "Quality",
+      cell: (row) => <QualityBadge state={row.qualityState} />,
+    },
+    {
+      key: "verificationTier",
+      header: "Verification",
+      cell: (row) => <VerificationBadge tier={row.verificationTier} />,
     },
     {
       key: "updatedAt",
