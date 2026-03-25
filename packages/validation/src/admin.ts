@@ -1,7 +1,11 @@
 import { z } from "zod";
 
 export const appCreateSchema = z.object({
-  slug: z.string().min(1).max(200).regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
+  slug: z
+    .string()
+    .min(1)
+    .max(200)
+    .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
   canonicalName: z.string().min(1).max(500),
   vendorName: z.string().max(500).optional(),
   homepageUrl: z.string().url().max(2000).optional(),
@@ -18,7 +22,15 @@ export const appUpdateSchema = z.object({
 });
 
 export const aliasCreateSchema = z.object({
-  aliasType: z.enum(["bundle_id", "name", "team_id", "sparkle_feed", "homepage", "download_pattern", "github_repo"]),
+  aliasType: z.enum([
+    "bundle_id",
+    "name",
+    "team_id",
+    "sparkle_feed",
+    "homepage",
+    "download_pattern",
+    "github_repo",
+  ]),
   value: z.string().min(1).max(2000),
   normalizedValue: z.string().min(1).max(2000).optional(),
   isExact: z.boolean().default(true),
@@ -68,7 +80,9 @@ export const installRuleCreateSchema = z.object({
 });
 
 export const installRuleUpdateSchema = z.object({
-  strategy: z.enum(["sparkle", "zip_replace", "dmg_copy_replace", "pkg_manual", "manual_only"]).optional(),
+  strategy: z
+    .enum(["sparkle", "zip_replace", "dmg_copy_replace", "pkg_manual", "manual_only"])
+    .optional(),
   requiresQuit: z.boolean().optional(),
   requiresAdmin: z.boolean().optional(),
   supportsSilent: z.boolean().optional(),

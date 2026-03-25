@@ -1,21 +1,17 @@
-import { useState } from "react";
 import { createRoute } from "@tanstack/react-router";
-import { rootRoute } from "../__root";
-import {
-  useOverrides,
-  useCreateOverride,
-  useDeactivateOverride,
-} from "@/api/hooks/use-overrides";
+import { Plus } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+
+import { useOverrides, useCreateOverride, useDeactivateOverride } from "@/api/hooks/use-overrides";
 import type { Override } from "@/api/types";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DataTable, type Column } from "@/components/shared/data-table";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { TimeAgo } from "@/components/shared/time-ago";
 import { IdDisplay } from "@/components/shared/id-display";
 import { JsonViewer } from "@/components/shared/json-viewer";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -23,9 +19,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { Plus } from "lucide-react";
-import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+import { rootRoute } from "../__root";
 
 export const overridesIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -47,9 +45,7 @@ function OverridesPage() {
       key: "overrideType",
       header: "Type",
       cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-          {row.overrideType}
-        </span>
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.overrideType}</span>
       ),
     },
     {
@@ -74,9 +70,7 @@ function OverridesPage() {
     {
       key: "isActive",
       header: "Active",
-      cell: (row) => (
-        <StatusBadge status={row.isActive ? "active" : "disabled"} />
-      ),
+      cell: (row) => <StatusBadge status={row.isActive ? "active" : "disabled"} />,
     },
     {
       key: "createdAt",
@@ -173,10 +167,7 @@ function OverridesPage() {
         loading={deactivate.isPending}
       />
 
-      <Dialog
-        open={!!viewPayload}
-        onOpenChange={(open) => !open && setViewPayload(null)}
-      >
+      <Dialog open={!!viewPayload} onOpenChange={(open) => !open && setViewPayload(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Override Payload</DialogTitle>
@@ -281,9 +272,7 @@ function CreateOverrideDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={
-              !overrideType || !targetType || !targetId || createOverride.isPending
-            }
+            disabled={!overrideType || !targetType || !targetId || createOverride.isPending}
           >
             {createOverride.isPending ? "Creating..." : "Create"}
           </Button>

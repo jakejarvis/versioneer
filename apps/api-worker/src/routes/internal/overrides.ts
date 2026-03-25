@@ -1,9 +1,10 @@
-import { Hono } from "hono";
-import { eq, sql, desc } from "drizzle-orm";
-import type { Env } from "../../env";
 import { createDb } from "@macupdater/db";
 import { adminOverrides, auditLog, generateId, idPrefixes } from "@macupdater/schema";
 import { paginationSchema, overrideCreateSchema } from "@macupdater/validation";
+import { eq, sql, desc } from "drizzle-orm";
+import { Hono } from "hono";
+
+import type { Env } from "../../env";
 
 export const overridesRoutes = new Hono<{ Bindings: Env }>();
 
@@ -20,7 +21,10 @@ overridesRoutes.get("/", async (c) => {
   if (active === "true") where = eq(adminOverrides.isActive, true);
   else if (active === "false") where = eq(adminOverrides.isActive, false);
 
-  const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(adminOverrides).where(where);
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(adminOverrides)
+    .where(where);
   const items = await db
     .select()
     .from(adminOverrides)

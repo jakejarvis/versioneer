@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { apiClient } from "../client";
 import type { JobFailure, PaginatedResponse } from "../types";
 
@@ -30,8 +31,7 @@ export function useUpdateJobFailure() {
 export function useRetryJobFailure() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      apiClient(`/job-failures/${id}/retry`, { method: "POST" }),
+    mutationFn: (id: string) => apiClient(`/job-failures/${id}/retry`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["job-failures"] }),
   });
 }

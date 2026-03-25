@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { githubReleasesParser } from "../github";
 
 const SAMPLE_RELEASES = JSON.stringify([
@@ -12,19 +13,22 @@ const SAMPLE_RELEASES = JSON.stringify([
     assets: [
       {
         name: "App-3.0.0-mac.dmg",
-        browser_download_url: "https://github.com/example/app/releases/download/v3.0.0/App-3.0.0-mac.dmg",
+        browser_download_url:
+          "https://github.com/example/app/releases/download/v3.0.0/App-3.0.0-mac.dmg",
         size: 20000000,
         content_type: "application/octet-stream",
       },
       {
         name: "App-3.0.0-arm64.dmg",
-        browser_download_url: "https://github.com/example/app/releases/download/v3.0.0/App-3.0.0-arm64.dmg",
+        browser_download_url:
+          "https://github.com/example/app/releases/download/v3.0.0/App-3.0.0-arm64.dmg",
         size: 18000000,
         content_type: "application/octet-stream",
       },
       {
         name: "App-3.0.0-linux.tar.gz",
-        browser_download_url: "https://github.com/example/app/releases/download/v3.0.0/App-3.0.0-linux.tar.gz",
+        browser_download_url:
+          "https://github.com/example/app/releases/download/v3.0.0/App-3.0.0-linux.tar.gz",
         size: 15000000,
         content_type: "application/gzip",
       },
@@ -75,9 +79,7 @@ describe("githubReleasesParser", () => {
 
   it("infers architecture", () => {
     const result = githubReleasesParser.parse(SAMPLE_RELEASES);
-    const arm64Artifact = result.releases[0]!.artifacts.find(
-      (a) => a.architecture === "arm64",
-    );
+    const arm64Artifact = result.releases[0]!.artifacts.find((a) => a.architecture === "arm64");
     expect(arm64Artifact).toBeDefined();
   });
 

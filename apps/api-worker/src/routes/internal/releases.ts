@@ -1,6 +1,3 @@
-import { Hono } from "hono";
-import { eq, and, sql, desc } from "drizzle-orm";
-import type { Env } from "../../env";
 import { createDb } from "@macupdater/db";
 import {
   releases,
@@ -11,6 +8,10 @@ import {
   idPrefixes,
 } from "@macupdater/schema";
 import { paginationSchema, releaseUpdateSchema } from "@macupdater/validation";
+import { eq, and, sql, desc } from "drizzle-orm";
+import { Hono } from "hono";
+
+import type { Env } from "../../env";
 
 export const releasesRoutes = new Hono<{ Bindings: Env }>();
 
@@ -28,11 +29,15 @@ releasesRoutes.get("/", async (c) => {
   const conditions = [];
   if (appId) conditions.push(eq(releases.appId, appId));
   if (channel) conditions.push(eq(releases.channel, channel as "stable" | "beta" | "nightly"));
-  if (status) conditions.push(eq(releases.status, status as "active" | "retracted" | "superseded" | "draft"));
+  if (status)
+    conditions.push(eq(releases.status, status as "active" | "retracted" | "superseded" | "draft"));
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(releases).where(where);
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(releases)
+    .where(where);
   const items = await db
     .select()
     .from(releases)

@@ -1,6 +1,8 @@
-import { useState } from "react";
 import { createRoute } from "@tanstack/react-router";
-import { rootRoute } from "../__root";
+import { MoreHorizontal, RefreshCw, CheckCircle, Ban } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+
 import {
   useJobFailures,
   useUpdateJobFailure,
@@ -8,16 +10,17 @@ import {
 } from "@/api/hooks/use-job-failures";
 import type { JobFailure } from "@/api/types";
 import { DataTable, type Column } from "@/components/shared/data-table";
+import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
-import { IdDisplay } from "@/components/shared/id-display";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -25,14 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, RefreshCw, CheckCircle, Ban } from "lucide-react";
-import { toast } from "sonner";
+
+import { rootRoute } from "../__root";
 
 export const jobFailuresIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -75,9 +72,7 @@ function JobFailuresPage() {
       key: "jobType",
       header: "Job Type",
       cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-          {row.jobType}
-        </span>
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.jobType}</span>
       ),
     },
     {
@@ -125,11 +120,7 @@ function JobFailuresPage() {
         row.status === "open" || row.status === "retrying" ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -138,15 +129,11 @@ function JobFailuresPage() {
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Retry
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleStatusChange(row.id, "resolved")}
-              >
+              <DropdownMenuItem onClick={() => handleStatusChange(row.id, "resolved")}>
                 <CheckCircle className="mr-2 h-4 w-4" />
                 Resolve
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleStatusChange(row.id, "abandoned")}
-              >
+              <DropdownMenuItem onClick={() => handleStatusChange(row.id, "abandoned")}>
                 <Ban className="mr-2 h-4 w-4" />
                 Abandon
               </DropdownMenuItem>
@@ -159,9 +146,7 @@ function JobFailuresPage() {
   return (
     <div>
       <h2 className="text-2xl font-semibold tracking-tight">Job Failures</h2>
-      <p className="mt-1 text-muted-foreground">
-        Failed pipeline jobs and queue operations.
-      </p>
+      <p className="mt-1 text-muted-foreground">Failed pipeline jobs and queue operations.</p>
 
       <div className="mt-4">
         <Select
@@ -202,10 +187,7 @@ function JobFailuresPage() {
         />
       </div>
 
-      <Dialog
-        open={!!selectedFailure}
-        onOpenChange={(open) => !open && setSelectedFailure(null)}
-      >
+      <Dialog open={!!selectedFailure} onOpenChange={(open) => !open && setSelectedFailure(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Error Detail</DialogTitle>

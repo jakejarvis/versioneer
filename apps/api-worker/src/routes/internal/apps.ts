@@ -1,6 +1,3 @@
-import { Hono } from "hono";
-import { eq, like, sql, and, desc } from "drizzle-orm";
-import type { Env } from "../../env";
 import { createDb } from "@macupdater/db";
 import {
   apps,
@@ -20,6 +17,10 @@ import {
   aliasCreateSchema,
   installRuleCreateSchema,
 } from "@macupdater/validation";
+import { eq, like, sql, and, desc } from "drizzle-orm";
+import { Hono } from "hono";
+
+import type { Env } from "../../env";
 
 export const appsRoutes = new Hono<{ Bindings: Env }>();
 
@@ -34,12 +35,16 @@ appsRoutes.get("/", async (c) => {
   const search = c.req.query("search");
 
   const conditions = [];
-  if (status) conditions.push(eq(apps.status, status as "active" | "deprecated" | "merged" | "unlisted"));
+  if (status)
+    conditions.push(eq(apps.status, status as "active" | "deprecated" | "merged" | "unlisted"));
   if (search) conditions.push(like(apps.canonicalName, `%${search}%`));
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(apps).where(where);
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(apps)
+    .where(where);
   const items = await db
     .select()
     .from(apps)
@@ -59,7 +64,11 @@ appsRoutes.get("/:id", async (c) => {
   const app = await db.select().from(apps).where(eq(apps.id, id)).get();
   if (!app) return c.json({ error: "App not found" }, 404);
 
-  const latest = await db.select().from(appLatestReleases).where(eq(appLatestReleases.appId, id)).all();
+  const latest = await db
+    .select()
+    .from(appLatestReleases)
+    .where(eq(appLatestReleases.appId, id))
+    .all();
   const [sourceCount] = await db
     .select({ count: sql<number>`count(*)` })
     .from(sources)
@@ -121,7 +130,8 @@ appsRoutes.patch("/:id", async (c) => {
   if (parsed.data.vendorName !== undefined) updates.vendorName = parsed.data.vendorName;
   if (parsed.data.homepageUrl !== undefined) updates.homepageUrl = parsed.data.homepageUrl;
   if (parsed.data.status !== undefined) updates.status = parsed.data.status;
-  if (parsed.data.mergedIntoAppId !== undefined) updates.mergedIntoAppId = parsed.data.mergedIntoAppId;
+  if (parsed.data.mergedIntoAppId !== undefined)
+    updates.mergedIntoAppId = parsed.data.mergedIntoAppId;
   if (parsed.data.notes !== undefined) updates.notes = parsed.data.notes;
 
   await db.update(apps).set(updates).where(eq(apps.id, id));
@@ -208,7 +218,8 @@ appsRoutes.get("/:id/releases", async (c) => {
 
   const conditions = [eq(releases.appId, appId)];
   if (channel) conditions.push(eq(releases.channel, channel as "stable" | "beta" | "nightly"));
-  if (status) conditions.push(eq(releases.status, status as "active" | "retracted" | "superseded" | "draft"));
+  if (status)
+    conditions.push(eq(releases.status, status as "active" | "retracted" | "superseded" | "draft"));
 
   const [countResult] = await db
     .select({ count: sql<number>`count(*)` })
@@ -229,7 +240,11 @@ appsRoutes.get("/:id/releases", async (c) => {
 appsRoutes.get("/:id/latest", async (c) => {
   const db = createDb(c.env.DB);
   const id = c.req.param("id");
-  const items = await db.select().from(appLatestReleases).where(eq(appLatestReleases.appId, id)).all();
+  const items = await db
+    .select()
+    .from(appLatestReleases)
+    .where(eq(appLatestReleases.appId, id))
+    .all();
   return c.json({ items });
 });
 

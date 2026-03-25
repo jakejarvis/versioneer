@@ -1,4 +1,5 @@
 import { Outlet } from "@tanstack/react-router";
+
 import { Sidebar } from "./sidebar";
 
 export function RootLayout() {

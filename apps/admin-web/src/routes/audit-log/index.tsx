@@ -1,21 +1,18 @@
-import { useState } from "react";
 import { createRoute } from "@tanstack/react-router";
-import { rootRoute } from "../__root";
+import { Search } from "lucide-react";
+import { useState } from "react";
+
 import { useAuditLog } from "@/api/hooks/use-audit-log";
 import type { AuditLogEntry } from "@/api/types";
 import { DataTable, type Column } from "@/components/shared/data-table";
-import { TimeAgo } from "@/components/shared/time-ago";
 import { IdDisplay } from "@/components/shared/id-display";
 import { JsonViewer } from "@/components/shared/json-viewer";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
-import { Search } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+
+import { rootRoute } from "../__root";
 
 export const auditLogIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -39,9 +36,7 @@ function AuditLogPage() {
       key: "eventType",
       header: "Event",
       cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-          {row.eventType}
-        </span>
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.eventType}</span>
       ),
     },
     {
@@ -95,9 +90,7 @@ function AuditLogPage() {
   return (
     <div>
       <h2 className="text-2xl font-semibold tracking-tight">Audit Log</h2>
-      <p className="mt-1 text-muted-foreground">
-        Immutable event log for state changes.
-      </p>
+      <p className="mt-1 text-muted-foreground">Immutable event log for state changes.</p>
 
       <div className="mt-4">
         <div className="relative max-w-sm">
@@ -133,15 +126,10 @@ function AuditLogPage() {
         />
       </div>
 
-      <Dialog
-        open={!!selectedEntry}
-        onOpenChange={(open) => !open && setSelectedEntry(null)}
-      >
+      <Dialog open={!!selectedEntry} onOpenChange={(open) => !open && setSelectedEntry(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              {selectedEntry?.eventType} Payload
-            </DialogTitle>
+            <DialogTitle>{selectedEntry?.eventType} Payload</DialogTitle>
           </DialogHeader>
           {selectedEntry && <JsonViewer data={selectedEntry.payloadJson} />}
         </DialogContent>

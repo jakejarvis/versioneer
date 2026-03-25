@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -6,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
+
 import { EmptyState } from "./empty-state";
 import { PaginationControls } from "./pagination-controls";
 
@@ -20,6 +21,7 @@ export interface Column<T> {
 interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
+  rowKey?: (row: T, index: number) => string;
   isLoading?: boolean;
   emptyMessage?: string;
   pagination?: {
@@ -34,6 +36,7 @@ interface DataTableProps<T> {
 export function DataTable<T>({
   columns,
   data,
+  rowKey,
   isLoading,
   emptyMessage,
   pagination,
@@ -53,8 +56,9 @@ export function DataTable<T>({
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* oxlint-disable react/no-array-index-key -- static skeleton placeholders */}
             {Array.from({ length: 5 }).map((_, i) => (
-              <TableRow key={i}>
+              <TableRow key={`skeleton-${i}`}>
                 {columns.map((col) => (
                   <TableCell key={col.key} className={col.className}>
                     <Skeleton className="h-5 w-full" />
@@ -62,6 +66,7 @@ export function DataTable<T>({
                 ))}
               </TableRow>
             ))}
+            {/* oxlint-enable react/no-array-index-key */}
           </TableBody>
         </Table>
       </div>
@@ -88,7 +93,8 @@ export function DataTable<T>({
           <TableBody>
             {data.map((row, i) => (
               <TableRow
-                key={i}
+                // oxlint-disable-next-line react/no-array-index-key -- fallback when rowKey not provided
+                key={rowKey ? rowKey(row, i) : `row-${i}`}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={onRowClick ? "cursor-pointer hover:bg-muted/50" : undefined}
               >

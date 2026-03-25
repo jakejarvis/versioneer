@@ -1,20 +1,23 @@
-import { useState } from "react";
 import { createRoute } from "@tanstack/react-router";
-import { rootRoute } from "../__root";
+import { MoreHorizontal, CheckCircle, XCircle } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+
 import { useReviewQueue, useUpdateReviewItem } from "@/api/hooks/use-review-queue";
 import type { ReviewQueueItem } from "@/api/types";
 import { DataTable, type Column } from "@/components/shared/data-table";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { TimeAgo } from "@/components/shared/time-ago";
 import { IdDisplay } from "@/components/shared/id-display";
 import { JsonViewer } from "@/components/shared/json-viewer";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -22,14 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, CheckCircle, XCircle } from "lucide-react";
-import { toast } from "sonner";
+
+import { rootRoute } from "../__root";
 
 export const reviewQueueIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -64,9 +61,7 @@ function ReviewQueuePage() {
       key: "reviewType",
       header: "Type",
       cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-          {row.reviewType}
-        </span>
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.reviewType}</span>
       ),
     },
     {
@@ -107,11 +102,7 @@ function ReviewQueuePage() {
           {row.status === "pending" && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -135,9 +126,7 @@ function ReviewQueuePage() {
   return (
     <div>
       <h2 className="text-2xl font-semibold tracking-tight">Review Queue</h2>
-      <p className="mt-1 text-muted-foreground">
-        Items requiring manual review.
-      </p>
+      <p className="mt-1 text-muted-foreground">Items requiring manual review.</p>
 
       <div className="mt-4">
         <Select
@@ -178,10 +167,7 @@ function ReviewQueuePage() {
         />
       </div>
 
-      <Dialog
-        open={!!selectedItem}
-        onOpenChange={(open) => !open && setSelectedItem(null)}
-      >
+      <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Review Item</DialogTitle>

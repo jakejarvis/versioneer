@@ -1,6 +1,3 @@
-import { Hono } from "hono";
-import { eq, and, sql, desc } from "drizzle-orm";
-import type { Env } from "../../env";
 import { createDb } from "@macupdater/db";
 import {
   sources,
@@ -11,6 +8,10 @@ import {
   idPrefixes,
 } from "@macupdater/schema";
 import { paginationSchema, sourceCreateSchema, sourceUpdateSchema } from "@macupdater/validation";
+import { eq, and, sql, desc } from "drizzle-orm";
+import { Hono } from "hono";
+
+import type { Env } from "../../env";
 
 export const sourcesRoutes = new Hono<{ Bindings: Env }>();
 
@@ -26,13 +27,18 @@ sourcesRoutes.get("/", async (c) => {
   const appId = c.req.query("appId");
 
   const conditions = [];
-  if (status) conditions.push(eq(sources.status, status as "active" | "paused" | "disabled" | "error"));
-  if (sourceType) conditions.push(eq(sources.sourceType, sourceType as "sparkle" | "github_releases" | "manual"));
+  if (status)
+    conditions.push(eq(sources.status, status as "active" | "paused" | "disabled" | "error"));
+  if (sourceType)
+    conditions.push(eq(sources.sourceType, sourceType as "sparkle" | "github_releases" | "manual"));
   if (appId) conditions.push(eq(sources.appId, appId));
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(sources).where(where);
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(sources)
+    .where(where);
   const items = await db
     .select()
     .from(sources)
@@ -108,7 +114,8 @@ sourcesRoutes.patch("/:id", async (c) => {
   if (parsed.data.baseUrl !== undefined) updates.baseUrl = parsed.data.baseUrl;
   if (parsed.data.configJson !== undefined) updates.configJson = parsed.data.configJson;
   if (parsed.data.parserKey !== undefined) updates.parserKey = parsed.data.parserKey;
-  if (parsed.data.pollIntervalMinutes !== undefined) updates.pollIntervalMinutes = parsed.data.pollIntervalMinutes;
+  if (parsed.data.pollIntervalMinutes !== undefined)
+    updates.pollIntervalMinutes = parsed.data.pollIntervalMinutes;
   if (parsed.data.status !== undefined) updates.status = parsed.data.status;
 
   await db.update(sources).set(updates).where(eq(sources.id, id));

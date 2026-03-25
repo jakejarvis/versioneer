@@ -5,8 +5,11 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt --config ../../.oxfmtrc.json",
+    "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@macupdater/schema": "workspace:*",
@@ -14,6 +17,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@macupdater/typescript-config": "workspace:*",
     "typescript": "^6.0.2"
   }
 }

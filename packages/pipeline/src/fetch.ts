@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
 import { createDb } from "@macupdater/db";
 import { sources, sourceFetches, generateId, idPrefixes } from "@macupdater/schema";
+import { eq } from "drizzle-orm";
+
 import type { Env, SourceFetchJob } from "./types";
 
 export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<void> {

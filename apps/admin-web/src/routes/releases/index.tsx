@@ -1,12 +1,12 @@
-import { useState } from "react";
 import { createRoute, useNavigate } from "@tanstack/react-router";
-import { rootRoute } from "../__root";
+import { useState } from "react";
+
 import { useReleases } from "@/api/hooks/use-releases";
 import type { Release } from "@/api/types";
 import { DataTable, type Column } from "@/components/shared/data-table";
+import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
-import { IdDisplay } from "@/components/shared/id-display";
 import {
   Select,
   SelectContent,
@@ -14,6 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+import { rootRoute } from "../__root";
 
 export const releasesIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -43,9 +45,7 @@ function ReleasesPage() {
     {
       key: "versionRaw",
       header: "Version",
-      cell: (row) => (
-        <span className="font-mono font-medium">{row.versionRaw}</span>
-      ),
+      cell: (row) => <span className="font-mono font-medium">{row.versionRaw}</span>,
     },
     {
       key: "channel",
@@ -77,9 +77,7 @@ function ReleasesPage() {
   return (
     <div>
       <h2 className="text-2xl font-semibold tracking-tight">Releases</h2>
-      <p className="mt-1 text-muted-foreground">
-        Browse release records across all apps.
-      </p>
+      <p className="mt-1 text-muted-foreground">Browse release records across all apps.</p>
 
       <div className="mt-4 flex items-center gap-3">
         <Select

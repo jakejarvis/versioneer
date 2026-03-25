@@ -1,7 +1,6 @@
-import { Hono } from "hono";
-import { eq, and } from "drizzle-orm";
-import type { Env } from "../env";
 import { createDb } from "@macupdater/db";
+import { matchApp } from "@macupdater/identity";
+import type { AliasRecord } from "@macupdater/identity";
 import {
   apps,
   appAliases,
@@ -14,11 +13,13 @@ import {
   idPrefixes,
 } from "@macupdater/schema";
 import { inventoryCheckRequestSchema } from "@macupdater/validation";
-import { matchApp } from "@macupdater/identity";
-import type { AliasRecord } from "@macupdater/identity";
+import type { AppDecision } from "@macupdater/validation";
 import { normalizeVersion } from "@macupdater/versioning";
 import { compareVersionStrings } from "@macupdater/versioning";
-import type { AppDecision } from "@macupdater/validation";
+import { eq } from "drizzle-orm";
+import { Hono } from "hono";
+
+import type { Env } from "../env";
 
 export const publicRoutes = new Hono<{ Bindings: Env }>();
 
@@ -52,7 +53,14 @@ publicRoutes.post("/inventory/check", async (c) => {
       firstSeenAt: now,
       lastSeenAt: now,
     });
-    client = { id: clientId, anonymousInstallId: request.client.installId, platform: request.client.platform, appVersion: request.client.appVersion ?? null, firstSeenAt: now, lastSeenAt: now };
+    client = {
+      id: clientId,
+      anonymousInstallId: request.client.installId,
+      platform: request.client.platform,
+      appVersion: request.client.appVersion ?? null,
+      firstSeenAt: now,
+      lastSeenAt: now,
+    };
   } else {
     await db
       .update(clients)
@@ -87,7 +95,10 @@ publicRoutes.post("/inventory/check", async (c) => {
 
   // Load app names for alias records
   const appMap = new Map<string, string>();
-  const allApps = await db.select({ id: apps.id, canonicalName: apps.canonicalName }).from(apps).all();
+  const allApps = await db
+    .select({ id: apps.id, canonicalName: apps.canonicalName })
+    .from(apps)
+    .all();
   for (const a of allApps) {
     appMap.set(a.id, a.canonicalName);
   }
@@ -104,7 +115,7 @@ publicRoutes.post("/inventory/check", async (c) => {
 
   // Load all latest releases
   const latestReleases = await db.select().from(appLatestReleases).all();
-  const latestByApp = new Map<string, typeof latestReleases[number]>();
+  const latestByApp = new Map<string, (typeof latestReleases)[number]>();
   for (const lr of latestReleases) {
     // Prefer stable channel
     const key = lr.appId;
@@ -170,7 +181,9 @@ publicRoutes.post("/inventory/check", async (c) => {
       appName: installedApp.appName,
       bundleId: installedApp.bundleId ?? null,
       installedVersionRaw: installedApp.version ?? null,
-      installedVersionNormalized: installedApp.version ? normalizeVersion(installedApp.version) : null,
+      installedVersionNormalized: installedApp.version
+        ? normalizeVersion(installedApp.version)
+        : null,
       buildNumber: installedApp.buildNumber ?? null,
       teamId: installedApp.teamId ?? null,
       pathHash: installedApp.pathHash ?? null,
@@ -224,11 +237,7 @@ publicRoutes.get("/apps/:appId/releases", async (c) => {
   const appId = c.req.param("appId");
   const db = createDb(c.env.DB);
 
-  const appReleases = await db
-    .select()
-    .from(releases)
-    .where(eq(releases.appId, appId))
-    .all();
+  const appReleases = await db.select().from(releases).where(eq(releases.appId, appId)).all();
 
   return c.json({ releases: appReleases });
 });

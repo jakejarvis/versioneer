@@ -1,9 +1,10 @@
-import { Hono } from "hono";
-import { eq } from "drizzle-orm";
-import type { Env } from "../../env";
 import { createDb } from "@macupdater/db";
 import { installRules } from "@macupdater/schema";
 import { installRuleUpdateSchema } from "@macupdater/validation";
+import { eq } from "drizzle-orm";
+import { Hono } from "hono";
+
+import type { Env } from "../../env";
 
 export const installRulesRoutes = new Hono<{ Bindings: Env }>();
 
@@ -24,7 +25,8 @@ installRulesRoutes.patch("/:id", async (c) => {
   if (parsed.data.requiresQuit !== undefined) updates.requiresQuit = parsed.data.requiresQuit;
   if (parsed.data.requiresAdmin !== undefined) updates.requiresAdmin = parsed.data.requiresAdmin;
   if (parsed.data.supportsSilent !== undefined) updates.supportsSilent = parsed.data.supportsSilent;
-  if (parsed.data.rollbackSupported !== undefined) updates.rollbackSupported = parsed.data.rollbackSupported;
+  if (parsed.data.rollbackSupported !== undefined)
+    updates.rollbackSupported = parsed.data.rollbackSupported;
   if (parsed.data.ruleConfidence !== undefined) updates.ruleConfidence = parsed.data.ruleConfidence;
   if (parsed.data.enabled !== undefined) updates.enabled = parsed.data.enabled;
   if (parsed.data.notes !== undefined) updates.notes = parsed.data.notes;

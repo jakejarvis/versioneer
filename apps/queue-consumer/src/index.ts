@@ -1,18 +1,9 @@
-import type { Env } from "./env";
-import {
-  handleSourceFetch,
-  handleSourceParse,
-  handleRecomputeLatest,
-} from "@macupdater/pipeline";
-import type {
-  SourceFetchJob,
-  SourceParseJob,
-  RecomputeLatestJob,
-  ArtifactVerifyJob,
-} from "@macupdater/pipeline";
 import { createDb } from "@macupdater/db";
+import { handleSourceFetch, handleSourceParse, handleRecomputeLatest } from "@macupdater/pipeline";
+import type { SourceFetchJob, SourceParseJob, RecomputeLatestJob } from "@macupdater/pipeline";
 import { jobFailures, generateId, idPrefixes } from "@macupdater/schema";
 
+import type { Env } from "./env";
 // Import parsers to trigger auto-registration
 import "@macupdater/parsers";
 
@@ -97,25 +88,21 @@ export default {
     }
   },
 
-  async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
+  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
     // Cron handler for poll-sources
     const db = createDb(env.DB);
     const { sources } = await import("@macupdater/schema");
-    const { eq, lt, or, isNull } = await import("drizzle-orm");
+    const { eq } = await import("drizzle-orm");
 
     const now = new Date();
-    const dueSources = await db
-      .select()
-      .from(sources)
-      .where(eq(sources.status, "active"))
-      .all();
+    const dueSources = await db.select().from(sources).where(eq(sources.status, "active")).all();
 
     for (const source of dueSources) {
       // Check if source is due for polling
       const lastFetched = source.lastFetchedAt ? new Date(source.lastFetchedAt) : null;
       const intervalMs = source.pollIntervalMinutes * 60 * 1000;
 
-      if (!lastFetched || (now.getTime() - lastFetched.getTime()) >= intervalMs) {
+      if (!lastFetched || now.getTime() - lastFetched.getTime() >= intervalMs) {
         await env.SOURCE_FETCH_QUEUE.send({
           sourceId: source.id,
           reason: "scheduled",

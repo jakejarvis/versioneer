@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
 import { createDb } from "@macupdater/db";
+import { getParser } from "@macupdater/parsers";
 import {
   sourceFetches,
   sources,
@@ -10,8 +10,9 @@ import {
   generateId,
   idPrefixes,
 } from "@macupdater/schema";
-import { getParser } from "@macupdater/parsers";
-import { normalizeVersion, inferChannel, isPreRelease } from "@macupdater/versioning";
+import { normalizeVersion, inferChannel } from "@macupdater/versioning";
+import { eq } from "drizzle-orm";
+
 import type { Env, SourceParseJob } from "./types";
 
 export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<void> {
@@ -34,11 +35,7 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
   }
 
   // Load source for parser key and app ID
-  const source = await db
-    .select()
-    .from(sources)
-    .where(eq(sources.id, fetchRecord.sourceId))
-    .get();
+  const source = await db.select().from(sources).where(eq(sources.id, fetchRecord.sourceId)).get();
 
   if (!source) {
     throw new Error(`Source not found: ${fetchRecord.sourceId}`);
@@ -69,7 +66,12 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
       sourceFetchId: fetchRecord.id,
       parserKey: source.parserKey,
       parserVersion: output.parserVersion,
-      runStatus: output.errors.length > 0 && output.releases.length > 0 ? "partial" : output.releases.length > 0 ? "success" : "error",
+      runStatus:
+        output.errors.length > 0 && output.releases.length > 0
+          ? "partial"
+          : output.releases.length > 0
+            ? "success"
+            : "error",
       observationCount: output.releases.length,
       confidence: output.confidence,
       errorMessage: output.errors.length > 0 ? output.errors.join("; ") : null,

@@ -1,27 +1,32 @@
 {
   "name": "@macupdater/api-worker",
-  "private": true,
   "version": "0.0.1",
+  "private": true,
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt --config ../../.oxfmtrc.json",
+    "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@macupdater/schema": "workspace:*",
-    "@macupdater/db": "workspace:*",
-    "@macupdater/validation": "workspace:*",
-    "@macupdater/identity": "workspace:*",
-    "@macupdater/versioning": "workspace:*",
-    "@macupdater/cache": "workspace:*",
     "@macupdater/api-contracts": "workspace:*",
+    "@macupdater/cache": "workspace:*",
+    "@macupdater/db": "workspace:*",
+    "@macupdater/identity": "workspace:*",
+    "@macupdater/schema": "workspace:*",
+    "@macupdater/validation": "workspace:*",
+    "@macupdater/versioning": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.12.9",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "wrangler": "^4.77.0",
     "@cloudflare/workers-types": "^4.20260317.1",
-    "typescript": "^6.0.2"
+    "@macupdater/typescript-config": "workspace:*",
+    "typescript": "^6.0.2",
+    "wrangler": "^4.77.0"
   }
 }

@@ -1,5 +1,6 @@
-import type { SourceParser, ParserOutput, ParsedRelease, ParsedArtifact } from "./types";
 import { inferChannel, isPreRelease } from "@macupdater/versioning";
+
+import type { SourceParser, ParserOutput, ParsedRelease, ParsedArtifact } from "./types";
 
 interface GitHubRelease {
   tag_name: string;
@@ -68,7 +69,9 @@ export const githubReleasesParser: SourceParser = {
 
           releases.push(release);
         } catch (e) {
-          errors.push(`Failed to parse release ${ghRelease.tag_name}: ${e instanceof Error ? e.message : String(e)}`);
+          errors.push(
+            `Failed to parse release ${ghRelease.tag_name}: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
       }
     } catch (e) {
@@ -107,8 +110,15 @@ function inferArtifactType(name: string): ParsedArtifact["type"] {
 
 function inferArchitecture(name: string): string | undefined {
   const lower = name.toLowerCase();
-  if (lower.includes("arm64") || lower.includes("aarch64") || lower.includes("apple-silicon") || lower.includes("silicon")) return "arm64";
-  if (lower.includes("x86_64") || lower.includes("amd64") || lower.includes("intel")) return "x86_64";
+  if (
+    lower.includes("arm64") ||
+    lower.includes("aarch64") ||
+    lower.includes("apple-silicon") ||
+    lower.includes("silicon")
+  )
+    return "arm64";
+  if (lower.includes("x86_64") || lower.includes("amd64") || lower.includes("intel"))
+    return "x86_64";
   if (lower.includes("universal")) return "universal";
   return undefined;
 }
