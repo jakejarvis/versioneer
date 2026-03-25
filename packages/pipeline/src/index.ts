@@ -8,3 +8,13 @@ export type {
 export { handleSourceFetch } from "./fetch";
 export { handleSourceParse } from "./parse";
 export { handleRecomputeLatest } from "./recompute";
+export { generatePublicationExplanation, generateArtifactSelectionExplanation } from "./explain";
+export {
+  computeScorecard,
+  classifyQualityState,
+  computeQualityScore,
+  handleComputeScorecard,
+} from "./scorecard";
+export type { ScorecardData, QualityState } from "./scorecard";
+export { checkVerificationRequirements, autoPromoteVerification } from "./verification";
+export type { VerificationCheckResult, VerificationRequirement } from "./verification";

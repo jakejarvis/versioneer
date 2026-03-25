@@ -28,4 +28,7 @@ export const idPrefixes = {
   jobFailure: "jf",
   reviewQueue: "rq",
   auditLog: "al",
+  appScorecard: "asc",
+  sourceHealthMetric: "shm",
+  onboardingChecklist: "onb",
 } as const;

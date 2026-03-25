@@ -235,6 +235,9 @@ importers:
 
   packages/identity:
     dependencies:
+      '@versioneer/api-contracts':
+        specifier: workspace:*
+        version: link:../api-contracts
       '@versioneer/db':
         specifier: workspace:*
         version: link:../db
@@ -270,6 +273,9 @@ importers:
 
   packages/pipeline:
     dependencies:
+      '@versioneer/api-contracts':
+        specifier: workspace:*
+        version: link:../api-contracts
       '@versioneer/cache':
         specifier: workspace:*
         version: link:../cache

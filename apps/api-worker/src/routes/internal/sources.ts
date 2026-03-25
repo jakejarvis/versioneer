@@ -2,6 +2,7 @@ import { createDb } from "@versioneer/db";
 import {
   sources,
   sourceFetches,
+  sourceHealthMetrics,
   parserRuns,
   auditLog,
   generateId,
@@ -198,6 +199,20 @@ sourcesRoutes.get("/fetches/:id/parser-runs", async (c) => {
     .from(parserRuns)
     .where(eq(parserRuns.sourceFetchId, fetchId))
     .orderBy(desc(parserRuns.startedAt))
+    .all();
+  return c.json({ items });
+});
+
+// GET /sources/:id/health - last 30 days of health metrics
+sourcesRoutes.get("/:id/health", async (c) => {
+  const db = createDb(c.env.DB);
+  const sourceId = c.req.param("id");
+  const items = await db
+    .select()
+    .from(sourceHealthMetrics)
+    .where(eq(sourceHealthMetrics.sourceId, sourceId))
+    .orderBy(desc(sourceHealthMetrics.periodStart))
+    .limit(30)
     .all();
   return c.json({ items });
 });

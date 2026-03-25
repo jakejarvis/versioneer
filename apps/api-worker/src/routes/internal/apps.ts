@@ -3,6 +3,7 @@ import {
   apps,
   appAliases,
   appLatestReleases,
+  appScorecards,
   sources,
   releases,
   installRules,
@@ -74,7 +75,14 @@ appsRoutes.get("/:id", async (c) => {
     .from(sources)
     .where(eq(sources.appId, id));
 
-  return c.json({ ...app, latestReleases: latest, sourceCount: sourceCount?.count ?? 0 });
+  const scorecard = await db.select().from(appScorecards).where(eq(appScorecards.appId, id)).get();
+
+  return c.json({
+    ...app,
+    latestReleases: latest,
+    sourceCount: sourceCount?.count ?? 0,
+    scorecard: scorecard ?? null,
+  });
 });
 
 // POST /apps - create
@@ -133,6 +141,10 @@ appsRoutes.patch("/:id", async (c) => {
   if (parsed.data.mergedIntoAppId !== undefined)
     updates.mergedIntoAppId = parsed.data.mergedIntoAppId;
   if (parsed.data.notes !== undefined) updates.notes = parsed.data.notes;
+  if (parsed.data.verificationTier !== undefined)
+    updates.verificationTier = parsed.data.verificationTier;
+  if (parsed.data.qualityState !== undefined) updates.qualityState = parsed.data.qualityState;
+  if (parsed.data.lastReviewedAt !== undefined) updates.lastReviewedAt = parsed.data.lastReviewedAt;
 
   await db.update(apps).set(updates).where(eq(apps.id, id));
 

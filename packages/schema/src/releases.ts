@@ -132,6 +132,7 @@ export const appLatestReleases = sqliteTable(
       .notNull()
       .default("pipeline"),
     confidence: integer("confidence"),
+    decisionExplanationJson: text("decision_explanation_json"),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [uniqueIndex("idx_latest_app_channel").on(table.appId, table.channel)],

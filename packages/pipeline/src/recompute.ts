@@ -2,16 +2,19 @@ import { setCachedLatest } from "@versioneer/cache";
 import type { CacheKV } from "@versioneer/cache";
 import { createDb } from "@versioneer/db";
 import {
+  apps,
   releases,
   artifacts,
   appLatestReleases,
   adminOverrides,
+  reviewQueue,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
 import { compareVersionStrings } from "@versioneer/versioning";
 import { eq, and } from "drizzle-orm";
 
+import { generatePublicationExplanation, generateArtifactSelectionExplanation } from "./explain";
 import type { Env, RecomputeLatestJob } from "./types";
 
 const CHANNELS = ["stable", "beta", "nightly"] as const;
@@ -89,6 +92,55 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
       .where(and(eq(artifacts.releaseId, winningRelease.id), eq(artifacts.isPrimary, true)))
       .get();
 
+    // Generate decision explanation
+    const allArtifacts = await db
+      .select()
+      .from(artifacts)
+      .where(eq(artifacts.releaseId, winningRelease.id))
+      .all();
+
+    const publicationExplanation = generatePublicationExplanation(
+      winningRelease,
+      candidateReleases,
+      decisionSource === "override" ? override : null,
+      primaryArtifact,
+    );
+    const artifactExplanation = generateArtifactSelectionExplanation(primaryArtifact, allArtifacts);
+    const decisionExplanationJson = JSON.stringify({
+      publication: publicationExplanation,
+      artifact: artifactExplanation,
+    });
+
+    // Publication gating: check verification tier and quality state
+    const app = await db.select().from(apps).where(eq(apps.id, job.appId)).get();
+    if (app) {
+      const shouldGate =
+        (app.verificationTier === "unverified" && app.qualityState !== "green") ||
+        (app.verificationTier === "provisional" &&
+          (app.qualityState === "red" || app.qualityState === "unknown"));
+
+      if (shouldGate) {
+        // Route to review queue instead of publishing
+        await db.insert(reviewQueue).values({
+          id: generateId(idPrefixes.reviewQueue),
+          reviewType: "publication_gated",
+          relatedId: job.appId,
+          payloadJson: JSON.stringify({
+            channel,
+            releaseId: winningRelease.id,
+            version: winningRelease.versionRaw,
+            verificationTier: app.verificationTier,
+            qualityState: app.qualityState,
+            explanation: publicationExplanation,
+          }),
+          priority: 1,
+          status: "pending",
+          createdAt: now,
+        });
+        continue;
+      }
+    }
+
     // Upsert app_latest_releases
     const existing = await db
       .select()
@@ -107,6 +159,7 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
           releasedAt: winningRelease.releasedAt,
           decisionSource,
           confidence: winningRelease.sourceConfidence,
+          decisionExplanationJson,
           updatedAt: now,
         })
         .where(eq(appLatestReleases.id, existing.id));
@@ -122,6 +175,7 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
         releasedAt: winningRelease.releasedAt,
         decisionSource,
         confidence: winningRelease.sourceConfidence,
+        decisionExplanationJson,
         updatedAt: now,
       });
     }

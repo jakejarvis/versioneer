@@ -75,3 +75,26 @@ export const parserRuns = sqliteTable(
   },
   (table) => [index("idx_parser_runs_fetch_id").on(table.sourceFetchId)],
 );
+
+export const sourceHealthMetrics = sqliteTable(
+  "source_health_metrics",
+  {
+    id: text("id").primaryKey(),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => sources.id),
+    periodStart: text("period_start").notNull(),
+    fetchAttempts: integer("fetch_attempts").notNull().default(0),
+    fetchSuccesses: integer("fetch_successes").notNull().default(0),
+    fetchFailures: integer("fetch_failures").notNull().default(0),
+    parseAttempts: integer("parse_attempts").notNull().default(0),
+    parseSuccesses: integer("parse_successes").notNull().default(0),
+    parseFailures: integer("parse_failures").notNull().default(0),
+    reviewItemsCreated: integer("review_items_created").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_health_source_id").on(table.sourceId),
+    index("idx_health_source_period").on(table.sourceId, table.periodStart),
+  ],
+);

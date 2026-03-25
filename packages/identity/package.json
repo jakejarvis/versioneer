@@ -12,6 +12,7 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@versioneer/api-contracts": "workspace:*",
     "@versioneer/db": "workspace:*",
     "@versioneer/schema": "workspace:*"
   },

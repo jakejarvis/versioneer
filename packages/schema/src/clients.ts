@@ -54,6 +54,7 @@ export const clientInventoryApps = sqliteTable(
     latestReleaseId: text("latest_release_id"),
     latestVersionNormalized: text("latest_version_normalized"),
     latestVersionRaw: text("latest_version_raw"),
+    matchExplanationJson: text("match_explanation_json"),
     createdAt: text("created_at").notNull(),
   },
   (table) => [

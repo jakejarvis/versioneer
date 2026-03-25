@@ -1,5 +1,5 @@
 import { createDb } from "@versioneer/db";
-import { matchApp } from "@versioneer/identity";
+import { matchApp, generateMatchExplanation } from "@versioneer/identity";
 import type { AliasRecord } from "@versioneer/identity";
 import {
   apps,
@@ -118,6 +118,16 @@ publicRoutes.post("/inventory/check", async (c) => {
     confidenceWeight: a.confidenceWeight,
   }));
 
+  // Load all apps for verification tier lookup
+  const allAppDetails = await db
+    .select({ id: apps.id, verificationTier: apps.verificationTier })
+    .from(apps)
+    .all();
+  const appVerificationMap = new Map<string, string>();
+  for (const a of allAppDetails) {
+    appVerificationMap.set(a.id, a.verificationTier);
+  }
+
   // Load all latest releases
   const latestReleases = await db.select().from(appLatestReleases).all();
   const latestByApp = new Map<string, (typeof latestReleases)[number]>();
@@ -151,7 +161,14 @@ publicRoutes.post("/inventory/check", async (c) => {
     let latestReleaseId: string | null = null;
 
     if (matchResult.matched && matchResult.appId) {
-      const latest = latestByApp.get(matchResult.appId);
+      // Publication gating: unverified apps return unsupported
+      const tier = appVerificationMap.get(matchResult.appId);
+      if (tier === "unverified") {
+        decision = "unsupported";
+      }
+
+      const latest =
+        !tier || tier === "unverified" ? undefined : latestByApp.get(matchResult.appId);
       if (latest) {
         latestVersion = latest.versionNormalized;
         latestVersionRaw = latest.versionRaw;
@@ -178,6 +195,18 @@ publicRoutes.post("/inventory/check", async (c) => {
       decision = "ambiguous";
     }
 
+    // Generate match explanation
+    const matchExplanation = generateMatchExplanation(
+      {
+        appName: installedApp.appName,
+        bundleId: installedApp.bundleId,
+        teamId: installedApp.teamId,
+        version: installedApp.version,
+      },
+      matchResult,
+      aliasRecords,
+    );
+
     // Store inventory app record
     const ciaId = generateId(idPrefixes.clientInventoryApp);
     await db.insert(clientInventoryApps).values({
@@ -200,6 +229,7 @@ publicRoutes.post("/inventory/check", async (c) => {
       latestReleaseId,
       latestVersionNormalized: latestVersion,
       latestVersionRaw,
+      matchExplanationJson: JSON.stringify(matchExplanation),
       createdAt: now,
     });
 

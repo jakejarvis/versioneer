@@ -13,6 +13,7 @@ import {
 import { normalizeVersion, inferChannel } from "@versioneer/versioning";
 import { eq } from "drizzle-orm";
 
+import { incrementHealthMetric } from "./health";
 import type { Env, SourceParseJob } from "./types";
 
 export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<void> {
@@ -172,6 +173,14 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
       }
     }
 
+    // Track health metric: parse success
+    await incrementHealthMetric(db, source.id, "parseAttempts");
+    await incrementHealthMetric(
+      db,
+      source.id,
+      output.errors.length > 0 && output.releases.length > 0 ? "parseSuccesses" : "parseSuccesses",
+    );
+
     // Enqueue recompute-latest
     await env.RECOMPUTE_LATEST_QUEUE.send({
       appId: source.appId,
@@ -190,6 +199,10 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
       startedAt: now,
       finishedAt: new Date().toISOString(),
     });
+
+    // Track health metric: parse failure
+    await incrementHealthMetric(db, source.id, "parseAttempts");
+    await incrementHealthMetric(db, source.id, "parseFailures");
 
     throw error;
   }

@@ -19,6 +19,9 @@ export const appUpdateSchema = z.object({
   status: z.enum(["active", "deprecated", "merged", "unlisted"]).optional(),
   mergedIntoAppId: z.string().nullable().optional(),
   notes: z.string().max(5000).nullable().optional(),
+  verificationTier: z.enum(["unverified", "provisional", "verified"]).optional(),
+  qualityState: z.enum(["green", "yellow", "red", "unknown"]).optional(),
+  lastReviewedAt: z.string().nullable().optional(),
 });
 
 export const aliasCreateSchema = z.object({
@@ -101,6 +104,17 @@ export const overrideCreateSchema = z.object({
   createdBy: z.string().max(200).optional(),
 });
 
+export const onboardingChecklistUpdateSchema = z.object({
+  hasCanonicalRecord: z.boolean().optional(),
+  hasAliases: z.boolean().optional(),
+  hasSource: z.boolean().optional(),
+  parserOutputVerified: z.boolean().optional(),
+  latestReleasePublished: z.boolean().optional(),
+  reviewQueueClear: z.boolean().optional(),
+  qualityScoreAcceptable: z.boolean().optional(),
+});
+
+export type OnboardingChecklistUpdateInput = z.infer<typeof onboardingChecklistUpdateSchema>;
 export type AppCreateInput = z.infer<typeof appCreateSchema>;
 export type AppUpdateInput = z.infer<typeof appUpdateSchema>;
 export type AliasCreateInput = z.infer<typeof aliasCreateSchema>;

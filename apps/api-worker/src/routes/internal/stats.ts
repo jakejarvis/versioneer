@@ -32,6 +32,23 @@ statsRoutes.get("/", async (c) => {
     .from(releases)
     .where(sql`${releases.createdAt} > datetime('now', '-7 days')`);
 
+  const [verifiedCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(apps)
+    .where(sql`${apps.verificationTier} = 'verified'`);
+  const [greenCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(apps)
+    .where(sql`${apps.qualityState} = 'green'`);
+  const [yellowCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(apps)
+    .where(sql`${apps.qualityState} = 'yellow'`);
+  const [redCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(apps)
+    .where(sql`${apps.qualityState} = 'red'`);
+
   return c.json({
     totalApps: appCount?.count ?? 0,
     activeSources: activeSourceCount?.count ?? 0,
@@ -39,5 +56,9 @@ statsRoutes.get("/", async (c) => {
     pendingReviews: pendingReviewCount?.count ?? 0,
     openFailures: openFailureCount?.count ?? 0,
     recentReleases: recentReleaseCount?.count ?? 0,
+    verifiedApps: verifiedCount?.count ?? 0,
+    greenApps: greenCount?.count ?? 0,
+    yellowApps: yellowCount?.count ?? 0,
+    redApps: redCount?.count ?? 0,
   });
 });

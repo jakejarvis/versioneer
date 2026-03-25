@@ -6,9 +6,11 @@ import { appsRoutes } from "./apps";
 import { auditLogRoutes } from "./audit-log";
 import { installRulesRoutes } from "./install-rules";
 import { jobFailuresRoutes } from "./job-failures";
+import { onboardingRoutes } from "./onboarding";
 import { overridesRoutes } from "./overrides";
 import { releasesRoutes } from "./releases";
 import { reviewQueueRoutes } from "./review-queue";
+import { scorecardsRoutes } from "./scorecards";
 import { sourcesRoutes } from "./sources";
 import { statsRoutes } from "./stats";
 
@@ -24,6 +26,8 @@ internalRoutes.route("/job-failures", jobFailuresRoutes);
 internalRoutes.route("/overrides", overridesRoutes);
 internalRoutes.route("/audit-log", auditLogRoutes);
 internalRoutes.route("/install-rules", installRulesRoutes);
+internalRoutes.route("/scorecards", scorecardsRoutes);
+internalRoutes.route("/onboarding", onboardingRoutes);
 
 // Recompute latest (kept at top level for backwards compat)
 internalRoutes.post("/apps/:id/recompute-latest", async (c) => {

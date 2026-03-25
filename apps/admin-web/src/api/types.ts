@@ -12,6 +12,10 @@ export interface DashboardStats {
   pendingReviews: number;
   openFailures: number;
   recentReleases: number;
+  verifiedApps: number;
+  greenApps: number;
+  yellowApps: number;
+  redApps: number;
 }
 
 export interface App {
@@ -23,6 +27,10 @@ export interface App {
   status: "active" | "deprecated" | "merged" | "unlisted";
   mergedIntoAppId: string | null;
   notes: string | null;
+  verificationTier: "unverified" | "provisional" | "verified";
+  qualityState: "green" | "yellow" | "red" | "unknown";
+  qualityScore: number | null;
+  lastReviewedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -153,6 +161,7 @@ export interface AppLatestRelease {
   releasedAt: string | null;
   decisionSource: "pipeline" | "override" | "manual";
   confidence: number | null;
+  decisionExplanationJson: string | null;
   updatedAt: string;
 }
 
@@ -215,4 +224,70 @@ export interface AuditLogEntry {
   targetId: string | null;
   payloadJson: string | null;
   createdAt: string;
+}
+
+export interface AppScorecard {
+  id: string;
+  appId: string;
+  sourceTypesPresent: string | null;
+  latestFetchSuccessAt: string | null;
+  recentFetchSuccessRate: number | null;
+  recentParseSuccessRate: number | null;
+  latestReleaseConfidence: number | null;
+  artifactTrustStatus: string | null;
+  inventoryMatchSuccessRate: number | null;
+  ambiguityRate: number | null;
+  activeOverrideCount: number;
+  updatedAt: string;
+}
+
+export interface OnboardingChecklist {
+  id: string;
+  appId: string;
+  hasCanonicalRecord: boolean;
+  hasAliases: boolean;
+  hasSource: boolean;
+  parserOutputVerified: boolean;
+  latestReleasePublished: boolean;
+  reviewQueueClear: boolean;
+  qualityScoreAcceptable: boolean;
+  isComplete: boolean;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SourceHealthMetric {
+  id: string;
+  sourceId: string;
+  periodStart: string;
+  fetchAttempts: number;
+  fetchSuccesses: number;
+  fetchFailures: number;
+  parseAttempts: number;
+  parseSuccesses: number;
+  parseFailures: number;
+  reviewItemsCreated: number;
+  createdAt: string;
+}
+
+export interface MatchExplanation {
+  method: string;
+  confidence: number;
+  matchedAliasType: string | null;
+  matchedAliasValue: string | null;
+  candidateCount: number;
+  ambiguous: boolean;
+  ambiguityGap: number | null;
+  topCandidates: { appId: string; appName: string; method: string; confidence: number }[];
+}
+
+export interface DecisionExplanation {
+  selectedReleaseId: string;
+  selectedVersion: string;
+  reason: "highest_version" | "override";
+  overrideId: string | null;
+  candidateCount: number;
+  alternatesRejected: { releaseId: string; version: string; reason: string }[];
+  sourceConfidence: number | null;
 }
