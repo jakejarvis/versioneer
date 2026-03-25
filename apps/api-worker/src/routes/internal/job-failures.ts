@@ -4,9 +4,9 @@ import { paginationSchema } from "@versioneer/validation";
 import { eq, sql, desc } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const jobFailuresRoutes = new Hono<{ Bindings: Env }>();
+export const jobFailuresRoutes = new Hono<AppEnv>();
 
 // GET /job-failures - list
 jobFailuresRoutes.get("/", async (c) => {

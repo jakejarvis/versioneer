@@ -10,9 +10,9 @@ import {
 import { sql } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const statsRoutes = new Hono<{ Bindings: Env }>();
+export const statsRoutes = new Hono<AppEnv>();
 
 statsRoutes.get("/", async (c) => {
   const db = createDb(c.env.DB);

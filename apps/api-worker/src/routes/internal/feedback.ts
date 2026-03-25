@@ -4,9 +4,9 @@ import { paginationSchema, feedbackUpdateSchema } from "@versioneer/validation";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const feedbackRoutes = new Hono<{ Bindings: Env }>();
+export const feedbackRoutes = new Hono<AppEnv>();
 
 // GET /feedback - list
 feedbackRoutes.get("/", async (c) => {
@@ -82,7 +82,7 @@ feedbackRoutes.patch("/:id", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "feedback_updated",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "feedback",
     targetId: id,
     payloadJson: JSON.stringify({ status: parsed.data.status }),

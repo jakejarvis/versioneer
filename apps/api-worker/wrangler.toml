@@ -4,6 +4,9 @@ compatibility_date = "2025-01-13"
 
 [vars]
 ENVIRONMENT = "dev"
+CF_ACCESS_TEAM_DOMAIN = ""
+CF_ACCESS_AUD = ""
+ADMIN_ORIGIN = "http://localhost:5173"
 
 [[d1_databases]]
 binding = "DB"
@@ -41,7 +44,13 @@ queue = "versioneer-recompute-latest-dev"
 [env.staging]
 [env.staging.vars]
 ENVIRONMENT = "staging"
+CF_ACCESS_TEAM_DOMAIN = "yourteam.cloudflareaccess.com"
+CF_ACCESS_AUD = ""
+ADMIN_ORIGIN = ""
 
 [env.production]
 [env.production.vars]
 ENVIRONMENT = "production"
+CF_ACCESS_TEAM_DOMAIN = "yourteam.cloudflareaccess.com"
+CF_ACCESS_AUD = ""
+ADMIN_ORIGIN = ""

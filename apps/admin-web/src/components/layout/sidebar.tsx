@@ -1,11 +1,13 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 
+import { useAuth } from "@/api/hooks/use-auth";
 import { navItems } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 export function Sidebar() {
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
+  const { data: user } = useAuth();
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-border bg-sidebar">
@@ -36,6 +38,16 @@ export function Sidebar() {
           })}
         </ul>
       </nav>
+      {user && (
+        <div className="border-t border-border p-3">
+          <div className="flex items-center gap-2 text-sm text-sidebar-foreground/70">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-medium">
+              {user.email[0]?.toUpperCase() ?? "?"}
+            </div>
+            <span className="truncate">{user.email}</span>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

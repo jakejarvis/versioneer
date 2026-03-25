@@ -11,9 +11,9 @@ import { paginationSchema } from "@versioneer/validation";
 import { eq, sql, desc } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const reviewQueueRoutes = new Hono<{ Bindings: Env }>();
+export const reviewQueueRoutes = new Hono<AppEnv>();
 
 // GET /review-queue - list
 reviewQueueRoutes.get("/", async (c) => {
@@ -74,7 +74,7 @@ reviewQueueRoutes.patch("/:id", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "review_item_updated",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "review_queue",
     targetId: id,
     payloadJson: JSON.stringify({ status: newStatus }),
@@ -137,7 +137,7 @@ reviewQueueRoutes.post("/:id/resolve-match", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "match_resolved",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "review_queue",
     targetId: id,
     payloadJson: JSON.stringify({ appId, aliasType, value, aliasId }),
@@ -170,7 +170,7 @@ reviewQueueRoutes.post("/:id/approve-publication", async (c) => {
     targetId: `${appId}:${channel}`,
     payloadJson: payload.releaseId ? JSON.stringify({ releaseId: payload.releaseId }) : "{}",
     reason: "Approved via review queue",
-    createdBy: "admin",
+    createdBy: c.get("user").email,
     isActive: true,
     createdAt: now,
   });

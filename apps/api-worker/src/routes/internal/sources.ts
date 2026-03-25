@@ -12,9 +12,9 @@ import { paginationSchema, sourceCreateSchema, sourceUpdateSchema } from "@versi
 import { eq, and, sql, desc } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const sourcesRoutes = new Hono<{ Bindings: Env }>();
+export const sourcesRoutes = new Hono<AppEnv>();
 
 // GET /sources - list
 sourcesRoutes.get("/", async (c) => {
@@ -88,7 +88,7 @@ sourcesRoutes.post("/", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "source_created",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "source",
     targetId: id,
     payloadJson: JSON.stringify(parsed.data),
@@ -125,7 +125,7 @@ sourcesRoutes.patch("/:id", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "source_updated",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "source",
     targetId: id,
     payloadJson: JSON.stringify(parsed.data),

@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import { cfAccessAuth } from "../../auth/middleware";
+import type { AppEnv } from "../../env";
 import { aliasesRoutes } from "./aliases";
 import { appsRoutes } from "./apps";
 import { auditLogRoutes } from "./audit-log";
+import { authRoutes } from "./auth";
 import { executionsRoutes } from "./executions";
 import { feedbackRoutes } from "./feedback";
 import { installRulesRoutes } from "./install-rules";
@@ -16,8 +18,11 @@ import { scorecardsRoutes } from "./scorecards";
 import { sourcesRoutes } from "./sources";
 import { statsRoutes } from "./stats";
 
-export const internalRoutes = new Hono<{ Bindings: Env }>();
+export const internalRoutes = new Hono<AppEnv>();
 
+internalRoutes.use("*", cfAccessAuth);
+
+internalRoutes.route("/auth", authRoutes);
 internalRoutes.route("/stats", statsRoutes);
 internalRoutes.route("/apps", appsRoutes);
 internalRoutes.route("/aliases", aliasesRoutes);

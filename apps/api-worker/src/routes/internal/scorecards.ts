@@ -5,9 +5,9 @@ import { paginationSchema } from "@versioneer/validation";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const scorecardsRoutes = new Hono<{ Bindings: Env }>();
+export const scorecardsRoutes = new Hono<AppEnv>();
 
 // GET /scorecards - list
 scorecardsRoutes.get("/", async (c) => {
@@ -47,7 +47,7 @@ scorecardsRoutes.get("/", async (c) => {
     .where(where);
 
   return c.json({
-    items: items.map((row) => ({ ...row.app, scorecard: row.scorecard })),
+    items: items.map((row) => Object.assign({}, row.app, { scorecard: row.scorecard })),
     total: countResult?.count ?? 0,
     limit,
     offset,
@@ -103,7 +103,7 @@ scorecardsRoutes.post("/:appId/promote", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "verification_promoted",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "app",
     targetId: appId,
     payloadJson: JSON.stringify({ from: app.verificationTier, to: newTier }),

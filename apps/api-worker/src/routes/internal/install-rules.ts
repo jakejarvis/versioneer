@@ -4,9 +4,9 @@ import { installRuleUpdateSchema } from "@versioneer/validation";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const installRulesRoutes = new Hono<{ Bindings: Env }>();
+export const installRulesRoutes = new Hono<AppEnv>();
 
 // PATCH /install-rules/:id
 installRulesRoutes.patch("/:id", async (c) => {

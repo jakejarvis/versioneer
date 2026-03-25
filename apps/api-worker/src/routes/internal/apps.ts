@@ -21,9 +21,9 @@ import {
 import { eq, like, sql, and, desc } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const appsRoutes = new Hono<{ Bindings: Env }>();
+export const appsRoutes = new Hono<AppEnv>();
 
 // GET /apps - list
 appsRoutes.get("/", async (c) => {
@@ -111,7 +111,7 @@ appsRoutes.post("/", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "app_created",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "app",
     targetId: id,
     payloadJson: JSON.stringify(parsed.data),
@@ -152,7 +152,7 @@ appsRoutes.patch("/:id", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "app_updated",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "app",
     targetId: id,
     payloadJson: JSON.stringify(parsed.data),
@@ -199,7 +199,7 @@ appsRoutes.post("/:id/aliases", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "alias_created",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "alias",
     targetId: id,
     payloadJson: JSON.stringify({ appId, ...parsed.data }),

@@ -7,7 +7,13 @@ import { publicRoutes } from "./routes/public";
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.use("*", cors());
+app.use("*", async (c, next) => {
+  const handler = cors({
+    origin: c.env.ADMIN_ORIGIN || "*",
+    credentials: true,
+  });
+  return handler(c, next);
+});
 
 app.get("/health", (c) => {
   return c.json({ status: "ok", environment: c.env.ENVIRONMENT });

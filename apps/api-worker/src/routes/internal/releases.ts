@@ -12,9 +12,9 @@ import { paginationSchema, releaseUpdateSchema } from "@versioneer/validation";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const releasesRoutes = new Hono<{ Bindings: Env }>();
+export const releasesRoutes = new Hono<AppEnv>();
 
 // GET /releases - list
 releasesRoutes.get("/", async (c) => {
@@ -81,7 +81,7 @@ releasesRoutes.patch("/:id", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "release_updated",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "release",
     targetId: id,
     payloadJson: JSON.stringify(parsed.data),
@@ -139,7 +139,7 @@ releasesRoutes.post("/:id/pin", async (c) => {
     targetId,
     payloadJson: JSON.stringify({ releaseId: id }),
     reason: "Pinned via admin UI",
-    createdBy: "admin",
+    createdBy: c.get("user").email,
     isActive: true,
     createdAt: now,
   });

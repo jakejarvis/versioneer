@@ -21,6 +21,7 @@
     "@versioneer/versioning": "workspace:*",
     "drizzle-orm": "catalog:",
     "hono": "^4.12.9",
+    "jose": "^6.2.2",
     "zod": "catalog:"
   },
   "devDependencies": {

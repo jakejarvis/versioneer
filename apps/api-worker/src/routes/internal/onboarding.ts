@@ -18,9 +18,9 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const onboardingRoutes = new Hono<{ Bindings: Env }>();
+export const onboardingRoutes = new Hono<AppEnv>();
 
 // GET /onboarding/:appId
 onboardingRoutes.get("/:appId", async (c) => {
@@ -169,7 +169,7 @@ onboardingRoutes.post("/", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "app_onboarded",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "app",
     targetId: appId,
     payloadJson: JSON.stringify({ aliases: parsed.data.aliases?.length ?? 0, hasSource }),

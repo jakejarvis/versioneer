@@ -35,6 +35,7 @@ export async function apiClient<T>(path: string, options: RequestOptions = {}): 
   const response = await fetch(url.toString(), {
     method: options.method ?? "GET",
     headers,
+    credentials: "include",
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 

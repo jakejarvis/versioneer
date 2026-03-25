@@ -4,9 +4,9 @@ import { paginationSchema, overrideCreateSchema } from "@versioneer/validation";
 import { eq, sql, desc } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const overridesRoutes = new Hono<{ Bindings: Env }>();
+export const overridesRoutes = new Hono<AppEnv>();
 
 // GET /overrides - list
 overridesRoutes.get("/", async (c) => {
@@ -62,7 +62,7 @@ overridesRoutes.post("/", async (c) => {
     targetId: parsed.data.targetId,
     payloadJson: parsed.data.payloadJson,
     reason: parsed.data.reason ?? null,
-    createdBy: parsed.data.createdBy ?? null,
+    createdBy: c.get("user").email,
     isActive: true,
     createdAt: now,
   });
@@ -70,8 +70,8 @@ overridesRoutes.post("/", async (c) => {
   await db.insert(auditLog).values({
     id: generateId(idPrefixes.auditLog),
     eventType: "override_created",
-    actorType: parsed.data.createdBy ? "admin" : "system",
-    actorId: parsed.data.createdBy ?? null,
+    actorType: "admin",
+    actorId: c.get("user").email,
     targetType: parsed.data.targetType,
     targetId: parsed.data.targetId,
     payloadJson: parsed.data.payloadJson,
@@ -96,7 +96,7 @@ overridesRoutes.patch("/:id", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "override_deactivated",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "override",
     targetId: id,
     payloadJson: null,

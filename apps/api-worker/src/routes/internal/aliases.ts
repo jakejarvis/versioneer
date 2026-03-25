@@ -4,9 +4,9 @@ import { aliasUpdateSchema } from "@versioneer/validation";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
+import type { AppEnv } from "../../env";
 
-export const aliasesRoutes = new Hono<{ Bindings: Env }>();
+export const aliasesRoutes = new Hono<AppEnv>();
 
 // PATCH /aliases/:id
 aliasesRoutes.patch("/:id", async (c) => {
@@ -45,7 +45,7 @@ aliasesRoutes.delete("/:id", async (c) => {
     id: generateId(idPrefixes.auditLog),
     eventType: "alias_deleted",
     actorType: "admin",
-    actorId: null,
+    actorId: c.get("user").email,
     targetType: "alias",
     targetId: id,
     payloadJson: JSON.stringify({
