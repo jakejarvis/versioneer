@@ -1,4 +1,4 @@
-import { inferChannel, isPreRelease } from "@macupdater/versioning";
+import { inferChannel, isPreRelease } from "@versioneer/versioning";
 
 import type { SourceParser, ParserOutput, ParsedRelease, ParsedArtifact } from "./types";
 

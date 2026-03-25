@@ -1,4 +1,4 @@
-import { createDb } from "@macupdater/db";
+import { createDb } from "@versioneer/db";
 import {
   releases,
   artifacts,
@@ -6,8 +6,8 @@ import {
   auditLog,
   generateId,
   idPrefixes,
-} from "@macupdater/schema";
-import { paginationSchema, releaseUpdateSchema } from "@macupdater/validation";
+} from "@versioneer/schema";
+import { paginationSchema, releaseUpdateSchema } from "@versioneer/validation";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { Hono } from "hono";
 

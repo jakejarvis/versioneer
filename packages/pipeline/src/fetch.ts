@@ -1,5 +1,5 @@
-import { createDb } from "@macupdater/db";
-import { sources, sourceFetches, generateId, idPrefixes } from "@macupdater/schema";
+import { createDb } from "@versioneer/db";
+import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/schema";
 import { eq } from "drizzle-orm";
 
 import type { Env, SourceFetchJob } from "./types";
@@ -40,7 +40,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
     const headers: Record<string, string> = {};
     if (source.sourceType === "github_releases") {
       headers["Accept"] = "application/vnd.github.v3+json";
-      headers["User-Agent"] = "MacUpdater/1.0";
+      headers["User-Agent"] = "Versioneer/1.0 (https://versioneer.app)";
     }
 
     // Use etag/last-modified for conditional requests

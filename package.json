@@ -1,5 +1,5 @@
 {
-  "name": "macupdater",
+  "name": "versioneer",
   "private": true,
   "scripts": {
     "build": "turbo run build",

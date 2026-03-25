@@ -66,9 +66,6 @@ importers:
         specifier: ^3.5.0
         version: 3.5.0
     devDependencies:
-      '@macupdater/typescript-config':
-        specifier: workspace:*
-        version: link:../../packages/typescript-config
       '@tailwindcss/vite':
         specifier: ^4.2.2
         version: 4.2.2(vite@8.0.2(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0))
@@ -84,6 +81,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
+      '@versioneer/typescript-config':
+        specifier: workspace:*
+        version: link:../../packages/typescript-config
       '@vitejs/plugin-react':
         specifier: ^6.0.1
         version: 6.0.1(vite@8.0.2(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0))
@@ -99,25 +99,25 @@ importers:
 
   apps/api-worker:
     dependencies:
-      '@macupdater/api-contracts':
+      '@versioneer/api-contracts':
         specifier: workspace:*
         version: link:../../packages/api-contracts
-      '@macupdater/cache':
+      '@versioneer/cache':
         specifier: workspace:*
         version: link:../../packages/cache
-      '@macupdater/db':
+      '@versioneer/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@macupdater/identity':
+      '@versioneer/identity':
         specifier: workspace:*
         version: link:../../packages/identity
-      '@macupdater/schema':
+      '@versioneer/schema':
         specifier: workspace:*
         version: link:../../packages/schema
-      '@macupdater/validation':
+      '@versioneer/validation':
         specifier: workspace:*
         version: link:../../packages/validation
-      '@macupdater/versioning':
+      '@versioneer/versioning':
         specifier: workspace:*
         version: link:../../packages/versioning
       drizzle-orm:
@@ -133,7 +133,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260317.1
         version: 4.20260317.1
-      '@macupdater/typescript-config':
+      '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
       typescript:
@@ -145,22 +145,22 @@ importers:
 
   apps/queue-consumer:
     dependencies:
-      '@macupdater/cache':
+      '@versioneer/cache':
         specifier: workspace:*
         version: link:../../packages/cache
-      '@macupdater/db':
+      '@versioneer/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@macupdater/parsers':
+      '@versioneer/parsers':
         specifier: workspace:*
         version: link:../../packages/parsers
-      '@macupdater/pipeline':
+      '@versioneer/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline
-      '@macupdater/schema':
+      '@versioneer/schema':
         specifier: workspace:*
         version: link:../../packages/schema
-      '@macupdater/versioning':
+      '@versioneer/versioning':
         specifier: workspace:*
         version: link:../../packages/versioning
       drizzle-orm:
@@ -173,7 +173,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260317.1
         version: 4.20260317.1
-      '@macupdater/typescript-config':
+      '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
       typescript:
@@ -185,14 +185,14 @@ importers:
 
   packages/api-contracts:
     dependencies:
-      '@macupdater/validation':
+      '@versioneer/validation':
         specifier: workspace:*
         version: link:../validation
       zod:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@macupdater/typescript-config':
+      '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
@@ -201,7 +201,7 @@ importers:
 
   packages/cache:
     devDependencies:
-      '@macupdater/typescript-config':
+      '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
@@ -210,7 +210,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@macupdater/schema':
+      '@versioneer/schema':
         specifier: workspace:*
         version: link:../schema
       drizzle-orm:
@@ -220,7 +220,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260317.1
         version: 4.20260317.1
-      '@macupdater/typescript-config':
+      '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       drizzle-kit:
@@ -232,14 +232,14 @@ importers:
 
   packages/identity:
     dependencies:
-      '@macupdater/db':
+      '@versioneer/db':
         specifier: workspace:*
         version: link:../db
-      '@macupdater/schema':
+      '@versioneer/schema':
         specifier: workspace:*
         version: link:../schema
     devDependencies:
-      '@macupdater/typescript-config':
+      '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
@@ -248,17 +248,17 @@ importers:
 
   packages/parsers:
     dependencies:
-      '@macupdater/schema':
+      '@versioneer/schema':
         specifier: workspace:*
         version: link:../schema
-      '@macupdater/versioning':
+      '@versioneer/versioning':
         specifier: workspace:*
         version: link:../versioning
       zod:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@macupdater/typescript-config':
+      '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
@@ -267,19 +267,19 @@ importers:
 
   packages/pipeline:
     dependencies:
-      '@macupdater/cache':
+      '@versioneer/cache':
         specifier: workspace:*
         version: link:../cache
-      '@macupdater/db':
+      '@versioneer/db':
         specifier: workspace:*
         version: link:../db
-      '@macupdater/parsers':
+      '@versioneer/parsers':
         specifier: workspace:*
         version: link:../parsers
-      '@macupdater/schema':
+      '@versioneer/schema':
         specifier: workspace:*
         version: link:../schema
-      '@macupdater/versioning':
+      '@versioneer/versioning':
         specifier: workspace:*
         version: link:../versioning
       drizzle-orm:
@@ -289,7 +289,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260317.1
         version: 4.20260317.1
-      '@macupdater/typescript-config':
+      '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
@@ -305,7 +305,7 @@ importers:
         specifier: ^5.1.7
         version: 5.1.7
     devDependencies:
-      '@macupdater/typescript-config':
+      '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
@@ -320,7 +320,7 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@macupdater/typescript-config':
+      '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:
@@ -329,7 +329,7 @@ importers:
 
   packages/versioning:
     devDependencies:
-      '@macupdater/typescript-config':
+      '@versioneer/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
       typescript:

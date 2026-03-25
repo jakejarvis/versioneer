@@ -1,5 +1,5 @@
-import { createDb } from "@macupdater/db";
-import { getParser } from "@macupdater/parsers";
+import { createDb } from "@versioneer/db";
+import { getParser } from "@versioneer/parsers";
 import {
   sourceFetches,
   sources,
@@ -9,8 +9,8 @@ import {
   artifacts,
   generateId,
   idPrefixes,
-} from "@macupdater/schema";
-import { normalizeVersion, inferChannel } from "@macupdater/versioning";
+} from "@versioneer/schema";
+import { normalizeVersion, inferChannel } from "@versioneer/versioning";
 import { eq } from "drizzle-orm";
 
 import type { Env, SourceParseJob } from "./types";

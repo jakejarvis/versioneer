@@ -1,6 +1,6 @@
-import { createDb } from "@macupdater/db";
-import { auditLog } from "@macupdater/schema";
-import { paginationSchema } from "@macupdater/validation";
+import { createDb } from "@versioneer/db";
+import { auditLog } from "@versioneer/schema";
+import { paginationSchema } from "@versioneer/validation";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { Hono } from "hono";
 

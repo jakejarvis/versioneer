@@ -1,11 +1,11 @@
-import { createDb } from "@macupdater/db";
-import { handleSourceFetch, handleSourceParse, handleRecomputeLatest } from "@macupdater/pipeline";
-import type { SourceFetchJob, SourceParseJob, RecomputeLatestJob } from "@macupdater/pipeline";
-import { jobFailures, generateId, idPrefixes } from "@macupdater/schema";
+import { createDb } from "@versioneer/db";
+import { handleSourceFetch, handleSourceParse, handleRecomputeLatest } from "@versioneer/pipeline";
+import type { SourceFetchJob, SourceParseJob, RecomputeLatestJob } from "@versioneer/pipeline";
+import { jobFailures, generateId, idPrefixes } from "@versioneer/schema";
 
 import type { Env } from "./env";
 // Import parsers to trigger auto-registration
-import "@macupdater/parsers";
+import "@versioneer/parsers";
 
 interface QueueMessage<T = unknown> {
   body: T;
@@ -91,7 +91,7 @@ export default {
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
     // Cron handler for poll-sources
     const db = createDb(env.DB);
-    const { sources } = await import("@macupdater/schema");
+    const { sources } = await import("@versioneer/schema");
     const { eq } = await import("drizzle-orm");
 
     const now = new Date();

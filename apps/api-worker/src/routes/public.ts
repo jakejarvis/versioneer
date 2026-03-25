@@ -1,6 +1,6 @@
-import { createDb } from "@macupdater/db";
-import { matchApp } from "@macupdater/identity";
-import type { AliasRecord } from "@macupdater/identity";
+import { createDb } from "@versioneer/db";
+import { matchApp } from "@versioneer/identity";
+import type { AliasRecord } from "@versioneer/identity";
 import {
   apps,
   appAliases,
@@ -11,11 +11,11 @@ import {
   clientInventoryApps,
   generateId,
   idPrefixes,
-} from "@macupdater/schema";
-import { inventoryCheckRequestSchema } from "@macupdater/validation";
-import type { AppDecision } from "@macupdater/validation";
-import { normalizeVersion } from "@macupdater/versioning";
-import { compareVersionStrings } from "@macupdater/versioning";
+} from "@versioneer/schema";
+import { inventoryCheckRequestSchema } from "@versioneer/validation";
+import type { AppDecision } from "@versioneer/validation";
+import { normalizeVersion } from "@versioneer/versioning";
+import { compareVersionStrings } from "@versioneer/versioning";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 

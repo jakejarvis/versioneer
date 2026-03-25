@@ -1,5 +1,5 @@
 {
-  "name": "@macupdater/db",
+  "name": "@versioneer/db",
   "version": "0.0.1",
   "private": true,
   "main": "src/index.ts",
@@ -14,12 +14,12 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
-    "@macupdater/schema": "workspace:*",
+    "@versioneer/schema": "workspace:*",
     "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260317.1",
-    "@macupdater/typescript-config": "workspace:*",
+    "@versioneer/typescript-config": "workspace:*",
     "drizzle-kit": "^0.31.10",
     "typescript": "^6.0.2"
   }
