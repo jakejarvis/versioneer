@@ -72,7 +72,10 @@ function parseSparkleItem(xml: string): ParsedRelease | null {
       };
 
       const length = extractAttrValue(encAttrs, "length");
-      if (length) artifact.sizeBytes = parseInt(length, 10);
+      if (length) {
+        const sizeBytes = parseInt(length, 10);
+        if (!isNaN(sizeBytes) && sizeBytes > 0) artifact.sizeBytes = sizeBytes;
+      }
 
       const signature =
         extractAttrValue(encAttrs, "sparkle:edSignature") ??
@@ -122,8 +125,8 @@ function extractAttr(xml: string, tag: string, attr: string): string | null {
 }
 
 function extractAttrValue(attrs: string, name: string): string | null {
-  const match = attrs.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`, "i"));
-  return match?.[1] ?? null;
+  const match = attrs.match(new RegExp(`${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, "i"));
+  return match?.[1] ?? match?.[2] ?? null;
 }
 
 function inferArtifactType(url: string): ParsedArtifact["type"] {

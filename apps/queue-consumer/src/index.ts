@@ -103,11 +103,15 @@ export default {
       const intervalMs = source.pollIntervalMinutes * 60 * 1000;
 
       if (!lastFetched || now.getTime() - lastFetched.getTime() >= intervalMs) {
-        await env.SOURCE_FETCH_QUEUE.send({
-          sourceId: source.id,
-          reason: "scheduled",
-          force: false,
-        });
+        try {
+          await env.SOURCE_FETCH_QUEUE.send({
+            sourceId: source.id,
+            reason: "scheduled",
+            force: false,
+          });
+        } catch (error) {
+          console.error(`Failed to queue source ${source.id}:`, error);
+        }
       }
     }
   },

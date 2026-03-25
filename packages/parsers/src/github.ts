@@ -60,7 +60,11 @@ export const githubReleasesParser: SourceParser = {
 
           const release: ParsedRelease = {
             versionRaw,
-            channel: ghRelease.prerelease ? "beta" : inferChannel(versionRaw),
+            channel: ghRelease.prerelease
+              ? inferChannel(versionRaw) === "stable"
+                ? "beta"
+                : inferChannel(versionRaw)
+              : inferChannel(versionRaw),
             isPrerelease: ghRelease.prerelease || isPreRelease(versionRaw),
             publishedAt: ghRelease.published_at ?? undefined,
             releaseNotesUrl: ghRelease.html_url ?? undefined,
@@ -89,15 +93,19 @@ export const githubReleasesParser: SourceParser = {
 
 function isMacArtifact(name: string): boolean {
   const lower = name.toLowerCase();
-  return (
-    lower.endsWith(".dmg") ||
-    lower.endsWith(".zip") ||
-    lower.endsWith(".pkg") ||
+  const hasMacKeyword =
     lower.includes("mac") ||
     lower.includes("darwin") ||
     lower.includes("osx") ||
-    lower.includes("macos")
-  );
+    lower.includes("macos") ||
+    lower.includes("apple");
+  // .dmg and .pkg are mac-only formats
+  if (lower.endsWith(".dmg") || lower.endsWith(".pkg")) return true;
+  // .zip is cross-platform — only match if the name indicates macOS
+  if (lower.endsWith(".zip") && hasMacKeyword) return true;
+  // Non-archive files with mac keywords (e.g. "MyApp-mac.tar.gz")
+  if (hasMacKeyword) return true;
+  return false;
 }
 
 function inferArtifactType(name: string): ParsedArtifact["type"] {

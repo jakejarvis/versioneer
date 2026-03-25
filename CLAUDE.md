@@ -106,6 +106,17 @@ React 19 + Vite 8 + TanStack Router (manual route tree, not codegen) + TanStack 
 
 Owned by `packages/db`. Drizzle Kit generates from `packages/schema/src/*.ts`. Migrations live in `packages/db/migrations/`. The `packages/db/wrangler.toml` has a minimal D1 binding just for running `wrangler d1 migrations apply`.
 
+## Quality Gates
+
+All four must pass with zero errors AND zero warnings before committing or declaring a task complete:
+
+```bash
+pnpm run lint          # oxlint — 0 warnings, 0 errors
+pnpm run fmt:check     # oxfmt — no formatting diffs
+pnpm run check-types   # tsc --noEmit across all packages
+pnpm run test          # vitest — all tests pass
+```
+
 ## Code Style
 
 - oxfmt for formatting (config in `.oxfmtrc.json`)

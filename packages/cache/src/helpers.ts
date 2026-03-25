@@ -20,7 +20,11 @@ export async function getCachedLatest(
 ): Promise<CachedLatestRelease | null> {
   const raw = await kv.get(latestReleaseKey(appId, channel));
   if (!raw) return null;
-  return JSON.parse(raw) as CachedLatestRelease;
+  try {
+    return JSON.parse(raw) as CachedLatestRelease;
+  } catch {
+    return null;
+  }
 }
 
 export async function setCachedLatest(

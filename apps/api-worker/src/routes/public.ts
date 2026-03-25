@@ -25,7 +25,12 @@ export const publicRoutes = new Hono<{ Bindings: Env }>();
 
 // POST /v1/inventory/check
 publicRoutes.post("/inventory/check", async (c) => {
-  const body = await c.req.json();
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
   const parsed = inventoryCheckRequestSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -206,7 +211,7 @@ publicRoutes.post("/inventory/check", async (c) => {
       matchedAppName: matchResult.appName,
       matchConfidence: matchResult.confidence,
       decision,
-      latestVersion: latestVersionRaw,
+      latestVersion,
       latestVersionRaw,
       releasedAt,
     });
