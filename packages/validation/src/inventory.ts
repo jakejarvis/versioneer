@@ -25,7 +25,7 @@ export const inventoryCheckRequestSchema = z.object({
     osVersion: z.string().max(50).optional(),
     systemArchitecture: z.string().max(50).optional(),
   }),
-  apps: z.array(installedAppSchema).min(1).max(5000),
+  apps: z.array(installedAppSchema).max(5000),
   scanDurationMs: z.number().int().optional(),
 });
 
