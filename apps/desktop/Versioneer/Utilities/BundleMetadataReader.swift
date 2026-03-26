@@ -4,7 +4,7 @@ import Foundation
 enum BundleMetadataReader {
     /// Reads an `InstalledApp` from a `.app` bundle URL.
     /// Returns `nil` if the bundle cannot be loaded or has no usable name.
-    static func readApp(at url: URL) -> InstalledApp? {
+    nonisolated static func readApp(at url: URL) -> InstalledApp? {
         guard let bundle = Bundle(url: url) else { return nil }
         let info = bundle.infoDictionary ?? [:]
 
@@ -28,7 +28,7 @@ enum BundleMetadataReader {
         )
     }
 
-    private static func readTeamId(from bundle: Bundle) -> String? {
+    nonisolated private static func readTeamId(from bundle: Bundle) -> String? {
         // Team ID is embedded in the code signature; reading it requires
         // Security framework calls that are non-trivial under sandbox.
         // For v1, we leave this nil and revisit when needed.

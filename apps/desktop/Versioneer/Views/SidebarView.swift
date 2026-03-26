@@ -8,7 +8,7 @@ struct SidebarView: View {
 
         List(selection: $appState.selectedSection) {
             Section("Apps") {
-                ForEach(AppState.SidebarSection.allCases.filter { $0 != .settings }) { section in
+                ForEach(AppState.SidebarSection.allCases) { section in
                     Label {
                         Text(section.rawValue)
                     } icon: {
@@ -17,15 +17,6 @@ struct SidebarView: View {
                     .badge(appState.badgeCount(for: section) ?? 0)
                     .tag(section)
                 }
-            }
-
-            Section {
-                Label {
-                    Text(AppState.SidebarSection.settings.rawValue)
-                } icon: {
-                    Image(systemName: AppState.SidebarSection.settings.systemImage)
-                }
-                .tag(AppState.SidebarSection.settings)
             }
         }
         .listStyle(.sidebar)
