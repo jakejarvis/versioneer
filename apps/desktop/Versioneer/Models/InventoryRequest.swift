@@ -22,5 +22,6 @@ struct InventoryCheckRequest: Codable, Sendable {
         let teamId: String?
         let pathHash: String?
         let architecture: String?
+        let sparkleFeedUrl: String?
     }
 }

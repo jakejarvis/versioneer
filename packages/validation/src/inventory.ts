@@ -8,6 +8,7 @@ export const installedAppSchema = z.object({
   teamId: z.string().max(100).optional(),
   pathHash: z.string().max(100).optional(),
   architecture: z.string().max(50).optional(),
+  sparkleFeedUrl: z.string().url().max(2000).optional(),
 });
 
 export type InstalledApp = z.infer<typeof installedAppSchema>;

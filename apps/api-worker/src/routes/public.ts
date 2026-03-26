@@ -233,6 +233,7 @@ publicRoutes.post("/inventory/check", async (c) => {
       teamId: installedApp.teamId ?? null,
       pathHash: installedApp.pathHash ?? null,
       architecture: installedApp.architecture ?? null,
+      sparkleFeedUrl: installedApp.sparkleFeedUrl ?? null,
       matchedAppId: matchResult.appId,
       matchMethod: matchResult.method,
       matchConfidence: matchResult.confidence,
@@ -275,6 +276,7 @@ publicRoutes.post("/inventory/check", async (c) => {
           bundleId?: string | null;
           teamId?: string | null;
           version?: string | null;
+          sparkleFeedUrl?: string | null;
         }
       >();
       for (const installedApp of request.apps) {
@@ -291,6 +293,7 @@ publicRoutes.post("/inventory/check", async (c) => {
             bundleId: installedApp.bundleId,
             teamId: installedApp.teamId,
             version: installedApp.version,
+            sparkleFeedUrl: installedApp.sparkleFeedUrl,
           });
         }
       }
@@ -326,6 +329,7 @@ publicRoutes.post("/inventory/check", async (c) => {
               bundleId: app.bundleId ?? existing.bundleId,
               teamId: app.teamId ?? existing.teamId,
               sampleVersions: JSON.stringify(sampleVersions),
+              sparkleFeedUrl: app.sparkleFeedUrl ?? existing.sparkleFeedUrl,
             })
             .where(eq(discoveredApps.id, existing.id));
         } else {
@@ -341,6 +345,7 @@ publicRoutes.post("/inventory/check", async (c) => {
             lastSeenAt: now,
             status: "pending",
             sampleVersions: JSON.stringify(sampleVersions),
+            sparkleFeedUrl: app.sparkleFeedUrl ?? null,
             createdAt: now,
             updatedAt: now,
           });

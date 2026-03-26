@@ -57,7 +57,8 @@ struct InventoryAPIClient: Sendable {
                 buildNumber: app.buildNumber,
                 teamId: app.teamId,
                 pathHash: pathHash(app.path),
-                architecture: app.architecture
+                architecture: app.architecture,
+                sparkleFeedUrl: app.sparkleFeedUrl
             )
         }
 

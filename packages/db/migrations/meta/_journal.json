@@ -43,6 +43,13 @@
       "when": 1774537041764,
       "tag": "0005_broad_meteorite",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1774540001073,
+      "tag": "0006_flawless_bromley",
+      "breakpoints": true
     }
   ]
 }
