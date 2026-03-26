@@ -23,8 +23,12 @@ export const Route = createFileRoute("/sources/")({
 
 function SourcesPage() {
   const navigate = useNavigate();
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "paused" | "disabled" | "error"
+  >("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "sparkle" | "github_releases" | "manual">(
+    "all",
+  );
   const [offset, setOffset] = useState(0);
   const triggerFetch = useTriggerSourceFetch();
 
@@ -109,7 +113,7 @@ function SourcesPage() {
         <Select
           value={statusFilter}
           onValueChange={(v) => {
-            setStatusFilter(v);
+            setStatusFilter(v as typeof statusFilter);
             setOffset(0);
           }}
         >
@@ -127,7 +131,7 @@ function SourcesPage() {
         <Select
           value={typeFilter}
           onValueChange={(v) => {
-            setTypeFilter(v);
+            setTypeFilter(v as typeof typeFilter);
             setOffset(0);
           }}
         >

@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { apiClient } from "../client";
-import type { AuditLogEntry, PaginatedResponse } from "../types";
+import { listAuditLog } from "@/server/audit-log.server";
 
 interface UseAuditLogParams {
   eventType?: string;
@@ -13,7 +12,6 @@ interface UseAuditLogParams {
 export function useAuditLog(params: UseAuditLogParams = {}) {
   return useQuery({
     queryKey: ["audit-log", params],
-    queryFn: () =>
-      apiClient<PaginatedResponse<AuditLogEntry>>("/audit-log", { params: { ...params } }),
+    queryFn: () => listAuditLog({ data: params }),
   });
 }

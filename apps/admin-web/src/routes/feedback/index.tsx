@@ -44,7 +44,7 @@ function FeedbackPage() {
     offset,
   });
 
-  const handleStatusChange = (id: string, status: string) => {
+  const handleStatusChange = (id: string, status: "new" | "triaged" | "resolved" | "dismissed") => {
     updateFeedback.mutate(
       { id, status },
       {

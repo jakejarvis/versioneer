@@ -21,8 +21,10 @@ export const Route = createFileRoute("/releases/")({
 
 function ReleasesPage() {
   const navigate = useNavigate();
-  const [channelFilter, setChannelFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [channelFilter, setChannelFilter] = useState<"all" | "stable" | "beta" | "nightly">("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "retracted" | "superseded" | "draft"
+  >("all");
   const [offset, setOffset] = useState(0);
 
   const { data, isLoading } = useReleases({
@@ -79,7 +81,7 @@ function ReleasesPage() {
         <Select
           value={channelFilter}
           onValueChange={(v) => {
-            setChannelFilter(v);
+            setChannelFilter(v as typeof channelFilter);
             setOffset(0);
           }}
         >
@@ -96,7 +98,7 @@ function ReleasesPage() {
         <Select
           value={statusFilter}
           onValueChange={(v) => {
-            setStatusFilter(v);
+            setStatusFilter(v as typeof statusFilter);
             setOffset(0);
           }}
         >

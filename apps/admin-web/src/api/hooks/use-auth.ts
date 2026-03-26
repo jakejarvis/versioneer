@@ -1,15 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { apiClient } from "../client";
-
-interface AuthUser {
-  email: string;
-}
+import { getMe } from "@/server/auth.server";
 
 export function useAuth() {
   return useQuery({
     queryKey: ["auth", "me"],
-    queryFn: () => apiClient<AuthUser>("/auth/me"),
+    queryFn: () => getMe(),
     staleTime: 5 * 60 * 1000,
     retry: false,
   });

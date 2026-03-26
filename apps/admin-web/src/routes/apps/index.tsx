@@ -36,7 +36,9 @@ export const Route = createFileRoute("/apps/")({
 function AppsPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "deprecated" | "merged" | "unlisted"
+  >("all");
   const [offset, setOffset] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -114,7 +116,7 @@ function AppsPage() {
         <Select
           value={statusFilter}
           onValueChange={(v) => {
-            setStatusFilter(v);
+            setStatusFilter(v as typeof statusFilter);
             setOffset(0);
           }}
         >

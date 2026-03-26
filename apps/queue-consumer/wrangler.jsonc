@@ -86,6 +86,75 @@
     "production": {
       "vars": {
         "ENVIRONMENT": "production"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "versioneer-db-production",
+          "database_id": "ebebaf93-b3a1-4832-b3e7-39845bb7422f"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "RAW_BUCKET",
+          "bucket_name": "versioneer-raw-production"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "CACHE_KV",
+          "id": "fd325c0b363541278f4555a0d43c57be"
+        },
+        {
+          "binding": "CONFIG_KV",
+          "id": "babe0cb4a83642b0943226af13862149"
+        }
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "SOURCE_FETCH_QUEUE",
+            "queue": "versioneer-source-fetch-production"
+          },
+          {
+            "binding": "SOURCE_PARSE_QUEUE",
+            "queue": "versioneer-source-parse-production"
+          },
+          {
+            "binding": "ARTIFACT_VERIFY_QUEUE",
+            "queue": "versioneer-artifact-verify-production"
+          },
+          {
+            "binding": "RECOMPUTE_LATEST_QUEUE",
+            "queue": "versioneer-recompute-latest-production"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "versioneer-source-fetch-production",
+            "max_batch_size": 5,
+            "max_retries": 3,
+            "dead_letter_queue": "versioneer-dlq-production"
+          },
+          {
+            "queue": "versioneer-source-parse-production",
+            "max_batch_size": 5,
+            "max_retries": 3,
+            "dead_letter_queue": "versioneer-dlq-production"
+          },
+          {
+            "queue": "versioneer-artifact-verify-production",
+            "max_batch_size": 5,
+            "max_retries": 3,
+            "dead_letter_queue": "versioneer-dlq-production"
+          },
+          {
+            "queue": "versioneer-recompute-latest-production",
+            "max_batch_size": 10,
+            "max_retries": 3,
+            "dead_letter_queue": "versioneer-dlq-production"
+          }
+        ]
       }
     }
   }

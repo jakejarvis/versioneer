@@ -159,7 +159,7 @@ function ReleaseDetailPage() {
             value={release.status}
             onValueChange={(v) =>
               updateRelease.mutate(
-                { status: v },
+                { status: v as "active" | "retracted" | "superseded" | "draft" },
                 {
                   onSuccess: () => toast.success("Status updated"),
                   onError: (err) => toast.error(err.message),

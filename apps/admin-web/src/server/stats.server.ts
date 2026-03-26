@@ -1,3 +1,4 @@
+import { createServerFn } from "@tanstack/react-start";
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -7,15 +8,11 @@ import {
   releases,
   clientFeedback,
 } from "@versioneer/schema";
+import { env } from "cloudflare:workers";
 import { sql } from "drizzle-orm";
-import { Hono } from "hono";
 
-import type { AppEnv } from "../../env";
-
-export const statsRoutes = new Hono<AppEnv>();
-
-statsRoutes.get("/", async (c) => {
-  const db = createDb(c.env.DB);
+export const getStats = createServerFn({ method: "GET" }).handler(async () => {
+  const db = createDb(env.DB);
 
   const [appCount] = await db.select({ count: sql<number>`count(*)` }).from(apps);
   const [activeSourceCount] = await db
@@ -61,7 +58,7 @@ statsRoutes.get("/", async (c) => {
     .from(clientFeedback)
     .where(sql`${clientFeedback.status} = 'new'`);
 
-  return c.json({
+  return {
     totalApps: appCount?.count ?? 0,
     activeSources: activeSourceCount?.count ?? 0,
     errorSources: errorSourceCount?.count ?? 0,
@@ -73,5 +70,5 @@ statsRoutes.get("/", async (c) => {
     yellowApps: yellowCount?.count ?? 0,
     redApps: redCount?.count ?? 0,
     pendingFeedback: pendingFeedbackCount?.count ?? 0,
-  });
+  };
 });

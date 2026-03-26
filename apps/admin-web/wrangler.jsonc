@@ -16,15 +16,63 @@
   "workers_dev": false,
   "preview_urls": false,
 
-  "vars": {
-    "ENVIRONMENT": "dev"
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "versioneer-db-dev",
+      "database_id": "0af7b90f-a8b3-4392-8dd9-73b12e3e48ff"
+    }
+  ],
+
+  "queues": {
+    "producers": [
+      {
+        "binding": "SOURCE_FETCH_QUEUE",
+        "queue": "versioneer-source-fetch-dev"
+      },
+      {
+        "binding": "SOURCE_PARSE_QUEUE",
+        "queue": "versioneer-source-parse-dev"
+      },
+      {
+        "binding": "ARTIFACT_VERIFY_QUEUE",
+        "queue": "versioneer-artifact-verify-dev"
+      },
+      {
+        "binding": "RECOMPUTE_LATEST_QUEUE",
+        "queue": "versioneer-recompute-latest-dev"
+      }
+    ]
   },
 
   "env": {
     "production": {
-      "vars": {
-        "ENVIRONMENT": "production",
-        "VITE_API_BASE_URL": "https://api.versioneer.app"
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "versioneer-db-production",
+          "database_id": "ebebaf93-b3a1-4832-b3e7-39845bb7422f"
+        }
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "SOURCE_FETCH_QUEUE",
+            "queue": "versioneer-source-fetch-production"
+          },
+          {
+            "binding": "SOURCE_PARSE_QUEUE",
+            "queue": "versioneer-source-parse-production"
+          },
+          {
+            "binding": "ARTIFACT_VERIFY_QUEUE",
+            "queue": "versioneer-artifact-verify-production"
+          },
+          {
+            "binding": "RECOMPUTE_LATEST_QUEUE",
+            "queue": "versioneer-recompute-latest-production"
+          }
+        ]
       }
     }
   }

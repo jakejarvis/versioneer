@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { apiClient } from "../client";
-import type { UpdateExecution, PaginatedResponse } from "../types";
+import { listExecutions, getExecutionDetail, getExecutionStats } from "@/server/executions.server";
 
 interface UseExecutionsParams {
   appId?: string;
@@ -13,17 +12,14 @@ interface UseExecutionsParams {
 export function useExecutions(params: UseExecutionsParams = {}) {
   return useQuery({
     queryKey: ["executions", params],
-    queryFn: () =>
-      apiClient<PaginatedResponse<UpdateExecution>>("/executions", {
-        params: { ...params },
-      }),
+    queryFn: () => listExecutions({ data: params }),
   });
 }
 
 export function useExecutionDetail(id: string) {
   return useQuery({
     queryKey: ["executions", id],
-    queryFn: () => apiClient<UpdateExecution>(`/executions/${id}`),
+    queryFn: () => getExecutionDetail({ data: { id } }),
     enabled: !!id,
   });
 }
@@ -31,7 +27,6 @@ export function useExecutionDetail(id: string) {
 export function useExecutionStats() {
   return useQuery({
     queryKey: ["executions", "stats"],
-    queryFn: () =>
-      apiClient<{ recentExecutions: number; failedExecutions: number }>("/executions/stats"),
+    queryFn: () => getExecutionStats(),
   });
 }

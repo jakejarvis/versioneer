@@ -15,18 +15,25 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@cloudflare/workers-types": "catalog:",
     "@tanstack/react-query": "^5.95.2",
     "@tanstack/react-router": "^1.168.4",
     "@tanstack/react-start": "^1.167.7",
+    "@versioneer/db": "workspace:*",
+    "@versioneer/pipeline": "workspace:*",
+    "@versioneer/schema": "workspace:*",
+    "@versioneer/validation": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "drizzle-orm": "catalog:",
     "lucide-react": "^1.7.0",
     "radix-ui": "^1.4.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "sonner": "^2.0.7",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.30.1",

@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { apiClient } from "../client";
-import type { Override, PaginatedResponse } from "../types";
+import { listOverrides, createOverride, deactivateOverride } from "@/server/overrides.server";
 
 interface UseOverridesParams {
   active?: boolean;
@@ -12,14 +11,7 @@ interface UseOverridesParams {
 export function useOverrides(params: UseOverridesParams = {}) {
   return useQuery({
     queryKey: ["overrides", params],
-    queryFn: () =>
-      apiClient<PaginatedResponse<Override>>("/overrides", {
-        params: {
-          active: params.active !== undefined ? String(params.active) : undefined,
-          limit: params.limit,
-          offset: params.offset,
-        },
-      }),
+    queryFn: () => listOverrides({ data: params }),
   });
 }
 
@@ -33,11 +25,7 @@ export function useCreateOverride() {
       payloadJson: string;
       reason?: string;
       createdBy?: string;
-    }) =>
-      apiClient<{ id: string }>("/overrides", {
-        method: "POST",
-        body: input,
-      }),
+    }) => createOverride({ data: input }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["overrides"] }),
   });
 }
@@ -45,8 +33,7 @@ export function useCreateOverride() {
 export function useDeactivateOverride() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      apiClient(`/overrides/${id}`, { method: "PATCH", body: { isActive: false } }),
+    mutationFn: (id: string) => deactivateOverride({ data: { id } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["overrides"] }),
   });
 }

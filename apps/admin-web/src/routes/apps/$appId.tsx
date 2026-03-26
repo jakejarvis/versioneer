@@ -303,7 +303,15 @@ function CreateAliasDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [aliasType, setAliasType] = useState("bundle_id");
+  const [aliasType, setAliasType] = useState<
+    | "bundle_id"
+    | "name"
+    | "team_id"
+    | "sparkle_feed"
+    | "homepage"
+    | "download_pattern"
+    | "github_repo"
+  >("bundle_id");
   const [value, setValue] = useState("");
   const createAlias = useCreateAlias(appId);
 
@@ -330,7 +338,7 @@ function CreateAliasDialog({
         <div className="space-y-4">
           <div>
             <Label>Type</Label>
-            <Select value={aliasType} onValueChange={setAliasType}>
+            <Select value={aliasType} onValueChange={(v) => setAliasType(v as typeof aliasType)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

@@ -10,5 +10,17 @@
       "database_id": "0af7b90f-a8b3-4392-8dd9-73b12e3e48ff",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  "env": {
+    "production": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "versioneer-db-production",
+          "database_id": "ebebaf93-b3a1-4832-b3e7-39845bb7422f",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
 }

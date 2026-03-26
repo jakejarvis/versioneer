@@ -1,10 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { apiClient } from "../client";
-import type { JobFailure, PaginatedResponse } from "../types";
+import {
+  listJobFailures,
+  updateJobFailure,
+  retryJobFailure,
+  retryAllJobFailures,
+} from "@/server/job-failures.server";
 
 interface UseJobFailuresParams {
-  status?: string;
+  status?: "open" | "retrying" | "resolved" | "abandoned";
   limit?: number;
   offset?: number;
 }
@@ -12,18 +16,15 @@ interface UseJobFailuresParams {
 export function useJobFailures(params: UseJobFailuresParams = {}) {
   return useQuery({
     queryKey: ["job-failures", params],
-    queryFn: () =>
-      apiClient<PaginatedResponse<JobFailure>>("/job-failures", {
-        params: { ...params },
-      }),
+    queryFn: () => listJobFailures({ data: params }),
   });
 }
 
 export function useUpdateJobFailure() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      apiClient(`/job-failures/${id}`, { method: "PATCH", body: { status } }),
+    mutationFn: ({ id, status }: { id: string; status: "resolved" | "abandoned" | "retrying" }) =>
+      updateJobFailure({ data: { id, status } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["job-failures"] }),
   });
 }
@@ -31,7 +32,7 @@ export function useUpdateJobFailure() {
 export function useRetryJobFailure() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiClient(`/job-failures/${id}/retry`, { method: "POST" }),
+    mutationFn: (id: string) => retryJobFailure({ data: { id } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["job-failures"] }),
   });
 }
@@ -39,11 +40,7 @@ export function useRetryJobFailure() {
 export function useRetryAllJobFailures() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (jobType?: string) =>
-      apiClient<{ status: string; count: number }>("/job-failures/retry-all", {
-        method: "POST",
-        body: jobType ? { jobType } : {},
-      }),
+    mutationFn: (jobType?: string) => retryAllJobFailures({ data: jobType ? { jobType } : {} }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["job-failures"] }),
   });
 }

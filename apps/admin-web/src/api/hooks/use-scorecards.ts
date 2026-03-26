@@ -1,12 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { apiClient } from "../client";
-import type { AppScorecard } from "../types";
+import { getScorecard, recomputeScorecard, promoteVerification } from "@/server/scorecards.server";
 
 export function useScorecard(appId: string) {
   return useQuery({
     queryKey: ["scorecards", appId],
-    queryFn: () => apiClient<AppScorecard>(`/scorecards/${appId}`),
+    queryFn: () => getScorecard({ data: { appId } }),
     enabled: !!appId,
   });
 }
@@ -14,7 +13,7 @@ export function useScorecard(appId: string) {
 export function useRecomputeScorecard() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (appId: string) => apiClient(`/scorecards/${appId}/recompute`, { method: "POST" }),
+    mutationFn: (appId: string) => recomputeScorecard({ data: { appId } }),
     onSuccess: (_data, appId) => {
       void qc.invalidateQueries({ queryKey: ["scorecards", appId] });
       void qc.invalidateQueries({ queryKey: ["apps", appId] });
@@ -25,10 +24,7 @@ export function useRecomputeScorecard() {
 export function usePromoteVerification() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (appId: string) =>
-      apiClient<{ status: string; verificationTier: string }>(`/scorecards/${appId}/promote`, {
-        method: "POST",
-      }),
+    mutationFn: (appId: string) => promoteVerification({ data: { appId } }),
     onSuccess: (_data, appId) => {
       void qc.invalidateQueries({ queryKey: ["scorecards", appId] });
       void qc.invalidateQueries({ queryKey: ["apps"] });

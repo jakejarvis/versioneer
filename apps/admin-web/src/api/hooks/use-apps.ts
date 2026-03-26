@@ -1,18 +1,24 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { apiClient } from "../client";
-import type {
-  App,
-  AppAlias,
-  AppLatestRelease,
-  Source,
-  Release,
-  InstallRule,
-  PaginatedResponse,
-} from "../types";
+import { updateAlias, deleteAlias } from "@/server/aliases.server";
+import {
+  listApps,
+  getApp,
+  createApp,
+  updateApp,
+  getAppAliases,
+  createAlias,
+  getAppSources,
+  getAppReleases,
+  getAppLatest,
+  getAppInstallRules,
+  createInstallRule,
+  recomputeLatest,
+} from "@/server/apps.server";
+import { triggerFetch } from "@/server/sources.server";
 
 interface UseAppsParams {
-  status?: string;
+  status?: "active" | "deprecated" | "merged" | "unlisted";
   search?: string;
   limit?: number;
   offset?: number;
@@ -21,15 +27,14 @@ interface UseAppsParams {
 export function useApps(params: UseAppsParams = {}) {
   return useQuery({
     queryKey: ["apps", params],
-    queryFn: () => apiClient<PaginatedResponse<App>>("/apps", { params: { ...params } }),
+    queryFn: () => listApps({ data: params }),
   });
 }
 
 export function useApp(id: string) {
   return useQuery({
     queryKey: ["apps", id],
-    queryFn: () =>
-      apiClient<App & { latestReleases: AppLatestRelease[]; sourceCount: number }>(`/apps/${id}`),
+    queryFn: () => getApp({ data: { id } }),
     enabled: !!id,
   });
 }
@@ -43,7 +48,7 @@ export function useCreateApp() {
       vendorName?: string;
       homepageUrl?: string;
       notes?: string;
-    }) => apiClient<{ id: string }>("/apps", { method: "POST", body: input }),
+    }) => createApp({ data: input }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["apps"] }),
   });
 }
@@ -51,8 +56,7 @@ export function useCreateApp() {
 export function useUpdateApp(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: Record<string, unknown>) =>
-      apiClient(`/apps/${id}`, { method: "PATCH", body: input }),
+    mutationFn: (input: Record<string, unknown>) => updateApp({ data: { id, ...input } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["apps"] });
       void qc.invalidateQueries({ queryKey: ["apps", id] });
@@ -63,7 +67,7 @@ export function useUpdateApp(id: string) {
 export function useAppAliases(appId: string) {
   return useQuery({
     queryKey: ["apps", appId, "aliases"],
-    queryFn: () => apiClient<{ items: AppAlias[] }>(`/apps/${appId}/aliases`),
+    queryFn: () => getAppAliases({ data: { appId } }),
     enabled: !!appId,
   });
 }
@@ -72,18 +76,21 @@ export function useCreateAlias(appId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: {
-      aliasType: string;
+      aliasType:
+        | "bundle_id"
+        | "name"
+        | "team_id"
+        | "sparkle_feed"
+        | "homepage"
+        | "download_pattern"
+        | "github_repo";
       value: string;
       normalizedValue?: string;
       isExact?: boolean;
       priority?: number;
       confidenceWeight?: number;
       source?: string;
-    }) =>
-      apiClient<{ id: string }>(`/apps/${appId}/aliases`, {
-        method: "POST",
-        body: input,
-      }),
+    }) => createAlias({ data: { appId, ...input } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["apps", appId, "aliases"] }),
   });
 }
@@ -99,7 +106,7 @@ export function useUpdateAlias() {
       isActive?: boolean;
       priority?: number;
       confidenceWeight?: number;
-    }) => apiClient(`/aliases/${id}`, { method: "PATCH", body: input }),
+    }) => updateAlias({ data: { id, ...input } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["apps"] }),
   });
 }
@@ -107,7 +114,7 @@ export function useUpdateAlias() {
 export function useDeleteAlias() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiClient(`/aliases/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => deleteAlias({ data: { id } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["apps"] }),
   });
 }
@@ -115,14 +122,14 @@ export function useDeleteAlias() {
 export function useAppSources(appId: string) {
   return useQuery({
     queryKey: ["apps", appId, "sources"],
-    queryFn: () => apiClient<{ items: Source[] }>(`/apps/${appId}/sources`),
+    queryFn: () => getAppSources({ data: { appId } }),
     enabled: !!appId,
   });
 }
 
 interface UseAppReleasesParams {
-  channel?: string;
-  status?: string;
+  channel?: "stable" | "beta" | "nightly";
+  status?: "active" | "retracted" | "superseded" | "draft";
   limit?: number;
   offset?: number;
 }
@@ -130,10 +137,7 @@ interface UseAppReleasesParams {
 export function useAppReleases(appId: string, params: UseAppReleasesParams = {}) {
   return useQuery({
     queryKey: ["apps", appId, "releases", params],
-    queryFn: () =>
-      apiClient<PaginatedResponse<Release>>(`/apps/${appId}/releases`, {
-        params: { ...params },
-      }),
+    queryFn: () => getAppReleases({ data: { appId, ...params } }),
     enabled: !!appId,
   });
 }
@@ -141,7 +145,7 @@ export function useAppReleases(appId: string, params: UseAppReleasesParams = {})
 export function useAppLatest(appId: string) {
   return useQuery({
     queryKey: ["apps", appId, "latest"],
-    queryFn: () => apiClient<{ items: AppLatestRelease[] }>(`/apps/${appId}/latest`),
+    queryFn: () => getAppLatest({ data: { appId } }),
     enabled: !!appId,
   });
 }
@@ -149,7 +153,7 @@ export function useAppLatest(appId: string) {
 export function useAppInstallRules(appId: string) {
   return useQuery({
     queryKey: ["apps", appId, "install-rules"],
-    queryFn: () => apiClient<{ items: InstallRule[] }>(`/apps/${appId}/install-rules`),
+    queryFn: () => getAppInstallRules({ data: { appId } }),
     enabled: !!appId,
   });
 }
@@ -157,11 +161,15 @@ export function useAppInstallRules(appId: string) {
 export function useCreateInstallRule(appId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: Record<string, unknown>) =>
-      apiClient<{ id: string }>(`/apps/${appId}/install-rules`, {
-        method: "POST",
-        body: input,
-      }),
+    mutationFn: (input: {
+      strategy: "sparkle" | "zip_replace" | "dmg_copy_replace" | "pkg_manual" | "manual_only";
+      requiresQuit?: boolean;
+      requiresAdmin?: boolean;
+      supportsSilent?: boolean;
+      rollbackSupported?: boolean;
+      ruleConfidence?: number;
+      notes?: string;
+    }) => createInstallRule({ data: { appId, ...input } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["apps", appId, "install-rules"] }),
   });
 }
@@ -169,21 +177,15 @@ export function useCreateInstallRule(appId: string) {
 export function useTriggerFetch() {
   return useMutation({
     mutationFn: ({ sourceId, force }: { sourceId: string; force?: boolean }) =>
-      apiClient(`/sources/${sourceId}/fetch`, {
-        method: "POST",
-        body: { reason: "manual", force: force ?? false },
-      }),
+      triggerFetch({ data: { sourceId, reason: "manual", force: force ?? false } }),
   });
 }
 
 export function useRecomputeLatest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ appId, channel }: { appId: string; channel?: string }) =>
-      apiClient(`/apps/${appId}/recompute-latest`, {
-        method: "POST",
-        body: { channel },
-      }),
+    mutationFn: ({ appId, channel }: { appId: string; channel?: "stable" | "beta" | "nightly" }) =>
+      recomputeLatest({ data: { appId, channel } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["apps"] }),
   });
 }

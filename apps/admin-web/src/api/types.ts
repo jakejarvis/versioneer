@@ -127,9 +127,14 @@ export interface Artifact {
   sizeBytes: number | null;
   architecture: string | null;
   minOsVersion: string | null;
-  signatureStatus: "unknown" | "valid" | "invalid" | "missing";
-  notarizationStatus: "unknown" | "notarized" | "not_notarized";
+  signatureStatus: "unknown" | "valid" | "invalid" | "missing" | null;
+  notarizationStatus: "unknown" | "notarized" | "not_notarized" | null;
   expectedTeamId: string | null;
+  observedTeamId: string | null;
+  teamIdMatch: "unknown" | "match" | "mismatch" | null;
+  signatureObservationJson: string | null;
+  notarizationObservationJson: string | null;
+  trustLevel: "unknown" | "untrusted" | "low" | "medium" | "high" | null;
   isPrimary: boolean;
   createdAt: string;
 }

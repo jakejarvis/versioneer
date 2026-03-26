@@ -31,7 +31,9 @@ export const Route = createFileRoute("/review-queue/")({
 });
 
 function ReviewQueuePage() {
-  const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [statusFilter, setStatusFilter] = useState<
+    "pending" | "in_progress" | "resolved" | "dismissed"
+  >("pending");
   const [offset, setOffset] = useState(0);
   const [selectedItem, setSelectedItem] = useState<ReviewQueueItem | null>(null);
   const updateItem = useUpdateReviewItem();
@@ -42,7 +44,7 @@ function ReviewQueuePage() {
     offset,
   });
 
-  const handleAction = (id: string, status: string) => {
+  const handleAction = (id: string, status: "resolved" | "dismissed" | "in_progress") => {
     updateItem.mutate(
       { id, status },
       {
@@ -128,7 +130,7 @@ function ReviewQueuePage() {
         <Select
           value={statusFilter}
           onValueChange={(v) => {
-            setStatusFilter(v);
+            setStatusFilter(v as typeof statusFilter);
             setOffset(0);
           }}
         >

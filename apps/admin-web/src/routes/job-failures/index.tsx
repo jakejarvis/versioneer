@@ -34,7 +34,9 @@ export const Route = createFileRoute("/job-failures/")({
 });
 
 function JobFailuresPage() {
-  const [statusFilter, setStatusFilter] = useState<string>("open");
+  const [statusFilter, setStatusFilter] = useState<"open" | "retrying" | "resolved" | "abandoned">(
+    "open",
+  );
   const [offset, setOffset] = useState(0);
   const [selectedFailure, setSelectedFailure] = useState<JobFailure | null>(null);
   const updateFailure = useUpdateJobFailure();
@@ -53,7 +55,7 @@ function JobFailuresPage() {
     });
   };
 
-  const handleStatusChange = (id: string, status: string) => {
+  const handleStatusChange = (id: string, status: "resolved" | "abandoned" | "retrying") => {
     updateFailure.mutate(
       { id, status },
       {
@@ -148,7 +150,7 @@ function JobFailuresPage() {
         <Select
           value={statusFilter}
           onValueChange={(v) => {
-            setStatusFilter(v);
+            setStatusFilter(v as typeof statusFilter);
             setOffset(0);
           }}
         >

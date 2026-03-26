@@ -17,10 +17,7 @@
   "preview_urls": false,
 
   "vars": {
-    "ENVIRONMENT": "dev",
-    "CF_ACCESS_TEAM_DOMAIN": "",
-    "CF_ACCESS_AUD": "",
-    "ADMIN_ORIGIN": "http://localhost:5173"
+    "ENVIRONMENT": "dev"
   },
 
   "d1_databases": [
@@ -73,10 +70,50 @@
   "env": {
     "production": {
       "vars": {
-        "ENVIRONMENT": "production",
-        "CF_ACCESS_TEAM_DOMAIN": "jarvis.cloudflareaccess.com",
-        "CF_ACCESS_AUD": "f6885050299ad0f289bee3b07bc38226c1082b4086dd90dcdde57426a8dabad7",
-        "ADMIN_ORIGIN": "https://dash.versioneer.app"
+        "ENVIRONMENT": "production"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "versioneer-db-production",
+          "database_id": "ebebaf93-b3a1-4832-b3e7-39845bb7422f"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "RAW_BUCKET",
+          "bucket_name": "versioneer-raw-production"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "CACHE_KV",
+          "id": "fd325c0b363541278f4555a0d43c57be"
+        },
+        {
+          "binding": "CONFIG_KV",
+          "id": "babe0cb4a83642b0943226af13862149"
+        }
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "SOURCE_FETCH_QUEUE",
+            "queue": "versioneer-source-fetch-production"
+          },
+          {
+            "binding": "SOURCE_PARSE_QUEUE",
+            "queue": "versioneer-source-parse-production"
+          },
+          {
+            "binding": "ARTIFACT_VERIFY_QUEUE",
+            "queue": "versioneer-artifact-verify-production"
+          },
+          {
+            "binding": "RECOMPUTE_LATEST_QUEUE",
+            "queue": "versioneer-recompute-latest-production"
+          }
+        ]
       }
     }
   }

@@ -28,14 +28,25 @@ interface AppData {
   notes: string;
 }
 
+type AliasType =
+  | "bundle_id"
+  | "name"
+  | "team_id"
+  | "sparkle_feed"
+  | "homepage"
+  | "download_pattern"
+  | "github_repo";
+
+type SourceType = "sparkle" | "github_releases" | "manual";
+
 interface AliasData {
   key: string;
-  aliasType: string;
+  aliasType: AliasType;
   value: string;
 }
 
 interface SourceData {
-  sourceType: string;
+  sourceType: SourceType;
   label: string;
   baseUrl: string;
   parserKey: string;
@@ -219,8 +230,8 @@ function AliasStep({
   const addAlias = () =>
     onChange([...aliases, { key: crypto.randomUUID(), aliasType: "bundle_id", value: "" }]);
   const removeAlias = (i: number) => onChange(aliases.filter((_, idx) => idx !== i));
-  const updateAlias = (i: number, field: "aliasType" | "value", val: string) =>
-    onChange(aliases.map((a, idx) => (idx === i ? { ...a, [field]: val } : a)));
+  const updateAlias = (i: number, field: keyof Omit<AliasData, "key">, val: string) =>
+    onChange(aliases.map((a, idx) => (idx === i ? ({ ...a, [field]: val } as AliasData) : a)));
 
   return (
     <div className="space-y-4">
@@ -278,7 +289,7 @@ function SourceStep({ data, onChange }: { data: SourceData; onChange: (d: Source
             onValueChange={(v) =>
               onChange({
                 ...data,
-                sourceType: v,
+                sourceType: v as SourceType,
                 parserKey: v === "github_releases" ? "github_releases" : "sparkle",
               })
             }
