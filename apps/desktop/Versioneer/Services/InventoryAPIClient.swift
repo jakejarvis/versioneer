@@ -46,7 +46,8 @@ nonisolated struct InventoryAPIClient: Sendable {
 
     private func buildRequest(from apps: [InstalledApp], scanDurationMs: Int?) -> InventoryCheckRequest {
         let installId = installIdentifier()
-        let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
+        let osVer = ProcessInfo.processInfo.operatingSystemVersion
+        let osVersion = "\(osVer.majorVersion).\(osVer.minorVersion).\(osVer.patchVersion)"
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
 
         let inventoryApps = apps.map { app in
@@ -69,7 +70,8 @@ nonisolated struct InventoryAPIClient: Sendable {
                 installId: installId,
                 platform: "macos",
                 appVersion: appVersion,
-                osVersion: osVersion
+                osVersion: osVersion,
+                systemArchitecture: Self.systemArchitecture()
             ),
             apps: inventoryApps,
             scanDurationMs: scanDurationMs
@@ -85,6 +87,26 @@ nonisolated struct InventoryAPIClient: Sendable {
         let newId = UUID().uuidString
         UserDefaults.standard.set(newId, forKey: key)
         return newId
+    }
+
+    /// Detects the real hardware architecture, seeing through Rosetta translation.
+    private static func systemArchitecture() -> String {
+        var size = 256
+        var machine = [CChar](repeating: 0, count: size)
+        sysctlbyname("hw.machine", &machine, &size, nil, 0)
+        let reported = String(cString: machine)
+
+        // If reported as x86_64, check if actually running under Rosetta on ARM
+        if reported == "x86_64" {
+            var translated: Int32 = 0
+            var tsize = MemoryLayout<Int32>.size
+            if sysctlbyname("sysctl.proc_translated", &translated, &tsize, nil, 0) == 0,
+               translated == 1
+            {
+                return "arm64"
+            }
+        }
+        return reported
     }
 
     /// Simple hash of the app path for deduplication on the backend.

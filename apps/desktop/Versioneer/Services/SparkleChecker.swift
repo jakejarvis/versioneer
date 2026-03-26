@@ -121,15 +121,22 @@ actor SparkleChecker {
         // Take the first item (appcasts are typically newest-first)
         guard let latest = applicable.first else { return nil }
 
+        let bestEnclosure = latest.bestEnclosure
+
         return SparkleResult(
             feedUrl: feedUrl,
             latestVersion: latest.shortVersionString ?? latest.version,
             latestBuildNumber: latest.version,
             publishedAt: latest.pubDate,
             releaseNotesUrl: latest.releaseNotesUrl,
-            downloadUrl: latest.downloadUrl,
-            minOsVersion: latest.minOsVersion
+            downloadUrl: bestEnclosure?.url,
+            minOsVersion: bestEnclosure?.minOsVersion ?? latest.minOsVersion
         )
+    }
+
+    private struct Enclosure {
+        let url: String
+        let minOsVersion: String?
     }
 
     private struct AppcastItem {
@@ -137,8 +144,35 @@ actor SparkleChecker {
         let version: String?
         let pubDate: String?
         let releaseNotesUrl: String?
-        let downloadUrl: String?
+        let enclosures: [Enclosure]
         let minOsVersion: String?
+
+        var downloadUrl: String? { bestEnclosure?.url }
+
+        /// Picks the best enclosure for the local architecture.
+        var bestEnclosure: Enclosure? {
+            guard enclosures.count > 1 else { return enclosures.first }
+
+            #if arch(arm64)
+            let preferredKeywords = ["arm64", "aarch64", "apple-silicon", "silicon"]
+            #else
+            let preferredKeywords = ["x86_64", "amd64", "intel"]
+            #endif
+
+            // Prefer architecture-matched URL, then universal, then first
+            if let match = enclosures.first(where: { enc in
+                let lower = enc.url.lowercased()
+                return preferredKeywords.contains { lower.contains($0) }
+            }) {
+                return match
+            }
+
+            if let universal = enclosures.first(where: { $0.url.lowercased().contains("universal") }) {
+                return universal
+            }
+
+            return enclosures.first
+        }
     }
 
     private func parseItems(from xml: String) -> [AppcastItem] {
@@ -164,18 +198,36 @@ actor SparkleChecker {
 
         let pubDate = extractTag(xml, "pubDate")
         let releaseNotesUrl = extractTag(xml, "sparkle:releaseNotesLink")
-        let downloadUrl = extractEnclosureAttr(xml, "url")
-        let minOsVersion = extractEnclosureAttr(xml, "sparkle:minimumSystemVersion")
-            ?? extractTag(xml, "sparkle:minimumSystemVersion")
+        let minOsVersion = extractTag(xml, "sparkle:minimumSystemVersion")
+
+        // Extract all enclosures
+        let enclosures = extractAllEnclosures(from: xml)
 
         return AppcastItem(
             shortVersionString: shortVersion,
             version: version,
             pubDate: pubDate,
             releaseNotesUrl: releaseNotesUrl,
-            downloadUrl: downloadUrl,
-            minOsVersion: minOsVersion
+            enclosures: enclosures,
+            minOsVersion: minOsVersion ?? enclosures.first?.minOsVersion
         )
+    }
+
+    /// Extracts all `<enclosure>` elements from an item's XML.
+    private func extractAllEnclosures(from xml: String) -> [Enclosure] {
+        let pattern = try! NSRegularExpression(
+            pattern: "<enclosure\\s([^>]*?)/?>",
+            options: [.caseInsensitive]
+        )
+        let range = NSRange(xml.startIndex..., in: xml)
+
+        return pattern.matches(in: xml, range: range).compactMap { match in
+            guard let attrsRange = Range(match.range(at: 1), in: xml) else { return nil }
+            let attrs = String(xml[attrsRange])
+            guard let url = extractAttrValue(attrs, "url") else { return nil }
+            let minOs = extractAttrValue(attrs, "sparkle:minimumSystemVersion")
+            return Enclosure(url: url, minOsVersion: minOs)
+        }
     }
 
     // MARK: - XML helpers

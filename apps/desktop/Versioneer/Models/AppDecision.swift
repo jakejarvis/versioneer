@@ -14,6 +14,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     let latestVersion: String?
     let latestVersionRaw: String?
     let releasedAt: String?
+    let artifact: Artifact?
 
     enum Decision: String, Codable, Sendable, CaseIterable {
         case unknown
@@ -22,6 +23,14 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
         case ambiguous
         case unsupported
         case ignored
+    }
+
+    struct Artifact: Codable, Hashable, Sendable {
+        let downloadUrl: String?
+        let architecture: String?
+        let minOsVersion: String?
+        let artifactType: String?
+        let sizeBytes: Int?
     }
 
     /// Returns a copy with only the decision field changed.
@@ -36,7 +45,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
             decision: newDecision,
             latestVersion: latestVersion,
             latestVersionRaw: latestVersionRaw,
-            releasedAt: releasedAt
+            releasedAt: releasedAt,
+            artifact: artifact
         )
     }
 }

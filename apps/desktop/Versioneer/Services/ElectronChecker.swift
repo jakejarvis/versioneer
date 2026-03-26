@@ -134,10 +134,25 @@ actor ElectronChecker {
         return s
     }
 
-    /// Finds a macOS-relevant download URL from GitHub release assets.
+    /// Finds a macOS-relevant download URL from GitHub release assets, preferring the local architecture.
     private func findMacAssetUrl(in assets: [[String: Any]]) -> String? {
         let macKeywords = ["mac", "darwin", "osx", "macos"]
         let macExtensions = [".dmg", ".zip", ".pkg"]
+
+        #if arch(arm64)
+        let preferredArchKeywords = ["arm64", "aarch64", "apple-silicon", "silicon"]
+        let otherArchKeywords = ["x86_64", "amd64", "intel", "x64"]
+        #else
+        let preferredArchKeywords = ["x86_64", "amd64", "intel", "x64"]
+        let otherArchKeywords = ["arm64", "aarch64", "apple-silicon", "silicon"]
+        #endif
+
+        struct ScoredAsset {
+            let url: String
+            let score: Int // Higher = better match
+        }
+
+        var candidates: [ScoredAsset] = []
 
         for asset in assets {
             guard let name = (asset["name"] as? String)?.lowercased(),
@@ -146,24 +161,26 @@ actor ElectronChecker {
 
             let hasMacKeyword = macKeywords.contains { name.contains($0) }
             let hasMacExtension = macExtensions.contains { name.hasSuffix($0) }
+            guard hasMacExtension else { continue }
 
-            if hasMacKeyword && hasMacExtension {
-                return url
+            let hasPreferredArch = preferredArchKeywords.contains { name.contains($0) }
+            let hasOtherArch = otherArchKeywords.contains { name.contains($0) }
+            let isUniversal = name.contains("universal")
+
+            // Score: prefer arch match > universal > no arch specified > wrong arch
+            let score: Int
+            if hasPreferredArch { score = 4 }
+            else if isUniversal { score = 3 }
+            else if hasMacKeyword && !hasOtherArch { score = 2 }
+            else if !hasOtherArch { score = 1 }
+            else { score = 0 }
+
+            if score > 0 {
+                candidates.append(ScoredAsset(url: url, score: score))
             }
         }
 
-        // Fallback: any asset with a macOS extension
-        for asset in assets {
-            guard let name = (asset["name"] as? String)?.lowercased(),
-                  let url = asset["browser_download_url"] as? String
-            else { continue }
-
-            if macExtensions.contains(where: { name.hasSuffix($0) }) {
-                return url
-            }
-        }
-
-        return nil
+        return candidates.max(by: { $0.score < $1.score })?.url
     }
 
     // MARK: - Generic provider
