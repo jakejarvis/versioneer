@@ -345,6 +345,7 @@ final class AppState {
                 latestVersionRaw: localInfo.latestVersion ?? decision.latestVersionRaw,
                 latestReleaseId: decision.latestReleaseId,
                 releasedAt: localInfo.publishedAt ?? decision.releasedAt,
+                iconUrl: decision.iconUrl,
                 artifact: decision.artifact,
                 install: decision.install
             )
@@ -389,6 +390,7 @@ final class AppState {
                 latestVersionRaw: latestVersion,
                 latestReleaseId: nil,
                 releasedAt: releasedAt,
+                iconUrl: nil,
                 artifact: nil,
                 install: .unavailable
             )

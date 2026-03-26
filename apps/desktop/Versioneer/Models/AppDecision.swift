@@ -15,6 +15,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     let latestVersionRaw: String?
     let latestReleaseId: String?
     let releasedAt: String?
+    let iconUrl: String?
     let artifact: Artifact?
     let install: Install
 
@@ -98,6 +99,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
             latestVersionRaw: latestVersionRaw,
             latestReleaseId: latestReleaseId,
             releasedAt: releasedAt,
+            iconUrl: iconUrl,
             artifact: artifact,
             install: install
         )

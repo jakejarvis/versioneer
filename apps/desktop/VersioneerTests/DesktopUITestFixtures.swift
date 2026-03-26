@@ -65,6 +65,7 @@ enum DesktopUITestFixtures {
             latestVersionRaw: latestVersion,
             latestReleaseId: nil,
             releasedAt: releasedAt,
+            iconUrl: nil,
             artifact: artifact,
             install: install
         )

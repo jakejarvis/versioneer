@@ -194,6 +194,7 @@ private enum VersioneerPreviewFixtures {
             latestVersionRaw: latestVersionRaw,
             latestReleaseId: nil,
             releasedAt: releasedAt,
+            iconUrl: nil,
             artifact: artifact,
             install: install
         )
