@@ -242,6 +242,13 @@ struct AppDetailView: View {
                     .foregroundStyle(installState.phase == .failed ? .red : .secondary)
             }
 
+            if let recoveryAction = installState.recoveryAction {
+                Button(installCoordinator.recoveryActionTitle(recoveryAction)) {
+                    installCoordinator.performRecoveryAction(recoveryAction)
+                }
+                .buttonStyle(.link)
+            }
+
             if !result.install.canInstall {
                 Text(unavailableInstallReason)
                     .font(.callout)

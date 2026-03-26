@@ -7,6 +7,17 @@ import Sparkle
 @Observable
 @MainActor
 final class InstallCoordinator {
+    enum RecoveryAction: Sendable {
+        case openSystemSettings
+    }
+
+    enum ExecutionRoute: Equatable, Sendable {
+        case sparkle
+        case localReplace
+        case privilegedReplace
+        case privilegedPackage
+    }
+
     enum Phase: String, Sendable {
         case idle
         case preparing
@@ -24,6 +35,7 @@ final class InstallCoordinator {
         let executionId: String?
         let errorMessage: String?
         let installedVersion: String?
+        let recoveryAction: RecoveryAction?
 
         var isRunning: Bool {
             switch phase {
@@ -39,7 +51,8 @@ final class InstallCoordinator {
             detail: "",
             executionId: nil,
             errorMessage: nil,
-            installedVersion: nil
+            installedVersion: nil,
+            recoveryAction: nil
         )
     }
 
@@ -57,6 +70,11 @@ final class InstallCoordinator {
     }
 
     private var operations: [String: OperationState] = [:]
+    private let privilegedHelperClient: any PrivilegedHelperClientProtocol
+
+    init(privilegedHelperClient: any PrivilegedHelperClientProtocol = PrivilegedHelperClient()) {
+        self.privilegedHelperClient = privilegedHelperClient
+    }
 
     func state(for result: AppDecision) -> OperationState {
         operations[result.id] ?? .idle
@@ -85,7 +103,8 @@ final class InstallCoordinator {
                 detail: "Requesting install plan…",
                 executionId: nil,
                 errorMessage: nil,
-                installedVersion: nil
+                installedVersion: nil,
+                recoveryAction: nil
             )
 
             let prepared = try await apiClient.prepareInstall(
@@ -112,7 +131,8 @@ final class InstallCoordinator {
                     detail: "Running the app's Sparkle updater…",
                     executionId: prepared.executionId,
                     errorMessage: nil,
-                    installedVersion: nil
+                    installedVersion: nil,
+                    recoveryAction: nil
                 )
                 try await ExternalSparkleInstaller().install(appAt: URL(fileURLWithPath: installedApp.path))
                 verificationSummary = VerificationSummary(strategy: prepared.plan.strategy.rawValue)
@@ -139,7 +159,8 @@ final class InstallCoordinator {
                     detail: "Verifying downloaded app…",
                     executionId: prepared.executionId,
                     errorMessage: nil,
-                    installedVersion: nil
+                    installedVersion: nil,
+                    recoveryAction: nil
                 )
                 verificationSummary = try await verifyAppBundle(
                     bundleURL: preparedBundle.appBundleURL,
@@ -149,20 +170,44 @@ final class InstallCoordinator {
 
                 try await ensureTargetAppIsClosed(installedApp: installedApp)
 
-                updateState(
-                    for: operationKey,
-                    phase: .installing,
-                    detail: "Replacing installed app…",
-                    executionId: prepared.executionId,
-                    errorMessage: nil,
-                    installedVersion: nil
-                )
-                try await replaceInstalledApp(
-                    sourceAppURL: preparedBundle.appBundleURL,
-                    destinationAppURL: URL(fileURLWithPath: installedApp.path),
-                    stagingDirectory: stagingDir,
-                    requiresAdmin: prepared.plan.requiresAdmin
-                )
+                let destinationAppURL = URL(fileURLWithPath: installedApp.path)
+                switch executionRoute(for: prepared.plan, destinationAppURL: destinationAppURL) {
+                case .localReplace:
+                    updateState(
+                        for: operationKey,
+                        phase: .installing,
+                        detail: "Replacing installed app…",
+                        executionId: prepared.executionId,
+                        errorMessage: nil,
+                        installedVersion: nil,
+                        recoveryAction: nil
+                    )
+                    try await replaceInstalledAppLocally(
+                        sourceAppURL: preparedBundle.appBundleURL,
+                        destinationAppURL: destinationAppURL,
+                        stagingDirectory: stagingDir
+                    )
+
+                case .privilegedReplace:
+                    updateState(
+                        for: operationKey,
+                        phase: .installing,
+                        detail: "Setting up privileged installer…",
+                        executionId: prepared.executionId,
+                        errorMessage: nil,
+                        installedVersion: nil,
+                        recoveryAction: nil
+                    )
+                    try await replaceInstalledAppViaHelper(
+                        executionId: prepared.executionId,
+                        sourceAppURL: preparedBundle.appBundleURL,
+                        destinationAppURL: destinationAppURL,
+                        stagingDirectory: stagingDir
+                    )
+
+                case .sparkle, .privilegedPackage:
+                    throw InstallError.unsupportedStrategy
+                }
 
                 if prepared.plan.relaunchAfterInstall {
                     updateState(
@@ -171,7 +216,8 @@ final class InstallCoordinator {
                         detail: "Relaunching app…",
                         executionId: prepared.executionId,
                         errorMessage: nil,
-                        installedVersion: nil
+                        installedVersion: nil,
+                        recoveryAction: nil
                     )
                     try await relaunchApp(at: URL(fileURLWithPath: installedApp.path))
                 }
@@ -186,7 +232,8 @@ final class InstallCoordinator {
                     detail: "Verifying package…",
                     executionId: prepared.executionId,
                     errorMessage: nil,
-                    installedVersion: nil
+                    installedVersion: nil,
+                    recoveryAction: nil
                 )
                 verificationSummary = try await verifyPackage(
                     packageURL: artifactURL,
@@ -196,14 +243,16 @@ final class InstallCoordinator {
                 updateState(
                     for: operationKey,
                     phase: .installing,
-                    detail: "Installing package…",
+                    detail: "Setting up privileged installer…",
                     executionId: prepared.executionId,
                     errorMessage: nil,
-                    installedVersion: nil
+                    installedVersion: nil,
+                    recoveryAction: nil
                 )
-                try await installPackage(
+                try await installPackageViaHelper(
+                    executionId: prepared.executionId,
                     packageURL: artifactURL,
-                    requiresAdmin: prepared.plan.requiresAdmin
+                    stagingDirectory: stagingDir
                 )
 
             case .pkgManual, .manualOnly:
@@ -228,7 +277,8 @@ final class InstallCoordinator {
                 detail: "Install completed.",
                 executionId: executionId,
                 errorMessage: nil,
-                installedVersion: installedVersion
+                installedVersion: installedVersion,
+                recoveryAction: nil
             )
             cleanupStagingDirectory(stagedDirectory)
             return true
@@ -251,7 +301,8 @@ final class InstallCoordinator {
                 detail: "Install failed.",
                 executionId: executionId,
                 errorMessage: error.localizedDescription,
-                installedVersion: nil
+                installedVersion: nil,
+                recoveryAction: recoveryAction(for: error)
             )
             cleanupStagingDirectory(stagedDirectory)
             return false
@@ -264,15 +315,40 @@ final class InstallCoordinator {
         detail: String,
         executionId: String?,
         errorMessage: String?,
-        installedVersion: String?
+        installedVersion: String?,
+        recoveryAction: RecoveryAction?
     ) {
         operations[key] = OperationState(
             phase: phase,
             detail: detail,
             executionId: executionId,
             errorMessage: errorMessage,
-            installedVersion: installedVersion
+            installedVersion: installedVersion,
+            recoveryAction: recoveryAction
         )
+    }
+
+    func performRecoveryAction(_ action: RecoveryAction) {
+        switch action {
+        case .openSystemSettings:
+            if let settingsURL = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension"),
+               NSWorkspace.shared.open(settingsURL) {
+                return
+            }
+
+            let configuration = NSWorkspace.OpenConfiguration()
+            NSWorkspace.shared.openApplication(
+                at: URL(fileURLWithPath: "/System/Applications/System Settings.app"),
+                configuration: configuration
+            ) { _, _ in }
+        }
+    }
+
+    func recoveryActionTitle(_ action: RecoveryAction) -> String {
+        switch action {
+        case .openSystemSettings:
+            return "Open System Settings"
+        }
     }
 
     private func reportStatus(
@@ -554,43 +630,87 @@ final class InstallCoordinator {
         }
     }
 
-    private func replaceInstalledApp(
+    func executionRoute(
+        for plan: InstallPlan,
+        destinationAppURL: URL? = nil
+    ) -> ExecutionRoute {
+        switch plan.strategy {
+        case .sparkle:
+            return .sparkle
+        case .zipReplace, .dmgCopyReplace:
+            guard let destinationAppURL else { return .localReplace }
+            let needsPrivilege =
+                plan.requiresAdmin
+                || !FileManager.default.isWritableFile(atPath: destinationAppURL.deletingLastPathComponent().path)
+            return needsPrivilege ? .privilegedReplace : .localReplace
+        case .pkgInstall:
+            return .privilegedPackage
+        case .pkgManual, .manualOnly:
+            return .localReplace
+        }
+    }
+
+    private func replaceInstalledAppLocally(
         sourceAppURL: URL,
         destinationAppURL: URL,
-        stagingDirectory: URL,
-        requiresAdmin: Bool
+        stagingDirectory: URL
     ) async throws {
-        let needsPrivilege =
-            requiresAdmin || !FileManager.default.isWritableFile(atPath: destinationAppURL.deletingLastPathComponent().path)
-        let backupURL = stagingDirectory.appendingPathComponent("backup-\(destinationAppURL.lastPathComponent)")
+        let backupURL = stagingDirectory
+            .appendingPathComponent("local-backups", isDirectory: true)
+            .appendingPathComponent(destinationAppURL.lastPathComponent, isDirectory: true)
 
-        let script = """
-        set -e; src=\(shellQuoted(sourceAppURL.path)); dst=\(shellQuoted(destinationAppURL.path)); backup=\(shellQuoted(backupURL.path)); rm -rf "$backup"; cleanup(){ status=$?; if [ $status -ne 0 ]; then rm -rf "$dst"; if [ -e "$backup" ]; then mv "$backup" "$dst"; fi; fi; exit $status; }; trap cleanup EXIT; if [ -e "$dst" ]; then mv "$dst" "$backup"; fi; /usr/bin/ditto "$src" "$dst"; /usr/bin/xattr -dr com.apple.quarantine "$dst" >/dev/null 2>&1 || true; rm -rf "$backup"; trap - EXIT
-        """
-
-        try await runShellScript(script, privileged: needsPrivilege)
+        _ = try await Task.detached(priority: .userInitiated) {
+            try PrivilegedOperationPerformer.replaceApp(
+                sourceURL: sourceAppURL,
+                destinationURL: destinationAppURL,
+                backupURL: backupURL
+            )
+        }.value
     }
 
-    private func installPackage(packageURL: URL, requiresAdmin _: Bool) async throws {
-        let script = "/usr/sbin/installer -pkg \(shellQuoted(packageURL.path)) -target /"
-        try await runShellScript(script, privileged: true)
+    private func replaceInstalledAppViaHelper(
+        executionId: String,
+        sourceAppURL: URL,
+        destinationAppURL: URL,
+        stagingDirectory: URL
+    ) async throws {
+        let helperSourceURL = try await stageAppBundleForHelper(
+            sourceAppURL: sourceAppURL,
+            stagingDirectory: stagingDirectory
+        )
+        let manifest = PreparedPrivilegedOperation(
+            executionId: executionId,
+            operationType: .replaceApp,
+            sourceRelativePath: relativePath(from: stagingDirectory, to: helperSourceURL),
+            destinationPath: destinationAppURL.path,
+            backupRelativePath: "helper-backups/\(destinationAppURL.lastPathComponent)",
+            installTarget: nil
+        )
+        try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
+        _ = try await privilegedHelperClient.performOperation(
+            executionId: executionId,
+            stagingDirectory: stagingDirectory
+        )
     }
 
-    private func runShellScript(_ script: String, privileged: Bool) async throws {
-        if privileged {
-            let appleScript = """
-            do shell script "\(appleScriptEscaped(script))" with administrator privileges
-            """
-            _ = try await ProcessRunner.runSuccessful(
-                "/usr/bin/osascript",
-                arguments: ["-e", appleScript]
-            )
-        } else {
-            _ = try await ProcessRunner.runSuccessful(
-                "/bin/sh",
-                arguments: ["-c", script]
-            )
-        }
+    private func installPackageViaHelper(
+        executionId: String,
+        packageURL: URL,
+        stagingDirectory: URL
+    ) async throws {
+        let manifest = PreparedPrivilegedOperation(
+            executionId: executionId,
+            operationType: .installPackage,
+            sourceRelativePath: relativePath(from: stagingDirectory, to: packageURL),
+            destinationPath: "/",
+            backupRelativePath: nil,
+            installTarget: "/"
+        )
+        try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
+        _ = try await privilegedHelperClient.performOperation(
+            executionId: executionId,
+            stagingDirectory: stagingDirectory
+        )
     }
 
     private func relaunchApp(at url: URL) async throws {
@@ -625,15 +745,12 @@ final class InstallCoordinator {
     }
 
     private func makeStagingDirectory(executionId: String) throws -> URL {
-        let appSupport = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let root = appSupport.appendingPathComponent("Versioneer/InstallStaging", isDirectory: true)
+        let root = PrivilegedInstallPaths.stagingRoot(in: FileManager.default.homeDirectoryForCurrentUser)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let executionDirectory = root.appendingPathComponent(executionId, isDirectory: true)
+        let executionDirectory = PrivilegedInstallPaths.stagingDirectory(
+            executionId: executionId,
+            in: FileManager.default.homeDirectoryForCurrentUser
+        )
         if FileManager.default.fileExists(atPath: executionDirectory.path) {
             try FileManager.default.removeItem(at: executionDirectory)
         }
@@ -709,6 +826,54 @@ final class InstallCoordinator {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return try? String(data: encoder.encode(summary), encoding: .utf8)
+    }
+
+    private func recoveryAction(for error: Error) -> RecoveryAction? {
+        guard let installError = error as? InstallError else { return nil }
+        switch installError {
+        case .privilegedHelperApprovalRequired:
+            return .openSystemSettings
+        default:
+            return nil
+        }
+    }
+
+    private func stageAppBundleForHelper(
+        sourceAppURL: URL,
+        stagingDirectory: URL
+    ) async throws -> URL {
+        let helperSourceRoot = stagingDirectory.appendingPathComponent("helper-source", isDirectory: true)
+        try FileManager.default.createDirectory(at: helperSourceRoot, withIntermediateDirectories: true)
+        let stagedSourceURL = helperSourceRoot.appendingPathComponent(sourceAppURL.lastPathComponent, isDirectory: true)
+
+        if FileManager.default.fileExists(atPath: stagedSourceURL.path) {
+            try FileManager.default.removeItem(at: stagedSourceURL)
+        }
+
+        _ = try await ProcessRunner.runSuccessful(
+            "/usr/bin/ditto",
+            arguments: [sourceAppURL.path, stagedSourceURL.path]
+        )
+        return stagedSourceURL
+    }
+
+    private func writePreparedPrivilegedOperation(
+        _ manifest: PreparedPrivilegedOperation,
+        to stagingDirectory: URL
+    ) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(manifest)
+        try data.write(to: PreparedPrivilegedOperation.manifestURL(in: stagingDirectory), options: [.atomic])
+    }
+
+    private func relativePath(from root: URL, to child: URL) -> String {
+        let rootPath = root.standardizedFileURL.path
+        let childPath = child.standardizedFileURL.path
+        guard childPath == rootPath || childPath.hasPrefix(rootPath + "/") else {
+            return child.lastPathComponent
+        }
+        return String(childPath.dropFirst(rootPath.count + 1))
     }
 
     private static func installIdentifier() -> String {
@@ -797,6 +962,10 @@ enum InstallError: LocalizedError {
     case verificationFailed(String)
     case unsupportedStrategy
     case cancelled
+    case privilegedHelperApprovalRequired
+    case privilegedHelperRegistrationFailed(String)
+    case privilegedHelperConnectionFailed(String)
+    case privilegedHelperExecutionFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -814,6 +983,14 @@ enum InstallError: LocalizedError {
             "This install strategy is not supported by the current desktop app build."
         case .cancelled:
             "The install was cancelled."
+        case .privilegedHelperApprovalRequired:
+            "Versioneer needs its privileged helper approved in System Settings before it can install updates that require admin access."
+        case .privilegedHelperRegistrationFailed(let message):
+            "Versioneer could not register its privileged helper: \(message)"
+        case .privilegedHelperConnectionFailed(let message):
+            "Versioneer could not contact its privileged helper: \(message)"
+        case .privilegedHelperExecutionFailed(let message):
+            message
         }
     }
 }
@@ -823,14 +1000,4 @@ private extension Dictionary where Key == String, Value == String {
         let data = try JSONSerialization.data(withJSONObject: self, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
     }
-}
-
-private func shellQuoted(_ value: String) -> String {
-    "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
-}
-
-private func appleScriptEscaped(_ value: String) -> String {
-    value
-        .replacingOccurrences(of: "\\", with: "\\\\")
-        .replacingOccurrences(of: "\"", with: "\\\"")
 }
