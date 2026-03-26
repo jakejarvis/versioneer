@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { getScorecard, recomputeScorecard, promoteVerification } from "@/server/scorecards.server";
+import { getScorecard, recomputeScorecard, promoteVerification } from "@/server/scorecards";
 
 export function useScorecard(appId: string) {
   return useQuery({

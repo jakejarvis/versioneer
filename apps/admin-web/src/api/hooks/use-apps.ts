@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { updateAlias, deleteAlias } from "@/server/aliases.server";
+import { updateAlias, deleteAlias } from "@/server/aliases";
 import {
   listApps,
   getApp,
@@ -14,8 +14,8 @@ import {
   getAppInstallRules,
   createInstallRule,
   recomputeLatest,
-} from "@/server/apps.server";
-import { triggerFetch } from "@/server/sources.server";
+} from "@/server/apps";
+import { triggerFetch } from "@/server/sources";
 
 interface UseAppsParams {
   status?: "active" | "deprecated" | "merged" | "unlisted";

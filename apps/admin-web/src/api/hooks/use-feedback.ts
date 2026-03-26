@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { listFeedback, getFeedbackDetail, updateFeedback } from "@/server/feedback.server";
+import { listFeedback, getFeedbackDetail, updateFeedback } from "@/server/feedback";
 
 interface UseFeedbackParams {
   status?: string;

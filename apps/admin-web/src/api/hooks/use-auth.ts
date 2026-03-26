@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getMe } from "@/server/auth.server";
+import { getMe } from "@/server/auth";
 
 export function useAuth() {
   return useQuery({

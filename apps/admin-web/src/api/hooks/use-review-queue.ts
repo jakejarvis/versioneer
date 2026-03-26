@@ -5,7 +5,7 @@ import {
   updateReviewItem,
   resolveMatch,
   approvePublication,
-} from "@/server/review-queue.server";
+} from "@/server/review-queue";
 
 interface UseReviewQueueParams {
   status?: "pending" | "in_progress" | "resolved" | "dismissed";

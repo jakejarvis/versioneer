@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getStats } from "@/server/stats.server";
+import { getStats } from "@/server/stats";
 
 export function useStats() {
   return useQuery({

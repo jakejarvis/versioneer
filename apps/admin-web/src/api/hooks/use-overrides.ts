@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { listOverrides, createOverride, deactivateOverride } from "@/server/overrides.server";
+import { listOverrides, createOverride, deactivateOverride } from "@/server/overrides";
 
 interface UseOverridesParams {
   active?: boolean;

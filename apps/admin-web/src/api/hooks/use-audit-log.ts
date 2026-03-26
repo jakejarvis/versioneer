@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { listAuditLog } from "@/server/audit-log.server";
+import { listAuditLog } from "@/server/audit-log";
 
 interface UseAuditLogParams {
   eventType?: string;

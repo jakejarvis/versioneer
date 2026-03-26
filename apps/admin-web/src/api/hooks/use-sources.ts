@@ -11,7 +11,7 @@ import {
   triggerFetch,
   reparse,
   getSourceHealth,
-} from "@/server/sources.server";
+} from "@/server/sources";
 
 interface UseSourcesParams {
   status?: "active" | "paused" | "disabled" | "error";

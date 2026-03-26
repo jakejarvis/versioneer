@@ -4,7 +4,7 @@ import {
   getOnboardingChecklist,
   updateOnboardingChecklist,
   onboardApp,
-} from "@/server/onboarding.server";
+} from "@/server/onboarding";
 
 export function useOnboardingChecklist(appId: string) {
   return useQuery({

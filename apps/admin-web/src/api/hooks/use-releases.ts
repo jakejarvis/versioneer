@@ -8,7 +8,7 @@ import {
   getReleaseObservations,
   pinRelease,
   unpinRelease,
-} from "@/server/releases.server";
+} from "@/server/releases";
 
 interface UseReleasesParams {
   appId?: string;

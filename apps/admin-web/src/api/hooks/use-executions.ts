@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { listExecutions, getExecutionDetail, getExecutionStats } from "@/server/executions.server";
+import { listExecutions, getExecutionDetail, getExecutionStats } from "@/server/executions";
 
 interface UseExecutionsParams {
   appId?: string;

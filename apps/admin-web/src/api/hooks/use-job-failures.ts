@@ -5,7 +5,7 @@ import {
   updateJobFailure,
   retryJobFailure,
   retryAllJobFailures,
-} from "@/server/job-failures.server";
+} from "@/server/job-failures";
 
 interface UseJobFailuresParams {
   status?: "open" | "retrying" | "resolved" | "abandoned";
