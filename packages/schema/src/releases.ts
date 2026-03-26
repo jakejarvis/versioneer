@@ -180,7 +180,14 @@ export const installRules = sqliteTable(
       .notNull()
       .references(() => apps.id),
     strategy: text("strategy", {
-      enum: ["sparkle", "zip_replace", "dmg_copy_replace", "pkg_manual", "manual_only"],
+      enum: [
+        "sparkle",
+        "zip_replace",
+        "dmg_copy_replace",
+        "pkg_install",
+        "pkg_manual",
+        "manual_only",
+      ],
     }).notNull(),
     requiresQuit: integer("requires_quit", { mode: "boolean" }).notNull().default(true),
     requiresAdmin: integer("requires_admin", { mode: "boolean" }).notNull().default(false),

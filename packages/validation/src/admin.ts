@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { installStrategySchema } from "./install";
+
 export const appCreateSchema = z.object({
   slug: z
     .string()
@@ -75,7 +77,7 @@ export const releaseUpdateSchema = z.object({
 });
 
 export const installRuleCreateSchema = z.object({
-  strategy: z.enum(["sparkle", "zip_replace", "dmg_copy_replace", "pkg_manual", "manual_only"]),
+  strategy: installStrategySchema,
   requiresQuit: z.boolean().default(true),
   requiresAdmin: z.boolean().default(false),
   supportsSilent: z.boolean().default(false),
@@ -85,9 +87,7 @@ export const installRuleCreateSchema = z.object({
 });
 
 export const installRuleUpdateSchema = z.object({
-  strategy: z
-    .enum(["sparkle", "zip_replace", "dmg_copy_replace", "pkg_manual", "manual_only"])
-    .optional(),
+  strategy: installStrategySchema.optional(),
   requiresQuit: z.boolean().optional(),
   requiresAdmin: z.boolean().optional(),
   supportsSilent: z.boolean().optional(),

@@ -12,11 +12,18 @@ import {
   clientInventoryApps,
   clientFeedback,
   discoveredApps,
+  installRules,
   reviewQueue,
+  updateExecutions,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
-import { inventoryCheckRequestSchema, clientFeedbackSubmitSchema } from "@versioneer/validation";
+import {
+  inventoryCheckRequestSchema,
+  clientFeedbackSubmitSchema,
+  installPrepareRequestSchema,
+  installExecutionStatusUpdateSchema,
+} from "@versioneer/validation";
 import type { AppDecision } from "@versioneer/validation";
 import { normalizeVersion } from "@versioneer/versioning";
 import { compareVersionStrings } from "@versioneer/versioning";
@@ -62,6 +69,191 @@ function computeLookupKey(appName: string, bundleId?: string | null): string {
     .toLowerCase()
     .trim()
     .replace(/\.app$/, "")}`;
+}
+
+async function hashPath(path: string): Promise<string> {
+  const bytes = new TextEncoder().encode(path);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function deriveInstallabilityClass(params: {
+  verificationTier: string | null;
+  installRule: { strategy: string; enabled: boolean } | null;
+  hasArtifact: boolean;
+}): NonNullable<AppDecision["install"]["installabilityClass"]> {
+  const { verificationTier, installRule, hasArtifact } = params;
+
+  if (
+    !installRule ||
+    !installRule.enabled ||
+    verificationTier === "unverified" ||
+    !verificationTier
+  ) {
+    return "notify_only";
+  }
+
+  if (installRule.strategy === "manual_only" || installRule.strategy === "pkg_manual") {
+    return "notify_only";
+  }
+
+  const strategyAvailable = installRule.strategy === "sparkle" || hasArtifact;
+  if (!strategyAvailable) {
+    return "notify_only";
+  }
+
+  if (verificationTier === "verified" && installRule.strategy === "sparkle") {
+    return "automation_candidate";
+  }
+
+  if (verificationTier === "verified") {
+    return "assisted_replace";
+  }
+
+  if (verificationTier === "provisional") {
+    return "assisted_download";
+  }
+
+  return "notify_only";
+}
+
+function defaultInstallMetadata(
+  eligibility: AppDecision["install"]["eligibility"] = "not_supported",
+): AppDecision["install"] {
+  return {
+    canInstall: false,
+    installabilityClass: null,
+    strategy: null,
+    requiresQuit: false,
+    requiresAdmin: false,
+    supportsSilent: false,
+    eligibility,
+  };
+}
+
+function buildInstallMetadata(params: {
+  decision: AppDecision["decision"];
+  installRule: {
+    strategy: string;
+    enabled: boolean;
+    requiresQuit: boolean;
+    requiresAdmin: boolean;
+    supportsSilent: boolean;
+  } | null;
+  installabilityClass: AppDecision["install"]["installabilityClass"];
+  verificationTier: string | null;
+  isMasApp: boolean | null | undefined;
+  hasSparkleFeed: boolean;
+  hasArtifact: boolean;
+}): AppDecision["install"] {
+  const {
+    decision,
+    installRule,
+    installabilityClass,
+    verificationTier,
+    isMasApp,
+    hasSparkleFeed,
+    hasArtifact,
+  } = params;
+
+  if (isMasApp) {
+    return defaultInstallMetadata("mas_app");
+  }
+
+  if (!installRule) {
+    return defaultInstallMetadata("not_supported");
+  }
+
+  const base: AppDecision["install"] = {
+    canInstall: false,
+    installabilityClass,
+    strategy: installRule.strategy as AppDecision["install"]["strategy"],
+    requiresQuit: installRule.requiresQuit,
+    requiresAdmin: installRule.requiresAdmin,
+    supportsSilent: installRule.supportsSilent,
+    eligibility: "not_supported",
+  };
+
+  if (installRule.strategy === "manual_only" || installRule.strategy === "pkg_manual") {
+    return { ...base, eligibility: "manual_only" };
+  }
+
+  if (
+    decision !== "update_available" ||
+    installabilityClass === null ||
+    installabilityClass === "notify_only"
+  ) {
+    return base;
+  }
+
+  if (
+    !verificationTier ||
+    (verificationTier !== "verified" && verificationTier !== "provisional")
+  ) {
+    return base;
+  }
+
+  if (installRule.strategy === "sparkle" && !hasSparkleFeed) {
+    return base;
+  }
+
+  if (installRule.strategy !== "sparkle" && !hasArtifact) {
+    return base;
+  }
+
+  if (verificationTier === "provisional") {
+    return { ...base, canInstall: true, eligibility: "requires_warning" };
+  }
+
+  return { ...base, canInstall: true, eligibility: "eligible" };
+}
+
+function pickPreferredAliasMap(
+  aliases: Array<{
+    appId: string;
+    aliasType: string;
+    value: string;
+    isExact: boolean;
+    confidenceWeight: number;
+  }>,
+  aliasType: string,
+): Map<string, string> {
+  const map = new Map<string, { value: string; confidenceWeight: number }>();
+
+  for (const alias of aliases) {
+    if (alias.aliasType !== aliasType || !alias.isExact) continue;
+    const existing = map.get(alias.appId);
+    if (!existing || alias.confidenceWeight > existing.confidenceWeight) {
+      map.set(alias.appId, { value: alias.value, confidenceWeight: alias.confidenceWeight });
+    }
+  }
+
+  return new Map(Array.from(map.entries(), ([appId, entry]) => [appId, entry.value]));
+}
+
+function actionTypeForStrategy(strategy: string): "sparkle" | "pkg_install" | "assisted_replace" {
+  if (strategy === "sparkle") return "sparkle";
+  if (strategy === "pkg_install") return "pkg_install";
+  return "assisted_replace";
+}
+
+function artifactMatchesStrategy(
+  strategy: string,
+  artifactType: string | null,
+  url: string,
+): boolean {
+  const lowerUrl = url.toLowerCase();
+
+  switch (strategy) {
+    case "zip_replace":
+      return artifactType === "zip" || lowerUrl.endsWith(".zip");
+    case "dmg_copy_replace":
+      return artifactType === "dmg" || lowerUrl.endsWith(".dmg");
+    case "pkg_install":
+      return artifactType === "pkg" || lowerUrl.endsWith(".pkg");
+    default:
+      return true;
+  }
 }
 
 // POST /v1/inventory/check
@@ -158,6 +350,8 @@ publicRoutes.post("/inventory/check", async (c) => {
     isExact: a.isExact,
     confidenceWeight: a.confidenceWeight,
   }));
+  const expectedBundleIdByApp = pickPreferredAliasMap(allAliases, "bundle_id");
+  const expectedTeamIdByApp = pickPreferredAliasMap(allAliases, "team_id");
 
   // Load all apps for verification tier lookup
   const allAppDetails = await db
@@ -167,6 +361,19 @@ publicRoutes.post("/inventory/check", async (c) => {
   const appVerificationMap = new Map<string, string>();
   for (const a of allAppDetails) {
     appVerificationMap.set(a.id, a.verificationTier);
+  }
+
+  // Load install rules, preferring enabled + most recently updated rule per app
+  const allInstallRules = await db.select().from(installRules).all();
+  allInstallRules.sort((a, b) => {
+    if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+    return b.updatedAt.localeCompare(a.updatedAt);
+  });
+  const installRuleByApp = new Map<string, (typeof allInstallRules)[number]>();
+  for (const rule of allInstallRules) {
+    if (!installRuleByApp.has(rule.appId)) {
+      installRuleByApp.set(rule.appId, rule);
+    }
   }
 
   // Load all latest releases
@@ -201,10 +408,23 @@ publicRoutes.post("/inventory/check", async (c) => {
     let releasedAt: string | null = null;
     let latestReleaseId: string | null = null;
     let matchedArtifact: AppDecision["artifact"] = null;
+    let selectedVerificationTier: string | null = null;
+    let selectedInstallRule: {
+      strategy: string;
+      enabled: boolean;
+      requiresQuit: boolean;
+      requiresAdmin: boolean;
+      supportsSilent: boolean;
+    } | null = null;
+    let selectedInstallabilityClass: AppDecision["install"]["installabilityClass"] = null;
+    let installMetadata: AppDecision["install"] = defaultInstallMetadata(
+      installedApp.isMasApp ? "mas_app" : "not_supported",
+    );
 
     if (matchResult.matched && matchResult.appId) {
       // Publication gating: unverified apps return unsupported
       const tier = appVerificationMap.get(matchResult.appId);
+      selectedVerificationTier = tier ?? null;
       if (tier === "unverified") {
         decision = "unsupported";
       }
@@ -237,11 +457,19 @@ publicRoutes.post("/inventory/check", async (c) => {
 
           if (compatibleArtifact) {
             matchedArtifact = {
+              id: compatibleArtifact.id,
               downloadUrl: compatibleArtifact.url,
               architecture: compatibleArtifact.architecture,
               minOsVersion: compatibleArtifact.minOsVersion,
               artifactType: compatibleArtifact.artifactType,
               sizeBytes: compatibleArtifact.sizeBytes,
+              sha256: compatibleArtifact.sha256,
+              expectedTeamId:
+                compatibleArtifact.expectedTeamId ??
+                expectedTeamIdByApp.get(matchResult.appId) ??
+                null,
+              expectedBundleId: expectedBundleIdByApp.get(matchResult.appId) ?? null,
+              expectedVersionRaw: latest.versionRaw,
             };
           }
         } else {
@@ -252,11 +480,14 @@ publicRoutes.post("/inventory/check", async (c) => {
               versionNormalized: releases.versionNormalized,
               versionRaw: releases.versionRaw,
               releasedAt: releases.releasedAt,
+              artifactId: artifacts.id,
               artifactUrl: artifacts.url,
               artifactArch: artifacts.architecture,
               artifactMinOs: artifacts.minOsVersion,
               artifactType: artifacts.artifactType,
               artifactSize: artifacts.sizeBytes,
+              artifactSha256: artifacts.sha256,
+              artifactExpectedTeamId: artifacts.expectedTeamId,
             })
             .from(releases)
             .innerJoin(artifacts, eq(artifacts.releaseId, releases.id))
@@ -282,14 +513,40 @@ publicRoutes.post("/inventory/check", async (c) => {
             releasedAt = found.releasedAt;
             latestReleaseId = found.releaseId;
             matchedArtifact = {
+              id: found.artifactId,
               downloadUrl: found.artifactUrl,
               architecture: found.artifactArch,
               minOsVersion: found.artifactMinOs,
               artifactType: found.artifactType,
               sizeBytes: found.artifactSize,
+              sha256: found.artifactSha256,
+              expectedTeamId:
+                found.artifactExpectedTeamId ?? expectedTeamIdByApp.get(matchResult.appId) ?? null,
+              expectedBundleId: expectedBundleIdByApp.get(matchResult.appId) ?? null,
+              expectedVersionRaw: found.versionRaw,
             };
           }
         }
+
+        const rawInstallRule = installRuleByApp.get(matchResult.appId) ?? null;
+        selectedInstallRule = rawInstallRule
+          ? {
+              strategy: rawInstallRule.strategy,
+              enabled: rawInstallRule.enabled,
+              requiresQuit: rawInstallRule.requiresQuit,
+              requiresAdmin: rawInstallRule.requiresAdmin,
+              supportsSilent: rawInstallRule.supportsSilent,
+            }
+          : null;
+        selectedInstallabilityClass =
+          latest.installabilityClass ??
+          deriveInstallabilityClass({
+            verificationTier: tier ?? null,
+            installRule: rawInstallRule
+              ? { strategy: rawInstallRule.strategy, enabled: rawInstallRule.enabled }
+              : null,
+            hasArtifact: matchedArtifact?.downloadUrl != null,
+          });
 
         if (latestVersion) {
           if (installedApp.version) {
@@ -314,6 +571,16 @@ publicRoutes.post("/inventory/check", async (c) => {
     if (matchResult.ambiguous) {
       decision = "ambiguous";
     }
+
+    installMetadata = buildInstallMetadata({
+      decision,
+      installRule: selectedInstallRule,
+      installabilityClass: selectedInstallabilityClass,
+      verificationTier: selectedVerificationTier,
+      isMasApp: installedApp.isMasApp,
+      hasSparkleFeed: Boolean(installedApp.sparkleFeedUrl),
+      hasArtifact: matchedArtifact?.downloadUrl != null,
+    });
 
     // Generate match explanation
     const matchExplanation = generateMatchExplanation(
@@ -375,6 +642,7 @@ publicRoutes.post("/inventory/check", async (c) => {
       releasedAt,
       iconUrl,
       artifact: matchedArtifact,
+      install: installMetadata,
     });
   }
 
@@ -480,6 +748,289 @@ publicRoutes.post("/inventory/check", async (c) => {
     results,
     processedAt: now,
   });
+});
+
+// POST /v1/install/prepare
+publicRoutes.post("/install/prepare", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const parsed = installPrepareRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Invalid request", details: parsed.error.issues }, 400);
+  }
+
+  const db = createDb(c.env.DB);
+  const now = new Date().toISOString();
+  const data = parsed.data;
+  const localPathHash = await hashPath(data.localAppPath);
+
+  const client = await db
+    .select()
+    .from(clients)
+    .where(eq(clients.anonymousInstallId, data.installId))
+    .get();
+  if (!client) {
+    return c.json({ error: "Unknown client. Submit inventory first." }, 400);
+  }
+
+  const snapshot = await db
+    .select()
+    .from(clientInventorySnapshots)
+    .where(
+      and(
+        eq(clientInventorySnapshots.id, data.snapshotId),
+        eq(clientInventorySnapshots.clientId, client.id),
+      ),
+    )
+    .get();
+  if (!snapshot) {
+    return c.json({ error: "Snapshot not found for client" }, 404);
+  }
+
+  const inventoryApp = await db
+    .select()
+    .from(clientInventoryApps)
+    .where(
+      and(
+        eq(clientInventoryApps.snapshotId, data.snapshotId),
+        eq(clientInventoryApps.matchedAppId, data.matchedAppId),
+        eq(clientInventoryApps.latestReleaseId, data.releaseId),
+        eq(clientInventoryApps.pathHash, localPathHash),
+      ),
+    )
+    .get();
+  if (!inventoryApp) {
+    return c.json({ error: "No matching inventory record for requested install" }, 404);
+  }
+
+  if (inventoryApp.isMasApp) {
+    return c.json({ error: "Mac App Store apps cannot be installed by Versioneer" }, 400);
+  }
+
+  if (inventoryApp.decisionStatus !== "update_available") {
+    return c.json({ error: "App is not currently eligible for install" }, 400);
+  }
+
+  const app = await db.select().from(apps).where(eq(apps.id, data.matchedAppId)).get();
+  if (!app) {
+    return c.json({ error: "App not found" }, 404);
+  }
+
+  if (app.verificationTier !== "verified" && app.verificationTier !== "provisional") {
+    return c.json({ error: "App verification tier does not permit installation" }, 400);
+  }
+
+  const release = await db
+    .select()
+    .from(releases)
+    .where(and(eq(releases.id, data.releaseId), eq(releases.appId, data.matchedAppId)))
+    .get();
+  if (!release || release.status !== "active") {
+    return c.json({ error: "Release not found or inactive" }, 404);
+  }
+
+  const appInstallRules = await db
+    .select()
+    .from(installRules)
+    .where(eq(installRules.appId, data.matchedAppId))
+    .all();
+  appInstallRules.sort((a, b) => {
+    if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+    return b.updatedAt.localeCompare(a.updatedAt);
+  });
+  const selectedRule = appInstallRules[0] ?? null;
+  if (!selectedRule || !selectedRule.enabled) {
+    return c.json({ error: "No enabled install rule found for app" }, 400);
+  }
+
+  if (selectedRule.strategy !== data.strategyCandidate) {
+    return c.json({ error: "Requested strategy does not match the active install rule" }, 400);
+  }
+
+  if (selectedRule.strategy === "manual_only" || selectedRule.strategy === "pkg_manual") {
+    return c.json({ error: "Selected install rule is manual-only" }, 400);
+  }
+
+  const exactAliases = await db
+    .select({
+      aliasType: appAliases.aliasType,
+      value: appAliases.value,
+      confidenceWeight: appAliases.confidenceWeight,
+    })
+    .from(appAliases)
+    .where(
+      and(
+        eq(appAliases.appId, data.matchedAppId),
+        eq(appAliases.isActive, true),
+        eq(appAliases.isExact, true),
+      ),
+    )
+    .all();
+  const expectedBundleId =
+    exactAliases
+      .filter((alias) => alias.aliasType === "bundle_id")
+      .sort((a, b) => b.confidenceWeight - a.confidenceWeight)[0]?.value ?? null;
+  const expectedTeamId =
+    exactAliases
+      .filter((alias) => alias.aliasType === "team_id")
+      .sort((a, b) => b.confidenceWeight - a.confidenceWeight)[0]?.value ?? null;
+
+  let artifactPlan: AppDecision["artifact"] = null;
+  if (selectedRule.strategy === "sparkle") {
+    if (!inventoryApp.sparkleFeedUrl) {
+      return c.json({ error: "Latest inventory snapshot does not include Sparkle metadata" }, 400);
+    }
+  } else {
+    const releaseArtifacts = await db
+      .select()
+      .from(artifacts)
+      .where(eq(artifacts.releaseId, data.releaseId))
+      .all();
+    const compatibleArtifact = releaseArtifacts.find(
+      (artifact) =>
+        isArchCompatible(artifact.architecture, inventoryApp.architecture) &&
+        isOsVersionCompatible(snapshot.osVersion, artifact.minOsVersion) &&
+        artifactMatchesStrategy(selectedRule.strategy, artifact.artifactType, artifact.url),
+    );
+
+    if (!compatibleArtifact) {
+      return c.json({ error: "No compatible artifact is available for this install rule" }, 400);
+    }
+
+    artifactPlan = {
+      id: compatibleArtifact.id,
+      downloadUrl: compatibleArtifact.url,
+      architecture: compatibleArtifact.architecture,
+      minOsVersion: compatibleArtifact.minOsVersion,
+      artifactType: compatibleArtifact.artifactType,
+      sizeBytes: compatibleArtifact.sizeBytes,
+      sha256: compatibleArtifact.sha256,
+      expectedTeamId: compatibleArtifact.expectedTeamId ?? expectedTeamId,
+      expectedBundleId,
+      expectedVersionRaw: release.versionRaw,
+    };
+  }
+
+  const installabilityClass = deriveInstallabilityClass({
+    verificationTier: app.verificationTier,
+    installRule: { strategy: selectedRule.strategy, enabled: selectedRule.enabled },
+    hasArtifact: artifactPlan?.downloadUrl != null,
+  });
+  if (installabilityClass === "notify_only") {
+    return c.json({ error: "Installability class does not permit installation" }, 400);
+  }
+
+  const executionId = generateId(idPrefixes.updateExecution);
+  await db.insert(updateExecutions).values({
+    id: executionId,
+    clientId: client.id,
+    appId: data.matchedAppId,
+    releaseId: data.releaseId,
+    artifactId: artifactPlan?.id ?? null,
+    actionType: actionTypeForStrategy(selectedRule.strategy),
+    actionStatus: "initiated",
+    clientVersionBefore: data.installedVersion ?? inventoryApp.installedVersionRaw ?? null,
+    clientVersionAfter: null,
+    installabilityClass,
+    errorMessage: null,
+    detailsJson: JSON.stringify({
+      snapshotId: data.snapshotId,
+      strategy: selectedRule.strategy,
+      warningLevel: app.verificationTier === "provisional" ? "provisional" : "none",
+      localAppPath: data.localAppPath,
+    }),
+    durationMs: null,
+    initiatedAt: now,
+    completedAt: null,
+  });
+
+  return c.json({
+    executionId,
+    plan: {
+      executionId,
+      appId: data.matchedAppId,
+      releaseId: data.releaseId,
+      strategy: selectedRule.strategy,
+      installabilityClass,
+      warningLevel: app.verificationTier === "provisional" ? "provisional" : "none",
+      requiresQuit: selectedRule.requiresQuit,
+      requiresAdmin: selectedRule.requiresAdmin,
+      supportsSilent: selectedRule.supportsSilent,
+      relaunchAfterInstall: selectedRule.strategy !== "pkg_install",
+      artifact: artifactPlan,
+      localVerification: {
+        requireHash: artifactPlan?.sha256 != null,
+        requireSignature: selectedRule.strategy !== "sparkle",
+        requireNotarization: selectedRule.strategy !== "sparkle",
+        requireBundleIdMatch:
+          selectedRule.strategy !== "pkg_install" && artifactPlan?.expectedBundleId != null,
+        requireTeamIdMatch: artifactPlan?.expectedTeamId != null,
+        requireVersionMatch:
+          selectedRule.strategy !== "pkg_install" && artifactPlan?.expectedVersionRaw != null,
+      },
+    },
+  });
+});
+
+// POST /v1/install/executions/:executionId/status
+publicRoutes.post("/install/executions/:executionId/status", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const parsed = installExecutionStatusUpdateSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Invalid request", details: parsed.error.issues }, 400);
+  }
+
+  const db = createDb(c.env.DB);
+  const executionId = c.req.param("executionId");
+  const data = parsed.data;
+
+  const client = await db
+    .select()
+    .from(clients)
+    .where(eq(clients.anonymousInstallId, data.installId))
+    .get();
+  if (!client) {
+    return c.json({ error: "Unknown client" }, 400);
+  }
+
+  const execution = await db
+    .select()
+    .from(updateExecutions)
+    .where(and(eq(updateExecutions.id, executionId), eq(updateExecutions.clientId, client.id)))
+    .get();
+  if (!execution) {
+    return c.json({ error: "Execution not found for client" }, 404);
+  }
+
+  const terminal =
+    data.actionStatus === "completed" ||
+    data.actionStatus === "failed" ||
+    data.actionStatus === "cancelled";
+
+  await db
+    .update(updateExecutions)
+    .set({
+      actionStatus: data.actionStatus,
+      clientVersionAfter: data.clientVersionAfter ?? execution.clientVersionAfter,
+      errorMessage: data.errorMessage ?? null,
+      detailsJson: data.detailsJson ?? execution.detailsJson,
+      durationMs: data.durationMs ?? execution.durationMs,
+      completedAt: terminal ? new Date().toISOString() : execution.completedAt,
+    })
+    .where(eq(updateExecutions.id, executionId));
+
+  return c.json({ executionId, status: data.actionStatus });
 });
 
 // GET /v1/apps/:appId

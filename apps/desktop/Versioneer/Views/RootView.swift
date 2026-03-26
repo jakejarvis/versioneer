@@ -17,6 +17,7 @@ struct RootView: View {
             }
         }
         .environment(appState)
+        .environment(appState.installCoordinator)
         .frame(minWidth: 900, minHeight: 500)
         .task {
             if appState.settings.scanOnLaunch {

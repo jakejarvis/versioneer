@@ -7,14 +7,16 @@ import {
   artifacts,
   appLatestReleases,
   adminOverrides,
+  installRules,
   reviewQueue,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
 import { compareVersionStrings } from "@versioneer/versioning";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 import { generatePublicationExplanation, generateArtifactSelectionExplanation } from "./explain";
+import { classifyInstallability } from "./installability";
 import type { Env, RecomputeLatestJob } from "./types";
 
 const CHANNELS = ["stable", "beta", "nightly"] as const;
@@ -113,6 +115,22 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
 
     // Publication gating: check verification tier and quality state
     const app = await db.select().from(apps).where(eq(apps.id, job.appId)).get();
+    const appRuleRecords = await db
+      .select()
+      .from(installRules)
+      .where(eq(installRules.appId, job.appId))
+      .orderBy(desc(installRules.updatedAt))
+      .all();
+    const selectedInstallRule =
+      appRuleRecords.find((rule) => rule.enabled) ?? appRuleRecords[0] ?? null;
+    const installabilityClass = classifyInstallability({
+      verificationTier: app?.verificationTier ?? null,
+      installRule: selectedInstallRule
+        ? { strategy: selectedInstallRule.strategy, enabled: selectedInstallRule.enabled }
+        : null,
+      hasArtifact: primaryArtifact != null,
+    });
+
     if (app) {
       const shouldGate =
         (app.verificationTier === "unverified" && app.qualityState !== "green") ||
@@ -160,6 +178,7 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
           decisionSource,
           confidence: winningRelease.sourceConfidence,
           decisionExplanationJson,
+          installabilityClass,
           updatedAt: now,
         })
         .where(eq(appLatestReleases.id, existing.id));
@@ -176,6 +195,7 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
         decisionSource,
         confidence: winningRelease.sourceConfidence,
         decisionExplanationJson,
+        installabilityClass,
         updatedAt: now,
       });
     }

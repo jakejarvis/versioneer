@@ -164,7 +164,13 @@ export function useCreateInstallRule(appId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: {
-      strategy: "sparkle" | "zip_replace" | "dmg_copy_replace" | "pkg_manual" | "manual_only";
+      strategy:
+        | "sparkle"
+        | "zip_replace"
+        | "dmg_copy_replace"
+        | "pkg_install"
+        | "pkg_manual"
+        | "manual_only";
       requiresQuit?: boolean;
       requiresAdmin?: boolean;
       supportsSilent?: boolean;
