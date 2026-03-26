@@ -11,6 +11,7 @@ final class AppState {
 
     let settings = SettingsStore()
     let scanner = AppScanner()
+    private let cacheStore = ScanCacheStore()
 
     var apiClient: InventoryAPIClient {
         InventoryAPIClient(baseURL: settings.baseURL)
@@ -71,6 +72,18 @@ final class AppState {
 
     var loadState: LoadState = .idle
 
+    // MARK: - Init
+
+    init() {
+        if let cached = cacheStore.load() {
+            installedApps = cached.installedApps
+            inventoryResults = cached.inventoryResults
+            snapshotId = cached.snapshotId
+            loadState = .done
+            rebuildLookupTables()
+        }
+    }
+
     // MARK: - Computed filtered results
 
     var filteredResults: [AppDecision] {
@@ -113,6 +126,18 @@ final class AppState {
 
     // MARK: - Actions
 
+    /// Rebuilds path lookup tables from the current `installedApps` array.
+    private func rebuildLookupTables() {
+        appPathsByBundleId = [:]
+        appPathsByName = [:]
+        for app in installedApps {
+            if let bundleId = app.bundleId {
+                appPathsByBundleId[bundleId] = app.path
+            }
+            appPathsByName[app.name] = app.path
+        }
+    }
+
     /// Returns the locally extracted icon for an app decision, or a generic app icon.
     func appIcon(for result: AppDecision) -> NSImage {
         let cacheKey = result.appName + (result.bundleId ?? "")
@@ -144,14 +169,7 @@ final class AppState {
 
         installedApps = apps
         iconCache = [:]
-        appPathsByBundleId = [:]
-        appPathsByName = [:]
-        for app in apps {
-            if let bundleId = app.bundleId {
-                appPathsByBundleId[bundleId] = app.path
-            }
-            appPathsByName[app.name] = app.path
-        }
+        rebuildLookupTables()
         loadState = .submitting
 
         do {
@@ -159,6 +177,11 @@ final class AppState {
             inventoryResults = response.results
             snapshotId = response.snapshotId
             loadState = .done
+            cacheStore.save(ScanCacheStore.CachedScanData(
+                installedApps: installedApps,
+                inventoryResults: response.results,
+                snapshotId: response.snapshotId
+            ))
         } catch {
             loadState = .error(error.localizedDescription)
         }

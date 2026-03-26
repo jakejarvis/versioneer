@@ -34,6 +34,13 @@ struct SettingsView: View {
                 }
             }
 
+            Section("General") {
+                Toggle("Scan on launch", isOn: Binding(
+                    get: { appState.settings.scanOnLaunch },
+                    set: { appState.settings.scanOnLaunch = $0 }
+                ))
+            }
+
             Section("About") {
                 LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
                 LabeledContent("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—")

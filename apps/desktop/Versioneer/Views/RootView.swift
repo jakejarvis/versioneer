@@ -25,5 +25,10 @@ struct RootView: View {
         }
         .environment(appState)
         .frame(minWidth: 900, minHeight: 500)
+        .task {
+            if appState.settings.scanOnLaunch {
+                await appState.scanAndSubmit()
+            }
+        }
     }
 }
