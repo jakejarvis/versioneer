@@ -19,7 +19,11 @@ export function HealthChart({ metrics }: { metrics: SourceHealthMetric[] }) {
           const rate = total > 0 ? successes / total : 0;
           const height = `${Math.max((total / maxAttempts) * 100, 4)}%`;
           const color =
-            rate >= 0.9 ? "bg-emerald-500" : rate >= 0.7 ? "bg-amber-500" : "bg-red-500";
+            rate >= 0.9
+              ? "bg-emerald-500 dark:bg-emerald-400"
+              : rate >= 0.7
+                ? "bg-amber-500 dark:bg-amber-400"
+                : "bg-red-500 dark:bg-red-400";
 
           return (
             <div

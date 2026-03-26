@@ -44,7 +44,7 @@ function ExecutionsPage() {
         <Link
           to="/apps/$appId"
           params={{ appId: row.appId }}
-          className="text-blue-600 hover:underline"
+          className="text-blue-600 dark:text-blue-400 hover:underline"
         >
           <IdDisplay id={row.appId} />
         </Link>
@@ -75,7 +75,7 @@ function ExecutionsPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold tracking-tight">Executions</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Executions</h2>
       <p className="mt-1 text-muted-foreground">Client update execution audit trail.</p>
 
       <div className="mt-4 flex items-center gap-3">

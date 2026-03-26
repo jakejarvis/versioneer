@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 
 import { Sidebar } from "@/components/layout/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider, themeInitScript, useTheme } from "@/lib/theme";
 
 import appCss from "@/app.css?url";
 
@@ -30,25 +31,36 @@ export const Route = createRootRoute({
   component: RootComponent,
 });
 
+function AppShell() {
+  const { resolvedTheme } = useTheme();
+
+  return (
+    <TooltipProvider>
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-6xl px-6 py-5">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+      <Toaster position="bottom-right" richColors theme={resolvedTheme} />
+    </TooltipProvider>
+  );
+}
+
 function RootComponent() {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body>
+      <body className="antialiased">
         <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <div className="flex h-screen overflow-hidden">
-              <Sidebar />
-              <main className="flex-1 overflow-y-auto">
-                <div className="mx-auto max-w-7xl p-6">
-                  <Outlet />
-                </div>
-              </main>
-            </div>
-            <Toaster position="bottom-right" richColors />
-          </TooltipProvider>
+          <ThemeProvider>
+            <AppShell />
+          </ThemeProvider>
           <ReactQueryDevtools />
         </QueryClientProvider>
         <TanStackRouterDevtools />

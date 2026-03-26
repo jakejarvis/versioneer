@@ -29,7 +29,11 @@ export function IdDisplay({ id, className }: IdDisplayProps) {
           )}
         >
           {id.length > 20 ? `${id.slice(0, 20)}...` : id}
-          {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+          {copied ? (
+            <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <Copy className="h-3 w-3" />
+          )}
         </button>
       </TooltipTrigger>
       <TooltipContent>{copied ? "Copied!" : "Click to copy"}</TooltipContent>

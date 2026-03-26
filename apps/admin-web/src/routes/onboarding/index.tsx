@@ -115,7 +115,7 @@ function OnboardingPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold tracking-tight">Onboard New App</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Onboard New App</h2>
       <p className="mt-1 text-muted-foreground">
         Guided workflow for adding a new app to the catalog.
       </p>
@@ -130,7 +130,7 @@ function OnboardingPage() {
               i === step
                 ? "bg-primary text-primary-foreground"
                 : i < step
-                  ? "bg-emerald-100 text-emerald-800"
+                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-400"
                   : "bg-muted text-muted-foreground"
             }`}
           >

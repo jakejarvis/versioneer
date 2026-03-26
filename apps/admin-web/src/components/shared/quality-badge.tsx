@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
 
 const qualityConfig: Record<string, { color: string; dot: string; label: string }> = {
-  green: { color: "text-emerald-700", dot: "bg-emerald-500", label: "Green" },
-  yellow: { color: "text-amber-700", dot: "bg-amber-500", label: "Yellow" },
-  red: { color: "text-red-700", dot: "bg-red-500", label: "Red" },
-  unknown: { color: "text-zinc-500", dot: "bg-zinc-400", label: "Unknown" },
+  green: { color: "text-emerald-700 dark:text-emerald-400", dot: "bg-emerald-500", label: "Green" },
+  yellow: { color: "text-amber-700 dark:text-amber-400", dot: "bg-amber-500", label: "Yellow" },
+  red: { color: "text-red-700 dark:text-red-400", dot: "bg-red-500", label: "Red" },
+  unknown: { color: "text-zinc-500 dark:text-zinc-400", dot: "bg-zinc-400", label: "Unknown" },
 };
 
 export function QualityBadge({ state, className }: { state: string; className?: string }) {

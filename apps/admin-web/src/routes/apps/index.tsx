@@ -91,7 +91,7 @@ function AppsPage() {
     <div>
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Apps</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Apps</h2>
           <p className="mt-1 text-muted-foreground">Manage the application catalog.</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>

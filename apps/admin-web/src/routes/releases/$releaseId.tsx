@@ -62,7 +62,7 @@ function ReleaseDetailPage() {
           href={row.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-mono text-xs text-blue-600 hover:underline truncate max-w-64 block"
+          className="font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-64 block"
         >
           {row.url}
         </a>
@@ -111,7 +111,7 @@ function ReleaseDetailPage() {
             href={row.observedDownloadUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline truncate max-w-48 block"
+            className="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-48 block"
           >
             {row.observedDownloadUrl}
           </a>
@@ -139,9 +139,7 @@ function ReleaseDetailPage() {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-semibold tracking-tight font-mono">
-              {release.versionRaw}
-            </h2>
+            <h2 className="text-xl font-semibold tracking-tight font-mono">{release.versionRaw}</h2>
             <StatusBadge status={release.channel} />
             <StatusBadge status={release.status} />
             {release.isPrerelease && <StatusBadge status="beta" />}

@@ -123,7 +123,7 @@ function ReviewQueuePage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold tracking-tight">Review Queue</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Review Queue</h2>
       <p className="mt-1 text-muted-foreground">Items requiring manual review.</p>
 
       <div className="mt-4">

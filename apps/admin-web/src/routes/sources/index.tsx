@@ -104,7 +104,7 @@ function SourcesPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold tracking-tight">Sources</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Sources</h2>
       <p className="mt-1 text-muted-foreground">
         Manage update data sources and their fetch pipelines.
       </p>

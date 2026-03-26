@@ -31,7 +31,7 @@ export function OnboardingChecklistCard({
         <span
           className={cn(
             "text-xs font-medium",
-            pct === 100 ? "text-emerald-600" : "text-muted-foreground",
+            pct === 100 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
           )}
         >
           {completed}/{total} ({pct}%)
@@ -49,9 +49,9 @@ export function OnboardingChecklistCard({
                 disabled={!onToggle}
               >
                 {done ? (
-                  <CheckCircle className="h-4 w-4 text-emerald-600" />
+                  <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 ) : (
-                  <Circle className="h-4 w-4 text-zinc-300" />
+                  <Circle className="h-4 w-4 text-zinc-300 dark:text-zinc-600" />
                 )}
               </button>
               <span className={cn("text-sm", done ? "text-foreground" : "text-muted-foreground")}>

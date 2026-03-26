@@ -8,11 +8,12 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const colorClass = statusColors[status] ?? "bg-zinc-100 text-zinc-800";
+  const colorClass =
+    statusColors[status] ?? "bg-zinc-100 text-zinc-800 dark:bg-zinc-700/50 dark:text-zinc-300";
   const label = statusLabels[status] ?? status;
 
   return (
-    <Badge variant="secondary" className={cn("font-medium", colorClass, className)}>
+    <Badge variant="secondary" className={cn("rounded-md font-medium", colorClass, className)}>
       {label}
     </Badge>
   );

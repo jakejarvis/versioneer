@@ -74,7 +74,7 @@ function ReleasesPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold tracking-tight">Releases</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Releases</h2>
       <p className="mt-1 text-muted-foreground">Browse release records across all apps.</p>
 
       <div className="mt-4 flex items-center gap-3">

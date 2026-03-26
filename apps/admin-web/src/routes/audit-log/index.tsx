@@ -85,7 +85,7 @@ function AuditLogPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold tracking-tight">Audit Log</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Audit Log</h2>
       <p className="mt-1 text-muted-foreground">Immutable event log for state changes.</p>
 
       <div className="mt-4">

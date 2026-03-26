@@ -88,7 +88,7 @@ function AppDetailPage() {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-semibold tracking-tight">{app.canonicalName}</h2>
+            <h2 className="text-xl font-semibold tracking-tight">{app.canonicalName}</h2>
             <StatusBadge status={app.status} />
             <QualityBadge state={app.qualityState} />
             <VerificationBadge tier={app.verificationTier} />

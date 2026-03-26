@@ -71,7 +71,7 @@ function SourceDetailPage() {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-semibold tracking-tight">
+            <h2 className="text-xl font-semibold tracking-tight">
               {source.label ?? source.sourceType}
             </h2>
             <StatusBadge status={source.status} />
@@ -301,7 +301,9 @@ function ParserRunsPanel({ fetchId }: { fetchId: string }) {
       header: "Error",
       cell: (row) =>
         row.errorMessage ? (
-          <span className="text-red-600 text-xs truncate max-w-48 block">{row.errorMessage}</span>
+          <span className="text-red-600 dark:text-red-400 text-xs truncate max-w-48 block">
+            {row.errorMessage}
+          </span>
         ) : (
           "--"
         ),

@@ -14,6 +14,7 @@ import { useAuditLog } from "@/api/hooks/use-audit-log";
 import { useStats } from "@/api/hooks/use-stats";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   component: DashboardPage,
@@ -25,7 +26,7 @@ function DashboardPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold tracking-tight">Dashboard</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Dashboard</h2>
       <p className="mt-1 text-muted-foreground">Overview of the Versioneer system.</p>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -156,23 +157,38 @@ function StatCard({
 }) {
   const accentClass =
     accent === "red"
-      ? "text-red-600"
+      ? "text-red-600 dark:text-red-400"
       : accent === "amber"
-        ? "text-amber-600"
+        ? "text-amber-600 dark:text-amber-400"
         : accent === "emerald"
-          ? "text-emerald-600"
+          ? "text-emerald-600 dark:text-emerald-400"
           : "";
 
+  const borderAccent =
+    accent === "red"
+      ? "border-l-red-500"
+      : accent === "amber"
+        ? "border-l-amber-500"
+        : accent === "emerald"
+          ? "border-l-emerald-500"
+          : "border-l-transparent";
+
   return (
-    <Link to={href} className="rounded-lg border bg-card p-5 transition-colors hover:bg-accent/50">
+    <Link
+      to={href}
+      className={cn(
+        "rounded-lg border border-l-2 bg-card p-5 transition-all duration-200 hover:bg-accent/50 hover:shadow-sm hover:-translate-y-0.5",
+        borderAccent,
+      )}
+    >
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
+        <p className="text-[13px] font-medium text-muted-foreground">{title}</p>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
       {isLoading ? (
         <Skeleton className="mt-2 h-8 w-16" />
       ) : (
-        <p className={`mt-2 text-3xl font-bold ${accentClass}`}>{value ?? 0}</p>
+        <p className={`mt-2 text-3xl font-bold tabular-nums ${accentClass}`}>{value ?? 0}</p>
       )}
     </Link>
   );

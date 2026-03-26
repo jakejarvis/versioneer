@@ -3,9 +3,13 @@ import { Shield, ShieldCheck, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tierConfig: Record<string, { icon: typeof Shield; color: string; label: string }> = {
-  verified: { icon: ShieldCheck, color: "text-emerald-600", label: "Verified" },
-  provisional: { icon: Shield, color: "text-blue-600", label: "Provisional" },
-  unverified: { icon: ShieldAlert, color: "text-zinc-400", label: "Unverified" },
+  verified: {
+    icon: ShieldCheck,
+    color: "text-emerald-600 dark:text-emerald-400",
+    label: "Verified",
+  },
+  provisional: { icon: Shield, color: "text-blue-600 dark:text-blue-400", label: "Provisional" },
+  unverified: { icon: ShieldAlert, color: "text-zinc-400 dark:text-zinc-500", label: "Unverified" },
 };
 
 export function VerificationBadge({ tier, className }: { tier: string; className?: string }) {

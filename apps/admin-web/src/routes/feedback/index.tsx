@@ -75,7 +75,7 @@ function FeedbackPage() {
           <Link
             to="/apps/$appId"
             params={{ appId: row.targetAppId }}
-            className="text-blue-600 hover:underline"
+            className="text-blue-600 dark:text-blue-400 hover:underline"
           >
             <IdDisplay id={row.targetAppId} />
           </Link>
@@ -126,7 +126,7 @@ function FeedbackPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold tracking-tight">Feedback</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Feedback</h2>
       <p className="mt-1 text-muted-foreground">
         Client-reported feedback for triage and resolution.
       </p>

@@ -12,12 +12,12 @@ function MetricRow({
   const displayValue = value !== null ? `${value}${suffix ?? ""}` : "—";
   const color =
     value === null
-      ? "text-zinc-400"
+      ? "text-zinc-400 dark:text-zinc-500"
       : value >= 90
-        ? "text-emerald-600"
+        ? "text-emerald-600 dark:text-emerald-400"
         : value >= 70
-          ? "text-amber-600"
-          : "text-red-600";
+          ? "text-amber-600 dark:text-amber-400"
+          : "text-red-600 dark:text-red-400";
 
   return (
     <div className="flex items-center justify-between py-1.5">

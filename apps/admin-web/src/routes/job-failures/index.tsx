@@ -84,7 +84,7 @@ function JobFailuresPage() {
       cell: (row) =>
         row.errorMessage ? (
           <span
-            className="text-xs text-red-600 truncate max-w-48 block cursor-pointer"
+            className="text-xs text-red-600 dark:text-red-400 truncate max-w-48 block cursor-pointer"
             onClick={(e) => {
               e.stopPropagation();
               setSelectedFailure(row);
@@ -143,7 +143,7 @@ function JobFailuresPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold tracking-tight">Job Failures</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Job Failures</h2>
       <p className="mt-1 text-muted-foreground">Failed pipeline jobs and queue operations.</p>
 
       <div className="mt-4">
@@ -202,7 +202,7 @@ function JobFailuresPage() {
               </div>
               <div>
                 <span className="text-sm text-muted-foreground">Error:</span>
-                <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-red-50 p-3 font-mono text-xs text-red-800">
+                <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-red-50 dark:bg-red-900/30 p-3 font-mono text-xs text-red-800 dark:text-red-300">
                   {selectedFailure.errorMessage}
                 </pre>
               </div>
