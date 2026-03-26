@@ -60,6 +60,9 @@ final class AppState {
     /// Icon cache to avoid re-loading from disk on every view redraw.
     private var iconCache: [String: NSImage] = [:]
 
+    /// Cached release notes HTML keyed by release ID.
+    private var releaseNotesCache: [String: String?] = [:]
+
     // MARK: - Loading state
 
     enum LoadState: Equatable {
@@ -278,6 +281,7 @@ final class AppState {
                 ),
                 latestVersion: localInfo.latestVersion ?? decision.latestVersion,
                 latestVersionRaw: localInfo.latestVersion ?? decision.latestVersionRaw,
+                latestReleaseId: decision.latestReleaseId,
                 releasedAt: localInfo.publishedAt ?? decision.releasedAt,
                 artifact: nil
             )
@@ -320,6 +324,7 @@ final class AppState {
                 decision: decision,
                 latestVersion: latestVersion,
                 latestVersionRaw: latestVersion,
+                latestReleaseId: nil,
                 releasedAt: releasedAt,
                 artifact: nil
             )
@@ -356,6 +361,24 @@ final class AppState {
             if av < bv { return false }
         }
         return false // equal
+    }
+
+    // MARK: - Release Notes
+
+    /// Fetches release notes for a given release ID. Returns cached result if available.
+    func fetchReleaseNotes(releaseId: String) async -> String? {
+        if let cached = releaseNotesCache[releaseId] {
+            return cached
+        }
+        do {
+            let response = try await apiClient.fetchReleaseNotes(releaseId: releaseId)
+            releaseNotesCache[releaseId] = response.releaseNotesHtml
+            return response.releaseNotesHtml
+        } catch {
+            Logger.api.error("Failed to fetch release notes for \(releaseId): \(error.localizedDescription)")
+            releaseNotesCache[releaseId] = nil
+            return nil
+        }
     }
 
     func submitWrongMatch(for result: AppDecision, comment: String?) async throws {

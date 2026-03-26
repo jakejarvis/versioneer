@@ -1,5 +1,5 @@
 {
-  "name": "@versioneer/api-worker",
+  "name": "@versioneer/api",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -12,8 +12,8 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@versioneer/api-contracts": "workspace:*",
     "@versioneer/cache": "workspace:*",
+    "@versioneer/contracts": "workspace:*",
     "@versioneer/db": "workspace:*",
     "@versioneer/identity": "workspace:*",
     "@versioneer/schema": "workspace:*",

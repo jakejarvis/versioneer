@@ -1,4 +1,4 @@
-import type { MatchExplanation } from "@versioneer/api-contracts";
+import type { MatchExplanation } from "@versioneer/contracts";
 
 import type { AliasRecord, MatchInput, MatchResult } from "./types";
 

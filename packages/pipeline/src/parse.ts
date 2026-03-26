@@ -14,6 +14,7 @@ import { normalizeVersion, inferChannel } from "@versioneer/versioning";
 import { eq } from "drizzle-orm";
 
 import { incrementHealthMetric } from "./health";
+import { normalizeReleaseNotes } from "./release-notes";
 import type { Env, SourceParseJob } from "./types";
 
 export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<void> {
@@ -101,11 +102,18 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
       if (matchingRelease) {
         releaseId = matchingRelease.id;
         // Update if we have newer info
+        const updatedNotesHtml = parsedRelease.releaseNotesBody
+          ? normalizeReleaseNotes(
+              parsedRelease.releaseNotesBody,
+              parsedRelease.releaseNotesFormat ?? "html",
+            )
+          : matchingRelease.releaseNotesHtml;
         await db
           .update(releases)
           .set({
             releasedAt: parsedRelease.publishedAt ?? matchingRelease.releasedAt,
             sourceConfidence: output.confidence,
+            releaseNotesHtml: updatedNotesHtml,
             updatedAt: new Date().toISOString(),
           })
           .where(eq(releases.id, releaseId));
@@ -121,6 +129,12 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
           releasedAt: parsedRelease.publishedAt ?? null,
           isPrerelease: parsedRelease.isPrerelease,
           sourceConfidence: output.confidence,
+          releaseNotesHtml: parsedRelease.releaseNotesBody
+            ? normalizeReleaseNotes(
+                parsedRelease.releaseNotesBody,
+                parsedRelease.releaseNotesFormat ?? "html",
+              )
+            : null,
           status: "active",
           createdAt: now,
           updatedAt: now,

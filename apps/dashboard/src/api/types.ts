@@ -115,6 +115,7 @@ export interface Release {
   isPrerelease: boolean;
   sourceConfidence: number | null;
   status: "active" | "retracted" | "superseded" | "draft";
+  releaseNotesHtml: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -12,6 +12,7 @@ const SAMPLE_APPCAST = `<?xml version="1.0" encoding="utf-8"?>
       <sparkle:version>210</sparkle:version>
       <pubDate>Mon, 15 Jan 2024 12:00:00 +0000</pubDate>
       <sparkle:releaseNotesLink>https://example.com/notes/2.1.0</sparkle:releaseNotesLink>
+      <description><![CDATA[<h2>Changes in 2.1.0</h2><ul><li>Bug fix</li><li>Performance improvement</li></ul>]]></description>
       <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
       <enclosure url="https://example.com/download/MyApp-2.1.0.dmg" length="15000000" type="application/octet-stream" sparkle:edSignature="abc123"/>
     </item>
@@ -52,6 +53,20 @@ describe("sparkleParser", () => {
   it("extracts pubDate", () => {
     const result = sparkleParser.parse(SAMPLE_APPCAST);
     expect(result.releases[0]!.publishedAt).toBe("Mon, 15 Jan 2024 12:00:00 +0000");
+  });
+
+  it("extracts inline description HTML", () => {
+    const result = sparkleParser.parse(SAMPLE_APPCAST);
+    expect(result.releases[0]!.releaseNotesBody).toBe(
+      "<h2>Changes in 2.1.0</h2><ul><li>Bug fix</li><li>Performance improvement</li></ul>",
+    );
+    expect(result.releases[0]!.releaseNotesFormat).toBe("html");
+  });
+
+  it("omits releaseNotesBody when no description present", () => {
+    const result = sparkleParser.parse(SAMPLE_APPCAST);
+    expect(result.releases[1]!.releaseNotesBody).toBeUndefined();
+    expect(result.releases[1]!.releaseNotesFormat).toBeUndefined();
   });
 
   it("handles empty body", () => {

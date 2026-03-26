@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 struct AppDetailView: View {
     @Environment(AppState.self) private var appState
@@ -12,6 +13,9 @@ struct AppDetailView: View {
     @State private var feedbackSubmitting = false
     @State private var feedbackError: String?
     @State private var feedbackSuccess = false
+    @State private var releaseNotesHtml: String?
+    @State private var releaseNotesLoading = false
+    @State private var releaseNotesExpanded = true
 
     enum FeedbackType: String, CaseIterable {
         case wrongMatch = "Wrong Match"
@@ -27,12 +31,19 @@ struct AppDetailView: View {
                 identitySection
                 Divider()
                 versionSection
+                if result.latestReleaseId != nil {
+                    Divider()
+                    releaseNotesSection
+                }
                 Divider()
                 actionsSection
             }
             .padding(20)
         }
         .navigationTitle(result.matchedAppName ?? result.appName)
+        .task(id: result.latestReleaseId) {
+            await loadReleaseNotes()
+        }
         .sheet(isPresented: $showFeedbackSheet) {
             feedbackSheet
         }
@@ -118,6 +129,60 @@ struct AppDetailView: View {
 
             LabeledContent("Released", value: VersionFormatting.relativeDate(from: result.releasedAt))
         }
+    }
+
+    // MARK: - Release Notes
+
+    @ViewBuilder
+    private var releaseNotesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation { releaseNotesExpanded.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: releaseNotesExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Release Notes")
+                        .font(.headline)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if releaseNotesExpanded {
+                if releaseNotesLoading {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading release notes…")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let html = releaseNotesHtml, !html.isEmpty {
+                    ReleaseNotesWebView(html: html)
+                        .frame(minHeight: 100, maxHeight: 400)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(.separator, lineWidth: 1)
+                        )
+                } else {
+                    Text("No release notes available.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func loadReleaseNotes() async {
+        guard let releaseId = result.latestReleaseId else {
+            releaseNotesHtml = nil
+            return
+        }
+        releaseNotesLoading = true
+        releaseNotesHtml = await appState.fetchReleaseNotes(releaseId: releaseId)
+        releaseNotesLoading = false
     }
 
     // MARK: - Actions
@@ -239,5 +304,101 @@ struct AppDetailView: View {
             feedbackError = error.localizedDescription
         }
         feedbackSubmitting = false
+    }
+}
+
+// MARK: - Release Notes Web View
+
+private struct ReleaseNotesWebView: NSViewRepresentable {
+    let html: String
+
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.preferences.isElementFullscreenEnabled = false
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        webView.setValue(false, forKey: "drawsBackground")
+        loadHTML(in: webView)
+        return webView
+    }
+
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        loadHTML(in: webView)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    private func loadHTML(in webView: WKWebView) {
+        let wrapped = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 13px;
+                line-height: 1.5;
+                color: -apple-system-label;
+                margin: 12px;
+                word-wrap: break-word;
+            }
+            h1 { font-size: 1.3em; margin: 0.8em 0 0.4em; }
+            h2 { font-size: 1.15em; margin: 0.6em 0 0.3em; }
+            h3 { font-size: 1em; margin: 0.4em 0 0.2em; }
+            ul, ol { padding-left: 1.5em; margin: 0.4em 0; }
+            li { margin: 0.15em 0; }
+            p { margin: 0.4em 0; }
+            a { color: -apple-system-blue; }
+            code {
+                font-family: Menlo, monospace;
+                font-size: 0.9em;
+                background: rgba(128, 128, 128, 0.12);
+                padding: 0.15em 0.3em;
+                border-radius: 3px;
+            }
+            pre {
+                background: rgba(128, 128, 128, 0.12);
+                padding: 8px;
+                border-radius: 5px;
+                overflow-x: auto;
+            }
+            pre code { background: none; padding: 0; }
+            blockquote {
+                border-left: 3px solid rgba(128, 128, 128, 0.3);
+                padding-left: 10px;
+                margin-left: 0;
+                color: rgba(128, 128, 128, 0.8);
+            }
+            img { max-width: 100%; height: auto; }
+            @media (prefers-color-scheme: dark) {
+                body { color: #e0e0e0; }
+            }
+        </style>
+        </head>
+        <body>\(html)</body>
+        </html>
+        """
+        webView.loadHTMLString(wrapped, baseURL: nil)
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
+            // Open external links in the default browser
+            if navigationAction.navigationType == .linkActivated,
+               let url = navigationAction.request.url
+            {
+                NSWorkspace.shared.open(url)
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
+        }
     }
 }

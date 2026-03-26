@@ -9,6 +9,39 @@ nonisolated struct InventoryAPIClient: Sendable {
         self.baseURL = baseURL
     }
 
+    /// Response from the release notes endpoint.
+    struct ReleaseNotesResponse: Codable, Sendable {
+        let releaseId: String
+        let appId: String
+        let versionRaw: String
+        let releaseNotesHtml: String?
+    }
+
+    /// Fetches release notes HTML for a specific release.
+    func fetchReleaseNotes(releaseId: String) async throws -> ReleaseNotesResponse {
+        let endpoint = baseURL.appendingPathComponent("v1/releases/\(releaseId)/notes")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw APIError.httpError(statusCode: httpResponse.statusCode, body: body)
+        }
+
+        do {
+            return try JSONDecoder().decode(ReleaseNotesResponse.self, from: data)
+        } catch {
+            throw APIError.decodingFailed(error.localizedDescription)
+        }
+    }
+
     /// Submits inventory and returns the decoded response.
     func checkInventory(apps: [InstalledApp], scanDurationMs: Int?) async throws -> InventoryCheckResponse {
         let endpoint = baseURL.appendingPathComponent("v1/inventory/check")

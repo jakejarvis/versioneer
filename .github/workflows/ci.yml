@@ -68,7 +68,7 @@ jobs:
         with:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          workingDirectory: apps/api-worker
+          workingDirectory: apps/api
           command: deploy --env production
 
       - name: Deploy queue consumer
@@ -79,10 +79,10 @@ jobs:
           workingDirectory: apps/queue-consumer
           command: deploy --env production
 
-      - name: Deploy admin web
+      - name: Deploy dashboard
         uses: cloudflare/wrangler-action@v3
         with:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          workingDirectory: apps/admin-web
+          workingDirectory: apps/dashboard
           command: deploy --env production
