@@ -8,8 +8,7 @@ describe("classifyInstallability", () => {
       classifyInstallability({
         verificationTier: "verified",
         installRule: null,
-        artifactTrustLevel: "high",
-        sourceQuality: 95,
+        hasArtifact: true,
       }),
     ).toBe("notify_only");
   });
@@ -19,52 +18,47 @@ describe("classifyInstallability", () => {
       classifyInstallability({
         verificationTier: "unverified",
         installRule: { strategy: "sparkle", enabled: true },
-        artifactTrustLevel: "high",
-        sourceQuality: 95,
+        hasArtifact: true,
       }),
     ).toBe("notify_only");
   });
 
-  it("returns automation_candidate for verified + high trust + sparkle", () => {
+  it("returns automation_candidate for verified sparkle installs", () => {
     expect(
       classifyInstallability({
         verificationTier: "verified",
         installRule: { strategy: "sparkle", enabled: true },
-        artifactTrustLevel: "high",
-        sourceQuality: 95,
+        hasArtifact: false,
       }),
     ).toBe("automation_candidate");
   });
 
-  it("returns assisted_replace for verified + medium trust", () => {
+  it("returns assisted_replace for verified archive installs", () => {
     expect(
       classifyInstallability({
         verificationTier: "verified",
         installRule: { strategy: "zip_replace", enabled: true },
-        artifactTrustLevel: "medium",
-        sourceQuality: 85,
+        hasArtifact: true,
       }),
     ).toBe("assisted_replace");
   });
 
-  it("returns assisted_download for provisional + medium trust", () => {
+  it("returns assisted_download for provisional archive installs", () => {
     expect(
       classifyInstallability({
         verificationTier: "provisional",
         installRule: { strategy: "dmg_copy_replace", enabled: true },
-        artifactTrustLevel: "medium",
-        sourceQuality: 80,
+        hasArtifact: true,
       }),
     ).toBe("assisted_download");
   });
 
-  it("returns notify_only for provisional + low trust", () => {
+  it("returns notify_only when a non-sparkle strategy has no artifact", () => {
     expect(
       classifyInstallability({
         verificationTier: "provisional",
-        installRule: { strategy: "sparkle", enabled: true },
-        artifactTrustLevel: "low",
-        sourceQuality: 70,
+        installRule: { strategy: "zip_replace", enabled: true },
+        hasArtifact: false,
       }),
     ).toBe("notify_only");
   });
@@ -74,8 +68,17 @@ describe("classifyInstallability", () => {
       classifyInstallability({
         verificationTier: "verified",
         installRule: { strategy: "sparkle", enabled: false },
-        artifactTrustLevel: "high",
-        sourceQuality: 95,
+        hasArtifact: true,
+      }),
+    ).toBe("notify_only");
+  });
+
+  it("returns notify_only for pkg_manual strategies", () => {
+    expect(
+      classifyInstallability({
+        verificationTier: "verified",
+        installRule: { strategy: "pkg_manual", enabled: true },
+        hasArtifact: true,
       }),
     ).toBe("notify_only");
   });

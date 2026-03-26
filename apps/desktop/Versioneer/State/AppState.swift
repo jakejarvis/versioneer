@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Logging
 import Observation
 import UniformTypeIdentifiers
 
@@ -13,6 +14,7 @@ final class AppState {
     let scanner = AppScanner()
     let sparkleChecker = SparkleChecker()
     let electronChecker = ElectronChecker()
+    let installCoordinator = InstallCoordinator()
     private let cacheStore = ScanCacheStore()
 
     var apiClient: InventoryAPIClient {
@@ -165,6 +167,10 @@ final class AppState {
         return icon
     }
 
+    func installedApp(for result: AppDecision) -> InstalledApp? {
+        findInstalledApp(for: result, in: installedApps)
+    }
+
     func scanAndSubmit() async {
         loadState = .scanning
         if !hasCachedResults {
@@ -283,7 +289,8 @@ final class AppState {
                 latestVersionRaw: localInfo.latestVersion ?? decision.latestVersionRaw,
                 latestReleaseId: decision.latestReleaseId,
                 releasedAt: localInfo.publishedAt ?? decision.releasedAt,
-                artifact: nil
+                artifact: decision.artifact,
+                install: decision.install
             )
         }
 
@@ -326,7 +333,8 @@ final class AppState {
                 latestVersionRaw: latestVersion,
                 latestReleaseId: nil,
                 releasedAt: releasedAt,
-                artifact: nil
+                artifact: nil,
+                install: .unavailable
             )
         }
     }
@@ -412,5 +420,21 @@ final class AppState {
             comment: comment
         )
         try await feedbackClient.submitMissingApp(feedback)
+    }
+
+    func install(_ result: AppDecision) async {
+        guard let snapshotId,
+              let installedApp = installedApp(for: result) else { return }
+
+        let didInstall = await installCoordinator.startInstall(
+            result: result,
+            installedApp: installedApp,
+            snapshotId: snapshotId,
+            apiClient: apiClient
+        )
+
+        if didInstall {
+            await scanAndSubmit()
+        }
     }
 }

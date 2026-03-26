@@ -171,13 +171,25 @@ export interface AppLatestRelease {
   decisionSource: "pipeline" | "override" | "manual";
   confidence: number | null;
   decisionExplanationJson: string | null;
+  installabilityClass:
+    | "notify_only"
+    | "assisted_download"
+    | "assisted_replace"
+    | "automation_candidate"
+    | null;
   updatedAt: string;
 }
 
 export interface InstallRule {
   id: string;
   appId: string;
-  strategy: "sparkle" | "zip_replace" | "dmg_copy_replace" | "pkg_manual" | "manual_only";
+  strategy:
+    | "sparkle"
+    | "zip_replace"
+    | "dmg_copy_replace"
+    | "pkg_install"
+    | "pkg_manual"
+    | "manual_only";
   requiresQuit: boolean;
   requiresAdmin: boolean;
   supportsSilent: boolean;
@@ -286,12 +298,19 @@ export interface UpdateExecution {
   appId: string;
   releaseId: string;
   artifactId: string | null;
-  actionType: "view_notes" | "download" | "assisted_replace" | "automation";
+  actionType:
+    | "view_notes"
+    | "download"
+    | "assisted_replace"
+    | "sparkle"
+    | "pkg_install"
+    | "automation";
   actionStatus: "initiated" | "in_progress" | "completed" | "failed" | "cancelled";
   clientVersionBefore: string | null;
   clientVersionAfter: string | null;
   installabilityClass: string | null;
   errorMessage: string | null;
+  detailsJson: string | null;
   durationMs: number | null;
   initiatedAt: string;
   completedAt: string | null;

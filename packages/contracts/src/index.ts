@@ -3,6 +3,9 @@ export type {
   InventoryCheckRequest,
   InventoryCheckResponse,
   AppDecision,
+  InstallPrepareRequest,
+  InstallPrepareResponse,
+  InstallExecutionStatusUpdate,
 } from "@versioneer/validation";
 
 // Internal API types

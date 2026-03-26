@@ -7,10 +7,9 @@ export type InstallabilityClass =
 export function classifyInstallability(params: {
   verificationTier: string | null;
   installRule: { strategy: string; enabled: boolean } | null;
-  artifactTrustLevel: string;
-  sourceQuality: number | null;
+  hasArtifact: boolean;
 }): InstallabilityClass {
-  const { verificationTier, installRule, artifactTrustLevel } = params;
+  const { verificationTier, installRule, hasArtifact } = params;
 
   // No install rule or unverified → notify only
   if (
@@ -22,21 +21,27 @@ export function classifyInstallability(params: {
     return "notify_only";
   }
 
-  const highTrust = artifactTrustLevel === "high";
-  const mediumPlusTrust = highTrust || artifactTrustLevel === "medium";
+  if (installRule.strategy === "manual_only" || installRule.strategy === "pkg_manual") {
+    return "notify_only";
+  }
 
-  // Verified + high trust + sparkle strategy → automation candidate
-  if (verificationTier === "verified" && highTrust && installRule.strategy === "sparkle") {
+  const strategyAvailable = installRule.strategy === "sparkle" || hasArtifact;
+  if (!strategyAvailable) {
+    return "notify_only";
+  }
+
+  // Verified + Sparkle strategy → automation candidate
+  if (verificationTier === "verified" && installRule.strategy === "sparkle") {
     return "automation_candidate";
   }
 
-  // Verified + medium+ trust + any rule → assisted replace
-  if (verificationTier === "verified" && mediumPlusTrust) {
+  // Verified + supported install strategy → assisted replace
+  if (verificationTier === "verified") {
     return "assisted_replace";
   }
 
-  // Provisional + medium+ trust + rule → assisted download
-  if (verificationTier === "provisional" && mediumPlusTrust) {
+  // Provisional + supported install strategy → assisted download
+  if (verificationTier === "provisional") {
     return "assisted_download";
   }
 

@@ -19,7 +19,17 @@ struct InventoryDecodingTests {
               "decision": "up_to_date",
               "latestVersion": "126.0",
               "latestVersionRaw": "126.0",
-              "releasedAt": "2024-06-10T00:00:00Z"
+              "releasedAt": "2024-06-10T00:00:00Z",
+              "artifact": null,
+              "install": {
+                "canInstall": false,
+                "installabilityClass": null,
+                "strategy": null,
+                "requiresQuit": false,
+                "requiresAdmin": false,
+                "supportsSilent": false,
+                "eligibility": "not_supported"
+              }
             }
           ]
         }
@@ -55,7 +65,17 @@ struct InventoryDecodingTests {
               "decision": "unknown",
               "latestVersion": null,
               "latestVersionRaw": null,
-              "releasedAt": null
+              "releasedAt": null,
+              "artifact": null,
+              "install": {
+                "canInstall": false,
+                "installabilityClass": null,
+                "strategy": null,
+                "requiresQuit": false,
+                "requiresAdmin": false,
+                "supportsSilent": false,
+                "eligibility": "not_supported"
+              }
             }
           ]
         }
@@ -92,7 +112,17 @@ struct InventoryDecodingTests {
                   "decision": "\(decisionStr)",
                   "latestVersion": null,
                   "latestVersionRaw": null,
-                  "releasedAt": null
+                  "releasedAt": null,
+                  "artifact": null,
+                  "install": {
+                    "canInstall": false,
+                    "installabilityClass": null,
+                    "strategy": null,
+                    "requiresQuit": false,
+                    "requiresAdmin": false,
+                    "supportsSilent": false,
+                    "eligibility": "not_supported"
+                  }
                 }
               ]
             }
@@ -110,7 +140,8 @@ struct InventoryDecodingTests {
                 installId: "test-id",
                 platform: "macos",
                 appVersion: "1.0",
-                osVersion: "14.5"
+                osVersion: "14.5",
+                systemArchitecture: "arm64"
             ),
             apps: [
                 .init(
@@ -121,7 +152,9 @@ struct InventoryDecodingTests {
                     teamId: nil,
                     pathHash: "abc123",
                     architecture: nil,
-                    sparkleFeedUrl: nil
+                    sparkleFeedUrl: nil,
+                    isMasApp: nil,
+                    electronUpdateUrl: nil
                 )
             ],
             scanDurationMs: 500

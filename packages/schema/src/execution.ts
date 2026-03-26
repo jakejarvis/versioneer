@@ -19,7 +19,7 @@ export const updateExecutions = sqliteTable(
       .references(() => releases.id),
     artifactId: text("artifact_id"),
     actionType: text("action_type", {
-      enum: ["view_notes", "download", "assisted_replace", "automation"],
+      enum: ["view_notes", "download", "assisted_replace", "sparkle", "pkg_install", "automation"],
     }).notNull(),
     actionStatus: text("action_status", {
       enum: ["initiated", "in_progress", "completed", "failed", "cancelled"],
@@ -28,6 +28,7 @@ export const updateExecutions = sqliteTable(
     clientVersionAfter: text("client_version_after"),
     installabilityClass: text("installability_class"),
     errorMessage: text("error_message"),
+    detailsJson: text("details_json"),
     durationMs: integer("duration_ms"),
     initiatedAt: text("initiated_at").notNull(),
     completedAt: text("completed_at"),

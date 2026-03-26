@@ -3,9 +3,11 @@ import WebKit
 
 struct AppDetailView: View {
     @Environment(AppState.self) private var appState
+    @Environment(InstallCoordinator.self) private var installCoordinator
     let result: AppDecision
 
     @State private var showFeedbackSheet = false
+    @State private var showInstallWarning = false
     @State private var feedbackType: FeedbackType = .wrongMatch
     @State private var feedbackComment: String = ""
     @State private var feedbackVersion: String = ""
@@ -46,6 +48,14 @@ struct AppDetailView: View {
         }
         .sheet(isPresented: $showFeedbackSheet) {
             feedbackSheet
+        }
+        .alert("Install provisional update?", isPresented: $showInstallWarning) {
+            Button("Install", role: .destructive) {
+                Task { await appState.install(result) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This app is only provisionally verified. Versioneer will still run full local verification before installing.")
         }
         .onChange(of: feedbackSuccess) {
             if feedbackSuccess {
@@ -189,11 +199,33 @@ struct AppDetailView: View {
 
     @ViewBuilder
     private var actionsSection: some View {
+        let installState = installCoordinator.state(for: result)
+
         VStack(alignment: .leading, spacing: 12) {
             Text("Actions")
                 .font(.headline)
 
             HStack(spacing: 12) {
+                if result.install.canInstall {
+                    Button {
+                        if result.install.eligibility == .requiresWarning {
+                            showInstallWarning = true
+                        } else {
+                            Task { await appState.install(result) }
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if installState.isRunning {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text(primaryInstallButtonTitle(for: installState))
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(installState.isRunning)
+                }
+
                 Button("Report Issue…") {
                     feedbackComment = ""
                     feedbackVersion = ""
@@ -203,7 +235,84 @@ struct AppDetailView: View {
                     showFeedbackSheet = true
                 }
             }
+
+            if let installInfo = installSummary(installState: installState) {
+                Text(installInfo)
+                    .font(.callout)
+                    .foregroundStyle(installState.phase == .failed ? .red : .secondary)
+            }
+
+            if !result.install.canInstall {
+                Text(unavailableInstallReason)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(installSupportSummary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
         }
+    }
+
+    private func primaryInstallButtonTitle(for state: InstallCoordinator.OperationState) -> String {
+        switch state.phase {
+        case .downloading: "Downloading…"
+        case .verifying: "Verifying…"
+        case .installing: "Installing…"
+        case .relaunching: "Relaunching…"
+        case .failed: "Retry Install"
+        default:
+            result.install.eligibility == .requiresWarning ? "Install with Warning…" : "Install Update"
+        }
+    }
+
+    private func installSummary(installState: InstallCoordinator.OperationState) -> String? {
+        switch installState.phase {
+        case .idle:
+            return nil
+        case .completed:
+            if let version = installState.installedVersion {
+                return "Install completed. Detected version \(version)."
+            }
+            return "Install completed."
+        case .failed:
+            return installState.errorMessage ?? "Install failed."
+        default:
+            return installState.detail
+        }
+    }
+
+    private var unavailableInstallReason: String {
+        switch result.install.eligibility {
+        case .masApp:
+            "Mac App Store apps must be updated through the App Store."
+        case .manualOnly:
+            "This app is currently configured for manual updates only."
+        case .requiresWarning, .eligible:
+            ""
+        case .notSupported:
+            "Versioneer does not currently have an install path for this update."
+        }
+    }
+
+    private var installSupportSummary: String {
+        var parts: [String] = []
+        if let strategy = result.install.strategy {
+            parts.append("Strategy: \(strategy.rawValue)")
+        }
+        if result.install.requiresAdmin {
+            parts.append("Admin authentication may be required")
+        }
+        if result.install.requiresQuit {
+            parts.append("The app will need to quit first")
+        }
+        if let artifact = result.artifact,
+           let sizeBytes = artifact.sizeBytes {
+            let formatter = ByteCountFormatter()
+            formatter.countStyle = .file
+            parts.append("Download: \(formatter.string(fromByteCount: Int64(sizeBytes)))")
+        }
+        return parts.joined(separator: " • ")
     }
 
     // MARK: - Feedback Sheet
@@ -388,7 +497,7 @@ private struct ReleaseNotesWebView: NSViewRepresentable {
         func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,
-            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+            decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
         ) {
             // Open external links in the default browser
             if navigationAction.navigationType == .linkActivated,

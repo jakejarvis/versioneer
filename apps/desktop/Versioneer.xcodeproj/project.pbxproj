@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		23F9791D2F7584620058763E /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 23F9791C2F7584620058763E /* Logging */; };
+		23FCB0012F7600010058763E /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 23FCB0022F7600010058763E /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +47,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				23F9791D2F7584620058763E /* Logging in Frameworks */,
+				23FCB0012F7600010058763E /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -104,6 +106,7 @@
 			);
 			name = Versioneer;
 			packageProductDependencies = (
+				23FCB0022F7600010058763E /* Sparkle */,
 				23F9791C2F7584620058763E /* Logging */,
 			);
 			productName = Versioneer;
@@ -356,7 +359,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = B5ZWKBCUTU;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -401,7 +404,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = B5ZWKBCUTU;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -531,6 +534,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		23FCB0022F7600010058763E /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 23F9791A2F7583030058763E /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
 		23F9791C2F7584620058763E /* Logging */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 23F9791B2F7584620058763E /* XCRemoteSwiftPackageReference "swift-log" */;

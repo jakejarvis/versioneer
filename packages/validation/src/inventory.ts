@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { appArtifactSchema, appInstallMetadataSchema } from "./install";
+
 export const installedAppSchema = z.object({
   appName: z.string().min(1).max(500),
   bundleId: z.string().max(500).optional(),
@@ -49,15 +51,8 @@ export const appDecisionSchema = z.object({
   latestReleaseId: z.string().nullable(),
   releasedAt: z.string().nullable(),
   iconUrl: z.string().nullable(),
-  artifact: z
-    .object({
-      downloadUrl: z.string().nullable(),
-      architecture: z.string().nullable(),
-      minOsVersion: z.string().nullable(),
-      artifactType: z.string().nullable(),
-      sizeBytes: z.number().nullable(),
-    })
-    .nullable(),
+  artifact: appArtifactSchema.nullable(),
+  install: appInstallMetadataSchema,
 });
 
 export type AppDecision = z.infer<typeof appDecisionSchema>;

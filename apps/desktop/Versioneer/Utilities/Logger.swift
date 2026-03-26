@@ -7,4 +7,5 @@ extension Logger {
     nonisolated static let cache = Logger(label: "com.jakejarvis.Versioneer.Cache")
     nonisolated static let sparkle = Logger(label: "com.jakejarvis.Versioneer.Sparkle")
     nonisolated static let electron = Logger(label: "com.jakejarvis.Versioneer.Electron")
+    nonisolated static let install = Logger(label: "com.jakejarvis.Versioneer.Install")
 }
