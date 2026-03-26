@@ -1,10 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import {
-  getOnboardingChecklist,
-  updateOnboardingChecklist,
-  onboardApp,
-} from "@/server/onboarding";
+import { getOnboardingChecklist, updateOnboardingChecklist, onboardApp } from "@/server/onboarding";
 
 export function useOnboardingChecklist(appId: string) {
   return useQuery({

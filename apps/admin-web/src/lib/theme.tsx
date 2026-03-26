@@ -42,6 +42,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setResolvedTheme(getResolvedTheme(newTheme));
   }, []);
 
+  // Re-apply theme class after hydration (SSR renders without .dark,
+  // and React hydration may strip the class added by the inline script)
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
   useEffect(() => {
     if (theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

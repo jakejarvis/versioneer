@@ -1,6 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ExternalLink, Plus, RefreshCw, Zap, BarChart3 } from "lucide-react";
-import { useState } from "react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Plus,
+  RefreshCw,
+  Zap,
+  BarChart3,
+  Upload,
+  Trash2,
+} from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -14,6 +23,8 @@ import {
   useDeleteAlias,
   useTriggerFetch,
   useRecomputeLatest,
+  useUploadAppIcon,
+  useDeleteAppIcon,
 } from "@/api/hooks/use-apps";
 import { useOnboardingChecklist, useUpdateOnboardingChecklist } from "@/api/hooks/use-onboarding";
 import {
@@ -22,6 +33,7 @@ import {
   usePromoteVerification,
 } from "@/api/hooks/use-scorecards";
 import type { AppAlias, Source, Release, AppLatestRelease, InstallRule } from "@/api/types";
+import { AppIcon } from "@/components/shared/app-icon";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { DecisionExplanationCard } from "@/components/shared/decision-explanation";
 import { IdDisplay } from "@/components/shared/id-display";
@@ -60,6 +72,9 @@ function AppDetailPage() {
   const { appId } = Route.useParams();
   const { data: app, isLoading } = useApp(appId);
   const [tab, setTab] = useState("overview");
+  const uploadIconMutation = useUploadAppIcon(appId);
+  const deleteIconMutation = useDeleteAppIcon(appId);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (isLoading) {
     return (
@@ -86,26 +101,72 @@ function AppDetailPage() {
       </Link>
 
       <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-semibold tracking-tight">{app.canonicalName}</h2>
-            <StatusBadge status={app.status} />
-            <QualityBadge state={app.qualityState} />
-            <VerificationBadge tier={app.verificationTier} />
-          </div>
-          <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-            <IdDisplay id={app.id} />
-            {app.vendorName && <span>{app.vendorName}</span>}
-            {app.homepageUrl && (
-              <a
-                href={app.homepageUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 hover:text-foreground"
+        <div className="flex items-start gap-4">
+          <div className="group relative">
+            <AppIcon iconR2Key={app.iconR2Key} appName={app.canonicalName} size={48} />
+            <div className="absolute inset-0 flex items-center justify-center gap-1 rounded-md bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded p-1 text-white hover:bg-white/20"
+                title="Upload icon"
               >
-                Homepage <ExternalLink className="h-3 w-3" />
-              </a>
-            )}
+                <Upload className="h-4 w-4" />
+              </button>
+              {app.iconR2Key && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteIconMutation.mutate(undefined, {
+                      onSuccess: () => toast.success("Icon deleted"),
+                      onError: (e) => toast.error(e.message),
+                    });
+                  }}
+                  className="rounded p-1 text-white hover:bg-white/20"
+                  title="Delete icon"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  uploadIconMutation.mutate(file, {
+                    onSuccess: () => toast.success("Icon uploaded"),
+                    onError: (err) => toast.error(err.message),
+                  });
+                }
+                e.target.value = "";
+              }}
+            />
+          </div>
+          <div>
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold tracking-tight">{app.canonicalName}</h2>
+              <StatusBadge status={app.status} />
+              <QualityBadge state={app.qualityState} />
+              <VerificationBadge tier={app.verificationTier} />
+            </div>
+            <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
+              <IdDisplay id={app.id} />
+              {app.vendorName && <span>{app.vendorName}</span>}
+              {app.homepageUrl && (
+                <a
+                  href={app.homepageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 hover:text-foreground"
+                >
+                  Homepage <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
           </div>
         </div>
       </div>

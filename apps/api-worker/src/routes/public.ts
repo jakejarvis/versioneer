@@ -101,18 +101,18 @@ publicRoutes.post("/inventory/check", async (c) => {
     .all();
 
   // Load app names for alias records
-  const appMap = new Map<string, string>();
+  const appMap = new Map<string, { canonicalName: string; iconR2Key: string | null }>();
   const allApps = await db
-    .select({ id: apps.id, canonicalName: apps.canonicalName })
+    .select({ id: apps.id, canonicalName: apps.canonicalName, iconR2Key: apps.iconR2Key })
     .from(apps)
     .all();
   for (const a of allApps) {
-    appMap.set(a.id, a.canonicalName);
+    appMap.set(a.id, { canonicalName: a.canonicalName, iconR2Key: a.iconR2Key });
   }
 
   const aliasRecords: AliasRecord[] = allAliases.map((a) => ({
     appId: a.appId,
-    appName: appMap.get(a.appId) ?? "Unknown",
+    appName: appMap.get(a.appId)?.canonicalName ?? "Unknown",
     aliasType: a.aliasType,
     value: a.value,
     normalizedValue: a.normalizedValue,
@@ -235,6 +235,11 @@ publicRoutes.post("/inventory/check", async (c) => {
       createdAt: now,
     });
 
+    const matchedAppInfo = matchResult.appId ? appMap.get(matchResult.appId) : undefined;
+    const iconUrl = matchedAppInfo?.iconR2Key
+      ? `${c.env.ASSETS_BASE_URL}/${matchedAppInfo.iconR2Key}`
+      : null;
+
     results.push({
       appName: installedApp.appName,
       bundleId: installedApp.bundleId ?? null,
@@ -246,6 +251,7 @@ publicRoutes.post("/inventory/check", async (c) => {
       latestVersion,
       latestVersionRaw,
       releasedAt,
+      iconUrl,
     });
   }
 
@@ -266,7 +272,8 @@ publicRoutes.get("/apps/:appId", async (c) => {
     return c.json({ error: "App not found" }, 404);
   }
 
-  return c.json(app);
+  const iconUrl = app.iconR2Key ? `${c.env.ASSETS_BASE_URL}/${app.iconR2Key}` : null;
+  return c.json({ ...app, iconUrl });
 });
 
 // GET /v1/apps/:appId/releases

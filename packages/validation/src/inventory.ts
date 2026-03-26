@@ -43,6 +43,7 @@ export const appDecisionSchema = z.object({
   latestVersion: z.string().nullable(),
   latestVersionRaw: z.string().nullable(),
   releasedAt: z.string().nullable(),
+  iconUrl: z.string().nullable(),
 });
 
 export type AppDecision = z.infer<typeof appDecisionSchema>;

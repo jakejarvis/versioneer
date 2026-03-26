@@ -15,6 +15,7 @@ import {
   createInstallRule,
   recomputeLatest,
 } from "@/server/apps";
+import { uploadAppIcon, deleteAppIcon } from "@/server/icons";
 import { triggerFetch } from "@/server/sources";
 
 interface UseAppsParams {
@@ -187,5 +188,42 @@ export function useRecomputeLatest() {
     mutationFn: ({ appId, channel }: { appId: string; channel?: "stable" | "beta" | "nightly" }) =>
       recomputeLatest({ data: { appId, channel } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["apps"] }),
+  });
+}
+
+export function useUploadAppIcon(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]!);
+      }
+      const fileBase64 = btoa(binary);
+      return uploadAppIcon({
+        data: {
+          appId,
+          fileBase64,
+          contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        },
+      });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["apps"] });
+      void qc.invalidateQueries({ queryKey: ["apps", appId] });
+    },
+  });
+}
+
+export function useDeleteAppIcon(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => deleteAppIcon({ data: { appId } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["apps"] });
+      void qc.invalidateQueries({ queryKey: ["apps", appId] });
+    },
   });
 }
