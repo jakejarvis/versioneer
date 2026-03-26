@@ -1,7 +1,7 @@
 import Foundation
 
 /// Extracts metadata from an app bundle on disk.
-enum BundleMetadataReader {
+nonisolated enum BundleMetadataReader {
     /// Reads an `InstalledApp` from a `.app` bundle URL.
     /// Returns `nil` if the bundle cannot be loaded or has no usable name.
     nonisolated static func readApp(at url: URL) -> InstalledApp? {

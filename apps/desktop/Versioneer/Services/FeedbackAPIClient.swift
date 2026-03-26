@@ -2,7 +2,7 @@ import Foundation
 import Logging
 
 /// Submits user feedback about incorrect matches or versions.
-struct FeedbackAPIClient: Sendable {
+nonisolated struct FeedbackAPIClient: Sendable {
     let baseURL: URL
 
     init(baseURL: URL) {

@@ -1,7 +1,7 @@
 import Foundation
 
 /// User-reported issue about match or version correctness.
-enum FeedbackRequest: Sendable {
+nonisolated enum FeedbackRequest: Sendable {
     case wrongMatch(WrongMatch)
     case wrongVersion(WrongVersion)
     case missingApp(MissingApp)
