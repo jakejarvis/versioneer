@@ -2,12 +2,38 @@
 set -euo pipefail
 
 # Versioneer deploy script
-# Usage: ./scripts/deploy.sh [--skip-checks]
+# Usage: ./scripts/deploy.sh [--env production|dev] [--skip-checks]
+#
+# Deploys all Cloudflare apps (api-worker, queue-consumer, admin-web)
+# and applies D1 migrations for the target environment.
 
+ENV="production"
 SKIP_CHECKS=false
-if [[ "${1:-}" == "--skip-checks" ]]; then
-  SKIP_CHECKS=true
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --env)
+      ENV="$2"
+      shift 2
+      ;;
+    --skip-checks)
+      SKIP_CHECKS=true
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      echo "Usage: ./scripts/deploy.sh [--env production|dev] [--skip-checks]" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ "$ENV" != "production" && "$ENV" != "dev" ]]; then
+  echo "Error: --env must be 'production' or 'dev'" >&2
+  exit 1
 fi
+
+echo "==> Deploying to: $ENV"
 
 echo "==> Installing dependencies"
 pnpm install --frozen-lockfile
@@ -21,16 +47,26 @@ if [[ "$SKIP_CHECKS" == false ]]; then
   echo "==> All quality gates passed"
 fi
 
-echo "==> Applying D1 migrations"
-pnpm db:migrate:remote
+# Resolve D1 database name and wrangler env flag
+if [[ "$ENV" == "production" ]]; then
+  D1_DATABASE="versioneer-db-production"
+  WRANGLER_ENV_FLAG="--env production"
+else
+  D1_DATABASE="versioneer-db-dev"
+  WRANGLER_ENV_FLAG=""
+fi
+
+echo "==> Applying D1 migrations ($D1_DATABASE)"
+pnpm --filter @versioneer/db exec wrangler d1 migrations apply "$D1_DATABASE" --remote $WRANGLER_ENV_FLAG
 
 echo "==> Deploying API worker"
-pnpm --filter @versioneer/api-worker run deploy
+pnpm --filter @versioneer/api-worker exec wrangler deploy $WRANGLER_ENV_FLAG
 
 echo "==> Deploying queue consumer"
-pnpm --filter @versioneer/queue-consumer run deploy
+pnpm --filter @versioneer/queue-consumer exec wrangler deploy $WRANGLER_ENV_FLAG
 
 echo "==> Deploying admin web"
-pnpm --filter @versioneer/admin-web run deploy
+pnpm --filter @versioneer/admin-web run build
+pnpm --filter @versioneer/admin-web exec wrangler deploy $WRANGLER_ENV_FLAG
 
-echo "==> Deploy complete"
+echo "==> Deploy complete ($ENV)"
