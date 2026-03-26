@@ -22,7 +22,7 @@ interface GitHubAsset {
 
 export const githubReleasesParser: SourceParser = {
   key: "github_releases",
-  version: "1.0.0",
+  version: "1.1.0",
 
   parse(body: string, _config?: Record<string, unknown>): ParserOutput {
     const releases: ParsedRelease[] = [];
@@ -68,6 +68,8 @@ export const githubReleasesParser: SourceParser = {
             isPrerelease: ghRelease.prerelease || isPreRelease(versionRaw),
             publishedAt: ghRelease.published_at ?? undefined,
             releaseNotesUrl: ghRelease.html_url ?? undefined,
+            releaseNotesBody: ghRelease.body ?? undefined,
+            releaseNotesFormat: ghRelease.body ? ("markdown" as const) : undefined,
             artifacts,
           };
 

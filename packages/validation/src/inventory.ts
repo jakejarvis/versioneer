@@ -46,6 +46,7 @@ export const appDecisionSchema = z.object({
   ]),
   latestVersion: z.string().nullable(),
   latestVersionRaw: z.string().nullable(),
+  latestReleaseId: z.string().nullable(),
   releasedAt: z.string().nullable(),
   iconUrl: z.string().nullable(),
   artifact: z

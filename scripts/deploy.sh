@@ -4,7 +4,7 @@ set -euo pipefail
 # Versioneer deploy script
 # Usage: ./scripts/deploy.sh [--env production|dev] [--skip-checks]
 #
-# Deploys all Cloudflare apps (api-worker, queue-consumer, admin-web)
+# Deploys all Cloudflare apps (api, queue-consumer, dashboard)
 # and applies D1 migrations for the target environment.
 
 ENV="production"
@@ -60,13 +60,17 @@ echo "==> Applying D1 migrations ($D1_DATABASE)"
 pnpm --filter @versioneer/db exec wrangler d1 migrations apply "$D1_DATABASE" --remote $WRANGLER_ENV_FLAG
 
 echo "==> Deploying API worker"
-pnpm --filter @versioneer/api-worker exec wrangler deploy $WRANGLER_ENV_FLAG
+pnpm --filter @versioneer/api exec wrangler deploy $WRANGLER_ENV_FLAG
 
 echo "==> Deploying queue consumer"
 pnpm --filter @versioneer/queue-consumer exec wrangler deploy $WRANGLER_ENV_FLAG
 
-echo "==> Deploying admin web"
-pnpm --filter @versioneer/admin-web run build
-pnpm --filter @versioneer/admin-web exec wrangler deploy $WRANGLER_ENV_FLAG
+echo "==> Deploying dashboard"
+pnpm --filter @versioneer/dashboard run build
+pnpm --filter @versioneer/dashboard exec wrangler deploy $WRANGLER_ENV_FLAG
+
+echo "==> Deploying landing page"
+pnpm --filter @versioneer/web run build
+pnpm --filter @versioneer/web exec wrangler pages deploy
 
 echo "==> Deploy complete ($ENV)"

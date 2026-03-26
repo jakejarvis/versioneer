@@ -5,6 +5,8 @@ export interface ParsedRelease {
   isPrerelease: boolean;
   publishedAt?: string;
   releaseNotesUrl?: string;
+  releaseNotesBody?: string;
+  releaseNotesFormat?: "html" | "markdown";
   downloadUrl?: string;
   artifacts: ParsedArtifact[];
   metadata?: Record<string, unknown>;

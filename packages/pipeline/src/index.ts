@@ -20,3 +20,5 @@ export { checkVerificationRequirements, autoPromoteVerification } from "./verifi
 export type { VerificationCheckResult, VerificationRequirement } from "./verification";
 export { classifyInstallability } from "./installability";
 export type { InstallabilityClass } from "./installability";
+export { normalizeReleaseNotes } from "./release-notes";
+export { sanitizeHtml } from "./sanitize-html";

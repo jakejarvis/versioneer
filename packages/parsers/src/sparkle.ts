@@ -8,7 +8,7 @@ import type { SourceParser, ParserOutput, ParsedRelease, ParsedArtifact } from "
  */
 export const sparkleParser: SourceParser = {
   key: "sparkle",
-  version: "1.0.0",
+  version: "1.1.0",
 
   parse(body: string, _config?: Record<string, unknown>): ParserOutput {
     const releases: ParsedRelease[] = [];
@@ -57,6 +57,7 @@ function parseSparkleItem(xml: string): ParsedRelease | null {
 
   const publishedAt = extractTag(xml, "pubDate");
   const releaseNotesUrl = extractTag(xml, "sparkle:releaseNotesLink");
+  const releaseNotesBody = extractDescription(xml);
 
   // Extract enclosure info
   const enclosureMatch = xml.match(/<enclosure\s([^>]*?)\/?\s*>/i);
@@ -100,6 +101,8 @@ function parseSparkleItem(xml: string): ParsedRelease | null {
     isPrerelease: /alpha|beta|rc|dev|canary|nightly/i.test(version),
     publishedAt: publishedAt ?? undefined,
     releaseNotesUrl: releaseNotesUrl ?? undefined,
+    releaseNotesBody: releaseNotesBody ?? undefined,
+    releaseNotesFormat: releaseNotesBody ? ("html" as const) : undefined,
     downloadUrl: downloadUrl ?? undefined,
     artifacts,
   };
@@ -127,6 +130,18 @@ function extractAttr(xml: string, tag: string, attr: string): string | null {
 function extractAttrValue(attrs: string, name: string): string | null {
   const match = attrs.match(new RegExp(`${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, "i"));
   return match?.[1] ?? match?.[2] ?? null;
+}
+
+function extractDescription(xml: string): string | null {
+  // Handle CDATA-wrapped: <description><![CDATA[<h2>Notes</h2>...]]></description>
+  const cdataMatch = xml.match(/<description[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i);
+  if (cdataMatch?.[1]) return cdataMatch[1].trim();
+
+  // Handle raw HTML: <description><h2>Notes</h2>...</description>
+  const rawMatch = xml.match(/<description[^>]*>([\s\S]*?)<\/description>/i);
+  if (rawMatch?.[1]) return rawMatch[1].trim();
+
+  return null;
 }
 
 function inferArtifactType(url: string): ParsedArtifact["type"] {

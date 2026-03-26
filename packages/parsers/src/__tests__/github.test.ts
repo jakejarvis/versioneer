@@ -10,6 +10,7 @@ const SAMPLE_RELEASES = JSON.stringify([
     draft: false,
     published_at: "2024-01-15T12:00:00Z",
     html_url: "https://github.com/example/app/releases/tag/v3.0.0",
+    body: "## Changes\n- New feature\n- Bug fix",
     assets: [
       {
         name: "App-3.0.0-mac.dmg",
@@ -81,6 +82,18 @@ describe("githubReleasesParser", () => {
     const result = githubReleasesParser.parse(SAMPLE_RELEASES);
     const arm64Artifact = result.releases[0]!.artifacts.find((a) => a.architecture === "arm64");
     expect(arm64Artifact).toBeDefined();
+  });
+
+  it("extracts release body as markdown", () => {
+    const result = githubReleasesParser.parse(SAMPLE_RELEASES);
+    expect(result.releases[0]!.releaseNotesBody).toBe("## Changes\n- New feature\n- Bug fix");
+    expect(result.releases[0]!.releaseNotesFormat).toBe("markdown");
+  });
+
+  it("omits releaseNotesBody when no body present", () => {
+    const result = githubReleasesParser.parse(SAMPLE_RELEASES);
+    expect(result.releases[1]!.releaseNotesBody).toBeUndefined();
+    expect(result.releases[1]!.releaseNotesFormat).toBeUndefined();
   });
 
   it("handles invalid JSON", () => {

@@ -1,4 +1,4 @@
-import type { ArtifactSelectionExplanation, DecisionExplanation } from "@versioneer/api-contracts";
+import type { ArtifactSelectionExplanation, DecisionExplanation } from "@versioneer/contracts";
 
 interface ReleaseCandidate {
   id: string;

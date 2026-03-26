@@ -13,7 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@versioneer/api-contracts": "workspace:*",
+    "@versioneer/contracts": "workspace:*",
     "@versioneer/db": "workspace:*",
     "@versioneer/schema": "workspace:*"
   },

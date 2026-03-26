@@ -19,12 +19,12 @@ pnpm db:migrate:local     # Apply migrations to local D1
 pnpm db:migrate:remote    # Apply migrations to remote D1
 
 # Deploy
-pnpm --filter @versioneer/api-worker run deploy
+pnpm --filter @versioneer/api run deploy
 pnpm --filter @versioneer/queue-consumer run deploy
 
 # Dev servers individually
-pnpm --filter @versioneer/api-worker dev       # API worker on :8787
-pnpm --filter @versioneer/admin-web dev        # Admin UI on :5173 (proxies /internal to :8787)
+pnpm --filter @versioneer/api dev              # API worker on :8787
+pnpm --filter @versioneer/dashboard dev        # Dashboard on :5173 (proxies /internal to :8787)
 ```
 
 ## Architecture
@@ -35,9 +35,9 @@ Cloudflare-native monorepo. pnpm workspaces + Turborepo.
 
 | App                   | Stack                     | Deploys to         |
 | --------------------- | ------------------------- | ------------------ |
-| `apps/api-worker`     | Hono on CF Workers        | Cloudflare Workers |
+| `apps/api`            | Hono on CF Workers        | Cloudflare Workers |
 | `apps/queue-consumer` | CF Workers queue consumer | Cloudflare Workers |
-| `apps/admin-web`      | React + Vite SPA          | Cloudflare Pages   |
+| `apps/dashboard`      | React + Vite SPA          | Cloudflare Pages   |
 
 ### Packages
 
@@ -48,7 +48,7 @@ All packages are consumed via source (`main: "src/index.ts"`) — no build step.
 | `schema`            | Drizzle ORM table definitions (D1/SQLite)                 |
 | `db`                | Drizzle client, migrations, D1 binding config             |
 | `validation`        | Zod schemas (inventory, admin, common)                    |
-| `api-contracts`     | Shared API request/response types                         |
+| `contracts`         | Shared API request/response types                         |
 | `identity`          | App matching logic (bundle ID, team ID, aliases)          |
 | `versioning`        | Version parsing, normalization, comparison                |
 | `parsers`           | Source parsers (Sparkle, GitHub releases)                 |
@@ -70,7 +70,7 @@ The API worker and queue consumer share these bindings:
 
 Public (`/v1`): `POST /v1/inventory/check`, `GET /v1/apps/:appId`, `GET /v1/apps/:appId/releases`
 
-Internal (`/internal`): Full CRUD for apps, aliases, sources, releases, install-rules, overrides, review-queue, job-failures, audit-log, stats. Sub-routers in `apps/api-worker/src/routes/internal/`.
+Internal (`/internal`): Full CRUD for apps, aliases, sources, releases, install-rules, overrides, review-queue, job-failures, audit-log, stats. Sub-routers in `apps/api/src/routes/internal/`.
 
 ### Queue Pipeline
 
@@ -87,12 +87,12 @@ All entities use prefixed nanoid text IDs: `app_xxx`, `src_xxx`, `rel_xxx`, etc.
 Shared configs in `packages/typescript-config/`. Each package extends one:
 
 - **library.json**: declaration + sourceMap (packages)
-- **worker.json**: CF Workers types + noEmit (api-worker, queue-consumer)
-- **react-vite.json**: DOM + JSX + noEmit (admin-web)
+- **worker.json**: CF Workers types + noEmit (api, queue-consumer)
+- **react-vite.json**: DOM + JSX + noEmit (dashboard)
 
 All packages use `noEmit` — no `dist/` is produced. Apps resolve workspace packages via path aliases pointing at source.
 
-### Admin Web
+### Dashboard
 
 React 19 + Vite 8 + TanStack Router (manual route tree, not codegen) + TanStack Query + shadcn/ui (new-york style) + Tailwind v4.
 

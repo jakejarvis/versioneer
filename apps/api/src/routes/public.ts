@@ -371,6 +371,7 @@ publicRoutes.post("/inventory/check", async (c) => {
       decision,
       latestVersion,
       latestVersionRaw,
+      latestReleaseId,
       releasedAt,
       iconUrl,
       artifact: matchedArtifact,
@@ -503,6 +504,34 @@ publicRoutes.get("/apps/:appId/releases", async (c) => {
   const appReleases = await db.select().from(releases).where(eq(releases.appId, appId)).all();
 
   return c.json({ releases: appReleases });
+});
+
+// GET /v1/releases/:releaseId/notes
+publicRoutes.get("/releases/:releaseId/notes", async (c) => {
+  const releaseId = c.req.param("releaseId");
+  const db = createDb(c.env.DB);
+
+  const release = await db
+    .select({
+      id: releases.id,
+      appId: releases.appId,
+      versionRaw: releases.versionRaw,
+      releaseNotesHtml: releases.releaseNotesHtml,
+    })
+    .from(releases)
+    .where(eq(releases.id, releaseId))
+    .get();
+
+  if (!release) {
+    return c.json({ error: "Release not found" }, 404);
+  }
+
+  return c.json({
+    releaseId: release.id,
+    appId: release.appId,
+    versionRaw: release.versionRaw,
+    releaseNotesHtml: release.releaseNotesHtml,
+  });
 });
 
 // POST /v1/feedback

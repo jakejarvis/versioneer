@@ -57,6 +57,13 @@
       "when": 1774543081793,
       "tag": "0007_wet_captain_universe",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1774548345462,
+      "tag": "0008_luxuriant_phalanx",
+      "breakpoints": true
     }
   ]
 }
