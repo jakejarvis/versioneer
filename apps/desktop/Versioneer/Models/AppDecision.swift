@@ -23,4 +23,20 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
         case unsupported
         case ignored
     }
+
+    /// Returns a copy with only the decision field changed.
+    func replacing(decision newDecision: Decision) -> AppDecision {
+        AppDecision(
+            appName: appName,
+            bundleId: bundleId,
+            installedVersion: installedVersion,
+            matchedAppId: matchedAppId,
+            matchedAppName: matchedAppName,
+            matchConfidence: matchConfidence,
+            decision: newDecision,
+            latestVersion: latestVersion,
+            latestVersionRaw: latestVersionRaw,
+            releasedAt: releasedAt
+        )
+    }
 }

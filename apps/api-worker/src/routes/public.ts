@@ -234,6 +234,8 @@ publicRoutes.post("/inventory/check", async (c) => {
       pathHash: installedApp.pathHash ?? null,
       architecture: installedApp.architecture ?? null,
       sparkleFeedUrl: installedApp.sparkleFeedUrl ?? null,
+      isMasApp: installedApp.isMasApp ?? null,
+      electronUpdateUrl: installedApp.electronUpdateUrl ?? null,
       matchedAppId: matchResult.appId,
       matchMethod: matchResult.method,
       matchConfidence: matchResult.confidence,
@@ -277,6 +279,8 @@ publicRoutes.post("/inventory/check", async (c) => {
           teamId?: string | null;
           version?: string | null;
           sparkleFeedUrl?: string | null;
+          isMasApp?: boolean | null;
+          electronUpdateUrl?: string | null;
         }
       >();
       for (const installedApp of request.apps) {
@@ -294,6 +298,8 @@ publicRoutes.post("/inventory/check", async (c) => {
             teamId: installedApp.teamId,
             version: installedApp.version,
             sparkleFeedUrl: installedApp.sparkleFeedUrl,
+            isMasApp: installedApp.isMasApp,
+            electronUpdateUrl: installedApp.electronUpdateUrl,
           });
         }
       }
@@ -330,6 +336,8 @@ publicRoutes.post("/inventory/check", async (c) => {
               teamId: app.teamId ?? existing.teamId,
               sampleVersions: JSON.stringify(sampleVersions),
               sparkleFeedUrl: app.sparkleFeedUrl ?? existing.sparkleFeedUrl,
+              isMasApp: app.isMasApp ?? existing.isMasApp,
+              electronUpdateUrl: app.electronUpdateUrl ?? existing.electronUpdateUrl,
             })
             .where(eq(discoveredApps.id, existing.id));
         } else {
@@ -346,6 +354,8 @@ publicRoutes.post("/inventory/check", async (c) => {
             status: "pending",
             sampleVersions: JSON.stringify(sampleVersions),
             sparkleFeedUrl: app.sparkleFeedUrl ?? null,
+            isMasApp: app.isMasApp ?? null,
+            electronUpdateUrl: app.electronUpdateUrl ?? null,
             createdAt: now,
             updatedAt: now,
           });

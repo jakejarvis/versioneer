@@ -18,6 +18,8 @@ nonisolated enum BundleMetadataReader {
         let teamId = readTeamId(from: bundle)
 
         let sparkleInfo = readSparkleInfo(from: bundle, info: info, bundleId: bundleId)
+        let isMasApp = masReceiptExists(in: bundle)
+        let electronInfo = readElectronInfo(from: bundle)
 
         return InstalledApp(
             name: name,
@@ -29,7 +31,11 @@ nonisolated enum BundleMetadataReader {
             architecture: nil,
             sparkleFeedUrl: sparkleInfo.feedUrl,
             sparklePublicKey: sparkleInfo.publicKey,
-            hasSparkle: sparkleInfo.hasSparkle
+            isSparkleApp: sparkleInfo.hasSparkle,
+            isMasApp: isMasApp,
+            isElectronApp: electronInfo.isElectron,
+            electronUpdateProvider: electronInfo.provider,
+            electronUpdateUrl: electronInfo.updateUrl
         )
     }
 
@@ -93,6 +99,79 @@ nonisolated enum BundleMetadataReader {
             return false
         }
         return contents.contains { $0.contains("DevMateKit") }
+    }
+
+    // MARK: - Mac App Store
+
+    /// Checks for the MAS receipt file that Apple embeds in all App Store apps.
+    nonisolated private static func masReceiptExists(in bundle: Bundle) -> Bool {
+        let receiptPath = bundle.bundleURL
+            .appendingPathComponent("Contents/_MASReceipt/receipt")
+        return FileManager.default.fileExists(atPath: receiptPath.path)
+    }
+
+    // MARK: - Electron
+
+    private struct ElectronInfo {
+        let isElectron: Bool
+        let provider: String?
+        let updateUrl: String?
+    }
+
+    nonisolated private static func readElectronInfo(from bundle: Bundle) -> ElectronInfo {
+        let frameworkPath = bundle.bundleURL
+            .appendingPathComponent("Contents/Frameworks/Electron Framework.framework")
+        guard FileManager.default.fileExists(atPath: frameworkPath.path) else {
+            return ElectronInfo(isElectron: false, provider: nil, updateUrl: nil)
+        }
+
+        // Try to read app-update.yml from Resources
+        let ymlPath = bundle.bundleURL
+            .appendingPathComponent("Contents/Resources/app-update.yml")
+        guard let ymlData = FileManager.default.contents(atPath: ymlPath.path),
+              let ymlString = String(data: ymlData, encoding: .utf8)
+        else {
+            return ElectronInfo(isElectron: true, provider: nil, updateUrl: nil)
+        }
+
+        let config = parseSimpleYaml(ymlString)
+        let provider = config["provider"]
+        let updateUrl = resolveElectronUpdateUrl(provider: provider, config: config)
+
+        return ElectronInfo(isElectron: true, provider: provider, updateUrl: updateUrl)
+    }
+
+    /// Resolves the update feed URL from electron-builder's app-update.yml config.
+    nonisolated private static func resolveElectronUpdateUrl(
+        provider: String?,
+        config: [String: String]
+    ) -> String? {
+        switch provider {
+        case "github":
+            guard let owner = config["owner"], let repo = config["repo"] else { return nil }
+            return "https://github.com/\(owner)/\(repo)/releases"
+        case "generic":
+            return config["url"]
+        default:
+            return nil
+        }
+    }
+
+    /// Parses a flat YAML file (key: value per line) into a dictionary.
+    /// Handles the simple format used by electron-builder's app-update.yml.
+    nonisolated private static func parseSimpleYaml(_ yaml: String) -> [String: String] {
+        var result: [String: String] = [:]
+        for line in yaml.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("#"), !trimmed.isEmpty else { continue }
+            guard let colonIndex = trimmed.firstIndex(of: ":") else { continue }
+            let key = String(trimmed[trimmed.startIndex..<colonIndex]).trimmingCharacters(in: .whitespaces)
+            let value = String(trimmed[trimmed.index(after: colonIndex)...]).trimmingCharacters(in: .whitespaces)
+            if !key.isEmpty, !value.isEmpty {
+                result[key] = value
+            }
+        }
+        return result
     }
 
     // MARK: - Team ID

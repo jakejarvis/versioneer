@@ -23,5 +23,7 @@ nonisolated struct InventoryCheckRequest: Codable, Sendable {
         let pathHash: String?
         let architecture: String?
         let sparkleFeedUrl: String?
+        let isMasApp: Bool?
+        let electronUpdateUrl: String?
     }
 }

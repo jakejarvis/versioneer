@@ -50,7 +50,8 @@ type AliasType =
   | "sparkle_feed"
   | "homepage"
   | "download_pattern"
-  | "github_repo";
+  | "github_repo"
+  | "mas_app_id";
 
 type SourceType = "sparkle" | "github_releases" | "manual";
 
@@ -291,6 +292,7 @@ function AliasStep({
                 <SelectItem value="team_id">Team ID</SelectItem>
                 <SelectItem value="sparkle_feed">Sparkle Feed</SelectItem>
                 <SelectItem value="github_repo">GitHub Repo</SelectItem>
+                <SelectItem value="mas_app_id">App Store ID</SelectItem>
               </SelectContent>
             </Select>
           </div>

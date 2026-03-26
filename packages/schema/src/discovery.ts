@@ -21,6 +21,8 @@ export const discoveredApps = sqliteTable(
     dismissedBy: text("dismissed_by"),
     sampleVersions: text("sample_versions"),
     sparkleFeedUrl: text("sparkle_feed_url"),
+    isMasApp: integer("is_mas_app", { mode: "boolean" }),
+    electronUpdateUrl: text("electron_update_url"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
