@@ -8,6 +8,7 @@ final class SettingsStore: @unchecked Sendable {
 
     private enum Keys {
         static let baseURL = "versioneer_base_url"
+        static let scanOnLaunch = "versioneer_scan_on_launch"
     }
 
     static let defaultBaseURL = URL(string: "https://api.versioneer.app")!
@@ -22,6 +23,16 @@ final class SettingsStore: @unchecked Sendable {
         }
         set {
             defaults.set(newValue.absoluteString, forKey: Keys.baseURL)
+        }
+    }
+
+    var scanOnLaunch: Bool {
+        get {
+            if defaults.object(forKey: Keys.scanOnLaunch) == nil { return true }
+            return defaults.bool(forKey: Keys.scanOnLaunch)
+        }
+        set {
+            defaults.set(newValue, forKey: Keys.scanOnLaunch)
         }
     }
 
