@@ -4,24 +4,22 @@ struct ResultsListView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        @Bindable var appState = appState
-
         Group {
             if appState.hasCachedResults {
-                VStack(spacing: 0) {
-                    if appState.loadState == .scanning || appState.loadState == .submitting {
-                        scanningBanner
-                    }
-                    resultsList
-                }
+                browserContent
             } else {
                 switch appState.loadState {
                 case .idle:
-                    ContentUnavailableView(
-                        "No Results Yet",
-                        systemImage: "arrow.clockwise",
-                        description: Text("Click \"Scan & Check\" to discover installed apps and check for updates.")
-                    )
+                    ContentUnavailableView {
+                        Label("No Results Yet", systemImage: "arrow.clockwise")
+                    } description: {
+                        Text("Run a scan to discover installed apps and check for updates.")
+                    } actions: {
+                        Button("Scan & Check") {
+                            Task { await appState.scanAndSubmit() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
 
                 case .scanning:
                     ProgressView("Scanning installed apps…")
@@ -32,7 +30,7 @@ struct ResultsListView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 case .done:
-                    resultsList
+                    browserContent
 
                 case .error(let message):
                     ErrorStateView(message: message) {
@@ -41,116 +39,173 @@ struct ResultsListView: View {
                 }
             }
         }
-        .searchable(text: $appState.searchText, prompt: "Filter apps")
+        .searchable(text: binding(for: \.searchText), prompt: "Filter apps")
         .navigationTitle(appState.selectedSection.rawValue)
     }
 
     @ViewBuilder
-    private var resultsList: some View {
-        let results = appState.filteredResults
-        if results.isEmpty {
+    private var browserContent: some View {
+        let rows = appState.resultsBrowserRows
+        if rows.isEmpty {
             ContentUnavailableView.search(text: appState.searchText)
         } else {
-            List(results, selection: Binding(
-                get: { appState.selectedResult },
-                set: { appState.selectedResult = $0 }
-            )) { result in
-                ResultRow(result: result)
-                    .tag(result)
+            Table(rows, selection: binding(for: \.selectedResultID)) {
+                TableColumn("App") { row in
+                    ResultsAppCell(row: row)
+                }
+                .width(min: 230, ideal: 280)
+
+                TableColumn("Status") { row in
+                    ResultsStatusCell(row: row)
+                }
+                .width(min: 150, ideal: 180)
+
+                TableColumn("Installed") { row in
+                    Text(row.installedVersionText)
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                .width(min: 110, ideal: 120)
+
+                TableColumn("Latest") { row in
+                    Text(row.latestVersionText)
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                .width(min: 110, ideal: 120)
+
+                TableColumn("Released") { row in
+                    Text(row.releasedDateText)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .width(min: 110, ideal: 140)
             }
-            .listStyle(.inset(alternatesRowBackgrounds: true))
+            .tableStyle(.inset)
+            .safeAreaInset(edge: .bottom) {
+                ResultsSummaryFooter(
+                    displayedCount: rows.count,
+                    summary: appState.scanSummary,
+                    sort: appState.resultsSort
+                )
+            }
         }
     }
-    @ViewBuilder
-    private var scanningBanner: some View {
-        HStack(spacing: 8) {
-            ProgressView()
-                .controlSize(.small)
 
-            Text(appState.loadState == .scanning
-                 ? "Scanning installed apps…"
-                 : "Checking for updates…")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(.bar)
-        .overlay(alignment: .bottom) {
-            Divider()
-        }
+    private func binding<Value>(for keyPath: ReferenceWritableKeyPath<AppState, Value>) -> Binding<Value> {
+        Binding(
+            get: { appState[keyPath: keyPath] },
+            set: { appState[keyPath: keyPath] = $0 }
+        )
     }
 }
 
-// MARK: - ResultRow
-
-private struct ResultRow: View {
+private struct ResultsAppCell: View {
     @Environment(AppState.self) private var appState
-    let result: AppDecision
+    let row: ResultsBrowserRowPresentation
 
     var body: some View {
-        HStack(spacing: 10) {
-            ZStack(alignment: .bottomTrailing) {
+        let result = appState.inventoryResults.first { $0.id == row.id }
+
+        HStack(spacing: 12) {
+            if let result {
                 Image(nsImage: appState.appIcon(for: result))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 32, height: 32)
-
-                DecisionBadge(decision: result.decision)
-                    .offset(x: 3, y: 3)
+                    .frame(width: 28, height: 28)
             }
-            .frame(width: 32, height: 32)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(result.matchedAppName ?? result.appName)
-                    .fontWeight(.medium)
+                Text(row.appName)
+                    .font(.body.weight(.medium))
                     .lineLimit(1)
 
-                if let bundleId = result.bundleId {
-                    Text(bundleId)
+                if let secondaryText = row.secondaryText {
+                    Text(secondaryText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(VersionFormatting.displayVersion(result.installedVersion))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if let latest = result.latestVersion {
-                    Text(latest)
-                        .font(.caption)
-                        .foregroundStyle(result.decision == .updateAvailable ? .orange : .secondary)
-                }
-            }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
     }
 }
 
-// MARK: - DecisionBadge
-
-struct DecisionBadge: View {
-    let decision: AppDecision.Decision
+private struct ResultsStatusCell: View {
+    let row: ResultsBrowserRowPresentation
 
     var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 10, height: 10)
+        VersioneerStatusChip(
+            title: row.statusText,
+            tint: tint,
+            systemImage: systemImage
+        )
     }
 
-    private var color: Color {
-        switch decision {
-        case .upToDate: .green
-        case .updateAvailable: .orange
-        case .unknown: .gray
-        case .ambiguous: .yellow
-        case .unsupported: .red
-        case .ignored: .secondary
+    private var tint: Color {
+        switch row.statusTone {
+        case .accent:
+            .accentColor
+        case .positive:
+            .green
+        case .secondary:
+            .secondary
+        case .warning:
+            .orange
+        case .negative:
+            .red
         }
+    }
+
+    private var systemImage: String {
+        switch row.statusTone {
+        case .accent:
+            "arrow.trianglehead.2.clockwise"
+        case .positive:
+            "checkmark.circle.fill"
+        case .secondary:
+            "questionmark.circle"
+        case .warning:
+            "sparkles"
+        case .negative:
+            "exclamationmark.triangle.fill"
+        }
+    }
+}
+
+private struct ResultsSummaryFooter: View {
+    let displayedCount: Int
+    let summary: AppState.ScanSummary
+    let sort: ResultsBrowserSort
+
+    var body: some View {
+        HStack {
+            Text("\(displayedCount) shown")
+            Text("•")
+            Text("\(summary.updatesAvailableCount) updates")
+            Text("•")
+            Text("Sorted by \(sort.title)")
+
+            Spacer()
+
+            if let lastCompletedAt = summary.lastCompletedAt {
+                Text("Last scan \(formatter.localizedString(for: lastCompletedAt, relativeTo: Date()))")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.bar)
+        .overlay(alignment: .top) {
+            Divider()
+        }
+    }
+
+    private var formatter: RelativeDateTimeFormatter {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter
     }
 }

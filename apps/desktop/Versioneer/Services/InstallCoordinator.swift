@@ -7,18 +7,28 @@ import Sparkle
 @Observable
 @MainActor
 final class InstallCoordinator {
-    enum RecoveryAction: Sendable {
+    nonisolated enum HelperSetupState: String, Sendable {
+        case notNeeded
+        case notRegistered
+        case preparing
+        case ready
+        case approvalRequired
+        case unavailable
+        case failed
+    }
+
+    nonisolated enum RecoveryAction: Equatable, Sendable {
         case openSystemSettings
     }
 
-    enum ExecutionRoute: Equatable, Sendable {
+    nonisolated enum ExecutionRoute: Equatable, Sendable {
         case sparkle
         case localReplace
         case privilegedReplace
         case privilegedPackage
     }
 
-    enum Phase: String, Sendable {
+    nonisolated enum Phase: String, Sendable {
         case idle
         case preparing
         case downloading
@@ -29,13 +39,15 @@ final class InstallCoordinator {
         case failed
     }
 
-    struct OperationState: Sendable {
+    nonisolated struct OperationState: Equatable, Sendable {
+        let appDisplayName: String?
         let phase: Phase
         let detail: String
         let executionId: String?
         let errorMessage: String?
         let installedVersion: String?
         let recoveryAction: RecoveryAction?
+        let helperStatus: HelperSetupState?
 
         var isRunning: Bool {
             switch phase {
@@ -47,16 +59,18 @@ final class InstallCoordinator {
         }
 
         static let idle = OperationState(
+            appDisplayName: nil,
             phase: .idle,
             detail: "",
             executionId: nil,
             errorMessage: nil,
             installedVersion: nil,
-            recoveryAction: nil
+            recoveryAction: nil,
+            helperStatus: nil
         )
     }
 
-    struct VerificationSummary: Codable, Sendable {
+    nonisolated struct VerificationSummary: Codable, Sendable {
         let strategy: String
         var hashVerified: Bool?
         var signatureVerified: Bool?
@@ -80,6 +94,28 @@ final class InstallCoordinator {
         operations[result.id] ?? .idle
     }
 
+    var primaryOperationState: OperationState? {
+        operations.values
+            .filter { $0.phase != .idle }
+            .sorted { lhs, rhs in
+                relevancePriority(for: lhs) < relevancePriority(for: rhs)
+            }
+            .first
+    }
+
+    func helperRegistrationState() -> HelperSetupState {
+        switch privilegedHelperClient.registrationStatus() {
+        case .enabled:
+            .ready
+        case .notRegistered:
+            .notRegistered
+        case .requiresApproval:
+            .approvalRequired
+        case .notFound:
+            .unavailable
+        }
+    }
+
     @discardableResult
     func startInstall(
         result: AppDecision,
@@ -92,19 +128,23 @@ final class InstallCoordinator {
 
         let startedAt = Date()
         let operationKey = result.id
+        let appDisplayName = result.matchedAppName ?? result.appName
         var executionId: String?
         var verificationSummary = VerificationSummary(strategy: result.install.strategy?.rawValue ?? "unknown")
         var stagedDirectory: URL?
+        var usedPrivilegedHelper = false
 
         do {
             updateState(
                 for: operationKey,
+                appDisplayName: appDisplayName,
                 phase: .preparing,
                 detail: "Requesting install plan…",
                 executionId: nil,
                 errorMessage: nil,
                 installedVersion: nil,
-                recoveryAction: nil
+                recoveryAction: nil,
+                helperStatus: .notNeeded
             )
 
             let prepared = try await apiClient.prepareInstall(
@@ -132,7 +172,8 @@ final class InstallCoordinator {
                     executionId: prepared.executionId,
                     errorMessage: nil,
                     installedVersion: nil,
-                    recoveryAction: nil
+                    recoveryAction: nil,
+                    helperStatus: .notNeeded
                 )
                 try await ExternalSparkleInstaller().install(appAt: URL(fileURLWithPath: installedApp.path))
                 verificationSummary = VerificationSummary(strategy: prepared.plan.strategy.rawValue)
@@ -153,15 +194,16 @@ final class InstallCoordinator {
                     }
                 }
 
-                updateState(
-                    for: operationKey,
-                    phase: .verifying,
-                    detail: "Verifying downloaded app…",
-                    executionId: prepared.executionId,
-                    errorMessage: nil,
-                    installedVersion: nil,
-                    recoveryAction: nil
-                )
+                    updateState(
+                        for: operationKey,
+                        phase: .verifying,
+                        detail: "Verifying downloaded app…",
+                        executionId: prepared.executionId,
+                        errorMessage: nil,
+                        installedVersion: nil,
+                        recoveryAction: nil,
+                        helperStatus: .notNeeded
+                    )
                 verificationSummary = try await verifyAppBundle(
                     bundleURL: preparedBundle.appBundleURL,
                     downloadedArtifactURL: artifactURL,
@@ -180,7 +222,8 @@ final class InstallCoordinator {
                         executionId: prepared.executionId,
                         errorMessage: nil,
                         installedVersion: nil,
-                        recoveryAction: nil
+                        recoveryAction: nil,
+                        helperStatus: .notNeeded
                     )
                     try await replaceInstalledAppLocally(
                         sourceAppURL: preparedBundle.appBundleURL,
@@ -189,6 +232,7 @@ final class InstallCoordinator {
                     )
 
                 case .privilegedReplace:
+                    usedPrivilegedHelper = true
                     updateState(
                         for: operationKey,
                         phase: .installing,
@@ -196,7 +240,8 @@ final class InstallCoordinator {
                         executionId: prepared.executionId,
                         errorMessage: nil,
                         installedVersion: nil,
-                        recoveryAction: nil
+                        recoveryAction: nil,
+                        helperStatus: .preparing
                     )
                     try await replaceInstalledAppViaHelper(
                         executionId: prepared.executionId,
@@ -217,7 +262,8 @@ final class InstallCoordinator {
                         executionId: prepared.executionId,
                         errorMessage: nil,
                         installedVersion: nil,
-                        recoveryAction: nil
+                        recoveryAction: nil,
+                        helperStatus: usedPrivilegedHelper ? .ready : .notNeeded
                     )
                     try await relaunchApp(at: URL(fileURLWithPath: installedApp.path))
                 }
@@ -233,13 +279,15 @@ final class InstallCoordinator {
                     executionId: prepared.executionId,
                     errorMessage: nil,
                     installedVersion: nil,
-                    recoveryAction: nil
+                    recoveryAction: nil,
+                    helperStatus: .notNeeded
                 )
                 verificationSummary = try await verifyPackage(
                     packageURL: artifactURL,
                     plan: prepared.plan
                 )
 
+                usedPrivilegedHelper = true
                 updateState(
                     for: operationKey,
                     phase: .installing,
@@ -247,7 +295,8 @@ final class InstallCoordinator {
                     executionId: prepared.executionId,
                     errorMessage: nil,
                     installedVersion: nil,
-                    recoveryAction: nil
+                    recoveryAction: nil,
+                    helperStatus: .preparing
                 )
                 try await installPackageViaHelper(
                     executionId: prepared.executionId,
@@ -278,7 +327,8 @@ final class InstallCoordinator {
                 executionId: executionId,
                 errorMessage: nil,
                 installedVersion: installedVersion,
-                recoveryAction: nil
+                recoveryAction: nil,
+                helperStatus: usedPrivilegedHelper ? .ready : .notNeeded
             )
             cleanupStagingDirectory(stagedDirectory)
             return true
@@ -302,7 +352,8 @@ final class InstallCoordinator {
                 executionId: executionId,
                 errorMessage: error.localizedDescription,
                 installedVersion: nil,
-                recoveryAction: recoveryAction(for: error)
+                recoveryAction: recoveryAction(for: error),
+                helperStatus: helperSetupState(for: error) ?? (usedPrivilegedHelper ? .failed : .notNeeded)
             )
             cleanupStagingDirectory(stagedDirectory)
             return false
@@ -311,20 +362,25 @@ final class InstallCoordinator {
 
     private func updateState(
         for key: String,
+        appDisplayName: String? = nil,
         phase: Phase,
         detail: String,
         executionId: String?,
         errorMessage: String?,
         installedVersion: String?,
-        recoveryAction: RecoveryAction?
+        recoveryAction: RecoveryAction?,
+        helperStatus: HelperSetupState? = nil
     ) {
+        let existingState = operations[key]
         operations[key] = OperationState(
+            appDisplayName: appDisplayName ?? existingState?.appDisplayName,
             phase: phase,
             detail: detail,
             executionId: executionId,
             errorMessage: errorMessage,
             installedVersion: installedVersion,
-            recoveryAction: recoveryAction
+            recoveryAction: recoveryAction,
+            helperStatus: helperStatus ?? existingState?.helperStatus
         )
     }
 
@@ -838,6 +894,20 @@ final class InstallCoordinator {
         }
     }
 
+    private func helperSetupState(for error: Error) -> HelperSetupState? {
+        guard let installError = error as? InstallError else { return nil }
+        switch installError {
+        case .privilegedHelperApprovalRequired:
+            return .approvalRequired
+        case .privilegedHelperRegistrationFailed:
+            return .unavailable
+        case .privilegedHelperConnectionFailed, .privilegedHelperExecutionFailed:
+            return .failed
+        default:
+            return nil
+        }
+    }
+
     private func stageAppBundleForHelper(
         sourceAppURL: URL,
         stagingDirectory: URL
@@ -884,6 +954,19 @@ final class InstallCoordinator {
         let newId = UUID().uuidString
         UserDefaults.standard.set(newId, forKey: key)
         return newId
+    }
+
+    private func relevancePriority(for state: OperationState) -> Int {
+        switch state.phase {
+        case .preparing, .downloading, .verifying, .installing, .relaunching:
+            return 0
+        case .failed:
+            return 1
+        case .completed:
+            return 2
+        case .idle:
+            return 3
+        }
     }
 }
 
@@ -1001,3 +1084,11 @@ private extension Dictionary where Key == String, Value == String {
         return String(decoding: data, as: UTF8.self)
     }
 }
+
+#if DEBUG
+extension InstallCoordinator {
+    func previewSetState(_ state: OperationState, for result: AppDecision) {
+        operations[result.id] = state
+    }
+}
+#endif
