@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		23F9791D2F7584620058763E /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 23F9791C2F7584620058763E /* Logging */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		23A5A6112F74908600245F54 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -41,6 +45,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				23F9791D2F7584620058763E /* Logging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -99,6 +104,7 @@
 			);
 			name = Versioneer;
 			packageProductDependencies = (
+				23F9791C2F7584620058763E /* Logging */,
 			);
 			productName = Versioneer;
 			productReference = 23A5A6032F74908500245F54 /* Versioneer.app */;
@@ -155,6 +161,10 @@
 			);
 			mainGroup = 23A5A5FA2F74908500245F54;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				23F9791A2F7583030058763E /* XCRemoteSwiftPackageReference "Sparkle" */,
+				23F9791B2F7584620058763E /* XCRemoteSwiftPackageReference "swift-log" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 23A5A6042F74908500245F54 /* Products */;
 			projectDirPath = "";
@@ -276,6 +286,7 @@
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
 			};
 			name = Debug;
 		};
@@ -332,6 +343,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_STRICT_CONCURRENCY = complete;
 			};
 			name = Release;
 		};
@@ -498,6 +510,33 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		23F9791A2F7583030058763E /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.0;
+			};
+		};
+		23F9791B2F7584620058763E /* XCRemoteSwiftPackageReference "swift-log" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-log.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.10.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		23F9791C2F7584620058763E /* Logging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 23F9791B2F7584620058763E /* XCRemoteSwiftPackageReference "swift-log" */;
+			productName = Logging;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 23A5A5FB2F74908500245F54 /* Project object */;
 }

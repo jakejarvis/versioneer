@@ -1,5 +1,5 @@
 import Foundation
-import OSLog
+import Logging
 
 /// Submits user feedback about incorrect matches or versions.
 struct FeedbackAPIClient: Sendable {

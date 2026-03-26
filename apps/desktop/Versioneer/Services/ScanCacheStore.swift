@@ -1,5 +1,5 @@
 import Foundation
-import OSLog
+import Logging
 
 /// Persists the most recent scan results to disk for instant display on launch.
 struct ScanCacheStore: Sendable {
