@@ -1,0 +1,259 @@
+import Foundation
+import Logging
+
+/// Fetches and parses Sparkle appcast feeds locally to determine the latest available version.
+actor SparkleChecker {
+
+    /// The result of checking a single Sparkle feed.
+    struct SparkleResult: Sendable {
+        let feedUrl: String
+        let latestVersion: String?
+        let latestBuildNumber: String?
+        let publishedAt: String?
+        let releaseNotesUrl: String?
+        let downloadUrl: String?
+        let minOsVersion: String?
+    }
+
+    private let session: URLSession
+
+    init() {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        config.httpAdditionalHeaders = [
+            "Accept": "application/rss+xml,*/*;q=0.1",
+        ]
+        self.session = URLSession(configuration: config)
+    }
+
+    /// Checks a Sparkle appcast feed and returns the latest applicable release.
+    func check(
+        feedUrl: String,
+        appName: String?,
+        installedVersion: String?
+    ) async -> SparkleResult? {
+        guard var url = URL(string: feedUrl) else {
+            Logger.sparkle.warning("Invalid feed URL: \(feedUrl)")
+            return nil
+        }
+
+        // Append minimal system parameters that some feeds use to filter items
+        url = appendQueryParameters(to: url, installedVersion: installedVersion)
+
+        var request = URLRequest(url: url)
+        let versioneerVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let userAgent = "\(appName ?? "Unknown")/\(installedVersion ?? "0") Sparkle/2 Versioneer/\(versioneerVersion)"
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+
+        do {
+            let (data, response) = try await session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                Logger.sparkle.warning("Non-HTTP response for \(feedUrl)")
+                return nil
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                Logger.sparkle.debug("Feed returned \(httpResponse.statusCode): \(feedUrl)")
+                return nil
+            }
+
+            guard let body = String(data: data, encoding: .utf8) else {
+                Logger.sparkle.warning("Could not decode feed body as UTF-8: \(feedUrl)")
+                return nil
+            }
+
+            return parseAppcast(body, feedUrl: feedUrl)
+        } catch {
+            Logger.sparkle.debug("Failed to fetch \(feedUrl): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Checks multiple apps with Sparkle feeds concurrently, returning results keyed by bundle ID or path.
+    func checkAll(apps: [InstalledApp]) async -> [String: SparkleResult] {
+        let sparkleApps = apps.filter { $0.sparkleFeedUrl != nil }
+        guard !sparkleApps.isEmpty else { return [:] }
+
+        Logger.sparkle.info("Checking \(sparkleApps.count) Sparkle feeds locally")
+
+        return await withTaskGroup(of: (String, SparkleResult?).self) { group in
+            for app in sparkleApps {
+                group.addTask {
+                    let result = await self.check(
+                        feedUrl: app.sparkleFeedUrl!,
+                        appName: app.name,
+                        installedVersion: app.version
+                    )
+                    return (app.id, result)
+                }
+            }
+
+            var results: [String: SparkleResult] = [:]
+            for await (appId, result) in group {
+                if let result {
+                    results[appId] = result
+                }
+            }
+
+            Logger.sparkle.info("Sparkle checks complete: \(results.count)/\(sparkleApps.count) succeeded")
+            return results
+        }
+    }
+
+    // MARK: - Appcast parsing
+
+    /// Parses a Sparkle appcast XML body and returns the latest applicable release.
+    private func parseAppcast(_ body: String, feedUrl: String) -> SparkleResult? {
+        let items = parseItems(from: body)
+        guard !items.isEmpty else { return nil }
+
+        let osVersion = ProcessInfo.processInfo.operatingSystemVersion
+        let osVersionString = "\(osVersion.majorVersion).\(osVersion.minorVersion).\(osVersion.patchVersion)"
+
+        // Filter to items compatible with the current OS
+        let applicable = items.filter { item in
+            guard let minOs = item.minOsVersion else { return true }
+            return compareVersions(osVersionString, isAtLeast: minOs)
+        }
+
+        // Take the first item (appcasts are typically newest-first)
+        guard let latest = applicable.first else { return nil }
+
+        return SparkleResult(
+            feedUrl: feedUrl,
+            latestVersion: latest.shortVersionString ?? latest.version,
+            latestBuildNumber: latest.version,
+            publishedAt: latest.pubDate,
+            releaseNotesUrl: latest.releaseNotesUrl,
+            downloadUrl: latest.downloadUrl,
+            minOsVersion: latest.minOsVersion
+        )
+    }
+
+    private struct AppcastItem {
+        let shortVersionString: String?
+        let version: String?
+        let pubDate: String?
+        let releaseNotesUrl: String?
+        let downloadUrl: String?
+        let minOsVersion: String?
+    }
+
+    private func parseItems(from xml: String) -> [AppcastItem] {
+        // Extract <item> blocks via regex, matching the server-side parser approach
+        let itemPattern = try! NSRegularExpression(pattern: "<item>(.*?)</item>", options: [.dotMatchesLineSeparators, .caseInsensitive])
+        let range = NSRange(xml.startIndex..., in: xml)
+
+        return itemPattern.matches(in: xml, range: range).compactMap { match in
+            guard let itemRange = Range(match.range(at: 1), in: xml) else { return nil }
+            let itemXml = String(xml[itemRange])
+            return parseItem(itemXml)
+        }
+    }
+
+    private func parseItem(_ xml: String) -> AppcastItem? {
+        let shortVersion = extractTag(xml, "sparkle:shortVersionString")
+            ?? extractEnclosureAttr(xml, "sparkle:shortVersionString")
+        let version = extractTag(xml, "sparkle:version")
+            ?? extractEnclosureAttr(xml, "sparkle:version")
+
+        // Must have at least one version identifier
+        guard shortVersion != nil || version != nil else { return nil }
+
+        let pubDate = extractTag(xml, "pubDate")
+        let releaseNotesUrl = extractTag(xml, "sparkle:releaseNotesLink")
+        let downloadUrl = extractEnclosureAttr(xml, "url")
+        let minOsVersion = extractEnclosureAttr(xml, "sparkle:minimumSystemVersion")
+            ?? extractTag(xml, "sparkle:minimumSystemVersion")
+
+        return AppcastItem(
+            shortVersionString: shortVersion,
+            version: version,
+            pubDate: pubDate,
+            releaseNotesUrl: releaseNotesUrl,
+            downloadUrl: downloadUrl,
+            minOsVersion: minOsVersion
+        )
+    }
+
+    // MARK: - XML helpers
+
+    private func extractTag(_ xml: String, _ tag: String) -> String? {
+        // Try CDATA first, then plain text content
+        let patterns = [
+            "<\(tag)[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></\(tag)>",
+            "<\(tag)[^>]*>([^<]*)</\(tag)>",
+        ]
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]),
+               let match = regex.firstMatch(in: xml, range: NSRange(xml.startIndex..., in: xml)),
+               let range = Range(match.range(at: 1), in: xml)
+            {
+                let value = String(xml[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !value.isEmpty { return value }
+            }
+        }
+        return nil
+    }
+
+    private func extractEnclosureAttr(_ xml: String, _ attr: String) -> String? {
+        let enclosurePattern = try! NSRegularExpression(
+            pattern: "<enclosure\\s([^>]*?)/?>",
+            options: [.caseInsensitive]
+        )
+        guard let encMatch = enclosurePattern.firstMatch(in: xml, range: NSRange(xml.startIndex..., in: xml)),
+              let attrsRange = Range(encMatch.range(at: 1), in: xml)
+        else { return nil }
+
+        let attrs = String(xml[attrsRange])
+        return extractAttrValue(attrs, attr)
+    }
+
+    private func extractAttrValue(_ attrs: String, _ name: String) -> String? {
+        let pattern = "\(NSRegularExpression.escapedPattern(for: name))\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = regex.firstMatch(in: attrs, range: NSRange(attrs.startIndex..., in: attrs))
+        else { return nil }
+
+        if let r1 = Range(match.range(at: 1), in: attrs), !attrs[r1].isEmpty {
+            return String(attrs[r1])
+        }
+        if let r2 = Range(match.range(at: 2), in: attrs), !attrs[r2].isEmpty {
+            return String(attrs[r2])
+        }
+        return nil
+    }
+
+    // MARK: - Helpers
+
+    private func appendQueryParameters(to url: URL, installedVersion: String?) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var items = components.queryItems ?? []
+
+        let osVersion = ProcessInfo.processInfo.operatingSystemVersion
+        items.append(URLQueryItem(name: "osVersion", value: "\(osVersion.majorVersion).\(osVersion.minorVersion).\(osVersion.patchVersion)"))
+
+        if let installedVersion {
+            items.append(URLQueryItem(name: "appVersion", value: installedVersion))
+        }
+
+        components.queryItems = items
+        return components.url ?? url
+    }
+
+    /// Simple numeric version comparison: returns true if `current` >= `minimum`.
+    private func compareVersions(_ current: String, isAtLeast minimum: String) -> Bool {
+        let currentParts = current.split(separator: ".").compactMap { Int($0) }
+        let minimumParts = minimum.split(separator: ".").compactMap { Int($0) }
+
+        for i in 0..<max(currentParts.count, minimumParts.count) {
+            let c = i < currentParts.count ? currentParts[i] : 0
+            let m = i < minimumParts.count ? minimumParts[i] : 0
+            if c > m { return true }
+            if c < m { return false }
+        }
+        return true // equal
+    }
+}

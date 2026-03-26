@@ -55,6 +55,7 @@ export const clientInventoryApps = sqliteTable(
     latestVersionNormalized: text("latest_version_normalized"),
     latestVersionRaw: text("latest_version_raw"),
     matchExplanationJson: text("match_explanation_json"),
+    sparkleFeedUrl: text("sparkle_feed_url"),
     createdAt: text("created_at").notNull(),
   },
   (table) => [

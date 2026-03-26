@@ -20,6 +20,7 @@ export const discoveredApps = sqliteTable(
     dismissedAt: text("dismissed_at"),
     dismissedBy: text("dismissed_by"),
     sampleVersions: text("sample_versions"),
+    sparkleFeedUrl: text("sparkle_feed_url"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
