@@ -82,6 +82,11 @@ final class AppState {
         }
     }
 
+    /// Whether we have cached inventory results to display while rescanning.
+    var hasCachedResults: Bool {
+        !inventoryResults.isEmpty
+    }
+
     // MARK: - Computed filtered results
 
     var filteredResults: [AppDecision] {
@@ -157,7 +162,9 @@ final class AppState {
 
     func scanAndSubmit() async {
         loadState = .scanning
-        selectedResult = nil
+        if !hasCachedResults {
+            selectedResult = nil
+        }
 
         let startTime = CFAbsoluteTimeGetCurrent()
         let apps = await scanner.scan()
