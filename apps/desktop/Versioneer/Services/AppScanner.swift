@@ -1,5 +1,5 @@
 import Foundation
-import OSLog
+import Logging
 
 /// Scans standard macOS app directories for installed `.app` bundles.
 actor AppScanner {

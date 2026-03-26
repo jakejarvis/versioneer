@@ -1,5 +1,5 @@
 import Foundation
-import OSLog
+import Logging
 
 /// Submits app inventory to the backend and decodes update decisions.
 struct InventoryAPIClient: Sendable {
@@ -40,7 +40,7 @@ struct InventoryAPIClient: Sendable {
             return try decoder.decode(InventoryCheckResponse.self, from: data)
         } catch {
             Logger.api.error("Failed to decode response: \(error.localizedDescription)")
-            throw APIError.decodingFailed(error)
+            throw APIError.decodingFailed(error.localizedDescription)
         }
     }
 
@@ -96,7 +96,7 @@ struct InventoryAPIClient: Sendable {
 enum APIError: LocalizedError, Sendable {
     case invalidResponse
     case httpError(statusCode: Int, body: String)
-    case decodingFailed(Error)
+    case decodingFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -104,8 +104,8 @@ enum APIError: LocalizedError, Sendable {
             "Invalid response from server"
         case .httpError(let statusCode, _):
             "Server returned status \(statusCode)"
-        case .decodingFailed(let error):
-            "Failed to decode response: \(error.localizedDescription)"
+        case .decodingFailed(let message):
+            "Failed to decode response: \(message)"
         }
     }
 }

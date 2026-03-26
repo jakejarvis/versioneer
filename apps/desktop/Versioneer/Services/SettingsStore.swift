@@ -3,7 +3,8 @@ import Observation
 
 /// Persists lightweight user settings using UserDefaults.
 @Observable
-final class SettingsStore: @unchecked Sendable {
+@MainActor
+final class SettingsStore {
     private let defaults = UserDefaults.standard
 
     private enum Keys {
