@@ -5,6 +5,7 @@ import { env } from "cloudflare:workers";
 import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { autoCreateSourcesForDiscoveredApp } from "./auto-source";
 import { authMiddleware } from "./middleware";
 
 export const listDiscoveredApps = createServerFn({ method: "GET" })
@@ -102,5 +103,13 @@ export const approveDiscoveredApp = createServerFn({ method: "POST" })
       createdAt: now,
     });
 
-    return { status: "approved" };
+    // Auto-create sources from discovered app metadata (Sparkle feed, GitHub releases)
+    const autoResult = await autoCreateSourcesForDiscoveredApp({
+      discoveredApp: item,
+      appId,
+      actorEmail: context.user.email,
+      db,
+    });
+
+    return { status: "approved", autoCreatedSources: autoResult.created };
   });

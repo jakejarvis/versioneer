@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { toGitHubApiReleasesUrl } from "@versioneer/validation";
 import { ArrowRight, Check } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -22,6 +23,8 @@ interface OnboardingSearch {
   appName?: string;
   bundleId?: string;
   teamId?: string;
+  sparkleFeedUrl?: string;
+  electronUpdateUrl?: string;
 }
 
 export const Route = createFileRoute("/onboarding/")({
@@ -32,6 +35,9 @@ export const Route = createFileRoute("/onboarding/")({
     appName: typeof search.appName === "string" ? search.appName : undefined,
     bundleId: typeof search.bundleId === "string" ? search.bundleId : undefined,
     teamId: typeof search.teamId === "string" ? search.teamId : undefined,
+    sparkleFeedUrl: typeof search.sparkleFeedUrl === "string" ? search.sparkleFeedUrl : undefined,
+    electronUpdateUrl:
+      typeof search.electronUpdateUrl === "string" ? search.electronUpdateUrl : undefined,
   }),
 });
 
@@ -110,12 +116,32 @@ function OnboardingPage() {
 
   const [aliases, setAliases] = useState<AliasData[]>(initialAliases);
 
-  const [sourceData, setSourceData] = useState<SourceData>({
-    sourceType: "sparkle",
-    label: "",
-    baseUrl: "",
-    parserKey: "sparkle",
-    pollIntervalMinutes: 60,
+  const [sourceData, setSourceData] = useState<SourceData>(() => {
+    if (search.sparkleFeedUrl) {
+      return {
+        sourceType: "sparkle" as SourceType,
+        label: "",
+        baseUrl: search.sparkleFeedUrl,
+        parserKey: "sparkle",
+        pollIntervalMinutes: 60,
+      };
+    }
+    if (search.electronUpdateUrl) {
+      return {
+        sourceType: "github_releases" as SourceType,
+        label: "",
+        baseUrl: toGitHubApiReleasesUrl(search.electronUpdateUrl) ?? search.electronUpdateUrl,
+        parserKey: "github_releases",
+        pollIntervalMinutes: 60,
+      };
+    }
+    return {
+      sourceType: "sparkle" as SourceType,
+      label: "",
+      baseUrl: "",
+      parserKey: "sparkle",
+      pollIntervalMinutes: 60,
+    };
   });
 
   const handleSubmit = () => {
