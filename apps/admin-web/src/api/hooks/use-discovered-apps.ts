@@ -38,6 +38,7 @@ export function useApproveDiscoveredApp() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["discovered-apps"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
+      void qc.invalidateQueries({ queryKey: ["sources"] });
     },
   });
 }

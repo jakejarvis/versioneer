@@ -38,6 +38,8 @@ interface DiscoveredApp {
   status: string;
   onboardedAppId: string | null;
   sampleVersions: string | null;
+  sparkleFeedUrl: string | null;
+  electronUpdateUrl: string | null;
 }
 
 function DiscoveredAppsPage() {
@@ -65,6 +67,8 @@ function DiscoveredAppsPage() {
     params.set("appName", item.appName);
     if (item.bundleId) params.set("bundleId", item.bundleId);
     if (item.teamId) params.set("teamId", item.teamId);
+    if (item.sparkleFeedUrl) params.set("sparkleFeedUrl", item.sparkleFeedUrl);
+    if (item.electronUpdateUrl) params.set("electronUpdateUrl", item.electronUpdateUrl);
     void navigate({ to: "/onboarding", search: Object.fromEntries(params) });
   };
 
