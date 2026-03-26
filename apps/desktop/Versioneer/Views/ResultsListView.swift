@@ -57,12 +57,21 @@ struct ResultsListView: View {
 // MARK: - ResultRow
 
 private struct ResultRow: View {
+    @Environment(AppState.self) private var appState
     let result: AppDecision
 
     var body: some View {
-        HStack(spacing: 12) {
-            DecisionBadge(decision: result.decision)
-                .frame(width: 10)
+        HStack(spacing: 10) {
+            ZStack(alignment: .bottomTrailing) {
+                Image(nsImage: appState.appIcon(for: result))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 32, height: 32)
+
+                DecisionBadge(decision: result.decision)
+                    .offset(x: 3, y: 3)
+            }
+            .frame(width: 32, height: 32)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(result.matchedAppName ?? result.appName)
