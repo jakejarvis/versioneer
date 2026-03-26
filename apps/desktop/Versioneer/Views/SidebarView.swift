@@ -27,24 +27,35 @@ struct SidebarView: View {
         }
     }
 
-    @ViewBuilder
-    private var scanButton: some View {
+    private var isScanning: Bool {
+        appState.loadState == .scanning || appState.loadState == .submitting
+    }
+
+    private var scanButtonLabel: String {
         switch appState.loadState {
-        case .scanning, .submitting:
-            ProgressView()
-                .controlSize(.small)
-                .frame(maxWidth: .infinity)
-        default:
-            Button {
-                Task {
-                    await appState.scanAndSubmit()
-                }
-            } label: {
-                Label("Scan & Check", systemImage: "arrow.clockwise")
-                    .frame(maxWidth: .infinity)
-            }
-            .controlSize(.large)
-            .buttonStyle(.borderedProminent)
+        case .scanning: "Scanning…"
+        case .submitting: "Checking…"
+        default: "Scan & Check"
         }
+    }
+
+    private var scanButton: some View {
+        Button {
+            Task {
+                await appState.scanAndSubmit()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                if isScanning {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Text(scanButtonLabel)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .controlSize(.large)
+        .buttonStyle(.borderedProminent)
+        .disabled(isScanning)
     }
 }

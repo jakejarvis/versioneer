@@ -7,28 +7,37 @@ struct ResultsListView: View {
         @Bindable var appState = appState
 
         Group {
-            switch appState.loadState {
-            case .idle:
-                ContentUnavailableView(
-                    "No Results Yet",
-                    systemImage: "arrow.clockwise",
-                    description: Text("Click \"Scan & Check\" to discover installed apps and check for updates.")
-                )
+            if appState.hasCachedResults {
+                VStack(spacing: 0) {
+                    if appState.loadState == .scanning || appState.loadState == .submitting {
+                        scanningBanner
+                    }
+                    resultsList
+                }
+            } else {
+                switch appState.loadState {
+                case .idle:
+                    ContentUnavailableView(
+                        "No Results Yet",
+                        systemImage: "arrow.clockwise",
+                        description: Text("Click \"Scan & Check\" to discover installed apps and check for updates.")
+                    )
 
-            case .scanning:
-                ProgressView("Scanning installed apps…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .scanning:
+                    ProgressView("Scanning installed apps…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            case .submitting:
-                ProgressView("Checking for updates…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .submitting:
+                    ProgressView("Checking for updates…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            case .done:
-                resultsList
+                case .done:
+                    resultsList
 
-            case .error(let message):
-                ErrorStateView(message: message) {
-                    Task { await appState.scanAndSubmit() }
+                case .error(let message):
+                    ErrorStateView(message: message) {
+                        Task { await appState.scanAndSubmit() }
+                    }
                 }
             }
         }
@@ -50,6 +59,25 @@ struct ResultsListView: View {
                     .tag(result)
             }
             .listStyle(.inset(alternatesRowBackgrounds: true))
+        }
+    }
+    @ViewBuilder
+    private var scanningBanner: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+
+            Text(appState.loadState == .scanning
+                 ? "Scanning installed apps…"
+                 : "Checking for updates…")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(.bar)
+        .overlay(alignment: .bottom) {
+            Divider()
         }
     }
 }
