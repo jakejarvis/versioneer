@@ -10,6 +10,7 @@ import {
   clientInventorySnapshots,
   clientInventoryApps,
   clientFeedback,
+  discoveredApps,
   reviewQueue,
   generateId,
   idPrefixes,
@@ -18,12 +19,20 @@ import { inventoryCheckRequestSchema, clientFeedbackSubmitSchema } from "@versio
 import type { AppDecision } from "@versioneer/validation";
 import { normalizeVersion } from "@versioneer/versioning";
 import { compareVersionStrings } from "@versioneer/versioning";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 
 import type { Env } from "../env";
 
 export const publicRoutes = new Hono<{ Bindings: Env }>();
+
+function computeLookupKey(appName: string, bundleId?: string | null): string {
+  if (bundleId) return `bid:${bundleId.toLowerCase()}`;
+  return `name:${appName
+    .toLowerCase()
+    .trim()
+    .replace(/\.app$/, "")}`;
+}
 
 // POST /v1/inventory/check
 publicRoutes.post("/inventory/check", async (c) => {
@@ -254,6 +263,91 @@ publicRoutes.post("/inventory/check", async (c) => {
       iconUrl,
     });
   }
+
+  // Track unmatched apps as discovered apps (runs after response)
+  c.executionCtx.waitUntil(
+    (async () => {
+      // Collect unmatched apps, deduplicate by lookupKey within this batch
+      const unmatchedByKey = new Map<
+        string,
+        {
+          appName: string;
+          bundleId?: string | null;
+          teamId?: string | null;
+          version?: string | null;
+        }
+      >();
+      for (const installedApp of request.apps) {
+        const result = results.find(
+          (r) =>
+            r.appName === installedApp.appName && r.bundleId === (installedApp.bundleId ?? null),
+        );
+        if (result && result.matchedAppId !== null) continue;
+
+        const key = computeLookupKey(installedApp.appName, installedApp.bundleId);
+        if (!unmatchedByKey.has(key)) {
+          unmatchedByKey.set(key, {
+            appName: installedApp.appName,
+            bundleId: installedApp.bundleId,
+            teamId: installedApp.teamId,
+            version: installedApp.version,
+          });
+        }
+      }
+
+      if (unmatchedByKey.size === 0) return;
+
+      for (const [key, app] of unmatchedByKey) {
+        const existing = await db
+          .select()
+          .from(discoveredApps)
+          .where(eq(discoveredApps.lookupKey, key))
+          .get();
+
+        if (existing) {
+          // Update sighting count and metadata
+          let sampleVersions: string[] = [];
+          try {
+            sampleVersions = existing.sampleVersions ? JSON.parse(existing.sampleVersions) : [];
+          } catch {
+            // ignore malformed JSON
+          }
+          if (app.version && !sampleVersions.includes(app.version)) {
+            sampleVersions = [...sampleVersions, app.version].slice(-5);
+          }
+
+          await db
+            .update(discoveredApps)
+            .set({
+              sightingCount: sql`${discoveredApps.sightingCount} + 1`,
+              lastSeenAt: now,
+              updatedAt: now,
+              appName: app.bundleId && !existing.bundleId ? app.appName : existing.appName,
+              bundleId: app.bundleId ?? existing.bundleId,
+              teamId: app.teamId ?? existing.teamId,
+              sampleVersions: JSON.stringify(sampleVersions),
+            })
+            .where(eq(discoveredApps.id, existing.id));
+        } else {
+          const sampleVersions = app.version ? [app.version] : [];
+          await db.insert(discoveredApps).values({
+            id: generateId(idPrefixes.discoveredApp),
+            lookupKey: key,
+            appName: app.appName,
+            bundleId: app.bundleId ?? null,
+            teamId: app.teamId ?? null,
+            sightingCount: 1,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            status: "pending",
+            sampleVersions: JSON.stringify(sampleVersions),
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      }
+    })(),
+  );
 
   return c.json({
     snapshotId,

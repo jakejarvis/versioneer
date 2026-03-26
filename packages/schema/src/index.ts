@@ -6,3 +6,4 @@ export * from "./clients";
 export * from "./ops";
 export * from "./feedback";
 export * from "./execution";
+export * from "./discovery";

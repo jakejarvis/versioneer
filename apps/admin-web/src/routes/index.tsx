@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Box,
   Radio,
+  Radar,
   AlertTriangle,
   ClipboardList,
   Package,
@@ -29,7 +30,7 @@ function DashboardPage() {
       <h2 className="text-xl font-semibold tracking-tight">Dashboard</h2>
       <p className="mt-1 text-muted-foreground">Overview of the Versioneer system.</p>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           title="Total Apps"
           value={stats?.totalApps}
@@ -68,6 +69,14 @@ function DashboardPage() {
           href="/job-failures"
           isLoading={isLoading}
           accent={stats?.openFailures ? "red" : undefined}
+        />
+        <StatCard
+          title="Discovered Apps"
+          value={stats?.pendingDiscoveredApps}
+          icon={Radar}
+          href="/discovered-apps"
+          isLoading={isLoading}
+          accent={stats?.pendingDiscoveredApps ? "amber" : undefined}
         />
       </div>
 

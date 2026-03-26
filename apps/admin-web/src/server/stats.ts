@@ -7,6 +7,7 @@ import {
   jobFailures,
   releases,
   clientFeedback,
+  discoveredApps,
 } from "@versioneer/schema";
 import { env } from "cloudflare:workers";
 import { sql } from "drizzle-orm";
@@ -58,6 +59,11 @@ export const getStats = createServerFn({ method: "GET" }).handler(async () => {
     .from(clientFeedback)
     .where(sql`${clientFeedback.status} = 'new'`);
 
+  const [pendingDiscoveredCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(discoveredApps)
+    .where(sql`${discoveredApps.status} = 'pending'`);
+
   return {
     totalApps: appCount?.count ?? 0,
     activeSources: activeSourceCount?.count ?? 0,
@@ -70,5 +76,6 @@ export const getStats = createServerFn({ method: "GET" }).handler(async () => {
     yellowApps: yellowCount?.count ?? 0,
     redApps: redCount?.count ?? 0,
     pendingFeedback: pendingFeedbackCount?.count ?? 0,
+    pendingDiscoveredApps: pendingDiscoveredCount?.count ?? 0,
   };
 });

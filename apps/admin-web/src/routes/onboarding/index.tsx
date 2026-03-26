@@ -1,8 +1,9 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowRight, Check } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { useApproveDiscoveredApp } from "@/api/hooks/use-discovered-apps";
 import { useOnboardApp } from "@/api/hooks/use-onboarding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +17,22 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
+interface OnboardingSearch {
+  discoveredAppId?: string;
+  appName?: string;
+  bundleId?: string;
+  teamId?: string;
+}
+
 export const Route = createFileRoute("/onboarding/")({
   component: OnboardingPage,
+  validateSearch: (search: Record<string, unknown>): OnboardingSearch => ({
+    discoveredAppId:
+      typeof search.discoveredAppId === "string" ? search.discoveredAppId : undefined,
+    appName: typeof search.appName === "string" ? search.appName : undefined,
+    bundleId: typeof search.bundleId === "string" ? search.bundleId : undefined,
+    teamId: typeof search.teamId === "string" ? search.teamId : undefined,
+  }),
 });
 
 interface AppData {
@@ -55,22 +70,44 @@ interface SourceData {
 
 const steps = ["App Details", "Aliases", "Source", "Review"];
 
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 function OnboardingPage() {
   const navigate = useNavigate();
+  const search = useSearch({ from: "/onboarding/" });
   const onboardApp = useOnboardApp();
+  const approveDiscoveredApp = useApproveDiscoveredApp();
   const [step, setStep] = useState(0);
 
+  const initialAliases: AliasData[] = [];
+  if (search.bundleId) {
+    initialAliases.push({
+      key: crypto.randomUUID(),
+      aliasType: "bundle_id",
+      value: search.bundleId,
+    });
+  }
+  if (search.appName) {
+    initialAliases.push({ key: crypto.randomUUID(), aliasType: "name", value: search.appName });
+  }
+  if (initialAliases.length === 0) {
+    initialAliases.push({ key: crypto.randomUUID(), aliasType: "bundle_id", value: "" });
+  }
+
   const [appData, setAppData] = useState<AppData>({
-    slug: "",
-    canonicalName: "",
+    slug: search.appName ? slugify(search.appName) : "",
+    canonicalName: search.appName ?? "",
     vendorName: "",
     homepageUrl: "",
     notes: "",
   });
 
-  const [aliases, setAliases] = useState<AliasData[]>([
-    { key: crypto.randomUUID(), aliasType: "bundle_id", value: "" },
-  ]);
+  const [aliases, setAliases] = useState<AliasData[]>(initialAliases);
 
   const [sourceData, setSourceData] = useState<SourceData>({
     sourceType: "sparkle",
@@ -105,6 +142,10 @@ function OnboardingPage() {
       },
       {
         onSuccess: (data) => {
+          // Mark discovered app as approved if we came from discovered apps
+          if (search.discoveredAppId) {
+            approveDiscoveredApp.mutate({ id: search.discoveredAppId, appId: data.id });
+          }
           toast.success("App onboarded successfully");
           void navigate({ to: "/apps/$appId", params: { appId: data.id } });
         },
