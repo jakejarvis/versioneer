@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import Observation
+import UniformTypeIdentifiers
 
 /// Top-level shared application state.
 @Observable
@@ -49,6 +51,13 @@ final class AppState {
     var inventoryResults: [AppDecision] = []
     var snapshotId: String?
     var searchText: String = ""
+
+    /// Path lookup tables built after each scan, keyed by bundle ID or app name.
+    private var appPathsByBundleId: [String: String] = [:]
+    private var appPathsByName: [String: String] = [:]
+
+    /// Icon cache to avoid re-loading from disk on every view redraw.
+    private var iconCache: [String: NSImage] = [:]
 
     // MARK: - Loading state
 
@@ -104,6 +113,27 @@ final class AppState {
 
     // MARK: - Actions
 
+    /// Returns the locally extracted icon for an app decision, or a generic app icon.
+    func appIcon(for result: AppDecision) -> NSImage {
+        let cacheKey = result.appName + (result.bundleId ?? "")
+        if let cached = iconCache[cacheKey] { return cached }
+
+        let path: String? = if let bundleId = result.bundleId {
+            appPathsByBundleId[bundleId]
+        } else {
+            appPathsByName[result.appName]
+        }
+
+        let icon: NSImage = if let path {
+            NSWorkspace.shared.icon(forFile: path)
+        } else {
+            NSWorkspace.shared.icon(for: .applicationBundle)
+        }
+
+        iconCache[cacheKey] = icon
+        return icon
+    }
+
     func scanAndSubmit() async {
         loadState = .scanning
         selectedResult = nil
@@ -113,6 +143,15 @@ final class AppState {
         let scanMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
 
         installedApps = apps
+        iconCache = [:]
+        appPathsByBundleId = [:]
+        appPathsByName = [:]
+        for app in apps {
+            if let bundleId = app.bundleId {
+                appPathsByBundleId[bundleId] = app.path
+            }
+            appPathsByName[app.name] = app.path
+        }
         loadState = .submitting
 
         do {

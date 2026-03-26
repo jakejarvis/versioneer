@@ -52,6 +52,11 @@ struct AppDetailView: View {
     @ViewBuilder
     private var header: some View {
         HStack(spacing: 16) {
+            Image(nsImage: appState.appIcon(for: result))
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 64, height: 64)
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(result.matchedAppName ?? result.appName)
                     .font(.title)
