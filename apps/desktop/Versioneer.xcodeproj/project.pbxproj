@@ -19,6 +19,13 @@
 			remoteGlobalIDString = 23A5A6022F74908500245F54;
 			remoteInfo = Versioneer;
 		};
+		24B100062F8000010058763E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 23A5A5FB2F74908500245F54 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 24B100052F8000010058763E;
+			remoteInfo = VersioneerPrivilegedHelper;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +33,7 @@
 		23967D222F74949F0012749C /* Versioneer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Versioneer.xcodeproj; sourceTree = "<group>"; };
 		23A5A6032F74908500245F54 /* Versioneer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Versioneer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		23A5A6102F74908600245F54 /* VersioneerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VersioneerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		24B100012F8000010058763E /* VersioneerPrivilegedHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = VersioneerPrivilegedHelper; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -37,6 +45,16 @@
 		23967D7C2F74959C0012749C /* VersioneerTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = VersioneerTests;
+			sourceTree = "<group>";
+		};
+		24B100022F8000010058763E /* VersioneerShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = VersioneerShared;
+			sourceTree = "<group>";
+		};
+		24B100032F8000010058763E /* VersioneerPrivilegedHelper */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = VersioneerPrivilegedHelper;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -58,6 +76,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		24B100042F8000010058763E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -73,6 +98,8 @@
 				23A5A6042F74908500245F54 /* Products */,
 				23967D7C2F74959C0012749C /* VersioneerTests */,
 				23967D782F7495980012749C /* Versioneer */,
+				24B100022F8000010058763E /* VersioneerShared */,
+				24B100032F8000010058763E /* VersioneerPrivilegedHelper */,
 				23967D082F74926F0012749C /* Versioneer-Info.plist */,
 			);
 			sourceTree = "<group>";
@@ -82,6 +109,7 @@
 			children = (
 				23A5A6032F74908500245F54 /* Versioneer.app */,
 				23A5A6102F74908600245F54 /* VersioneerTests.xctest */,
+				24B100012F8000010058763E /* VersioneerPrivilegedHelper */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -96,13 +124,16 @@
 				23A5A5FF2F74908500245F54 /* Sources */,
 				23A5A6002F74908500245F54 /* Frameworks */,
 				23A5A6012F74908500245F54 /* Resources */,
+				24B100082F8000010058763E /* Bundle Privileged Helper */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				24B100072F8000010058763E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				23967D782F7495980012749C /* Versioneer */,
+				24B100022F8000010058763E /* VersioneerShared */,
 			);
 			name = Versioneer;
 			packageProductDependencies = (
@@ -136,6 +167,29 @@
 			productReference = 23A5A6102F74908600245F54 /* VersioneerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		24B100052F8000010058763E /* VersioneerPrivilegedHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 24B1000D2F8000010058763E /* Build configuration list for PBXNativeTarget "VersioneerPrivilegedHelper" */;
+			buildPhases = (
+				24B1000A2F8000010058763E /* Sources */,
+				24B100042F8000010058763E /* Frameworks */,
+				24B100092F8000010058763E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				24B100022F8000010058763E /* VersioneerShared */,
+				24B100032F8000010058763E /* VersioneerPrivilegedHelper */,
+			);
+			name = VersioneerPrivilegedHelper;
+			packageProductDependencies = (
+			);
+			productName = VersioneerPrivilegedHelper;
+			productReference = 24B100012F8000010058763E /* VersioneerPrivilegedHelper */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -152,6 +206,9 @@
 					23A5A60F2F74908600245F54 = {
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = 23A5A6022F74908500245F54;
+					};
+					24B100052F8000010058763E = {
+						CreatedOnToolsVersion = 26.3;
 					};
 				};
 			};
@@ -181,6 +238,7 @@
 			targets = (
 				23A5A6022F74908500245F54 /* Versioneer */,
 				23A5A60F2F74908600245F54 /* VersioneerTests */,
+				24B100052F8000010058763E /* VersioneerPrivilegedHelper */,
 			);
 		};
 /* End PBXProject section */
@@ -200,7 +258,40 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		24B100092F8000010058763E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		24B100082F8000010058763E /* Bundle Privileged Helper */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/VersioneerPrivilegedHelper",
+				"$(PROJECT_DIR)/PrivilegedHelperSupport/com.jakejarvis.Versioneer.PrivilegedHelper.plist",
+			);
+			name = "Bundle Privileged Helper";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/Library/HelperTools/VersioneerPrivilegedHelper",
+				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/Library/LaunchDaemons/com.jakejarvis.Versioneer.PrivilegedHelper.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\nHELPER_SOURCE=\"${BUILT_PRODUCTS_DIR}/VersioneerPrivilegedHelper\"\nHELPER_DIR=\"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Library/HelperTools\"\nPLIST_SOURCE=\"${PROJECT_DIR}/PrivilegedHelperSupport/com.jakejarvis.Versioneer.PrivilegedHelper.plist\"\nPLIST_DIR=\"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Library/LaunchDaemons\"\n/bin/mkdir -p \"$HELPER_DIR\" \"$PLIST_DIR\"\n/usr/bin/ditto \"$HELPER_SOURCE\" \"$HELPER_DIR/VersioneerPrivilegedHelper\"\n/usr/bin/ditto \"$PLIST_SOURCE\" \"$PLIST_DIR/com.jakejarvis.Versioneer.PrivilegedHelper.plist\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		23A5A5FF2F74908500245F54 /* Sources */ = {
@@ -217,6 +308,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		24B1000A2F8000010058763E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -224,6 +322,11 @@
 			isa = PBXTargetDependency;
 			target = 23A5A6022F74908500245F54 /* Versioneer */;
 			targetProxy = 23A5A6112F74908600245F54 /* PBXContainerItemProxy */;
+		};
+		24B100072F8000010058763E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 24B100052F8000010058763E /* VersioneerPrivilegedHelper */;
+			targetProxy = 24B100062F8000010058763E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -482,6 +585,50 @@
 			};
 			name = Release;
 		};
+		24B1000B2F8000010058763E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B5ZWKBCUTU;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jakejarvis.Versioneer.PrivilegedHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		24B1000C2F8000010058763E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B5ZWKBCUTU;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jakejarvis.Versioneer.PrivilegedHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -508,6 +655,15 @@
 			buildConfigurations = (
 				23A5A6282F74908600245F54 /* Debug */,
 				23A5A6292F74908600245F54 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		24B1000D2F8000010058763E /* Build configuration list for PBXNativeTarget "VersioneerPrivilegedHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				24B1000B2F8000010058763E /* Debug */,
+				24B1000C2F8000010058763E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
