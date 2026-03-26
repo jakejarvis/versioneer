@@ -1,8 +1,8 @@
 import OSLog
 
 extension Logger {
-    static let appScanner = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.jakejarvis.Versioneer", category: "AppScanner")
-    static let api = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.jakejarvis.Versioneer", category: "API")
-    static let feedback = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.jakejarvis.Versioneer", category: "Feedback")
-    static let cache = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.jakejarvis.Versioneer", category: "Cache")
+    nonisolated static let appScanner = Logger(subsystem: "com.jakejarvis.Versioneer", category: "AppScanner")
+    nonisolated static let api = Logger(subsystem: "com.jakejarvis.Versioneer", category: "API")
+    nonisolated static let feedback = Logger(subsystem: "com.jakejarvis.Versioneer", category: "Feedback")
+    nonisolated static let cache = Logger(subsystem: "com.jakejarvis.Versioneer", category: "Cache")
 }

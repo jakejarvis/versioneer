@@ -7,5 +7,9 @@ struct VersioneerApp: App {
             RootView()
         }
         .defaultSize(width: 1000, height: 650)
+
+        Settings {
+            SettingsView()
+        }
     }
 }

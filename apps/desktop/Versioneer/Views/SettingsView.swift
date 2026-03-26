@@ -1,72 +1,79 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Environment(AppState.self) private var appState
+    var body: some View {
+        TabView {
+            Tab("General", systemImage: "gear") {
+                GeneralSettingsTab()
+            }
+            Tab("Advanced", systemImage: "gearshape.2") {
+                AdvancedSettingsTab()
+            }
+        }
+        .scenePadding()
+        .frame(width: 450, height: 250)
+    }
+}
 
-    @State private var urlString: String = ""
-    @State private var showSaveConfirmation = false
+// MARK: - General
+
+private struct GeneralSettingsTab: View {
+    @State private var settings = SettingsStore()
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+    }
 
     var body: some View {
         Form {
-            Section("Server") {
-                TextField("Backend Base URL", text: $urlString)
-                    .textFieldStyle(.roundedBorder)
-                    .onAppear {
-                        urlString = appState.settings.baseURL.absoluteString
-                    }
-
-                HStack {
-                    Button("Reset to Default") {
-                        appState.settings.resetBaseURL()
-                        urlString = appState.settings.baseURL.absoluteString
-                    }
-
-                    Spacer()
-
-                    Button("Save") {
-                        if let url = URL(string: urlString), url.scheme != nil {
-                            appState.settings.baseURL = url
-                            showSaveConfirmation = true
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(URL(string: urlString)?.scheme == nil)
-                }
+            LabeledContent("Version") {
+                Text("\(appVersion) (\(buildNumber))")
+                    .foregroundStyle(.secondary)
             }
 
-            Section("General") {
-                Toggle("Scan on launch", isOn: Binding(
-                    get: { appState.settings.scanOnLaunch },
-                    set: { appState.settings.scanOnLaunch = $0 }
-                ))
-            }
+            Toggle("Scan on launch", isOn: Binding(
+                get: { settings.scanOnLaunch },
+                set: { settings.scanOnLaunch = $0 }
+            ))
+        }
+    }
+}
 
-            Section("About") {
-                LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
-                LabeledContent("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—")
+// MARK: - Advanced
 
-                if let snapshotId = appState.snapshotId {
-                    LabeledContent("Last Snapshot", value: snapshotId)
+private struct AdvancedSettingsTab: View {
+    @State private var settings = SettingsStore()
+    @State private var urlString: String = ""
+
+    private var isCustomURL: Bool {
+        settings.baseURL != SettingsStore.defaultBaseURL
+    }
+
+    var body: some View {
+        Form {
+            TextField("Server URL", text: $urlString)
+                .onSubmit { applyURL() }
+
+            if isCustomURL {
+                Button("Reset to Default") {
+                    settings.resetBaseURL()
+                    urlString = settings.baseURL.absoluteString
                 }
+                .controlSize(.small)
             }
         }
-        .formStyle(.grouped)
-        .navigationTitle("Settings")
-        .overlay(alignment: .bottom) {
-            if showSaveConfirmation {
-                Text("Settings saved")
-                    .font(.callout)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.regularMaterial, in: Capsule())
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            withAnimation { showSaveConfirmation = false }
-                        }
-                    }
-            }
+        .onAppear {
+            urlString = settings.baseURL.absoluteString
         }
-        .animation(.default, value: showSaveConfirmation)
+    }
+
+    private func applyURL() {
+        if let url = URL(string: urlString), url.scheme != nil {
+            settings.baseURL = url
+        }
     }
 }

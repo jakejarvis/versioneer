@@ -28,7 +28,6 @@ final class AppState {
         case updatesAvailable = "Updates Available"
         case unsupported = "Unsupported"
         case unknown = "Unknown"
-        case settings = "Settings"
 
         var id: String { rawValue }
 
@@ -38,7 +37,6 @@ final class AppState {
             case .updatesAvailable: "arrow.up.circle"
             case .unsupported: "xmark.circle"
             case .unknown: "questionmark.circle"
-            case .settings: "gear"
             }
         }
     }
@@ -97,8 +95,6 @@ final class AppState {
             sectionFiltered = inventoryResults.filter { $0.decision == .unsupported || $0.decision == .ignored }
         case .unknown:
             sectionFiltered = inventoryResults.filter { $0.decision == .unknown || $0.decision == .ambiguous }
-        case .settings:
-            sectionFiltered = []
         }
 
         guard !searchText.isEmpty else { return sectionFiltered }
