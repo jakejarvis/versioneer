@@ -21,6 +21,7 @@ export const inventoryCheckRequestSchema = z.object({
     platform: z.string().default("macos"),
     appVersion: z.string().max(50).optional(),
     osVersion: z.string().max(50).optional(),
+    systemArchitecture: z.string().max(50).optional(),
   }),
   apps: z.array(installedAppSchema).min(1).max(5000),
   scanDurationMs: z.number().int().optional(),
@@ -47,6 +48,15 @@ export const appDecisionSchema = z.object({
   latestVersionRaw: z.string().nullable(),
   releasedAt: z.string().nullable(),
   iconUrl: z.string().nullable(),
+  artifact: z
+    .object({
+      downloadUrl: z.string().nullable(),
+      architecture: z.string().nullable(),
+      minOsVersion: z.string().nullable(),
+      artifactType: z.string().nullable(),
+      sizeBytes: z.number().nullable(),
+    })
+    .nullable(),
 });
 
 export type AppDecision = z.infer<typeof appDecisionSchema>;

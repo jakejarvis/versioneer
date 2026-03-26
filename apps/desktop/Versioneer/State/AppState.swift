@@ -278,7 +278,8 @@ final class AppState {
                 ),
                 latestVersion: localInfo.latestVersion ?? decision.latestVersion,
                 latestVersionRaw: localInfo.latestVersion ?? decision.latestVersionRaw,
-                releasedAt: localInfo.publishedAt ?? decision.releasedAt
+                releasedAt: localInfo.publishedAt ?? decision.releasedAt,
+                artifact: nil
             )
         }
 
@@ -319,7 +320,8 @@ final class AppState {
                 decision: decision,
                 latestVersion: latestVersion,
                 latestVersionRaw: latestVersion,
-                releasedAt: releasedAt
+                releasedAt: releasedAt,
+                artifact: nil
             )
         }
     }

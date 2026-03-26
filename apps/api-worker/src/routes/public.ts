@@ -5,6 +5,7 @@ import {
   apps,
   appAliases,
   appLatestReleases,
+  artifacts,
   releases,
   clients,
   clientInventorySnapshots,
@@ -19,12 +20,41 @@ import { inventoryCheckRequestSchema, clientFeedbackSubmitSchema } from "@versio
 import type { AppDecision } from "@versioneer/validation";
 import { normalizeVersion } from "@versioneer/versioning";
 import { compareVersionStrings } from "@versioneer/versioning";
-import { eq, sql } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { Hono } from "hono";
 
 import type { Env } from "../env";
 
 export const publicRoutes = new Hono<{ Bindings: Env }>();
+
+/** Returns true if `current` >= `minimum` using numeric version comparison. */
+function isOsVersionCompatible(
+  current: string | null | undefined,
+  minimum: string | null,
+): boolean {
+  if (!minimum) return true; // No minimum means compatible with any OS
+  if (!current) return true; // Unknown client OS, assume compatible
+  const curParts = current.split(".").map(Number);
+  const minParts = minimum.split(".").map(Number);
+  for (let i = 0; i < Math.max(curParts.length, minParts.length); i++) {
+    const c = curParts[i] ?? 0;
+    const m = minParts[i] ?? 0;
+    if (c > m) return true;
+    if (c < m) return false;
+  }
+  return true; // equal
+}
+
+/** Returns true if an artifact's architecture is compatible with the client's. */
+function isArchCompatible(
+  artifactArch: string | null,
+  clientArch: string | null | undefined,
+): boolean {
+  if (!artifactArch) return true; // Unspecified artifact arch = universal/any
+  if (!clientArch) return true; // Unknown client arch, assume compatible
+  if (artifactArch === "universal") return true;
+  return artifactArch === clientArch;
+}
 
 function computeLookupKey(appName: string, bundleId?: string | null): string {
   if (bundleId) return `bid:${bundleId.toLowerCase()}`;
@@ -170,6 +200,7 @@ publicRoutes.post("/inventory/check", async (c) => {
     let latestVersionRaw: string | null = null;
     let releasedAt: string | null = null;
     let latestReleaseId: string | null = null;
+    let matchedArtifact: AppDecision["artifact"] = null;
 
     if (matchResult.matched && matchResult.appId) {
       // Publication gating: unverified apps return unsupported
@@ -181,21 +212,99 @@ publicRoutes.post("/inventory/check", async (c) => {
       const latest =
         !tier || tier === "unverified" ? undefined : latestByApp.get(matchResult.appId);
       if (latest) {
-        latestVersion = latest.versionNormalized;
-        latestVersionRaw = latest.versionRaw;
-        releasedAt = latest.releasedAt;
-        latestReleaseId = latest.releaseId;
+        // Find a compatible artifact for this client's arch + OS
+        const releaseArtifacts = await db
+          .select()
+          .from(artifacts)
+          .where(eq(artifacts.releaseId, latest.releaseId))
+          .all();
 
-        if (installedApp.version) {
-          const installedNormalized = normalizeVersion(installedApp.version);
-          const cmp = compareVersionStrings(installedNormalized, latest.versionNormalized);
-          if (cmp >= 0) {
-            decision = "up_to_date";
-          } else {
-            decision = "update_available";
+        const clientArch = request.client.systemArchitecture;
+        const clientOs = request.client.osVersion;
+
+        const compatibleArtifact = releaseArtifacts.find(
+          (a) =>
+            isArchCompatible(a.architecture, clientArch) &&
+            isOsVersionCompatible(clientOs, a.minOsVersion),
+        );
+
+        if (compatibleArtifact || releaseArtifacts.length === 0) {
+          // Latest release is compatible (or has no artifacts to filter on)
+          latestVersion = latest.versionNormalized;
+          latestVersionRaw = latest.versionRaw;
+          releasedAt = latest.releasedAt;
+          latestReleaseId = latest.releaseId;
+
+          if (compatibleArtifact) {
+            matchedArtifact = {
+              downloadUrl: compatibleArtifact.url,
+              architecture: compatibleArtifact.architecture,
+              minOsVersion: compatibleArtifact.minOsVersion,
+              artifactType: compatibleArtifact.artifactType,
+              sizeBytes: compatibleArtifact.sizeBytes,
+            };
           }
         } else {
-          decision = "ambiguous";
+          // Latest release has no compatible artifact — walk back through older releases
+          const olderCompatible = await db
+            .select({
+              releaseId: releases.id,
+              versionNormalized: releases.versionNormalized,
+              versionRaw: releases.versionRaw,
+              releasedAt: releases.releasedAt,
+              artifactUrl: artifacts.url,
+              artifactArch: artifacts.architecture,
+              artifactMinOs: artifacts.minOsVersion,
+              artifactType: artifacts.artifactType,
+              artifactSize: artifacts.sizeBytes,
+            })
+            .from(releases)
+            .innerJoin(artifacts, eq(artifacts.releaseId, releases.id))
+            .where(
+              and(
+                eq(releases.appId, matchResult.appId!),
+                eq(releases.status, "active"),
+                eq(releases.channel, latest.channel),
+              ),
+            )
+            .orderBy(desc(releases.versionNormalized))
+            .all();
+
+          const found = olderCompatible.find(
+            (r) =>
+              isArchCompatible(r.artifactArch, clientArch) &&
+              isOsVersionCompatible(clientOs, r.artifactMinOs),
+          );
+
+          if (found) {
+            latestVersion = found.versionNormalized;
+            latestVersionRaw = found.versionRaw;
+            releasedAt = found.releasedAt;
+            latestReleaseId = found.releaseId;
+            matchedArtifact = {
+              downloadUrl: found.artifactUrl,
+              architecture: found.artifactArch,
+              minOsVersion: found.artifactMinOs,
+              artifactType: found.artifactType,
+              sizeBytes: found.artifactSize,
+            };
+          }
+        }
+
+        if (latestVersion) {
+          if (installedApp.version) {
+            const installedNormalized = normalizeVersion(installedApp.version);
+            const cmp = compareVersionStrings(installedNormalized, latestVersion);
+            if (cmp >= 0) {
+              decision = "up_to_date";
+            } else {
+              decision = "update_available";
+            }
+          } else {
+            decision = "ambiguous";
+          }
+        } else {
+          decision = "unsupported";
         }
       } else {
         decision = "unsupported";
@@ -264,6 +373,7 @@ publicRoutes.post("/inventory/check", async (c) => {
       latestVersionRaw,
       releasedAt,
       iconUrl,
+      artifact: matchedArtifact,
     });
   }
 

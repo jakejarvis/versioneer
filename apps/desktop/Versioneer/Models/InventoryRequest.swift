@@ -11,6 +11,7 @@ nonisolated struct InventoryCheckRequest: Codable, Sendable {
         let platform: String
         let appVersion: String?
         let osVersion: String?
+        let systemArchitecture: String?
     }
 
     /// The per-app payload shape expected by the backend.

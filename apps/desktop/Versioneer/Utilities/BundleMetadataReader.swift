@@ -28,7 +28,7 @@ nonisolated enum BundleMetadataReader {
             buildNumber: buildNumber,
             teamId: teamId,
             path: url.path,
-            architecture: nil,
+            architecture: readArchitecture(from: bundle),
             sparkleFeedUrl: sparkleInfo.feedUrl,
             sparklePublicKey: sparkleInfo.publicKey,
             isSparkleApp: sparkleInfo.hasSparkle,
@@ -172,6 +172,25 @@ nonisolated enum BundleMetadataReader {
             }
         }
         return result
+    }
+
+    // MARK: - Architecture
+
+    private static let cpuTypeARM64: Int = 0x0100000c
+    private static let cpuTypeX86_64: Int = 0x01000007
+
+    /// Reads executable architectures from the bundle's Mach-O header.
+    nonisolated private static func readArchitecture(from bundle: Bundle) -> String? {
+        guard let archs = bundle.executableArchitectures else { return nil }
+        let archSet = Set(archs.map(\.intValue))
+
+        let hasArm64 = archSet.contains(cpuTypeARM64)
+        let hasX86_64 = archSet.contains(cpuTypeX86_64)
+
+        if hasArm64 && hasX86_64 { return "universal" }
+        if hasArm64 { return "arm64" }
+        if hasX86_64 { return "x86_64" }
+        return nil
     }
 
     // MARK: - Team ID
