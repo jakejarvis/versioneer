@@ -1,7 +1,7 @@
 import Foundation
 
 /// Payload sent to `POST /v1/inventory/check`.
-struct InventoryCheckRequest: Codable, Sendable {
+nonisolated struct InventoryCheckRequest: Codable, Sendable {
     let client: ClientInfo
     let apps: [InventoryApp]
     let scanDurationMs: Int?

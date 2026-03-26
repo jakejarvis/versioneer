@@ -2,7 +2,7 @@ import Foundation
 import Logging
 
 /// Submits app inventory to the backend and decodes update decisions.
-struct InventoryAPIClient: Sendable {
+nonisolated struct InventoryAPIClient: Sendable {
     let baseURL: URL
 
     init(baseURL: URL) {
@@ -94,7 +94,7 @@ struct InventoryAPIClient: Sendable {
     }
 }
 
-enum APIError: LocalizedError, Sendable {
+nonisolated enum APIError: LocalizedError, Sendable {
     case invalidResponse
     case httpError(statusCode: Int, body: String)
     case decodingFailed(String)

@@ -120,7 +120,8 @@ struct InventoryDecodingTests {
                     buildNumber: nil,
                     teamId: nil,
                     pathHash: "abc123",
-                    architecture: nil
+                    architecture: nil,
+                    sparkleFeedUrl: nil
                 )
             ],
             scanDurationMs: 500

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Represents a locally discovered app bundle on disk.
-struct InstalledApp: Identifiable, Codable, Sendable {
+nonisolated struct InstalledApp: Identifiable, Codable, Sendable {
     var id: String { bundleId ?? path }
 
     let name: String

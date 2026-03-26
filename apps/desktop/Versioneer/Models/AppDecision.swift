@@ -1,7 +1,7 @@
 import Foundation
 
 /// A single backend decision about an installed app.
-struct AppDecision: Identifiable, Codable, Hashable, Sendable {
+nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     var id: String { appName + (bundleId ?? "") }
 
     let appName: String

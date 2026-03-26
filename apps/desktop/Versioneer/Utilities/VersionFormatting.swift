@@ -1,7 +1,7 @@
 import Foundation
 
 /// Helpers for presenting version strings and decision statuses.
-enum VersionFormatting {
+nonisolated enum VersionFormatting {
     /// Returns a human-readable label for a decision status.
     static func statusLabel(for decision: AppDecision.Decision) -> String {
         switch decision {

@@ -2,7 +2,7 @@ import Foundation
 import Logging
 
 /// Persists the most recent scan results to disk for instant display on launch.
-struct ScanCacheStore: Sendable {
+nonisolated struct ScanCacheStore: Sendable {
 
     /// The data that gets serialized to/from the cache file.
     struct CachedScanData: Codable, Sendable {
