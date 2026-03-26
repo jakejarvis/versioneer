@@ -1,15 +1,15 @@
 import Foundation
 
 nonisolated enum PrivilegedHelperConstants {
-    static let serviceLabel = "com.jakejarvis.Versioneer.PrivilegedHelper"
-    static let launchDaemonPlistName = "com.jakejarvis.Versioneer.PrivilegedHelper.plist"
-    static let mainAppBundleIdentifier = "com.jakejarvis.Versioneer"
-    static let helperBundleIdentifier = "com.jakejarvis.Versioneer.PrivilegedHelper"
+    static let serviceLabel = "com.jakejarvis.versioneer.PrivilegedHelper"
+    static let launchDaemonPlistName = "com.jakejarvis.versioneer.PrivilegedHelper.plist"
+    static let mainAppBundleIdentifier = "com.jakejarvis.versioneer"
+    static let helperBundleIdentifier = "com.jakejarvis.versioneer.PrivilegedHelper"
     static let teamIdentifier = "B5ZWKBCUTU"
     static let mainAppCodeSigningRequirement =
-        #"identifier "com.jakejarvis.Versioneer" and anchor apple generic and certificate leaf[subject.OU] = "B5ZWKBCUTU""#
+        #"identifier "com.jakejarvis.versioneer" and anchor apple generic and certificate leaf[subject.OU] = "B5ZWKBCUTU""#
     static let helperCodeSigningRequirement =
-        #"identifier "com.jakejarvis.Versioneer.PrivilegedHelper" and anchor apple generic and certificate leaf[subject.OU] = "B5ZWKBCUTU""#
+        #"identifier "com.jakejarvis.versioneer.PrivilegedHelper" and anchor apple generic and certificate leaf[subject.OU] = "B5ZWKBCUTU""#
 }
 
 nonisolated enum PrivilegedOperationType: String, Codable, Sendable {

@@ -12,6 +12,7 @@ struct SettingsView: View {
         }
         .scenePadding()
         .frame(width: 520, height: 360)
+        .versioneerAnalyticsScreen(name: "settings", class: "SettingsView")
     }
 }
 

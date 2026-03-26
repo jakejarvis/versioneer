@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct VersioneerApp: App {
+    @NSApplicationDelegateAdaptor(FirebaseAppDelegate.self) private var firebaseAppDelegate
     @State private var appState = AppState()
 
     var body: some Scene {

@@ -26,6 +26,7 @@ struct RootView: View {
                     .padding(.top, 10)
             }
         }
+        .versioneerAnalyticsScreen(name: "main_window", class: "RootView")
         .task {
             if appState.settings.scanOnLaunch {
                 await Task.yield()

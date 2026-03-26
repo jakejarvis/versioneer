@@ -93,7 +93,7 @@ describe("public contract schemas", () => {
       clientVersionAfter: "127.0",
       errorMessage: null,
       durationMs: 3210,
-      detailsJson: "{\"strategy\":\"zip_replace\"}",
+      detailsJson: '{"strategy":"zip_replace"}',
     });
 
     expect(parsed.actionStatus).toBe("completed");

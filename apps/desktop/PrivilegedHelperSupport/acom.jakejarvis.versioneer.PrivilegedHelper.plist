@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.jakejarvis.Versioneer.PrivilegedHelper</string>
+	<string>com.jakejarvis.versioneer.PrivilegedHelper</string>
 	<key>MachServices</key>
 	<dict>
-		<key>com.jakejarvis.Versioneer.PrivilegedHelper</key>
+		<key>com.jakejarvis.versioneer.PrivilegedHelper</key>
 		<true/>
 	</dict>
 	<key>BundleProgram</key>
 	<string>Contents/Library/HelperTools/VersioneerPrivilegedHelper</string>
 	<key>AssociatedBundleIdentifiers</key>
 	<array>
-		<string>com.jakejarvis.Versioneer</string>
+		<string>com.jakejarvis.versioneer</string>
 	</array>
 </dict>
 </plist>

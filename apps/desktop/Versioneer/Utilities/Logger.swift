@@ -1,11 +1,12 @@
 import Logging
 
 extension Logger {
-    nonisolated static let appScanner = Logger(label: "com.jakejarvis.Versioneer.AppScanner")
-    nonisolated static let api = Logger(label: "com.jakejarvis.Versioneer.API")
-    nonisolated static let feedback = Logger(label: "com.jakejarvis.Versioneer.Feedback")
-    nonisolated static let cache = Logger(label: "com.jakejarvis.Versioneer.Cache")
-    nonisolated static let sparkle = Logger(label: "com.jakejarvis.Versioneer.Sparkle")
-    nonisolated static let electron = Logger(label: "com.jakejarvis.Versioneer.Electron")
-    nonisolated static let install = Logger(label: "com.jakejarvis.Versioneer.Install")
+    nonisolated static let app = Logger(label: "com.jakejarvis.versioneer.App")
+    nonisolated static let appScanner = Logger(label: "com.jakejarvis.versioneer.AppScanner")
+    nonisolated static let api = Logger(label: "com.jakejarvis.versioneer.API")
+    nonisolated static let feedback = Logger(label: "com.jakejarvis.versioneer.Feedback")
+    nonisolated static let cache = Logger(label: "com.jakejarvis.versioneer.Cache")
+    nonisolated static let sparkle = Logger(label: "com.jakejarvis.versioneer.Sparkle")
+    nonisolated static let electron = Logger(label: "com.jakejarvis.versioneer.Electron")
+    nonisolated static let install = Logger(label: "com.jakejarvis.versioneer.Install")
 }

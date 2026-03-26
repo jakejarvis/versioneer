@@ -21,7 +21,7 @@ nonisolated struct ScanCacheStore: Sendable {
             in: .userDomainMask
         ).first else { return nil }
 
-        let bundleId = Bundle.main.bundleIdentifier ?? "com.jakejarvis.Versioneer"
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.jakejarvis.versioneer"
         let directory = appSupport.appendingPathComponent(bundleId)
 
         try? FileManager.default.createDirectory(
