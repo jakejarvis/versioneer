@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Box,
+  Radar,
   Radio,
   Package,
   ClipboardList,
@@ -22,6 +23,7 @@ export interface NavItem {
 export const navItems: NavItem[] = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
   { label: "Apps", path: "/apps", icon: Box },
+  { label: "Discovered", path: "/discovered-apps", icon: Radar },
   { label: "Sources", path: "/sources", icon: Radio },
   { label: "Releases", path: "/releases", icon: Package },
   { label: "Review Queue", path: "/review-queue", icon: ClipboardList },

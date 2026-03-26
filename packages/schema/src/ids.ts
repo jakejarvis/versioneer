@@ -34,4 +34,5 @@ export const idPrefixes = {
   feedback: "fb",
   artifactObservation: "arto",
   updateExecution: "exec",
+  discoveredApp: "dapp",
 } as const;
