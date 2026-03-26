@@ -16,6 +16,17 @@
   "workers_dev": false,
   "preview_urls": false,
 
+  "vars": {
+    "ASSETS_BASE_URL": "http://localhost:5173/assets"
+  },
+
+  "r2_buckets": [
+    {
+      "binding": "ASSETS_BUCKET",
+      "bucket_name": "versioneer-assets-dev"
+    }
+  ],
+
   "d1_databases": [
     {
       "binding": "DB",
@@ -47,6 +58,15 @@
 
   "env": {
     "production": {
+      "vars": {
+        "ASSETS_BASE_URL": "https://assets.versioneer.app"
+      },
+      "r2_buckets": [
+        {
+          "binding": "ASSETS_BUCKET",
+          "bucket_name": "versioneer-assets-production"
+        }
+      ],
       "d1_databases": [
         {
           "binding": "DB",

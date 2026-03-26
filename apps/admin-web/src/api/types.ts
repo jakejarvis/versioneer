@@ -31,6 +31,7 @@ export interface App {
   verificationTier: "unverified" | "provisional" | "verified";
   qualityState: "green" | "yellow" | "red" | "unknown";
   qualityScore: number | null;
+  iconR2Key: string | null;
   lastReviewedAt: string | null;
   createdAt: string;
   updatedAt: string;

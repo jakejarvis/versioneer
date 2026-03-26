@@ -24,6 +24,7 @@ export const apps = sqliteTable(
       .notNull()
       .default("unknown"),
     qualityScore: integer("quality_score"),
+    iconR2Key: text("icon_r2_key"),
     lastReviewedAt: text("last_reviewed_at"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),

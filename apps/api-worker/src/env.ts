@@ -1,6 +1,8 @@
 export interface Env {
   DB: D1Database;
   RAW_BUCKET: R2Bucket;
+  ASSETS_BUCKET: R2Bucket;
+  ASSETS_BASE_URL: string;
   CACHE_KV: KVNamespace;
   CONFIG_KV: KVNamespace;
   SOURCE_FETCH_QUEUE: Queue;

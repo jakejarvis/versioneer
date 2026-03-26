@@ -147,6 +147,7 @@ export const updateApp = createServerFn({ method: "POST" })
     if (fields.notes !== undefined) updates.notes = fields.notes;
     if (fields.verificationTier !== undefined) updates.verificationTier = fields.verificationTier;
     if (fields.qualityState !== undefined) updates.qualityState = fields.qualityState;
+    if (fields.iconR2Key !== undefined) updates.iconR2Key = fields.iconR2Key;
     if (fields.lastReviewedAt !== undefined) updates.lastReviewedAt = fields.lastReviewedAt;
 
     await db.update(apps).set(updates).where(eq(apps.id, id));

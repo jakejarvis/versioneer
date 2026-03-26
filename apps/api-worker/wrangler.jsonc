@@ -17,7 +17,8 @@
   "preview_urls": false,
 
   "vars": {
-    "ENVIRONMENT": "dev"
+    "ENVIRONMENT": "dev",
+    "ASSETS_BASE_URL": "http://localhost:8787/assets"
   },
 
   "d1_databases": [
@@ -32,6 +33,10 @@
     {
       "binding": "RAW_BUCKET",
       "bucket_name": "versioneer-raw-dev"
+    },
+    {
+      "binding": "ASSETS_BUCKET",
+      "bucket_name": "versioneer-assets-dev"
     }
   ],
 
@@ -70,7 +75,8 @@
   "env": {
     "production": {
       "vars": {
-        "ENVIRONMENT": "production"
+        "ENVIRONMENT": "production",
+        "ASSETS_BASE_URL": "https://assets.versioneer.app"
       },
       "d1_databases": [
         {
@@ -83,6 +89,10 @@
         {
           "binding": "RAW_BUCKET",
           "bucket_name": "versioneer-raw-production"
+        },
+        {
+          "binding": "ASSETS_BUCKET",
+          "bucket_name": "versioneer-assets-production"
         }
       ],
       "kv_namespaces": [

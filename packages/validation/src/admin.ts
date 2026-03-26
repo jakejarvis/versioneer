@@ -21,6 +21,7 @@ export const appUpdateSchema = z.object({
   notes: z.string().max(5000).nullable().optional(),
   verificationTier: z.enum(["unverified", "provisional", "verified"]).optional(),
   qualityState: z.enum(["green", "yellow", "red", "unknown"]).optional(),
+  iconR2Key: z.string().max(500).nullable().optional(),
   lastReviewedAt: z.string().nullable().optional(),
 });
 
