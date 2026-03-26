@@ -11,8 +11,7 @@
     "check-types": "turbo run check-types",
     "test": "turbo run test",
     "db:generate": "pnpm --filter @versioneer/db db:generate",
-    "db:migrate:local": "pnpm --filter @versioneer/db db:migrate:local",
-    "db:migrate:remote": "pnpm --filter @versioneer/db db:migrate:remote"
+    "db:migrate": "pnpm --filter @versioneer/db db:migrate"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",

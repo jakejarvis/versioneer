@@ -61,7 +61,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: packages/db
-          command: d1 migrations apply versioneer-db-dev --remote
+          command: d1 migrations apply versioneer-db-production --remote --env production
 
       - name: Deploy API worker
         uses: cloudflare/wrangler-action@v3
@@ -69,6 +69,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: apps/api-worker
+          command: deploy --env production
 
       - name: Deploy queue consumer
         uses: cloudflare/wrangler-action@v3
@@ -76,6 +77,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: apps/queue-consumer
+          command: deploy --env production
 
       - name: Deploy admin web
         uses: cloudflare/wrangler-action@v3
@@ -83,4 +85,4 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: apps/admin-web
-          command: deploy
+          command: deploy --env production
