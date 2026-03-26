@@ -47,6 +47,7 @@ final class AppState {
 
     var selectedSection: SidebarSection = .all
     var selectedResult: AppDecision?
+    var resultsSort: ResultsBrowserSort = .updatesFirst
 
     // MARK: - Data
 
@@ -54,6 +55,7 @@ final class AppState {
     var inventoryResults: [AppDecision] = []
     var snapshotId: String?
     var searchText: String = ""
+    var lastScanCompletedAt: Date?
 
     /// Path lookup tables built after each scan, keyed by bundle ID or app name.
     private var appPathsByBundleId: [String: String] = [:]
@@ -92,6 +94,47 @@ final class AppState {
     /// Whether we have cached inventory results to display while rescanning.
     var hasCachedResults: Bool {
         !inventoryResults.isEmpty
+    }
+
+    struct ScanSummary: Equatable, Sendable {
+        let totalApps: Int
+        let updatesAvailableCount: Int
+        let unknownCount: Int
+        let unsupportedCount: Int
+        let lastCompletedAt: Date?
+    }
+
+    var scanSummary: ScanSummary {
+        ScanSummary(
+            totalApps: max(inventoryResults.count, installedApps.count),
+            updatesAvailableCount: inventoryResults.filter { $0.decision == .updateAvailable }.count,
+            unknownCount: inventoryResults.filter { $0.decision == .unknown || $0.decision == .ambiguous }.count,
+            unsupportedCount: inventoryResults.filter { $0.decision == .unsupported || $0.decision == .ignored }.count,
+            lastCompletedAt: lastScanCompletedAt
+        )
+    }
+
+    var selectedResultID: String? {
+        get { selectedResult?.id }
+        set { selectResult(id: newValue) }
+    }
+
+    var resultsBrowserRows: [ResultsBrowserRowPresentation] {
+        let rows = filteredResults.map { result in
+            ResultsBrowserRowPresentation.make(
+                result: result,
+                installState: installCoordinator.state(for: result)
+            )
+        }
+        return sort(rows: rows, by: resultsSort)
+    }
+
+    var shellStatusPresentation: ShellStatusPresentation? {
+        ShellStatusPresentation.make(
+            loadState: loadState,
+            scanSummary: scanSummary,
+            activeInstall: installCoordinator.primaryOperationState
+        )
     }
 
     // MARK: - Computed filtered results
@@ -171,8 +214,17 @@ final class AppState {
         findInstalledApp(for: result, in: installedApps)
     }
 
+    func selectResult(id: String?) {
+        guard let id else {
+            selectedResult = nil
+            return
+        }
+        selectedResult = inventoryResults.first { $0.id == id }
+    }
+
     func scanAndSubmit() async {
         loadState = .scanning
+        let previousSelectionID = selectedResult?.id
         if !hasCachedResults {
             selectedResult = nil
         }
@@ -204,6 +256,8 @@ final class AppState {
             )
             snapshotId = response.snapshotId
             loadState = .done
+            lastScanCompletedAt = Date()
+            restoreSelection(with: previousSelectionID)
             cacheStore.save(ScanCacheStore.CachedScanData(
                 installedApps: installedApps,
                 inventoryResults: inventoryResults,
@@ -215,6 +269,8 @@ final class AppState {
                 inventoryResults = buildLocalOnlyResults(local: localResults, apps: apps)
                 snapshotId = nil
                 loadState = .done
+                lastScanCompletedAt = Date()
+                restoreSelection(with: previousSelectionID)
                 cacheStore.save(ScanCacheStore.CachedScanData(
                     installedApps: installedApps,
                     inventoryResults: inventoryResults,
@@ -436,5 +492,46 @@ final class AppState {
         if didInstall {
             await scanAndSubmit()
         }
+    }
+
+    private func sort(
+        rows: [ResultsBrowserRowPresentation],
+        by sort: ResultsBrowserSort
+    ) -> [ResultsBrowserRowPresentation] {
+        rows.sorted { lhs, rhs in
+            switch sort {
+            case .updatesFirst:
+                if lhs.defaultSortRank != rhs.defaultSortRank {
+                    return lhs.defaultSortRank < rhs.defaultSortRank
+                }
+                return lhs.appName.localizedStandardCompare(rhs.appName) == .orderedAscending
+            case .name:
+                return lhs.appName.localizedStandardCompare(rhs.appName) == .orderedAscending
+            case .latestVersion:
+                if lhs.latestVersionSortKey != rhs.latestVersionSortKey {
+                    return lhs.latestVersionSortKey.localizedStandardCompare(rhs.latestVersionSortKey) == .orderedDescending
+                }
+                return lhs.appName.localizedStandardCompare(rhs.appName) == .orderedAscending
+            case .releasedDate:
+                switch (lhs.releasedAtSortDate, rhs.releasedAtSortDate) {
+                case let (lhsDate?, rhsDate?):
+                    if lhsDate != rhsDate {
+                        return lhsDate > rhsDate
+                    }
+                case (.some, .none):
+                    return true
+                case (.none, .some):
+                    return false
+                case (.none, .none):
+                    break
+                }
+                return lhs.appName.localizedStandardCompare(rhs.appName) == .orderedAscending
+            }
+        }
+    }
+
+    private func restoreSelection(with id: String?) {
+        guard let id else { return }
+        selectResult(id: id)
     }
 }

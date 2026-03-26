@@ -19,6 +19,7 @@ nonisolated protocol PrivilegedHelperConnectionProviding: Sendable {
 
 nonisolated protocol PrivilegedHelperClientProtocol: Sendable {
     nonisolated func performOperation(executionId: String, stagingDirectory: URL) async throws -> PrivilegedOperationResult
+    nonisolated func registrationStatus() -> PrivilegedHelperRegistrationStatus
 }
 
 nonisolated struct PrivilegedHelperRegistrationController: PrivilegedHelperRegistrationControlling {
@@ -122,6 +123,10 @@ nonisolated struct PrivilegedHelperClient: PrivilegedHelperClientProtocol {
             executionId: executionId,
             stagingDirectoryPath: stagingDirectory.path
         ))
+    }
+
+    func registrationStatus() -> PrivilegedHelperRegistrationStatus {
+        registrationController.status
     }
 
     private func ensureHelperIsReady() throws {

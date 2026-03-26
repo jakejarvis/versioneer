@@ -76,4 +76,8 @@ private struct NoopPrivilegedHelperClient: PrivilegedHelperClientProtocol {
     func performOperation(executionId _: String, stagingDirectory _: URL) async throws -> PrivilegedOperationResult {
         PrivilegedOperationResult(operationType: nil, succeeded: true, detail: "unused")
     }
+
+    func registrationStatus() -> PrivilegedHelperRegistrationStatus {
+        .enabled
+    }
 }
