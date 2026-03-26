@@ -372,6 +372,7 @@ function CreateAliasDialog({
     | "homepage"
     | "download_pattern"
     | "github_repo"
+    | "mas_app_id"
   >("bundle_id");
   const [value, setValue] = useState("");
   const createAlias = useCreateAlias(appId);
@@ -411,6 +412,7 @@ function CreateAliasDialog({
                 <SelectItem value="homepage">Homepage</SelectItem>
                 <SelectItem value="download_pattern">Download Pattern</SelectItem>
                 <SelectItem value="github_repo">GitHub Repo</SelectItem>
+                <SelectItem value="mas_app_id">App Store ID</SelectItem>
               </SelectContent>
             </Select>
           </div>

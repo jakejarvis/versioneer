@@ -9,6 +9,8 @@ export const installedAppSchema = z.object({
   pathHash: z.string().max(100).optional(),
   architecture: z.string().max(50).optional(),
   sparkleFeedUrl: z.string().url().max(2000).optional(),
+  isMasApp: z.boolean().optional(),
+  electronUpdateUrl: z.string().url().max(2000).optional(),
 });
 
 export type InstalledApp = z.infer<typeof installedAppSchema>;

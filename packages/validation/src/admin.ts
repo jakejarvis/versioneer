@@ -34,6 +34,7 @@ export const aliasCreateSchema = z.object({
     "homepage",
     "download_pattern",
     "github_repo",
+    "mas_app_id",
   ]),
   value: z.string().min(1).max(2000),
   normalizedValue: z.string().min(1).max(2000).optional(),

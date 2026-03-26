@@ -105,6 +105,7 @@ export const resolveMatch = createServerFn({ method: "POST" })
         "homepage",
         "download_pattern",
         "github_repo",
+        "mas_app_id",
       ]),
       value: z.string().min(1),
     }),

@@ -12,6 +12,7 @@ final class AppState {
     let settings = SettingsStore()
     let scanner = AppScanner()
     let sparkleChecker = SparkleChecker()
+    let electronChecker = ElectronChecker()
     private let cacheStore = ScanCacheStore()
 
     var apiClient: InventoryAPIClient {
@@ -176,17 +177,20 @@ final class AppState {
         rebuildLookupTables()
         loadState = .submitting
 
-        // Run backend inventory check and local Sparkle checks in parallel
+        // Run backend + local checks in parallel
         async let backendTask = apiClient.checkInventory(apps: apps, scanDurationMs: scanMs)
         async let sparkleTask = sparkleChecker.checkAll(apps: apps)
+        async let electronTask = electronChecker.checkAll(apps: apps)
 
         let sparkleResults = await sparkleTask
+        let electronResults = await electronTask
+        let localResults = buildLocalVersionMap(sparkle: sparkleResults, electron: electronResults)
 
         do {
             let response = try await backendTask
             inventoryResults = mergeResults(
                 backend: response.results,
-                sparkle: sparkleResults,
+                local: localResults,
                 apps: apps
             )
             snapshotId = response.snapshotId
@@ -197,12 +201,9 @@ final class AppState {
                 snapshotId: response.snapshotId
             ))
         } catch {
-            // Backend failed — fall back to local Sparkle results if we have any
-            if !sparkleResults.isEmpty {
-                inventoryResults = buildSparkleOnlyResults(
-                    sparkle: sparkleResults,
-                    apps: apps
-                )
+            // Backend failed — fall back to local results if we have any
+            if !localResults.isEmpty {
+                inventoryResults = buildLocalOnlyResults(local: localResults, apps: apps)
                 snapshotId = nil
                 loadState = .done
                 cacheStore.save(ScanCacheStore.CachedScanData(
@@ -218,23 +219,51 @@ final class AppState {
 
     // MARK: - Result merging
 
-    /// Merges backend decisions with local Sparkle results.
-    /// Backend takes precedence for matched apps; local Sparkle fills in unknown/unmatched apps.
+    /// Unified local version info from any checker (Sparkle, Electron, etc.)
+    private struct LocalVersionInfo {
+        let latestVersion: String?
+        let publishedAt: String?
+    }
+
+    /// Combines Sparkle and Electron results into a single lookup by app ID.
+    private func buildLocalVersionMap(
+        sparkle: [String: SparkleChecker.SparkleResult],
+        electron: [String: ElectronChecker.ElectronResult]
+    ) -> [String: LocalVersionInfo] {
+        var map: [String: LocalVersionInfo] = [:]
+        for (id, result) in sparkle {
+            map[id] = LocalVersionInfo(latestVersion: result.latestVersion, publishedAt: result.publishedAt)
+        }
+        for (id, result) in electron where map[id] == nil {
+            map[id] = LocalVersionInfo(latestVersion: result.latestVersion, publishedAt: result.publishedAt)
+        }
+        return map
+    }
+
+    /// Merges backend decisions with local check results.
+    /// Backend takes precedence for matched apps; local results fill in unknown/unmatched apps.
+    /// MAS apps with unknown decisions are marked as ignored.
     private func mergeResults(
         backend: [AppDecision],
-        sparkle: [String: SparkleChecker.SparkleResult],
+        local: [String: LocalVersionInfo],
         apps: [InstalledApp]
     ) -> [AppDecision] {
         var results = backend
 
-        // For apps the backend didn't match, substitute local Sparkle data
         for (index, decision) in results.enumerated() {
-            guard decision.decision == .unknown || decision.decision == .unsupported else { continue }
+            let matchingApp = findInstalledApp(for: decision, in: apps)
 
-            let appId = decision.appName + (decision.bundleId ?? "")
-            // Try to find the matching installed app to get its id for Sparkle lookup
-            let matchingApp = apps.first { $0.id == decision.bundleId || $0.id == appId }
-            guard let matchingApp, let sparkleResult = sparkle[matchingApp.id] else { continue }
+            // Flag MAS apps that the backend doesn't know about
+            if let matchingApp, matchingApp.isMasApp,
+               decision.decision == .unknown || decision.decision == .unsupported
+            {
+                results[index] = decision.replacing(decision: .ignored)
+                continue
+            }
+
+            // For unmatched apps, try local version data
+            guard decision.decision == .unknown || decision.decision == .unsupported else { continue }
+            guard let matchingApp, let localInfo = local[matchingApp.id] else { continue }
 
             results[index] = AppDecision(
                 appName: decision.appName,
@@ -243,65 +272,70 @@ final class AppState {
                 matchedAppId: decision.matchedAppId,
                 matchedAppName: decision.matchedAppName,
                 matchConfidence: decision.matchConfidence,
-                decision: decisionFromSparkle(
-                    sparkleResult,
-                    installedVersion: decision.installedVersion
+                decision: decisionFromVersion(
+                    latest: localInfo.latestVersion,
+                    installed: decision.installedVersion
                 ),
-                latestVersion: sparkleResult.latestVersion ?? decision.latestVersion,
-                latestVersionRaw: sparkleResult.latestVersion ?? decision.latestVersionRaw,
-                releasedAt: sparkleResult.publishedAt ?? decision.releasedAt
+                latestVersion: localInfo.latestVersion ?? decision.latestVersion,
+                latestVersionRaw: localInfo.latestVersion ?? decision.latestVersionRaw,
+                releasedAt: localInfo.publishedAt ?? decision.releasedAt
             )
         }
 
         return results
     }
 
-    /// Builds AppDecision entries purely from local Sparkle results when the backend is unavailable.
-    private func buildSparkleOnlyResults(
-        sparkle: [String: SparkleChecker.SparkleResult],
+    /// Builds AppDecision entries from local results when the backend is unavailable.
+    private func buildLocalOnlyResults(
+        local: [String: LocalVersionInfo],
         apps: [InstalledApp]
     ) -> [AppDecision] {
         apps.map { app in
-            if let result = sparkle[app.id] {
-                AppDecision(
-                    appName: app.name,
-                    bundleId: app.bundleId,
-                    installedVersion: app.version,
-                    matchedAppId: nil,
-                    matchedAppName: nil,
-                    matchConfidence: nil,
-                    decision: decisionFromSparkle(result, installedVersion: app.version),
-                    latestVersion: result.latestVersion,
-                    latestVersionRaw: result.latestVersion,
-                    releasedAt: result.publishedAt
-                )
+            let decision: AppDecision.Decision
+            let latestVersion: String?
+            let releasedAt: String?
+
+            if app.isMasApp {
+                decision = .ignored
+                latestVersion = nil
+                releasedAt = nil
+            } else if let info = local[app.id] {
+                decision = decisionFromVersion(latest: info.latestVersion, installed: app.version)
+                latestVersion = info.latestVersion
+                releasedAt = info.publishedAt
             } else {
-                AppDecision(
-                    appName: app.name,
-                    bundleId: app.bundleId,
-                    installedVersion: app.version,
-                    matchedAppId: nil,
-                    matchedAppName: nil,
-                    matchConfidence: nil,
-                    decision: .unknown,
-                    latestVersion: nil,
-                    latestVersionRaw: nil,
-                    releasedAt: nil
-                )
+                decision = .unknown
+                latestVersion = nil
+                releasedAt = nil
             }
+
+            return AppDecision(
+                appName: app.name,
+                bundleId: app.bundleId,
+                installedVersion: app.version,
+                matchedAppId: nil,
+                matchedAppName: nil,
+                matchConfidence: nil,
+                decision: decision,
+                latestVersion: latestVersion,
+                latestVersionRaw: latestVersion,
+                releasedAt: releasedAt
+            )
         }
     }
 
-    /// Determines the update decision by comparing installed version to what Sparkle reports.
-    private func decisionFromSparkle(
-        _ result: SparkleChecker.SparkleResult,
-        installedVersion: String?
-    ) -> AppDecision.Decision {
-        guard let latest = result.latestVersion, let installed = installedVersion else {
-            return .unknown
+    /// Finds the InstalledApp that corresponds to a backend AppDecision.
+    private func findInstalledApp(for decision: AppDecision, in apps: [InstalledApp]) -> InstalledApp? {
+        if let bundleId = decision.bundleId {
+            return apps.first { $0.bundleId == bundleId }
         }
+        return apps.first { $0.name == decision.appName }
+    }
+
+    /// Determines update decision by comparing version strings.
+    private func decisionFromVersion(latest: String?, installed: String?) -> AppDecision.Decision {
+        guard let latest, let installed else { return .unknown }
         if latest == installed { return .upToDate }
-        // Simple numeric comparison: if latest > installed, update available
         if compareVersionStrings(latest, isNewerThan: installed) {
             return .updateAvailable
         }

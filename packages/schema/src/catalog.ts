@@ -48,6 +48,7 @@ export const appAliases = sqliteTable(
         "homepage",
         "download_pattern",
         "github_repo",
+        "mas_app_id",
       ],
     }).notNull(),
     value: text("value").notNull(),

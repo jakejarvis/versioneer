@@ -47,7 +47,8 @@ export interface AppAlias {
     | "sparkle_feed"
     | "homepage"
     | "download_pattern"
-    | "github_repo";
+    | "github_repo"
+    | "mas_app_id";
   value: string;
   normalizedValue: string;
   isExact: boolean;

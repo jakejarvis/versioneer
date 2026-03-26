@@ -58,7 +58,9 @@ nonisolated struct InventoryAPIClient: Sendable {
                 teamId: app.teamId,
                 pathHash: pathHash(app.path),
                 architecture: app.architecture,
-                sparkleFeedUrl: app.sparkleFeedUrl
+                sparkleFeedUrl: app.sparkleFeedUrl,
+                isMasApp: app.isMasApp ? true : nil,
+                electronUpdateUrl: app.electronUpdateUrl
             )
         }
 
