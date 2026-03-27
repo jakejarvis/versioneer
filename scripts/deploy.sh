@@ -66,8 +66,9 @@ echo "==> Deploying queue consumer"
 pnpm --filter @versioneer/queue-consumer exec wrangler deploy $WRANGLER_ENV_FLAG
 
 echo "==> Deploying dashboard"
-pnpm --filter @versioneer/dashboard run build
-pnpm --filter @versioneer/dashboard exec wrangler deploy $WRANGLER_ENV_FLAG
+# the --env flag won't work here; see https://developers.cloudflare.com/workers/vite-plugin/reference/migrating-from-wrangler-dev/#cloudflare-environments
+CLOUDFLARE_ENV="$ENV" pnpm --filter @versioneer/dashboard run build
+CLOUDFLARE_ENV="$ENV" pnpm --filter @versioneer/dashboard exec wrangler deploy
 
 echo "==> Deploying landing page"
 pnpm --filter @versioneer/web run build

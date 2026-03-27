@@ -6,16 +6,6 @@
   "compatibility_date": "2026-02-24",
   "compatibility_flags": ["nodejs_compat"],
 
-  "routes": [
-    {
-      "pattern": "api.versioneer.app",
-      "zone_name": "versioneer.app",
-      "custom_domain": true
-    }
-  ],
-  "workers_dev": false,
-  "preview_urls": false,
-
   "vars": {
     "ENVIRONMENT": "dev",
     "ASSETS_BASE_URL": "http://localhost:8787/assets"
@@ -72,27 +62,20 @@
     ]
   },
 
-  "observability": {
-    "enabled": false,
-    "head_sampling_rate": 1,
-    "logs": {
-      "enabled": true,
-      "head_sampling_rate": 1,
-      "persist": true,
-      "invocation_logs": true
-    },
-    "traces": {
-      "enabled": true,
-      "persist": true,
-      "head_sampling_rate": 1
-    }
-  },
-
   "env": {
     "production": {
+      "routes": [
+        {
+          "pattern": "api.versioneer.app",
+          "zone_name": "versioneer.app",
+          "custom_domain": true
+        }
+      ],
+      "workers_dev": false,
+      "preview_urls": false,
       "vars": {
         "ENVIRONMENT": "production",
-        "ASSETS_BASE_URL": "https://assets.versioneer.app"
+        "ASSETS_BASE_URL": "https://assets-prod.versioneer.app"
       },
       "d1_databases": [
         {
@@ -140,6 +123,21 @@
             "queue": "versioneer-recompute-latest-production"
           }
         ]
+      },
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "logs": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "persist": true,
+          "invocation_logs": true
+        },
+        "traces": {
+          "enabled": true,
+          "persist": true,
+          "head_sampling_rate": 1
+        }
       }
     }
   }
