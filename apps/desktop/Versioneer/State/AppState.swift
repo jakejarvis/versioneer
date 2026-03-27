@@ -547,6 +547,33 @@ final class AppState {
     }
   }
 
+  /// Triggers a Homebrew Cask upgrade for the given app decision.
+  /// Uses the cask token from the local InstalledApp (primary) or the server response (fallback).
+  func brewUpgrade(_ result: AppDecision) async {
+    guard let installedApp = installedApp(for: result) else { return }
+    let caskToken = installedApp.homebrewCaskToken ?? result.homebrewCaskToken
+    guard let caskToken, !caskToken.isEmpty else { return }
+
+    let didUpgrade = await installCoordinator.startBrewUpgrade(
+      result: result,
+      caskToken: caskToken
+    )
+
+    if didUpgrade {
+      await scanAndSubmit()
+    }
+  }
+
+  /// Returns true if the given result represents a Homebrew-installed app.
+  func isHomebrewInstalled(for result: AppDecision) -> Bool {
+    installedApp(for: result)?.isHomebrewInstalled ?? false
+  }
+
+  /// Returns the Homebrew cask token for the given result, from local detection or server.
+  func homebrewCaskToken(for result: AppDecision) -> String? {
+    installedApp(for: result)?.homebrewCaskToken ?? result.homebrewCaskToken
+  }
+
   private func sort(
     rows: [ResultsBrowserRowPresentation],
     by sort: ResultsBrowserSort

@@ -49,6 +49,7 @@ export const appAliases = sqliteTable(
         "download_pattern",
         "github_repo",
         "mas_app_id",
+        "homebrew_cask",
       ],
     }).notNull(),
     value: text("value").notNull(),

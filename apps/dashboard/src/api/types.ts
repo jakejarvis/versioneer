@@ -48,7 +48,7 @@ export interface AppSummary {
 
 export interface SourceSummary {
   id: string;
-  sourceType: "sparkle" | "github_releases" | "manual";
+  sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
   label: string | null;
   parserKey: string;
   status: "active" | "paused" | "disabled" | "error";
@@ -88,7 +88,8 @@ export interface AppAlias {
     | "homepage"
     | "download_pattern"
     | "github_repo"
-    | "mas_app_id";
+    | "mas_app_id"
+    | "homebrew_cask";
   value: string;
   normalizedValue: string;
   isExact: boolean;
@@ -102,7 +103,7 @@ export interface AppAlias {
 export interface Source {
   id: string;
   appId: string;
-  sourceType: "sparkle" | "github_releases" | "manual";
+  sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
   label: string | null;
   baseUrl: string | null;
   configJson: string | null;
@@ -380,7 +381,8 @@ export interface UpdateExecution {
     | "assisted_replace"
     | "sparkle"
     | "pkg_install"
-    | "automation";
+    | "automation"
+    | "homebrew_upgrade";
   actionStatus: "initiated" | "in_progress" | "completed" | "failed" | "cancelled";
   clientVersionBefore: string | null;
   clientVersionAfter: string | null;

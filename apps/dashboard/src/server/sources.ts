@@ -64,7 +64,7 @@ export const listSources = createServerFn({ method: "GET" })
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
       status: z.enum(["active", "paused", "disabled", "error"]).optional(),
-      sourceType: z.enum(["sparkle", "github_releases", "manual"]).optional(),
+      sourceType: z.enum(["sparkle", "github_releases", "manual", "homebrew_cask"]).optional(),
       appId: z.string().optional(),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,

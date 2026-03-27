@@ -59,6 +59,14 @@ final class PrivilegedHelperService: NSObject, PrivilegedInstallerXPCProtocol {
         packageURL: validatedOperation.sourceURL,
         target: validatedOperation.manifest.installTarget ?? "/"
       )
+
+    case .brewUpgrade:
+      guard let caskToken = validatedOperation.manifest.caskToken, !caskToken.isEmpty else {
+        throw PrivilegedOperationValidationError.backupPathInvalid(
+          "Brew upgrade requires a cask token."
+        )
+      }
+      return try PrivilegedOperationPerformer.brewUpgrade(caskToken: caskToken)
     }
   }
 }

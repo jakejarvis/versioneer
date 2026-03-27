@@ -299,6 +299,7 @@ export const inventoryRoutes = new Hono<{ Bindings: Env }>()
     }));
     const expectedBundleIdByApp = pickPreferredAliasMap(allAliases, "bundle_id");
     const expectedTeamIdByApp = pickPreferredAliasMap(allAliases, "team_id");
+    const caskTokenByApp = pickPreferredAliasMap(allAliases, "homebrew_cask");
 
     // Load all apps for verification tier lookup
     const allAppDetails = await db
@@ -561,6 +562,7 @@ export const inventoryRoutes = new Hono<{ Bindings: Env }>()
         sparkleFeedUrl: installedApp.sparkleFeedUrl ?? null,
         isMasApp: installedApp.isMasApp ?? null,
         electronUpdateUrl: installedApp.electronUpdateUrl ?? null,
+        isHomebrewInstalled: installedApp.isHomebrewInstalled ?? null,
         matchedAppId: matchResult.appId,
         matchMethod: matchResult.method,
         matchConfidence: matchResult.confidence,
@@ -587,6 +589,9 @@ export const inventoryRoutes = new Hono<{ Bindings: Env }>()
         decision,
         latestVersion,
         latestVersionRaw,
+        homebrewCaskToken: matchResult.appId
+          ? (caskTokenByApp.get(matchResult.appId) ?? null)
+          : null,
         latestReleaseId,
         releasedAt,
         iconUrl,

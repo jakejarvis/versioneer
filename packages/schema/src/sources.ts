@@ -9,7 +9,9 @@ export const sources = sqliteTable(
     appId: text("app_id")
       .notNull()
       .references(() => apps.id),
-    sourceType: text("source_type", { enum: ["sparkle", "github_releases", "manual"] }).notNull(),
+    sourceType: text("source_type", {
+      enum: ["sparkle", "github_releases", "manual", "homebrew_cask"],
+    }).notNull(),
     label: text("label"),
     baseUrl: text("base_url"),
     configJson: text("config_json"),

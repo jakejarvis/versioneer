@@ -42,7 +42,8 @@ type AliasType =
   | "homepage"
   | "download_pattern"
   | "github_repo"
-  | "mas_app_id";
+  | "mas_app_id"
+  | "homebrew_cask";
 
 interface AliasEntry {
   key: string;
@@ -51,11 +52,12 @@ interface AliasEntry {
 }
 
 interface SourceConfig {
-  sourceType: "sparkle" | "github_releases" | "manual";
+  sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
   baseUrl: string;
   parserKey: string;
   pollIntervalMinutes: number;
   label?: string;
+  status?: "active" | "paused";
 }
 
 function slugify(name: string): string {
@@ -87,6 +89,7 @@ const ALIAS_COLORS: Record<AliasType, string> = {
   download_pattern: "bg-rose-500/10 text-rose-400 border-rose-500/20",
   github_repo: "bg-neutral-500/10 text-neutral-300 border-neutral-500/20",
   mas_app_id: "bg-pink-500/10 text-pink-400 border-pink-500/20",
+  homebrew_cask: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
 };
 
 const ALIAS_LABELS: Record<AliasType, string> = {
@@ -98,6 +101,7 @@ const ALIAS_LABELS: Record<AliasType, string> = {
   download_pattern: "Download",
   github_repo: "GitHub",
   mas_app_id: "App Store",
+  homebrew_cask: "Homebrew",
 };
 
 interface Props {
@@ -171,7 +175,18 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
         });
       }
     }
+    if (discoveredApp.homebrewCaskToken) {
+      newAliases.push({
+        key: crypto.randomUUID(),
+        aliasType: "homebrew_cask",
+        value: discoveredApp.homebrewCaskToken,
+      });
+    }
     setAliases(newAliases);
+
+    // Build source suggestions — prefer Sparkle/GitHub as primary, Cask as backup
+    const caskToken = discoveredApp.homebrewCaskToken;
+    const caskUrl = caskToken ? `https://formulae.brew.sh/api/cask/${caskToken}.json` : null;
 
     if (discoveredApp.sparkleFeedUrl) {
       setSource({
@@ -179,6 +194,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
         baseUrl: discoveredApp.sparkleFeedUrl,
         parserKey: "sparkle",
         pollIntervalMinutes: 60,
+        status: "active",
       });
     } else if (discoveredApp.electronUpdateUrl) {
       const apiUrl = toGitHubApiReleasesUrl(discoveredApp.electronUpdateUrl);
@@ -188,10 +204,27 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
           baseUrl: apiUrl,
           parserKey: "github_releases",
           pollIntervalMinutes: 60,
+          status: "active",
+        });
+      } else if (caskUrl) {
+        setSource({
+          sourceType: "homebrew_cask",
+          baseUrl: caskUrl,
+          parserKey: "homebrew_cask",
+          pollIntervalMinutes: 360,
+          status: "active",
         });
       } else {
         setSource(null);
       }
+    } else if (caskUrl) {
+      setSource({
+        sourceType: "homebrew_cask",
+        baseUrl: caskUrl,
+        parserKey: "homebrew_cask",
+        pollIntervalMinutes: 360,
+        status: "active",
+      });
     } else {
       setSource(null);
     }
@@ -204,9 +237,10 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
 
   const handleTestFeed = () => {
     if (!source) return;
+    if (source.sourceType === "manual") return;
     validateSourceMutation.mutate({
       url: source.baseUrl,
-      sourceType: source.sourceType as "sparkle" | "github_releases",
+      sourceType: source.sourceType as "sparkle" | "github_releases" | "homebrew_cask",
     });
   };
 

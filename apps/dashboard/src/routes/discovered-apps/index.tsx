@@ -69,6 +69,8 @@ interface DiscoveredApp {
   confidenceScore: number | null;
   enrichedLatestVersion: string | null;
   iconR2Key: string | null;
+  homebrewCaskToken: string | null;
+  homebrewCaskVersion: string | null;
 }
 
 function DiscoveredAppsPage() {
@@ -211,6 +213,14 @@ function DiscoveredAppsPage() {
                 feed ok
               </Badge>
             ) : null}
+            {row.original.homebrewCaskToken ? (
+              <Badge
+                variant="outline"
+                className="text-[10px] text-emerald-600 dark:text-emerald-400"
+              >
+                brew: {row.original.homebrewCaskToken}
+              </Badge>
+            ) : null}
           </div>
         ),
       },
@@ -219,12 +229,14 @@ function DiscoveredAppsPage() {
         meta: { label: "Latest" },
         enableSorting: false,
         header: ({ column }) => <DataTableColumnHeader column={column} title="Latest" />,
-        cell: ({ row }) =>
-          row.original.enrichedLatestVersion ? (
-            <span className="text-xs font-mono">{row.original.enrichedLatestVersion}</span>
+        cell: ({ row }) => {
+          const version = row.original.enrichedLatestVersion ?? row.original.homebrewCaskVersion;
+          return version ? (
+            <span className="text-xs font-mono">{version}</span>
           ) : (
             <span className="text-xs text-muted-foreground">--</span>
-          ),
+          );
+        },
       },
       {
         accessorKey: "sightingCount",

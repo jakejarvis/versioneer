@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { sparkleParser, githubReleasesParser } from "@versioneer/parsers";
+import { sparkleParser, githubReleasesParser, homebrewCaskParser } from "@versioneer/parsers";
 import { githubApiHeaders } from "@versioneer/pipeline";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
@@ -8,7 +8,7 @@ export const validateSource = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       url: z.string().url(),
-      sourceType: z.enum(["sparkle", "github_releases"]),
+      sourceType: z.enum(["sparkle", "github_releases", "homebrew_cask"]),
     }),
   )
   .handler(async ({ data }) => {
@@ -45,7 +45,12 @@ export const validateSource = createServerFn({ method: "POST" })
     }
 
     const body = await response.text();
-    const parser = sourceType === "sparkle" ? sparkleParser : githubReleasesParser;
+    const parser =
+      sourceType === "sparkle"
+        ? sparkleParser
+        : sourceType === "homebrew_cask"
+          ? homebrewCaskParser
+          : githubReleasesParser;
     const parsed = parser.parse(body);
 
     if (parsed.releases.length === 0) {

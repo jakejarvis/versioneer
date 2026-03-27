@@ -22,6 +22,7 @@ nonisolated enum BundleMetadataReader {
     let sparkleInfo = readSparkleInfo(from: bundle, info: info, bundleId: bundleId)
     let isMasApp = masReceiptExists(in: bundle)
     let electronInfo = readElectronInfo(from: bundle)
+    let homebrewInfo = detectHomebrewInstall(at: url)
 
     return InstalledApp(
       name: name,
@@ -40,8 +41,38 @@ nonisolated enum BundleMetadataReader {
       electronUpdateUrl: electronInfo.updateUrl,
       codeSigningAuthority: signingInfo.authority,
       appCategory: info["LSApplicationCategoryType"] as? String,
-      minMacOSVersion: info["LSMinimumSystemVersion"] as? String
+      minMacOSVersion: info["LSMinimumSystemVersion"] as? String,
+      isHomebrewInstalled: homebrewInfo.isHomebrew,
+      homebrewCaskToken: homebrewInfo.caskToken
     )
+  }
+
+  // MARK: - Homebrew Cask detection
+
+  private struct HomebrewInfo {
+    let isHomebrew: Bool
+    let caskToken: String?
+  }
+
+  /// Detects if an app was installed via Homebrew by resolving symlinks.
+  /// Homebrew Cask apps in /Applications are symlinks to
+  /// /opt/homebrew/Caskroom/{token}/{version}/App.app (Apple Silicon) or
+  /// /usr/local/Caskroom/{token}/{version}/App.app (Intel).
+  nonisolated private static func detectHomebrewInstall(at url: URL) -> HomebrewInfo {
+    let resolved = url.resolvingSymlinksInPath()
+    let resolvedPath = resolved.path
+
+    // Check if the resolved path goes through a Caskroom directory
+    guard let caskroomRange = resolvedPath.range(of: "/Caskroom/") else {
+      return HomebrewInfo(isHomebrew: false, caskToken: nil)
+    }
+
+    // Extract the cask token: path after /Caskroom/ up to the next /
+    let afterCaskroom = resolvedPath[caskroomRange.upperBound...]
+    let token = afterCaskroom.prefix(while: { $0 != "/" })
+    let caskToken = token.isEmpty ? nil : String(token)
+
+    return HomebrewInfo(isHomebrew: true, caskToken: caskToken)
   }
 
   // MARK: - Sparkle metadata

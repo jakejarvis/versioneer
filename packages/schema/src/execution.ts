@@ -19,7 +19,15 @@ export const updateExecutions = sqliteTable(
       .references(() => releases.id),
     artifactId: text("artifact_id"),
     actionType: text("action_type", {
-      enum: ["view_notes", "download", "assisted_replace", "sparkle", "pkg_install", "automation"],
+      enum: [
+        "view_notes",
+        "download",
+        "assisted_replace",
+        "sparkle",
+        "pkg_install",
+        "automation",
+        "homebrew_upgrade",
+      ],
     }).notNull(),
     actionStatus: text("action_status", {
       enum: ["initiated", "in_progress", "completed", "failed", "cancelled"],

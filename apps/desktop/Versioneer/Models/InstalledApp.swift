@@ -29,4 +29,8 @@ nonisolated struct InstalledApp: Identifiable, Codable, Sendable {
   let codeSigningAuthority: String?
   let appCategory: String?
   let minMacOSVersion: String?
+
+  // Homebrew Cask
+  let isHomebrewInstalled: Bool
+  let homebrewCaskToken: String?
 }

@@ -4,8 +4,15 @@ import {
   handleSourceParse,
   handleRecomputeLatest,
   handleComputeScorecard,
+  handleCaskIndexSync,
+  isCaskSyncDue,
 } from "@versioneer/pipeline";
-import type { SourceFetchJob, SourceParseJob, RecomputeLatestJob } from "@versioneer/pipeline";
+import type {
+  SourceFetchJob,
+  SourceParseJob,
+  RecomputeLatestJob,
+  CaskIndexSyncJob,
+} from "@versioneer/pipeline";
 import { apps, jobFailures, generateId, idPrefixes } from "@versioneer/schema";
 
 import type { Env } from "./env";
@@ -86,6 +93,13 @@ export default {
           env,
           "recompute-latest",
         );
+      } else if (queueName.includes("cask-index-sync")) {
+        await handleMessage(
+          message as QueueMessage<CaskIndexSyncJob>,
+          handleCaskIndexSync,
+          env,
+          "cask-index-sync",
+        );
       } else {
         console.error("Unknown queue:", queueName);
         message.ack();
@@ -118,6 +132,15 @@ export default {
       } catch (error) {
         console.error(`Failed to compute scorecard for ${app.id}:`, error);
       }
+    }
+
+    // Trigger cask index sync if due (every 6 hours)
+    try {
+      if (await isCaskSyncDue(env as unknown as Parameters<typeof isCaskSyncDue>[0])) {
+        await env.CASK_INDEX_SYNC_QUEUE.send({ reason: "scheduled", force: false });
+      }
+    } catch (error) {
+      console.error("Failed to check/queue cask index sync:", error);
     }
 
     for (const source of dueSources) {

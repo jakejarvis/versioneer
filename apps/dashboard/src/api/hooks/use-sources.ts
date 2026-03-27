@@ -15,7 +15,7 @@ import {
 
 interface UseSourcesParams {
   status?: "active" | "paused" | "disabled" | "error";
-  sourceType?: "sparkle" | "github_releases" | "manual";
+  sourceType?: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
   appId?: string;
   limit?: number;
   offset?: number;
@@ -43,7 +43,7 @@ export function useCreateSource() {
   return useMutation({
     mutationFn: (input: {
       appId: string;
-      sourceType: "sparkle" | "github_releases" | "manual";
+      sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
       label?: string;
       baseUrl?: string;
       configJson?: string;

@@ -96,6 +96,34 @@ nonisolated enum PrivilegedOperationPerformer {
     )
   }
 
+  static func brewUpgrade(
+    caskToken: String
+  ) throws -> PrivilegedOperationExecutionResult {
+    // Locate the brew binary — Apple Silicon vs Intel
+    let brewPaths = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+    guard let brewPath = brewPaths.first(where: { FileManager.default.fileExists(atPath: $0) })
+    else {
+      throw PrivilegedOperationExecutionError.commandFailed(
+        command: "brew upgrade --cask \(caskToken)",
+        status: 1,
+        output: "Homebrew is not installed. Could not find brew at /opt/homebrew/bin/brew or /usr/local/bin/brew."
+      )
+    }
+
+    let output = try runSuccessful(
+      brewPath,
+      arguments: ["upgrade", "--cask", caskToken]
+    )
+
+    return PrivilegedOperationExecutionResult(
+      detail: "Upgraded cask \(caskToken) via Homebrew.",
+      usedRollback: false,
+      output: [output.stdout, output.stderr]
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n")
+    )
+  }
+
   private struct ProcessOutput {
     let stdout: String
     let stderr: String

@@ -26,6 +26,7 @@ final class InstallCoordinator {
     case localReplace
     case privilegedReplace
     case privilegedPackage
+    case brewUpgrade
   }
 
   nonisolated enum Phase: String, Sendable {
@@ -403,6 +404,76 @@ final class InstallCoordinator {
     }
   }
 
+  /// Runs `brew upgrade --cask {token}` through the privileged helper.
+  /// Returns true if the upgrade completed successfully.
+  @discardableResult
+  func startBrewUpgrade(
+    result: AppDecision,
+    caskToken: String
+  ) async -> Bool {
+    let operationKey = result.id
+    let appDisplayName = result.matchedAppName ?? result.appName
+
+    if state(for: result).isRunning { return false }
+
+    do {
+      let executionId = UUID().uuidString
+      let stagingDirectory = try makeStagingDirectory(executionId: executionId)
+
+      updateState(
+        for: operationKey,
+        appDisplayName: appDisplayName,
+        phase: .installing,
+        detail: "Running brew upgrade --cask \(caskToken)…",
+        executionId: executionId,
+        errorMessage: nil,
+        installedVersion: nil,
+        recoveryAction: nil,
+        helperStatus: .preparing
+      )
+
+      let manifest = PreparedPrivilegedOperation(
+        executionId: executionId,
+        operationType: .brewUpgrade,
+        sourceRelativePath: ".",
+        destinationPath: "",
+        backupRelativePath: nil,
+        installTarget: nil,
+        caskToken: caskToken
+      )
+      try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
+
+      _ = try await privilegedHelperClient.performOperation(
+        executionId: executionId,
+        stagingDirectory: stagingDirectory
+      )
+
+      cleanUpStagingDirectory(stagingDirectory)
+
+      updateState(
+        for: operationKey,
+        phase: .completed,
+        detail: "Upgraded \(caskToken) via Homebrew.",
+        executionId: executionId,
+        errorMessage: nil,
+        installedVersion: nil,
+        recoveryAction: nil
+      )
+      return true
+    } catch {
+      updateState(
+        for: operationKey,
+        phase: .failed,
+        detail: "Homebrew upgrade failed.",
+        executionId: nil,
+        errorMessage: error.localizedDescription,
+        installedVersion: nil,
+        recoveryAction: nil
+      )
+      return false
+    }
+  }
+
   func recoveryActionTitle(_ action: RecoveryAction) -> String {
     switch action {
     case .openSystemSettings:
@@ -753,7 +824,8 @@ final class InstallCoordinator {
       sourceRelativePath: relativePath(from: stagingDirectory, to: helperSourceURL),
       destinationPath: destinationAppURL.path,
       backupRelativePath: "helper-backups/\(destinationAppURL.lastPathComponent)",
-      installTarget: nil
+      installTarget: nil,
+      caskToken: nil
     )
     try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
     _ = try await privilegedHelperClient.performOperation(
@@ -773,7 +845,8 @@ final class InstallCoordinator {
       sourceRelativePath: relativePath(from: stagingDirectory, to: packageURL),
       destinationPath: "/",
       backupRelativePath: nil,
-      installTarget: "/"
+      installTarget: "/",
+      caskToken: nil
     )
     try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
     _ = try await privilegedHelperClient.performOperation(

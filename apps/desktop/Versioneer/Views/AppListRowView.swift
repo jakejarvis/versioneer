@@ -20,9 +20,18 @@ struct AppListRowView: View {
       appIcon
 
       VStack(alignment: .leading, spacing: 3) {
-        Text(row.appName)
-          .font(.body.weight(.medium))
-          .lineLimit(1)
+        HStack(spacing: 5) {
+          Text(row.appName)
+            .font(.body.weight(.medium))
+            .lineLimit(1)
+
+          if let result, appState.isHomebrewInstalled(for: result) {
+            Image(systemName: "mug.fill")
+              .font(.caption2)
+              .foregroundStyle(.green)
+              .help("Installed via Homebrew")
+          }
+        }
 
         subtitleText
       }
@@ -95,9 +104,13 @@ struct AppListRowView: View {
     } else if row.canInstall && row.isUpdateAvailable {
       Button {
         guard let result else { return }
-        Task { await appState.install(result) }
+        if appState.isHomebrewInstalled(for: result) {
+          Task { await appState.brewUpgrade(result) }
+        } else {
+          Task { await appState.install(result) }
+        }
       } label: {
-        Text("Update")
+        Text(result.map { appState.isHomebrewInstalled(for: $0) } == true ? "Brew Update" : "Update")
           .font(.caption.weight(.semibold))
       }
       .buttonStyle(.borderedProminent)

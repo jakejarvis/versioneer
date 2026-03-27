@@ -103,16 +103,18 @@ const aliasInputSchema = z.object({
     "download_pattern",
     "github_repo",
     "mas_app_id",
+    "homebrew_cask",
   ]),
   value: z.string().min(1),
 });
 
 const sourceInputSchema = z.object({
-  sourceType: z.enum(["sparkle", "github_releases", "manual"]),
+  sourceType: z.enum(["sparkle", "github_releases", "manual", "homebrew_cask"]),
   baseUrl: z.string().url(),
   parserKey: z.string().min(1),
   pollIntervalMinutes: z.number().int().min(5).max(10080).default(60),
   label: z.string().optional(),
+  status: z.enum(["active", "paused"]).default("active"),
 });
 
 const onboardDiscoveredAppSchema = z.object({
@@ -130,6 +132,7 @@ const onboardDiscoveredAppSchema = z.object({
   }),
   aliases: z.array(aliasInputSchema),
   source: sourceInputSchema.optional(),
+  sources: z.array(sourceInputSchema).optional(),
   sourceValidated: z.boolean().default(false),
   enrichmentHasReleases: z.boolean().default(false),
 });
@@ -207,25 +210,31 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       });
     }
 
-    // 3. Create source (active status, not paused)
+    // 3. Create sources
     let hasSource = false;
-    let sourceId: string | null = null;
-    if (data.source) {
-      sourceId = generateId(idPrefixes.source);
+    const activeSourceIds: string[] = [];
+    // Support both single `source` (backward compat) and `sources` array
+    const allSources = data.sources ?? (data.source ? [data.source] : []);
+    for (const src of allSources) {
+      const srcId = generateId(idPrefixes.source);
+      const status = src.status ?? "active";
       await db.insert(sources).values({
-        id: sourceId,
+        id: srcId,
         appId,
-        sourceType: data.source.sourceType,
-        label: data.source.label ?? null,
-        baseUrl: data.source.baseUrl,
+        sourceType: src.sourceType,
+        label: src.label ?? null,
+        baseUrl: src.baseUrl,
         configJson: null,
-        parserKey: data.source.parserKey,
-        pollIntervalMinutes: data.source.pollIntervalMinutes,
-        status: "active",
+        parserKey: src.parserKey,
+        pollIntervalMinutes: src.pollIntervalMinutes,
+        status,
         createdAt: now,
         updatedAt: now,
       });
       hasSource = true;
+      if (status === "active") {
+        activeSourceIds.push(srcId);
+      }
     }
 
     // 4. Create onboarding checklist with auto-marked items
@@ -269,10 +278,10 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       createdAt: now,
     });
 
-    // 7. Enqueue first source fetch
-    if (sourceId) {
+    // 7. Enqueue first source fetch for active sources
+    for (const srcId of activeSourceIds) {
       await env.SOURCE_FETCH_QUEUE.send({
-        sourceId,
+        sourceId: srcId,
         reason: "onboarding",
       });
     }

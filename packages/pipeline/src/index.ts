@@ -24,6 +24,8 @@ export type { InstallabilityClass } from "./installability";
 export { normalizeReleaseNotes, renderReleaseNotesDocument } from "./release-notes";
 export { sanitizeHtml } from "./sanitize-html";
 export { enrichDiscoveredApp, shouldEnrich, ENRICHMENT_STALE_MS } from "./enrich-discovered-app";
+export { handleCaskIndexSync, isCaskSyncDue, extractBundleIdsFromCask } from "./cask-index-sync";
+export type { CaskIndexSyncJob } from "./cask-index-sync";
 export type { EnrichmentResult } from "./enrich-discovered-app";
 export {
   fetchAndParse,

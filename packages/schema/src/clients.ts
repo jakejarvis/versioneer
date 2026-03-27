@@ -58,6 +58,7 @@ export const clientInventoryApps = sqliteTable(
     sparkleFeedUrl: text("sparkle_feed_url"),
     isMasApp: integer("is_mas_app", { mode: "boolean" }),
     electronUpdateUrl: text("electron_update_url"),
+    isHomebrewInstalled: integer("is_homebrew_installed", { mode: "boolean" }),
     createdAt: text("created_at").notNull(),
   },
   (table) => [

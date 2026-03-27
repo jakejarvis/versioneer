@@ -37,6 +37,7 @@ export const aliasCreateSchema = z.object({
     "download_pattern",
     "github_repo",
     "mas_app_id",
+    "homebrew_cask",
   ]),
   value: z.string().min(1).max(2000),
   normalizedValue: z.string().min(1).max(2000).optional(),
@@ -54,7 +55,7 @@ export const aliasUpdateSchema = z.object({
 
 export const sourceCreateSchema = z.object({
   appId: z.string().min(1),
-  sourceType: z.enum(["sparkle", "github_releases", "manual"]),
+  sourceType: z.enum(["sparkle", "github_releases", "manual", "homebrew_cask"]),
   label: z.string().max(500).optional(),
   baseUrl: z.string().url().max(2000).optional(),
   configJson: z.string().max(10000).optional(),

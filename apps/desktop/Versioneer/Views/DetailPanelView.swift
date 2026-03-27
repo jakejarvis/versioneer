@@ -8,6 +8,7 @@ struct DetailPanelView: View {
 
   @State private var showFeedbackSheet = false
   @State private var showInstallWarning = false
+  @State private var showBrewBypassWarning = false
   @State private var feedbackType: FeedbackType = .wrongMatch
   @State private var feedbackComment = ""
   @State private var feedbackVersion = ""
@@ -148,6 +149,15 @@ struct DetailPanelView: View {
           glass: true
         )
 
+        if appState.isHomebrewInstalled(for: result) {
+          VersioneerStatusChip(
+            title: "Homebrew",
+            tint: .green,
+            systemImage: "mug.fill",
+            glass: true
+          )
+        }
+
         if let confidence = result.matchConfidence {
           VersioneerStatusChip(
             title: VersionFormatting.confidenceLabel(confidence),
@@ -168,63 +178,16 @@ struct DetailPanelView: View {
 
   // MARK: - Action Section
 
+  private var isBrewApp: Bool {
+    appState.isHomebrewInstalled(for: result)
+  }
+
   @ViewBuilder
   private var actionSection: some View {
-    if result.install.canInstall {
-      VStack(alignment: .leading, spacing: 14) {
-        // Banners
-        ForEach(installPresentation.banners) { banner in
-          VersioneerBannerView(
-            title: banner.title,
-            detail: banner.detail,
-            tint: tint(for: banner.tone)
-          )
-        }
-
-        // Progress
-        if let progress = installPresentation.progress {
-          InstallProgressView(progress: progress)
-        }
-
-        if let statusDetail = installPresentation.statusDetail,
-          !statusDetail.isEmpty
-        {
-          Text(statusDetail)
-            .font(.callout)
-            .foregroundStyle(.secondary)
-        }
-
-        // Install button
-        Button {
-          handlePrimaryInstallAction()
-        } label: {
-          Text(installPresentation.primaryActionTitle)
-            .font(.body.weight(.semibold))
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .disabled(installPresentation.primaryActionDisabled)
-
-        if let recoveryAction = installPresentation.recoveryAction {
-          Button(installCoordinator.recoveryActionTitle(recoveryAction)) {
-            installCoordinator.performRecoveryAction(recoveryAction)
-          }
-          .buttonStyle(.link)
-        }
-
-        // Trust summary
-        if !installPresentation.trustSummary.isEmpty {
-          VStack(alignment: .leading, spacing: 6) {
-            ForEach(installPresentation.trustSummary, id: \.self) { item in
-              Label(item, systemImage: "checkmark.seal")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-          }
-        }
-      }
-      .versioneerCard(glass: true, interactive: true, cornerRadius: 22, padding: 18)
+    if isBrewApp && result.decision == .updateAvailable {
+      brewUpgradeActionSection
+    } else if result.install.canInstall {
+      standardInstallActionSection
     } else if result.decision == .updateAvailable {
       VStack(alignment: .leading, spacing: 8) {
         Text("Install Unavailable")
@@ -270,6 +233,143 @@ struct DetailPanelView: View {
         }
       }
     }
+  }
+
+  // MARK: - Homebrew Upgrade Action
+
+  private var brewUpgradeActionSection: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      // Progress/status from install coordinator (reused for brew upgrades)
+      if installState.isRunning {
+        if let progress = installPresentation.progress {
+          InstallProgressView(progress: progress)
+        }
+        if let statusDetail = installPresentation.statusDetail, !statusDetail.isEmpty {
+          Text(statusDetail)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+      }
+
+      if installState.phase == .completed {
+        Label("Updated via Homebrew", systemImage: "checkmark.circle.fill")
+          .font(.callout.weight(.semibold))
+          .foregroundStyle(.green)
+      } else if installState.phase == .failed {
+        VStack(alignment: .leading, spacing: 4) {
+          Label("Homebrew upgrade failed", systemImage: "xmark.circle.fill")
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(.red)
+          if let error = installState.errorMessage {
+            Text(error)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .textSelection(.enabled)
+          }
+        }
+      }
+
+      // Primary: Update via Homebrew
+      Button {
+        Task { await appState.brewUpgrade(result) }
+      } label: {
+        Label("Update via Homebrew", systemImage: "mug.fill")
+          .font(.body.weight(.semibold))
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+      .controlSize(.large)
+      .disabled(installState.isRunning)
+
+      // Secondary: Install directly (with warning)
+      if result.install.canInstall {
+        Button {
+          showBrewBypassWarning = true
+        } label: {
+          Text("Install directly instead")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.link)
+      }
+
+      Label(
+        "This app was installed via Homebrew. Updating through brew keeps your package manager in sync.",
+        systemImage: "info.circle"
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
+    }
+    .versioneerCard(glass: true, interactive: true, cornerRadius: 22, padding: 18)
+    .alert("Install directly?", isPresented: $showBrewBypassWarning) {
+      Button("Install Directly", role: .destructive) {
+        Task { await appState.install(result) }
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text(
+        "This app was installed via Homebrew. Installing directly may cause Homebrew to lose track of it. You can re-sync with `brew reinstall --cask`."
+      )
+    }
+  }
+
+  // MARK: - Standard Install Action
+
+  private var standardInstallActionSection: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      // Banners
+      ForEach(installPresentation.banners) { banner in
+        VersioneerBannerView(
+          title: banner.title,
+          detail: banner.detail,
+          tint: tint(for: banner.tone)
+        )
+      }
+
+      // Progress
+      if let progress = installPresentation.progress {
+        InstallProgressView(progress: progress)
+      }
+
+      if let statusDetail = installPresentation.statusDetail,
+        !statusDetail.isEmpty
+      {
+        Text(statusDetail)
+          .font(.callout)
+          .foregroundStyle(.secondary)
+      }
+
+      // Install button
+      Button {
+        handlePrimaryInstallAction()
+      } label: {
+        Text(installPresentation.primaryActionTitle)
+          .font(.body.weight(.semibold))
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+      .controlSize(.large)
+      .disabled(installPresentation.primaryActionDisabled)
+
+      if let recoveryAction = installPresentation.recoveryAction {
+        Button(installCoordinator.recoveryActionTitle(recoveryAction)) {
+          installCoordinator.performRecoveryAction(recoveryAction)
+        }
+        .buttonStyle(.link)
+      }
+
+      // Trust summary
+      if !installPresentation.trustSummary.isEmpty {
+        VStack(alignment: .leading, spacing: 6) {
+          ForEach(installPresentation.trustSummary, id: \.self) { item in
+            Label(item, systemImage: "checkmark.seal")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+        }
+      }
+    }
+    .versioneerCard(glass: true, interactive: true, cornerRadius: 22, padding: 18)
   }
 
   // MARK: - Footer Section

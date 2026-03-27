@@ -30,5 +30,6 @@ nonisolated struct InventoryCheckRequest: Codable, Sendable {
     let appCategory: String?
     let minMacOSVersion: String?
     let iconBase64: String?
+    let isHomebrewInstalled: Bool?
   }
 }

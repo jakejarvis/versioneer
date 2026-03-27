@@ -31,7 +31,7 @@ import {
 const sourcesSearchSchema = z.object({
   ...paginatedSearchShape,
   status: z.enum(["all", "active", "paused", "disabled", "error"]).catch("all"),
-  type: z.enum(["all", "sparkle", "github_releases", "manual"]).catch("all"),
+  type: z.enum(["all", "sparkle", "github_releases", "manual", "homebrew_cask"]).catch("all"),
 });
 
 export const Route = createFileRoute("/sources/")({
@@ -226,6 +226,7 @@ function SourcesPage() {
                   <SelectItem value="sparkle">Sparkle</SelectItem>
                   <SelectItem value="github_releases">GitHub Releases</SelectItem>
                   <SelectItem value="manual">Manual</SelectItem>
+                  <SelectItem value="homebrew_cask">Homebrew Cask</SelectItem>
                 </SelectContent>
               </Select>
             </>

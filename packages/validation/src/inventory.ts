@@ -17,6 +17,7 @@ export const installedAppSchema = z.object({
   appCategory: z.string().max(200).optional(),
   minMacOSVersion: z.string().max(50).optional(),
   iconBase64: z.string().max(500000).optional(),
+  isHomebrewInstalled: z.boolean().optional(),
 });
 
 export type InstalledApp = z.infer<typeof installedAppSchema>;
@@ -53,6 +54,7 @@ export const appDecisionSchema = z.object({
   latestVersion: z.string().nullable(),
   latestVersionRaw: z.string().nullable(),
   latestReleaseId: z.string().nullable(),
+  homebrewCaskToken: z.string().nullable().optional(),
   releasedAt: z.string().nullable(),
   iconUrl: z.string().nullable(),
   artifact: appArtifactSchema.nullable(),

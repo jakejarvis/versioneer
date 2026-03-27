@@ -29,6 +29,13 @@ export const discoveredApps = sqliteTable(
     appCategory: text("app_category"),
     minMacOSVersion: text("min_macos_version"),
 
+    // Homebrew Cask metadata (populated by index sync)
+    homebrewCaskToken: text("homebrew_cask_token"),
+    homebrewCaskVersion: text("homebrew_cask_version"),
+    homebrewCaskAppcastUrl: text("homebrew_cask_appcast_url"),
+    homebrewCaskHomepage: text("homebrew_cask_homepage"),
+    homebrewCaskMatchedAt: text("homebrew_cask_matched_at"),
+
     // Enrichment fields
     enrichmentStatus: text("enrichment_status", {
       enum: ["pending", "in_progress", "success", "failed", "skipped"],

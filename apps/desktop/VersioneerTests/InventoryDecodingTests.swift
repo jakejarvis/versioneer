@@ -170,7 +170,9 @@ struct InventoryDecodingTests {
           electronUpdateUrl: nil,
           codeSigningAuthority: nil,
           appCategory: nil,
-          minMacOSVersion: nil
+          minMacOSVersion: nil,
+          iconBase64: nil,
+          isHomebrewInstalled: nil
         )
       ],
       scanDurationMs: 500

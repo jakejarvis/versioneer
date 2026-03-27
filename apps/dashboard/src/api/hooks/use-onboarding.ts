@@ -35,8 +35,10 @@ export function useCheckSlugAvailable(slug: string) {
 
 export function useValidateSource() {
   return useMutation({
-    mutationFn: (input: { url: string; sourceType: "sparkle" | "github_releases" }) =>
-      validateSource({ data: input }),
+    mutationFn: (input: {
+      url: string;
+      sourceType: "sparkle" | "github_releases" | "homebrew_cask";
+    }) => validateSource({ data: input }),
   });
 }
 
@@ -61,16 +63,26 @@ export function useOnboardDiscoveredApp() {
           | "homepage"
           | "download_pattern"
           | "github_repo"
-          | "mas_app_id";
+          | "mas_app_id"
+          | "homebrew_cask";
         value: string;
       }[];
       source?: {
-        sourceType: "sparkle" | "github_releases" | "manual";
+        sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
         baseUrl: string;
         parserKey: string;
         pollIntervalMinutes?: number;
         label?: string;
+        status?: "active" | "paused";
       };
+      sources?: {
+        sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
+        baseUrl: string;
+        parserKey: string;
+        pollIntervalMinutes?: number;
+        label?: string;
+        status?: "active" | "paused";
+      }[];
       sourceValidated?: boolean;
       enrichmentHasReleases?: boolean;
     }) => onboardDiscoveredApp({ data: input }),

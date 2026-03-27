@@ -188,7 +188,8 @@ nonisolated struct InventoryAPIClient: Sendable {
         codeSigningAuthority: app.codeSigningAuthority,
         appCategory: app.appCategory,
         minMacOSVersion: app.minMacOSVersion,
-        iconBase64: Self.extractIconBase64(for: app)
+        iconBase64: Self.extractIconBase64(for: app),
+        isHomebrewInstalled: app.isHomebrewInstalled ? true : nil
       )
     }
 

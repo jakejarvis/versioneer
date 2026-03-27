@@ -52,6 +52,10 @@
       {
         "binding": "RECOMPUTE_LATEST_QUEUE",
         "queue": "versioneer-recompute-latest-dev"
+      },
+      {
+        "binding": "CASK_INDEX_SYNC_QUEUE",
+        "queue": "versioneer-cask-index-sync-dev"
       }
     ],
     "consumers": [
@@ -77,6 +81,12 @@
         "queue": "versioneer-recompute-latest-dev",
         "max_batch_size": 10,
         "max_retries": 3,
+        "dead_letter_queue": "versioneer-dlq-dev"
+      },
+      {
+        "queue": "versioneer-cask-index-sync-dev",
+        "max_batch_size": 1,
+        "max_retries": 2,
         "dead_letter_queue": "versioneer-dlq-dev"
       }
     ]
@@ -127,6 +137,10 @@
           {
             "binding": "RECOMPUTE_LATEST_QUEUE",
             "queue": "versioneer-recompute-latest-production"
+          },
+          {
+            "binding": "CASK_INDEX_SYNC_QUEUE",
+            "queue": "versioneer-cask-index-sync-production"
           }
         ],
         "consumers": [
@@ -152,6 +166,12 @@
             "queue": "versioneer-recompute-latest-production",
             "max_batch_size": 10,
             "max_retries": 3,
+            "dead_letter_queue": "versioneer-dlq-production"
+          },
+          {
+            "queue": "versioneer-cask-index-sync-production",
+            "max_batch_size": 1,
+            "max_retries": 2,
             "dead_letter_queue": "versioneer-dlq-production"
           }
         ]

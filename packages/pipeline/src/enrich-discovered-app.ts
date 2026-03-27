@@ -108,6 +108,11 @@ export async function enrichDiscoveredApp(params: {
       result.enrichedVendorName = extractVendorFromSigningAuthority(row.codeSigningAuthority);
     }
 
+    // Use Homebrew Cask homepage as fallback if no other homepage found
+    if (!result.enrichedHomepageUrl && row.homebrewCaskHomepage) {
+      result.enrichedHomepageUrl = row.homebrewCaskHomepage;
+    }
+
     // Compute confidence score
     result.confidenceScore = computeConfidenceScore({
       hasBundleId: !!row.bundleId,
@@ -115,6 +120,7 @@ export async function enrichDiscoveredApp(params: {
       hasReleases: (result.enrichedReleaseCount ?? 0) > 0,
       hasVendorInfo: !!result.enrichedVendorName,
       hasHomepageUrl: !!result.enrichedHomepageUrl,
+      hasHomebrewCask: !!row.homebrewCaskToken,
     });
 
     // Scrape homepage for icon if none exists yet
@@ -325,6 +331,7 @@ function computeConfidenceScore(factors: {
   hasReleases: boolean;
   hasVendorInfo: boolean;
   hasHomepageUrl: boolean;
+  hasHomebrewCask?: boolean;
 }): number {
   let score = 0;
   if (factors.hasBundleId) score += 20;
@@ -332,7 +339,9 @@ function computeConfidenceScore(factors: {
   if (factors.hasReleases) score += 20;
   if (factors.hasVendorInfo) score += 15;
   if (factors.hasHomepageUrl) score += 15;
-  return score;
+  // Homebrew Cask match boosts confidence when no other feed is valid
+  if (factors.hasHomebrewCask && !factors.hasValidFeed) score += 25;
+  return Math.min(score, 100);
 }
 
 // ──────────────────────────────────────────────────────────
