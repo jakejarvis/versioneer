@@ -36,9 +36,13 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Sendable {
     let secondaryText: String?
     let statusText: String
     let statusTone: Tone
+    let statusSystemImage: String
     let installedVersionText: String
     let latestVersionText: String
     let releasedDateText: String
+    let isUpdateAvailable: Bool
+    let canInstall: Bool
+    let versionDiffText: String?
     let defaultSortRank: Int
     let latestVersionSortKey: String
     let releasedAtSortDate: Date?
@@ -48,15 +52,27 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Sendable {
         installState: InstallCoordinator.OperationState
     ) -> ResultsBrowserRowPresentation {
         let status = statusPresentation(result: result, installState: installState)
+        let isUpdate = result.decision == .updateAvailable && installState.phase == .idle
+        let versionDiff: String? = if isUpdate,
+            let installed = result.installedVersion,
+            let latest = result.latestVersion {
+            "\(VersionFormatting.displayVersion(installed)) → \(VersionFormatting.displayVersion(latest))"
+        } else {
+            nil
+        }
         return ResultsBrowserRowPresentation(
             id: result.id,
             appName: result.matchedAppName ?? result.appName,
             secondaryText: result.bundleId ?? result.appName,
             statusText: status.text,
             statusTone: status.tone,
+            statusSystemImage: status.systemImage,
             installedVersionText: VersionFormatting.displayVersion(result.installedVersion),
             latestVersionText: VersionFormatting.displayVersion(result.latestVersion),
             releasedDateText: VersionFormatting.relativeDate(from: result.releasedAt),
+            isUpdateAvailable: isUpdate,
+            canInstall: result.install.canInstall && installState.phase == .idle,
+            versionDiffText: versionDiff,
             defaultSortRank: defaultSortRank(result: result, installState: installState),
             latestVersionSortKey: result.latestVersionRaw ?? result.latestVersion ?? "",
             releasedAtSortDate: ResultsBrowserDateParser.date(from: result.releasedAt)
@@ -66,40 +82,40 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Sendable {
     private static func statusPresentation(
         result: AppDecision,
         installState: InstallCoordinator.OperationState
-    ) -> (text: String, tone: Tone) {
+    ) -> (text: String, tone: Tone, systemImage: String) {
         switch installState.phase {
         case .preparing:
-            ("Preparing Install", .accent)
+            ("Preparing Install", .accent, "arrow.down.circle.fill")
         case .downloading:
-            ("Downloading", .accent)
+            ("Downloading", .accent, "arrow.down.circle.fill")
         case .verifying:
-            ("Verifying", .accent)
+            ("Verifying", .accent, "checkmark.shield.fill")
         case .installing:
             if installState.helperStatus == .preparing {
-                ("Preparing Helper", .accent)
+                ("Preparing Helper", .accent, "gearshape.fill")
             } else {
-                ("Installing", .accent)
+                ("Installing", .accent, "arrow.down.circle.fill")
             }
         case .relaunching:
-            ("Relaunching", .accent)
+            ("Relaunching", .accent, "arrow.clockwise")
         case .completed:
-            ("Installed", .positive)
+            ("Updated", .positive, "checkmark.circle.fill")
         case .failed:
-            ("Install Failed", .negative)
+            ("Install Failed", .negative, "xmark.circle.fill")
         case .idle:
             switch result.decision {
             case .upToDate:
-                ("Up to Date", .positive)
+                ("Up to Date", .positive, "checkmark.circle.fill")
             case .updateAvailable:
-                ("Update Available", .warning)
+                ("Update Available", .warning, "arrow.up.circle.fill")
             case .unknown:
-                ("Unknown", .secondary)
+                ("Unknown", .secondary, "questionmark.circle")
             case .ambiguous:
-                ("Needs Review", .warning)
+                ("Needs Review", .warning, "scope")
             case .unsupported:
-                ("Unsupported", .negative)
+                ("Unsupported", .negative, "xmark.circle.fill")
             case .ignored:
-                ("Ignored", .secondary)
+                ("Ignored", .secondary, "minus.circle")
             }
         }
     }

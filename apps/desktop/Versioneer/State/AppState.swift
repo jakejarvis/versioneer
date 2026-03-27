@@ -47,6 +47,8 @@ final class AppState {
 
     var selectedSection: SidebarSection = .all
     var selectedResult: AppDecision?
+    var detailResult: AppDecision?
+    var selectedResultIDs: Set<String> = []
     var resultsSort: ResultsBrowserSort = .updatesFirst
 
     // MARK: - Data
@@ -129,10 +131,16 @@ final class AppState {
         return sort(rows: rows, by: resultsSort)
     }
 
-    var shellStatusPresentation: ShellStatusPresentation? {
-        ShellStatusPresentation.make(
+    var updatableResults: [AppDecision] {
+        inventoryResults.filter { $0.decision == .updateAvailable }
+    }
+
+    var floatingBarPresentation: FloatingBarPresentation {
+        FloatingBarPresentation.make(
             loadState: loadState,
             scanSummary: scanSummary,
+            selectedIDs: selectedResultIDs,
+            updatableResults: updatableResults,
             activeInstall: installCoordinator.primaryOperationState
         )
     }
@@ -478,6 +486,27 @@ final class AppState {
             comment: comment
         )
         try await feedbackClient.submitMissingApp(feedback)
+    }
+
+    func openDetail(id: String) {
+        detailResult = inventoryResults.first { $0.id == id }
+        selectedResult = detailResult
+    }
+
+    func closeDetail() {
+        detailResult = nil
+    }
+
+    func installAll(ids: Set<String>? = nil) async {
+        let targets: [AppDecision]
+        if let ids {
+            targets = updatableResults.filter { ids.contains($0.id) }
+        } else {
+            targets = updatableResults
+        }
+        for target in targets {
+            await install(target)
+        }
     }
 
     func install(_ result: AppDecision) async {

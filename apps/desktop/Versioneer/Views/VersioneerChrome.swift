@@ -1,5 +1,7 @@
 import SwiftUI
 
+// MARK: - Card Modifier
+
 struct VersioneerCardModifier: ViewModifier {
     var glass: Bool
     var interactive: Bool = false
@@ -15,26 +17,18 @@ struct VersioneerCardModifier: ViewModifier {
             }
 
         if glass {
-            if #available(macOS 26.0, *) {
-                card
-                    .glassEffect(
-                        interactive ? .regular.interactive() : .regular,
-                        in: .rect(cornerRadius: cornerRadius)
-                    )
-            } else {
-                fallbackCard(card)
-            }
+            card
+                .glassEffect(
+                    interactive ? .regular.interactive() : .regular,
+                    in: .rect(cornerRadius: cornerRadius)
+                )
         } else {
-            fallbackCard(card)
+            card
+                .background(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial.opacity(0.9))
+                )
         }
-    }
-
-    private func fallbackCard<Body: View>(_ content: Body) -> some View {
-        content
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial.opacity(0.9))
-            )
     }
 }
 
@@ -53,6 +47,8 @@ extension View {
         ))
     }
 }
+
+// MARK: - Status Chip
 
 struct VersioneerStatusChip: View {
     let title: String
@@ -86,21 +82,13 @@ struct VersioneerStatusChip: View {
             Capsule(style: .continuous)
                 .strokeBorder(tint.opacity(0.2), lineWidth: 1)
         }
-        .modifier(ChipGlassModifier(glass: glass))
-    }
-}
-
-private struct ChipGlassModifier: ViewModifier {
-    var glass: Bool
-
-    func body(content: Content) -> some View {
-        if glass, #available(macOS 26.0, *) {
-            content.glassEffect(.regular, in: .capsule)
-        } else {
-            content
+        .if(glass) { view in
+            view.glassEffect(.regular, in: .capsule)
         }
     }
 }
+
+// MARK: - Banner
 
 struct VersioneerBannerView: View {
     let title: String
@@ -129,6 +117,8 @@ struct VersioneerBannerView: View {
     }
 }
 
+// MARK: - Section Header
+
 struct VersioneerSectionHeader: View {
     let eyebrow: String?
     let title: String
@@ -151,6 +141,149 @@ struct VersioneerSectionHeader: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+}
+
+// MARK: - Version Diff Label
+
+struct VersionDiffLabel: View {
+    let installed: String
+    let latest: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(installed)
+            Image(systemName: "arrow.right")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+            Text(latest)
+                .foregroundStyle(.orange)
+        }
+        .font(.callout.monospacedDigit())
+    }
+}
+
+// MARK: - Metadata Popover Button
+
+struct MetadataPopoverButton: View {
+    let result: AppDecision
+
+    @State private var showPopover = false
+
+    var body: some View {
+        Button {
+            showPopover.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.body)
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showPopover, arrowEdge: .trailing) {
+            VStack(alignment: .leading, spacing: 10) {
+                metadataRow("Bundle ID", value: result.bundleId ?? "—")
+                metadataRow("App Name", value: result.appName)
+                if let matched = result.matchedAppName {
+                    metadataRow("Canonical Name", value: matched)
+                }
+                if let matchedId = result.matchedAppId {
+                    metadataRow("Matched App ID", value: matchedId)
+                }
+                if let teamId = result.artifact?.expectedTeamId {
+                    metadataRow("Expected Team ID", value: teamId)
+                }
+                if let minOS = result.artifact?.minOsVersion {
+                    metadataRow("Minimum macOS", value: minOS)
+                }
+            }
+            .padding(16)
+            .frame(minWidth: 280)
+        }
+    }
+
+    private func metadataRow(_ label: String, value: String) -> some View {
+        LabeledContent(label) {
+            Text(value)
+                .font(.callout.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        }
+    }
+}
+
+// MARK: - Install Progress View
+
+struct InstallProgressView: View {
+    let progress: InstallPresentation.Progress
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(progress.title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("Step \(progress.currentStep) of \(progress.totalSteps)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                ForEach(1...progress.totalSteps, id: \.self) { step in
+                    Capsule(style: .continuous)
+                        .fill(step <= progress.currentStep ? Color.accentColor : Color.white.opacity(0.08))
+                        .frame(height: 7)
+                }
+            }
+        }
+        .versioneerCard(glass: false, cornerRadius: 18, padding: 14)
+    }
+}
+
+// MARK: - Detail Fact Row
+
+struct DetailFactRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        LabeledContent(label) {
+            Text(value)
+                .font(.callout.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+// MARK: - Vibrant Color Helpers
+
+extension ResultsBrowserRowPresentation.Tone {
+    var color: Color {
+        switch self {
+        case .accent:
+            .accentColor
+        case .positive:
+            .green
+        case .warning:
+            .orange
+        case .negative:
+            .red
+        case .secondary:
+            .purple
+        }
+    }
+}
+
+// MARK: - Conditional Modifier
+
+extension View {
+    @ViewBuilder
+    func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
         }
     }
 }

@@ -1,74 +1,87 @@
 import SwiftUI
 
-/// The main three-column layout: sidebar, results list, detail.
 struct RootView: View {
     @Environment(AppState.self) private var appState
     @Environment(InstallCoordinator.self) private var installCoordinator
 
     var body: some View {
-        NavigationSplitView {
-            SidebarView()
-        } content: {
-            ResultsListView()
-        } detail: {
-            if let selected = appState.selectedResult {
-                AppDetailView(result: selected)
-            } else {
-                EmptyStateView()
+        @Bindable var appState = appState
+
+        ZStack(alignment: .trailing) {
+            // Main content: header + list
+            VStack(spacing: 0) {
+                AppListHeaderView()
+
+                listContent
+                    .safeAreaInset(edge: .bottom) {
+                        FloatingActionBarView()
+                    }
+            }
+
+            // Detail panel overlay
+            if let detailResult = appState.detailResult {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.snappy(duration: 0.3)) {
+                            appState.closeDetail()
+                        }
+                    }
+
+                DetailPanelView(result: detailResult)
+                    .frame(width: 420)
+                    .frame(maxHeight: .infinity)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .frame(minWidth: 1040, minHeight: 620)
-        .toolbar { toolbarContent }
-        .safeAreaInset(edge: .top) {
-            if let shellStatus = appState.shellStatusPresentation {
-                ShellStatusStrip(presentation: shellStatus)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-            }
-        }
+        .animation(.snappy(duration: 0.3), value: appState.detailResult?.id)
+        .frame(minWidth: 900, minHeight: 560)
+        .searchable(text: $appState.searchText, prompt: "Filter apps")
         .versioneerAnalyticsScreen(name: "main_window", class: "RootView")
         .task {
-            if appState.settings.scanOnLaunch {
-                await Task.yield()
-                await appState.scanAndSubmit()
-            }
+            await Task.yield()
+            await appState.scanAndSubmit()
         }
     }
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItemGroup(placement: .primaryAction) {
-            Picker("Sort", selection: binding(for: \.resultsSort)) {
-                ForEach(ResultsBrowserSort.allCases) { sort in
-                    Text(sort.title).tag(sort)
+    @ViewBuilder
+    private var listContent: some View {
+        let rows = appState.resultsBrowserRows
+
+        if appState.loadState == .idle && rows.isEmpty && !appState.hasCachedResults {
+            // Scanning in progress — first launch
+            ContentUnavailableView {
+                ProgressView()
+                    .controlSize(.large)
+            } description: {
+                Text("Discovering your apps…")
+            }
+        } else if case .error(let message) = appState.loadState, !appState.hasCachedResults {
+            ErrorStateView(
+                message: message,
+                retryAction: { Task { await appState.scanAndSubmit() } }
+            )
+        } else if rows.isEmpty && !appState.searchText.isEmpty {
+            ContentUnavailableView.search(text: appState.searchText)
+        } else if rows.isEmpty {
+            ContentUnavailableView {
+                Label("No Results", systemImage: "app.dashed")
+            } description: {
+                Text("No apps match the current filter.")
+            }
+        } else {
+            List(selection: binding(for: \.selectedResultIDs)) {
+                ForEach(rows) { row in
+                    AppListRowView(row: row)
+                        .tag(row.id)
+                        .onTapGesture {
+                            withAnimation(.snappy(duration: 0.3)) {
+                                appState.openDetail(id: row.id)
+                            }
+                        }
                 }
             }
-            .pickerStyle(.menu)
-
-            Button {
-                Task { await appState.scanAndSubmit() }
-            } label: {
-                HStack(spacing: 8) {
-                    if appState.loadState == .scanning || appState.loadState == .submitting {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                    Text(scanButtonLabel)
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(appState.loadState == .scanning || appState.loadState == .submitting)
-        }
-    }
-
-    private var scanButtonLabel: String {
-        switch appState.loadState {
-        case .scanning:
-            "Scanning…"
-        case .submitting:
-            "Checking…"
-        default:
-            "Scan & Check"
+            .listStyle(.inset)
         }
     }
 
@@ -77,69 +90,5 @@ struct RootView: View {
             get: { appState[keyPath: keyPath] },
             set: { appState[keyPath: keyPath] = $0 }
         )
-    }
-}
-
-private struct ShellStatusStrip: View {
-    let presentation: ShellStatusPresentation
-
-    var body: some View {
-        GlassEffectContainer(spacing: 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(presentation.items) { item in
-                        ShellStatusItemView(item: item)
-                    }
-                }
-            }
-        }
-    }
-}
-
-private struct ShellStatusItemView: View {
-    let item: ShellStatusPresentation.Item
-
-    var body: some View {
-        HStack(spacing: 10) {
-            VersioneerStatusChip(
-                title: item.title,
-                tint: tint,
-                systemImage: item.showsProgress ? nil : systemImage,
-                showsProgress: item.showsProgress,
-                glass: true
-            )
-
-            Text(item.detail)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .versioneerCard(glass: true, cornerRadius: 20, padding: 14)
-    }
-
-    private var tint: Color {
-        switch item.tone {
-        case .progress:
-            .accentColor
-        case .success:
-            .green
-        case .warning:
-            .orange
-        case .failure:
-            .red
-        }
-    }
-
-    private var systemImage: String {
-        switch item.tone {
-        case .progress:
-            "arrow.trianglehead.2.clockwise"
-        case .success:
-            "checkmark.circle.fill"
-        case .warning:
-            "sparkles"
-        case .failure:
-            "exclamationmark.triangle.fill"
-        }
     }
 }

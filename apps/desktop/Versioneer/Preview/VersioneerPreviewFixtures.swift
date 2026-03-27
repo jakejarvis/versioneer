@@ -1,7 +1,7 @@
 #if DEBUG
 import SwiftUI
 
-private enum VersioneerPreviewFixtures {
+enum VersioneerPreviewFixtures {
     static let firefox = makeDecision(
         appName: "Firefox",
         bundleId: "org.mozilla.firefox",
@@ -123,12 +123,11 @@ private enum VersioneerPreviewFixtures {
 
     static func rootState(
         results: [AppDecision] = allResults,
-        selectedResultID: String? = nil,
+        detailResultID: String? = nil,
         loadState: AppState.LoadState = .done,
         installStates: [(AppDecision, InstallCoordinator.OperationState)] = []
     ) -> AppState {
         let state = AppState()
-        state.settings.scanOnLaunch = false
         state.installedApps = results.map(makeInstalledApp)
         state.inventoryResults = results
         state.snapshotId = "preview_snapshot"
@@ -137,7 +136,10 @@ private enum VersioneerPreviewFixtures {
         state.selectedSection = .all
         state.resultsSort = .updatesFirst
         state.searchText = ""
-        state.selectResult(id: selectedResultID)
+
+        if let detailResultID {
+            state.openDetail(id: detailResultID)
+        }
 
         for (result, operationState) in installStates {
             state.installCoordinator.previewSetState(operationState, for: result)
@@ -242,7 +244,7 @@ private struct PreviewHost<Content: View>: View {
     }
 }
 
-#Preview("No Selection") {
+#Preview("Main Window") {
     PreviewHost(appState: VersioneerPreviewFixtures.rootState()) {
         RootView()
     }
@@ -254,41 +256,16 @@ private struct PreviewHost<Content: View>: View {
     }
 }
 
-#Preview("Update Available") {
-    PreviewHost(appState: VersioneerPreviewFixtures.rootState(selectedResultID: VersioneerPreviewFixtures.firefox.id)) {
-        AppDetailView(result: VersioneerPreviewFixtures.firefox)
+#Preview("Detail: Update Available") {
+    PreviewHost(appState: VersioneerPreviewFixtures.rootState(detailResultID: VersioneerPreviewFixtures.firefox.id)) {
+        RootView()
     }
 }
 
-#Preview("Provisional Install") {
-    PreviewHost(appState: VersioneerPreviewFixtures.rootState(selectedResultID: VersioneerPreviewFixtures.obs.id)) {
-        AppDetailView(result: VersioneerPreviewFixtures.obs)
-    }
-}
-
-#Preview("Admin Helper Required") {
+#Preview("Detail: Install In Progress") {
     PreviewHost(
         appState: VersioneerPreviewFixtures.rootState(
-            selectedResultID: VersioneerPreviewFixtures.textMate.id,
-            installStates: [(
-                VersioneerPreviewFixtures.textMate,
-                VersioneerPreviewFixtures.installState(
-                    appDisplayName: "TextMate",
-                    phase: .installing,
-                    detail: "Setting up privileged installer…",
-                    helperStatus: .preparing
-                )
-            )]
-        )
-    ) {
-        AppDetailView(result: VersioneerPreviewFixtures.textMate)
-    }
-}
-
-#Preview("Install In Progress") {
-    PreviewHost(
-        appState: VersioneerPreviewFixtures.rootState(
-            selectedResultID: VersioneerPreviewFixtures.firefox.id,
+            detailResultID: VersioneerPreviewFixtures.firefox.id,
             installStates: [(
                 VersioneerPreviewFixtures.firefox,
                 VersioneerPreviewFixtures.installState(
@@ -299,14 +276,14 @@ private struct PreviewHost<Content: View>: View {
             )]
         )
     ) {
-        AppDetailView(result: VersioneerPreviewFixtures.firefox)
+        RootView()
     }
 }
 
-#Preview("Install Failure") {
+#Preview("Detail: Install Failed") {
     PreviewHost(
         appState: VersioneerPreviewFixtures.rootState(
-            selectedResultID: VersioneerPreviewFixtures.textMate.id,
+            detailResultID: VersioneerPreviewFixtures.textMate.id,
             installStates: [(
                 VersioneerPreviewFixtures.textMate,
                 VersioneerPreviewFixtures.installState(
@@ -320,7 +297,7 @@ private struct PreviewHost<Content: View>: View {
             )]
         )
     ) {
-        AppDetailView(result: VersioneerPreviewFixtures.textMate)
+        RootView()
     }
 }
 #endif
