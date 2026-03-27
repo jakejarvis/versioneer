@@ -1,157 +1,168 @@
 import Foundation
 import Testing
+
 @testable import Versioneer
 
 struct PrivilegedHelperClientTests {
-    @Test func registersHelperBeforeConnecting() async throws {
-        let registration = MockRegistrationController(initialStatus: .notRegistered, statusAfterRegister: .enabled)
-        let connection = MockConnectionProvider(result: PrivilegedOperationResult(
-            operationType: .installPackage,
-            succeeded: true,
-            detail: "ok"
+  @Test func registersHelperBeforeConnecting() async throws {
+    let registration = MockRegistrationController(
+      initialStatus: .notRegistered, statusAfterRegister: .enabled)
+    let connection = MockConnectionProvider(
+      result: PrivilegedOperationResult(
+        operationType: .installPackage,
+        succeeded: true,
+        detail: "ok"
+      ))
+    let client = PrivilegedHelperClient(
+      registrationController: registration,
+      connectionProvider: connection
+    )
+
+    _ = try await client.performOperation(
+      executionId: "exec_test",
+      stagingDirectory: FileManager.default.temporaryDirectory
+    )
+
+    #expect(registration.registerCalls == 1)
+    #expect(connection.requests.count == 1)
+  }
+
+  @Test func failsWhenHelperApprovalIsRequired() async {
+    let client = PrivilegedHelperClient(
+      registrationController: MockRegistrationController(initialStatus: .requiresApproval),
+      connectionProvider: MockConnectionProvider(
+        result: PrivilegedOperationResult(
+          operationType: .installPackage,
+          succeeded: true,
+          detail: "unused"
         ))
-        let client = PrivilegedHelperClient(
-            registrationController: registration,
-            connectionProvider: connection
-        )
+    )
 
-        _ = try await client.performOperation(
-            executionId: "exec_test",
-            stagingDirectory: FileManager.default.temporaryDirectory
-        )
-
-        #expect(registration.registerCalls == 1)
-        #expect(connection.requests.count == 1)
+    do {
+      _ = try await client.performOperation(
+        executionId: "exec_test",
+        stagingDirectory: FileManager.default.temporaryDirectory
+      )
+      Issue.record("Expected approval-required failure")
+    } catch let error as InstallError {
+      guard case .privilegedHelperApprovalRequired = error else {
+        Issue.record("Unexpected install error: \(error.localizedDescription)")
+        return
+      }
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
     }
+  }
 
-    @Test func failsWhenHelperApprovalIsRequired() async {
-        let client = PrivilegedHelperClient(
-            registrationController: MockRegistrationController(initialStatus: .requiresApproval),
-            connectionProvider: MockConnectionProvider(result: PrivilegedOperationResult(
-                operationType: .installPackage,
-                succeeded: true,
-                detail: "unused"
-            ))
-        )
+  @Test func surfacesRegistrationFailures() async {
+    let client = PrivilegedHelperClient(
+      registrationController: MockRegistrationController(
+        initialStatus: .notRegistered,
+        statusAfterRegister: .notRegistered,
+        registerError: NSError(
+          domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "boom"])
+      ),
+      connectionProvider: MockConnectionProvider(
+        result: PrivilegedOperationResult(
+          operationType: .installPackage,
+          succeeded: true,
+          detail: "unused"
+        ))
+    )
 
-        do {
-            _ = try await client.performOperation(
-                executionId: "exec_test",
-                stagingDirectory: FileManager.default.temporaryDirectory
-            )
-            Issue.record("Expected approval-required failure")
-        } catch let error as InstallError {
-            guard case .privilegedHelperApprovalRequired = error else {
-                Issue.record("Unexpected install error: \(error.localizedDescription)")
-                return
-            }
-        } catch {
-            Issue.record("Unexpected error: \(error.localizedDescription)")
-        }
+    do {
+      _ = try await client.performOperation(
+        executionId: "exec_test",
+        stagingDirectory: FileManager.default.temporaryDirectory
+      )
+      Issue.record("Expected registration failure")
+    } catch let error as InstallError {
+      guard case .privilegedHelperRegistrationFailed(let message) = error else {
+        Issue.record("Unexpected install error: \(error.localizedDescription)")
+        return
+      }
+      #expect(message.contains("boom"))
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
     }
+  }
 
-    @Test func surfacesRegistrationFailures() async {
-        let client = PrivilegedHelperClient(
-            registrationController: MockRegistrationController(
-                initialStatus: .notRegistered,
-                statusAfterRegister: .notRegistered,
-                registerError: NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "boom"])
-            ),
-            connectionProvider: MockConnectionProvider(result: PrivilegedOperationResult(
-                operationType: .installPackage,
-                succeeded: true,
-                detail: "unused"
-            ))
-        )
+  @Test func surfacesConnectionInvalidationFailures() async {
+    let client = PrivilegedHelperClient(
+      registrationController: MockRegistrationController(initialStatus: .enabled),
+      connectionProvider: MockConnectionProvider(
+        error: InstallError.privilegedHelperConnectionFailed("invalidated"))
+    )
 
-        do {
-            _ = try await client.performOperation(
-                executionId: "exec_test",
-                stagingDirectory: FileManager.default.temporaryDirectory
-            )
-            Issue.record("Expected registration failure")
-        } catch let error as InstallError {
-            guard case .privilegedHelperRegistrationFailed(let message) = error else {
-                Issue.record("Unexpected install error: \(error.localizedDescription)")
-                return
-            }
-            #expect(message.contains("boom"))
-        } catch {
-            Issue.record("Unexpected error: \(error.localizedDescription)")
-        }
+    do {
+      _ = try await client.performOperation(
+        executionId: "exec_test",
+        stagingDirectory: FileManager.default.temporaryDirectory
+      )
+      Issue.record("Expected connection failure")
+    } catch let error as InstallError {
+      guard case .privilegedHelperConnectionFailed(let message) = error else {
+        Issue.record("Unexpected install error: \(error.localizedDescription)")
+        return
+      }
+      #expect(message.contains("invalidated"))
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
     }
-
-    @Test func surfacesConnectionInvalidationFailures() async {
-        let client = PrivilegedHelperClient(
-            registrationController: MockRegistrationController(initialStatus: .enabled),
-            connectionProvider: MockConnectionProvider(error: InstallError.privilegedHelperConnectionFailed("invalidated"))
-        )
-
-        do {
-            _ = try await client.performOperation(
-                executionId: "exec_test",
-                stagingDirectory: FileManager.default.temporaryDirectory
-            )
-            Issue.record("Expected connection failure")
-        } catch let error as InstallError {
-            guard case .privilegedHelperConnectionFailed(let message) = error else {
-                Issue.record("Unexpected install error: \(error.localizedDescription)")
-                return
-            }
-            #expect(message.contains("invalidated"))
-        } catch {
-            Issue.record("Unexpected error: \(error.localizedDescription)")
-        }
-    }
+  }
 }
 
-private final class MockRegistrationController: PrivilegedHelperRegistrationControlling, @unchecked Sendable {
-    private(set) var registerCalls = 0
-    private let initialStatus: PrivilegedHelperRegistrationStatus
-    private let statusAfterRegister: PrivilegedHelperRegistrationStatus
-    private let registerError: Error?
+private final class MockRegistrationController: PrivilegedHelperRegistrationControlling,
+  @unchecked Sendable
+{
+  private(set) var registerCalls = 0
+  private let initialStatus: PrivilegedHelperRegistrationStatus
+  private let statusAfterRegister: PrivilegedHelperRegistrationStatus
+  private let registerError: Error?
 
-    init(
-        initialStatus: PrivilegedHelperRegistrationStatus,
-        statusAfterRegister: PrivilegedHelperRegistrationStatus? = nil,
-        registerError: Error? = nil
-    ) {
-        self.initialStatus = initialStatus
-        self.statusAfterRegister = statusAfterRegister ?? initialStatus
-        self.registerError = registerError
-    }
+  init(
+    initialStatus: PrivilegedHelperRegistrationStatus,
+    statusAfterRegister: PrivilegedHelperRegistrationStatus? = nil,
+    registerError: Error? = nil
+  ) {
+    self.initialStatus = initialStatus
+    self.statusAfterRegister = statusAfterRegister ?? initialStatus
+    self.registerError = registerError
+  }
 
-    var status: PrivilegedHelperRegistrationStatus {
-        registerCalls > 0 ? statusAfterRegister : initialStatus
-    }
+  var status: PrivilegedHelperRegistrationStatus {
+    registerCalls > 0 ? statusAfterRegister : initialStatus
+  }
 
-    func register() throws {
-        registerCalls += 1
-        if let registerError {
-            throw registerError
-        }
+  func register() throws {
+    registerCalls += 1
+    if let registerError {
+      throw registerError
     }
+  }
 }
 
-private final class MockConnectionProvider: PrivilegedHelperConnectionProviding, @unchecked Sendable {
-    private(set) var requests: [PrivilegedOperationRequest] = []
-    private let result: PrivilegedOperationResult?
-    private let error: Error?
+private final class MockConnectionProvider: PrivilegedHelperConnectionProviding, @unchecked Sendable
+{
+  private(set) var requests: [PrivilegedOperationRequest] = []
+  private let result: PrivilegedOperationResult?
+  private let error: Error?
 
-    init(result: PrivilegedOperationResult? = nil, error: Error? = nil) {
-        self.result = result
-        self.error = error
-    }
+  init(result: PrivilegedOperationResult? = nil, error: Error? = nil) {
+    self.result = result
+    self.error = error
+  }
 
-    func perform(request: PrivilegedOperationRequest) async throws -> PrivilegedOperationResult {
-        requests.append(request)
-        if let error {
-            throw error
-        }
-        return result ?? PrivilegedOperationResult(
-            operationType: .installPackage,
-            succeeded: true,
-            detail: "ok"
-        )
+  func perform(request: PrivilegedOperationRequest) async throws -> PrivilegedOperationResult {
+    requests.append(request)
+    if let error {
+      throw error
     }
+    return result
+      ?? PrivilegedOperationResult(
+        operationType: .installPackage,
+        succeeded: true,
+        detail: "ok"
+      )
+  }
 }

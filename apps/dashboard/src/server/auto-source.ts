@@ -11,6 +11,7 @@ interface DiscoveredAppRow {
   sightingCount: number;
   sparkleFeedUrl: string | null;
   electronUpdateUrl: string | null;
+  sourceValidationStatus?: string | null;
 }
 
 /**
@@ -26,7 +27,9 @@ export async function autoCreateSourcesForDiscoveredApp(params: {
   const { discoveredApp, appId, actorEmail, db } = params;
   const created: string[] = [];
 
-  if (discoveredApp.sightingCount < AUTO_SOURCE_MIN_SIGHTINGS) {
+  // Skip threshold if the source has been validated during enrichment
+  const isValidated = discoveredApp.sourceValidationStatus === "valid";
+  if (!isValidated && discoveredApp.sightingCount < AUTO_SOURCE_MIN_SIGHTINGS) {
     return { created };
   }
 

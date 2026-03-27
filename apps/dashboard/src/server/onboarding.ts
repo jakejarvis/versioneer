@@ -3,25 +3,24 @@ import { createDb } from "@versioneer/db";
 import {
   apps,
   appAliases,
+  discoveredApps,
   sources,
   onboardingChecklists,
   auditLog,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
-import {
-  appCreateSchema,
-  aliasCreateSchema,
-  sourceCreateSchema,
-  onboardingChecklistUpdateSchema,
-} from "@versioneer/validation";
+import { onboardingChecklistUpdateSchema } from "@versioneer/validation";
 import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { authMiddleware } from "./middleware";
 
-// GET /onboarding/:appId - detail
+// ──────────────────────────────────────────────────────────
+// Checklist queries (unchanged)
+// ──────────────────────────────────────────────────────────
+
 export const getOnboardingChecklist = createServerFn({ method: "GET" })
   .inputValidator(z.object({ appId: z.string().min(1) }))
   .handler(async ({ data: { appId } }) => {
@@ -35,7 +34,6 @@ export const getOnboardingChecklist = createServerFn({ method: "GET" })
     return checklist;
   });
 
-// PATCH /onboarding/:appId - update checklist, auto-mark complete
 export const updateOnboardingChecklist = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(onboardingChecklistUpdateSchema.extend({ appId: z.string().min(1) }))
@@ -56,7 +54,6 @@ export const updateOnboardingChecklist = createServerFn({ method: "POST" })
       if (value !== undefined) updates[key] = value;
     }
 
-    // Check if all items are complete
     const merged = { ...existing, ...fields };
     const allComplete =
       merged.hasCanonicalRecord &&
@@ -80,22 +77,73 @@ export const updateOnboardingChecklist = createServerFn({ method: "POST" })
     return { status: "updated" };
   });
 
-// POST /onboarding - full onboarding workflow: create app + aliases + source + checklist
-const onboardingCreateSchema = z.object({
-  app: appCreateSchema,
-  aliases: z.array(aliasCreateSchema).optional(),
-  source: sourceCreateSchema.omit({ appId: true }).optional(),
+// ──────────────────────────────────────────────────────────
+// Slug availability check
+// ──────────────────────────────────────────────────────────
+
+export const checkSlugAvailable = createServerFn({ method: "GET" })
+  .inputValidator(z.object({ slug: z.string().min(1) }))
+  .handler(async ({ data: { slug } }) => {
+    const db = createDb(env.DB);
+    const existing = await db.select({ id: apps.id }).from(apps).where(eq(apps.slug, slug)).get();
+    return { available: !existing };
+  });
+
+// ──────────────────────────────────────────────────────────
+// Atomic onboard from discovered app
+// ──────────────────────────────────────────────────────────
+
+const aliasInputSchema = z.object({
+  aliasType: z.enum([
+    "bundle_id",
+    "name",
+    "team_id",
+    "sparkle_feed",
+    "homepage",
+    "download_pattern",
+    "github_repo",
+    "mas_app_id",
+  ]),
+  value: z.string().min(1),
 });
 
-export const onboardApp = createServerFn({ method: "POST" })
+const sourceInputSchema = z.object({
+  sourceType: z.enum(["sparkle", "github_releases", "manual"]),
+  baseUrl: z.string().url(),
+  parserKey: z.string().min(1),
+  pollIntervalMinutes: z.number().int().min(5).max(10080).default(60),
+  label: z.string().optional(),
+});
+
+const onboardDiscoveredAppSchema = z.object({
+  discoveredAppId: z.string().min(1),
+  app: z.object({
+    slug: z.string().min(1).max(200),
+    canonicalName: z.string().min(1).max(500),
+    vendorName: z.string().max(500).optional(),
+    homepageUrl: z.string().url().max(2000).optional(),
+    notes: z.string().max(5000).optional(),
+  }),
+  aliases: z.array(aliasInputSchema),
+  source: sourceInputSchema.optional(),
+  sourceValidated: z.boolean().default(false),
+  enrichmentHasReleases: z.boolean().default(false),
+});
+
+/**
+ * Atomic onboard: creates app + aliases + source + checklist,
+ * approves the discovered app, and enqueues the first source fetch.
+ * All in a single call.
+ */
+export const onboardDiscoveredApp = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .inputValidator(onboardingCreateSchema)
+  .inputValidator(onboardDiscoveredAppSchema)
   .handler(async ({ data, context }) => {
     const db = createDb(env.DB);
     const now = new Date().toISOString();
     const appId = generateId(idPrefixes.app);
 
-    // Create app
+    // 1. Create app
     await db.insert(apps).values({
       id: appId,
       slug: data.app.slug,
@@ -108,41 +156,38 @@ export const onboardApp = createServerFn({ method: "POST" })
       updatedAt: now,
     });
 
-    let hasAliases = false;
-    let hasSource = false;
-
-    // Create aliases
-    if (data.aliases && data.aliases.length > 0) {
-      for (const aliasData of data.aliases) {
-        await db.insert(appAliases).values({
-          id: generateId(idPrefixes.alias),
-          appId,
-          aliasType: aliasData.aliasType,
-          value: aliasData.value,
-          normalizedValue: aliasData.normalizedValue ?? aliasData.value.toLowerCase(),
-          isExact: aliasData.isExact,
-          priority: aliasData.priority,
-          confidenceWeight: aliasData.confidenceWeight,
-          source: aliasData.source ?? null,
-          isActive: true,
-          createdAt: now,
-        });
-      }
-      hasAliases = true;
+    // 2. Create aliases
+    const hasAliases = data.aliases.length > 0;
+    for (const alias of data.aliases) {
+      await db.insert(appAliases).values({
+        id: generateId(idPrefixes.alias),
+        appId,
+        aliasType: alias.aliasType,
+        value: alias.value,
+        normalizedValue: alias.value.toLowerCase(),
+        isExact: true,
+        priority: 0,
+        confidenceWeight: 100,
+        source: "onboarding",
+        isActive: true,
+        createdAt: now,
+      });
     }
 
-    // Create source
+    // 3. Create source (active status, not paused)
+    let hasSource = false;
+    let sourceId: string | null = null;
     if (data.source) {
-      const sourceData = data.source;
+      sourceId = generateId(idPrefixes.source);
       await db.insert(sources).values({
-        id: generateId(idPrefixes.source),
+        id: sourceId,
         appId,
-        sourceType: sourceData.sourceType,
-        label: sourceData.label ?? null,
-        baseUrl: sourceData.baseUrl ?? null,
-        configJson: sourceData.configJson ?? null,
-        parserKey: sourceData.parserKey,
-        pollIntervalMinutes: sourceData.pollIntervalMinutes,
+        sourceType: data.source.sourceType,
+        label: data.source.label ?? null,
+        baseUrl: data.source.baseUrl,
+        configJson: null,
+        parserKey: data.source.parserKey,
+        pollIntervalMinutes: data.source.pollIntervalMinutes,
         status: "active",
         createdAt: now,
         updatedAt: now,
@@ -150,18 +195,30 @@ export const onboardApp = createServerFn({ method: "POST" })
       hasSource = true;
     }
 
-    // Create onboarding checklist
+    // 4. Create onboarding checklist with auto-marked items
     await db.insert(onboardingChecklists).values({
       id: generateId(idPrefixes.onboardingChecklist),
       appId,
       hasCanonicalRecord: true,
       hasAliases,
       hasSource,
+      parserOutputVerified: data.sourceValidated,
+      latestReleasePublished: data.enrichmentHasReleases,
       createdAt: now,
       updatedAt: now,
     });
 
-    // Audit log
+    // 5. Approve discovered app
+    await db
+      .update(discoveredApps)
+      .set({
+        status: "approved",
+        onboardedAppId: appId,
+        updatedAt: now,
+      })
+      .where(eq(discoveredApps.id, data.discoveredAppId));
+
+    // 6. Audit log
     await db.insert(auditLog).values({
       id: generateId(idPrefixes.auditLog),
       eventType: "app_onboarded",
@@ -169,9 +226,22 @@ export const onboardApp = createServerFn({ method: "POST" })
       actorId: context.user.email,
       targetType: "app",
       targetId: appId,
-      payloadJson: JSON.stringify({ aliases: data.aliases?.length ?? 0, hasSource }),
+      payloadJson: JSON.stringify({
+        discoveredAppId: data.discoveredAppId,
+        aliases: data.aliases.length,
+        hasSource,
+        sourceValidated: data.sourceValidated,
+      }),
       createdAt: now,
     });
+
+    // 7. Enqueue first source fetch
+    if (sourceId) {
+      await env.SOURCE_FETCH_QUEUE.send({
+        sourceId,
+        reason: "onboarding",
+      });
+    }
 
     return { id: appId, status: "onboarded" };
   });

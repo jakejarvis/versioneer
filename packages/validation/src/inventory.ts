@@ -13,6 +13,9 @@ export const installedAppSchema = z.object({
   sparkleFeedUrl: z.string().url().max(2000).optional(),
   isMasApp: z.boolean().optional(),
   electronUpdateUrl: z.string().url().max(2000).optional(),
+  codeSigningAuthority: z.string().max(500).optional(),
+  appCategory: z.string().max(200).optional(),
+  minMacOSVersion: z.string().max(50).optional(),
 });
 
 export type InstalledApp = z.infer<typeof installedAppSchema>;

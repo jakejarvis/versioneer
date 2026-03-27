@@ -1,6 +1,7 @@
 import { createDb } from "@versioneer/db";
 import { matchApp, generateMatchExplanation } from "@versioneer/identity";
 import type { AliasRecord } from "@versioneer/identity";
+import { enrichDiscoveredApp, shouldEnrich } from "@versioneer/pipeline";
 import {
   apps,
   appAliases,
@@ -660,6 +661,9 @@ publicRoutes.post("/inventory/check", async (c) => {
           sparkleFeedUrl?: string | null;
           isMasApp?: boolean | null;
           electronUpdateUrl?: string | null;
+          codeSigningAuthority?: string | null;
+          appCategory?: string | null;
+          minMacOSVersion?: string | null;
         }
       >();
       for (const installedApp of request.apps) {
@@ -679,6 +683,9 @@ publicRoutes.post("/inventory/check", async (c) => {
             sparkleFeedUrl: installedApp.sparkleFeedUrl,
             isMasApp: installedApp.isMasApp,
             electronUpdateUrl: installedApp.electronUpdateUrl,
+            codeSigningAuthority: installedApp.codeSigningAuthority,
+            appCategory: installedApp.appCategory,
+            minMacOSVersion: installedApp.minMacOSVersion,
           });
         }
       }
@@ -717,12 +724,22 @@ publicRoutes.post("/inventory/check", async (c) => {
               sparkleFeedUrl: app.sparkleFeedUrl ?? existing.sparkleFeedUrl,
               isMasApp: app.isMasApp ?? existing.isMasApp,
               electronUpdateUrl: app.electronUpdateUrl ?? existing.electronUpdateUrl,
+              codeSigningAuthority: app.codeSigningAuthority ?? existing.codeSigningAuthority,
+              appCategory: app.appCategory ?? existing.appCategory,
+              minMacOSVersion: app.minMacOSVersion ?? existing.minMacOSVersion,
             })
             .where(eq(discoveredApps.id, existing.id));
+
+          // Enrich if stale or never enriched
+          if (shouldEnrich(existing)) {
+            await enrichDiscoveredApp({ discoveredAppId: existing.id, db });
+          }
         } else {
           const sampleVersions = app.version ? [app.version] : [];
+          const initialStatus = app.isMasApp ? "mas_app" : "pending";
+          const newId = generateId(idPrefixes.discoveredApp);
           await db.insert(discoveredApps).values({
-            id: generateId(idPrefixes.discoveredApp),
+            id: newId,
             lookupKey: key,
             appName: app.appName,
             bundleId: app.bundleId ?? null,
@@ -730,14 +747,22 @@ publicRoutes.post("/inventory/check", async (c) => {
             sightingCount: 1,
             firstSeenAt: now,
             lastSeenAt: now,
-            status: "pending",
+            status: initialStatus,
             sampleVersions: JSON.stringify(sampleVersions),
             sparkleFeedUrl: app.sparkleFeedUrl ?? null,
             isMasApp: app.isMasApp ?? null,
             electronUpdateUrl: app.electronUpdateUrl ?? null,
+            codeSigningAuthority: app.codeSigningAuthority ?? null,
+            appCategory: app.appCategory ?? null,
+            minMacOSVersion: app.minMacOSVersion ?? null,
             createdAt: now,
             updatedAt: now,
           });
+
+          // Enrich newly discovered app if it has a feed URL
+          if (app.sparkleFeedUrl || app.electronUpdateUrl) {
+            await enrichDiscoveredApp({ discoveredAppId: newId, db });
+          }
         }
       }
     })(),

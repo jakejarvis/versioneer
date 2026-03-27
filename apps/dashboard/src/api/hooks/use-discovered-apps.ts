@@ -3,11 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   approveDiscoveredApp,
   dismissDiscoveredApp,
+  getDiscoveredApp,
   listDiscoveredApps,
+  reEnrichDiscoveredApp,
 } from "@/server/discovered-apps";
 
 interface UseDiscoveredAppsParams {
-  status?: "pending" | "approved" | "dismissed";
+  status?: "pending" | "approved" | "dismissed" | "mas_app";
   limit?: number;
   offset?: number;
 }
@@ -16,6 +18,14 @@ export function useDiscoveredApps(params: UseDiscoveredAppsParams = {}) {
   return useQuery({
     queryKey: ["discovered-apps", params],
     queryFn: () => listDiscoveredApps({ data: params }),
+  });
+}
+
+export function useDiscoveredApp(id: string | null) {
+  return useQuery({
+    queryKey: ["discovered-app", id],
+    queryFn: () => getDiscoveredApp({ data: { id: id! } }),
+    enabled: !!id,
   });
 }
 
@@ -39,6 +49,17 @@ export function useApproveDiscoveredApp() {
       void qc.invalidateQueries({ queryKey: ["discovered-apps"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
       void qc.invalidateQueries({ queryKey: ["sources"] });
+    },
+  });
+}
+
+export function useReEnrichDiscoveredApp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => reEnrichDiscoveredApp({ data: { id } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["discovered-apps"] });
+      void qc.invalidateQueries({ queryKey: ["discovered-app"] });
     },
   });
 }

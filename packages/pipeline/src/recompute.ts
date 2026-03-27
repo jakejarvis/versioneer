@@ -9,6 +9,7 @@ import {
   adminOverrides,
   installRules,
   reviewQueue,
+  onboardingChecklists,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
@@ -211,5 +212,43 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
       releasedAt: winningRelease.releasedAt,
       updatedAt: now,
     });
+  }
+
+  // Auto-update onboarding checklist: mark reviewQueueClear if no gated items
+  const checklist = await db
+    .select()
+    .from(onboardingChecklists)
+    .where(eq(onboardingChecklists.appId, job.appId))
+    .get();
+  if (checklist && !checklist.isComplete && !checklist.reviewQueueClear) {
+    const pendingReviews = await db
+      .select({ id: reviewQueue.id })
+      .from(reviewQueue)
+      .where(and(eq(reviewQueue.relatedId, job.appId), eq(reviewQueue.status, "pending")))
+      .get();
+
+    if (!pendingReviews) {
+      const updates: Record<string, unknown> = {
+        reviewQueueClear: true,
+        updatedAt: new Date().toISOString(),
+      };
+      const merged = { ...checklist, reviewQueueClear: true };
+      const allComplete =
+        merged.hasCanonicalRecord &&
+        merged.hasAliases &&
+        merged.hasSource &&
+        merged.parserOutputVerified &&
+        merged.latestReleasePublished &&
+        merged.reviewQueueClear &&
+        merged.qualityScoreAcceptable;
+      if (allComplete) {
+        updates.isComplete = true;
+        updates.completedAt = new Date().toISOString();
+      }
+      await db
+        .update(onboardingChecklists)
+        .set(updates)
+        .where(eq(onboardingChecklists.id, checklist.id));
+    }
   }
 }

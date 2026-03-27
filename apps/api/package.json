@@ -16,6 +16,7 @@
     "@versioneer/contracts": "workspace:*",
     "@versioneer/db": "workspace:*",
     "@versioneer/identity": "workspace:*",
+    "@versioneer/pipeline": "workspace:*",
     "@versioneer/schema": "workspace:*",
     "@versioneer/validation": "workspace:*",
     "@versioneer/versioning": "workspace:*",

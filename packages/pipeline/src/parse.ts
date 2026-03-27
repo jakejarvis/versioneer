@@ -7,6 +7,7 @@ import {
   releaseObservations,
   releases,
   artifacts,
+  onboardingChecklists,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
@@ -199,6 +200,41 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
     await env.RECOMPUTE_LATEST_QUEUE.send({
       appId: source.appId,
     });
+
+    // Auto-update onboarding checklist if it exists
+    const checklist = await db
+      .select()
+      .from(onboardingChecklists)
+      .where(eq(onboardingChecklists.appId, source.appId))
+      .get();
+    if (checklist && !checklist.isComplete) {
+      const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+      if (!checklist.parserOutputVerified && output.confidence >= 80) {
+        updates.parserOutputVerified = true;
+      }
+      if (!checklist.latestReleasePublished && output.releases.length > 0) {
+        updates.latestReleasePublished = true;
+      }
+      if (Object.keys(updates).length > 1) {
+        const merged = { ...checklist, ...updates };
+        const allComplete =
+          merged.hasCanonicalRecord &&
+          merged.hasAliases &&
+          merged.hasSource &&
+          merged.parserOutputVerified &&
+          merged.latestReleasePublished &&
+          merged.reviewQueueClear &&
+          merged.qualityScoreAcceptable;
+        if (allComplete) {
+          updates.isComplete = true;
+          updates.completedAt = new Date().toISOString();
+        }
+        await db
+          .update(onboardingChecklists)
+          .set(updates)
+          .where(eq(onboardingChecklists.id, checklist.id));
+      }
+    }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
 

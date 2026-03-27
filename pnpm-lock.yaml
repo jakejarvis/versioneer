@@ -68,6 +68,9 @@ importers:
       '@versioneer/identity':
         specifier: workspace:*
         version: link:../../packages/identity
+      '@versioneer/pipeline':
+        specifier: workspace:*
+        version: link:../../packages/pipeline
       '@versioneer/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -123,6 +126,9 @@ importers:
       '@versioneer/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@versioneer/parsers':
+        specifier: workspace:*
+        version: link:../../packages/parsers
       '@versioneer/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline
@@ -400,6 +406,9 @@ importers:
       '@versioneer/schema':
         specifier: workspace:*
         version: link:../schema
+      '@versioneer/validation':
+        specifier: workspace:*
+        version: link:../validation
       '@versioneer/versioning':
         specifier: workspace:*
         version: link:../versioning

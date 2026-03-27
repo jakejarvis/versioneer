@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createDb } from "@versioneer/db";
+import { enrichDiscoveredApp } from "@versioneer/pipeline";
 import { discoveredApps, auditLog, generateId, idPrefixes } from "@versioneer/schema";
 import { env } from "cloudflare:workers";
 import { desc, eq, sql } from "drizzle-orm";
@@ -13,7 +14,7 @@ export const listDiscoveredApps = createServerFn({ method: "GET" })
     z.object({
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
-      status: z.enum(["pending", "approved", "dismissed"]).default("pending"),
+      status: z.enum(["pending", "approved", "dismissed", "mas_app"]).default("pending"),
     }),
   )
   .handler(async ({ data }) => {
@@ -112,4 +113,24 @@ export const approveDiscoveredApp = createServerFn({ method: "POST" })
     });
 
     return { status: "approved", autoCreatedSources: autoResult.created };
+  });
+
+// GET single discovered app by ID (with all enrichment data)
+export const getDiscoveredApp = createServerFn({ method: "GET" })
+  .inputValidator(z.object({ id: z.string().min(1) }))
+  .handler(async ({ data: { id } }) => {
+    const db = createDb(env.DB);
+    const item = await db.select().from(discoveredApps).where(eq(discoveredApps.id, id)).get();
+    if (!item) throw new Error("Not found");
+    return item;
+  });
+
+// POST re-enrich a discovered app (manual trigger)
+export const reEnrichDiscoveredApp = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(z.object({ id: z.string().min(1) }))
+  .handler(async ({ data: { id } }) => {
+    const db = createDb(env.DB);
+    const result = await enrichDiscoveredApp({ discoveredAppId: id, db });
+    return result;
   });
