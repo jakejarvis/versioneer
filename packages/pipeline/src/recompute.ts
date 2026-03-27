@@ -219,6 +219,19 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
       releasedAt: winningRelease.releasedAt,
       updatedAt: now,
     });
+
+    // Dismiss any stale publication-gated review items for this app now that
+    // it has passed gating and published successfully.
+    await db
+      .update(reviewQueue)
+      .set({ status: "dismissed", resolvedAt: now })
+      .where(
+        and(
+          eq(reviewQueue.relatedId, job.appId),
+          eq(reviewQueue.reviewType, "publication_gated"),
+          eq(reviewQueue.status, "pending"),
+        ),
+      );
   }
 
   // Auto-update onboarding checklist: mark reviewQueueClear if no gated items

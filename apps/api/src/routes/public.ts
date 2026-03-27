@@ -304,7 +304,16 @@ function artifactMatchesStrategy(
 publicRoutes.post("/inventory/check", async (c) => {
   let body: unknown;
   try {
-    body = await c.req.json();
+    const contentEncoding = c.req.header("content-encoding");
+    if (contentEncoding === "gzip") {
+      const compressed = await c.req.arrayBuffer();
+      const decompressed = new Response(
+        new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip")),
+      );
+      body = await decompressed.json();
+    } else {
+      body = await c.req.json();
+    }
   } catch {
     return c.json({ error: "Invalid JSON body" }, 400);
   }

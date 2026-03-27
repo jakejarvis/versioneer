@@ -8,7 +8,6 @@ import {
   AlertTriangle,
   Shield,
   ScrollText,
-  PlusCircle,
   MessageSquare,
   Play,
   type LucideIcon,
@@ -32,7 +31,6 @@ export const navItems: NavItem[] = [
   { label: "Audit Log", path: "/audit-log", icon: ScrollText },
   { label: "Feedback", path: "/feedback", icon: MessageSquare },
   { label: "Executions", path: "/executions", icon: Play },
-  { label: "Onboarding", path: "/onboarding", icon: PlusCircle },
 ];
 
 const SUCCESS = "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-400";

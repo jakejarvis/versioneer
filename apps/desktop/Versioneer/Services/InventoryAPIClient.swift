@@ -2,6 +2,7 @@ import AppKit
 import CryptoKit
 import Foundation
 import Logging
+import zlib
 
 /// Submits app inventory to the backend and decodes update decisions.
 nonisolated struct InventoryAPIClient: Sendable {
@@ -130,9 +131,18 @@ nonisolated struct InventoryAPIClient: Sendable {
     let payload = buildRequest(from: apps, scanDurationMs: scanDurationMs)
 
     let encoder = JSONEncoder()
-    request.httpBody = try encoder.encode(payload)
+    let jsonData = try encoder.encode(payload)
 
-    Logger.api.info("Submitting inventory with \(apps.count) apps to \(endpoint.absoluteString)")
+    if let compressed = Self.gzipCompress(jsonData) {
+      request.httpBody = compressed
+      request.setValue("gzip", forHTTPHeaderField: "Content-Encoding")
+      Logger.api.info(
+        "Submitting inventory with \(apps.count) apps (\(jsonData.count) bytes → \(compressed.count) bytes gzipped)"
+      )
+    } else {
+      request.httpBody = jsonData
+      Logger.api.info("Submitting inventory with \(apps.count) apps (\(jsonData.count) bytes)")
+    }
 
     let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -233,6 +243,38 @@ nonisolated struct InventoryAPIClient: Sendable {
   private func pathHash(_ path: String) -> String {
     let digest = SHA256.hash(data: Data(path.utf8))
     return digest.map { String(format: "%02x", $0) }.joined()
+  }
+
+  /// Compresses data using gzip (RFC 1952) via zlib's deflateInit2.
+  private static func gzipCompress(_ data: Data) -> Data? {
+    var stream = z_stream()
+    // windowBits = 15 + 16 tells zlib to produce gzip format (with header/trailer)
+    guard deflateInit2_(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8,
+                        Z_DEFAULT_STRATEGY, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) == Z_OK
+    else { return nil }
+
+    defer { deflateEnd(&stream) }
+
+    let chunkSize = 65536
+    var output = Data()
+
+    data.withUnsafeBytes { inputPtr in
+      stream.next_in = UnsafeMutablePointer(mutating: inputPtr.baseAddress!.assumingMemoryBound(to: UInt8.self))
+      stream.avail_in = uInt(data.count)
+
+      var chunk = Data(count: chunkSize)
+      repeat {
+        chunk.withUnsafeMutableBytes { chunkPtr in
+          stream.next_out = chunkPtr.baseAddress!.assumingMemoryBound(to: UInt8.self)
+          stream.avail_out = uInt(chunkSize)
+          deflate(&stream, Z_FINISH)
+        }
+        let produced = chunkSize - Int(stream.avail_out)
+        output.append(chunk.prefix(produced))
+      } while stream.avail_out == 0
+    }
+
+    return output
   }
 
   /// Extracts the app's icon as a 128x128 PNG encoded in base64.

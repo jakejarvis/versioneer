@@ -6,7 +6,6 @@ import { env } from "cloudflare:workers";
 import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { autoCreateSourcesForDiscoveredApp } from "./auto-source";
 import { authMiddleware } from "./middleware";
 
 export const listDiscoveredApps = createServerFn({ method: "GET" })
@@ -67,52 +66,6 @@ export const dismissDiscoveredApp = createServerFn({ method: "POST" })
     });
 
     return { status: "dismissed" };
-  });
-
-export const approveDiscoveredApp = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .inputValidator(
-    z.object({
-      id: z.string().min(1),
-      appId: z.string().min(1),
-    }),
-  )
-  .handler(async ({ data, context }) => {
-    const { id, appId } = data;
-    const db = createDb(env.DB);
-    const item = await db.select().from(discoveredApps).where(eq(discoveredApps.id, id)).get();
-    if (!item) throw new Error("Not found");
-
-    const now = new Date().toISOString();
-    await db
-      .update(discoveredApps)
-      .set({
-        status: "approved",
-        onboardedAppId: appId,
-        updatedAt: now,
-      })
-      .where(eq(discoveredApps.id, id));
-
-    await db.insert(auditLog).values({
-      id: generateId(idPrefixes.auditLog),
-      eventType: "discovered_app_approved",
-      actorType: "admin",
-      actorId: context.user.email,
-      targetType: "discovered_app",
-      targetId: id,
-      payloadJson: JSON.stringify({ appName: item.appName, bundleId: item.bundleId, appId }),
-      createdAt: now,
-    });
-
-    // Auto-create sources from discovered app metadata (Sparkle feed, GitHub releases)
-    const autoResult = await autoCreateSourcesForDiscoveredApp({
-      discoveredApp: item,
-      appId,
-      actorEmail: context.user.email,
-      db,
-    });
-
-    return { status: "approved", autoCreatedSources: autoResult.created };
   });
 
 // GET single discovered app by ID (with all enrichment data)

@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  approveDiscoveredApp,
   dismissDiscoveredApp,
   getDiscoveredApp,
   listDiscoveredApps,
@@ -36,19 +35,6 @@ export function useDismissDiscoveredApp() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["discovered-apps"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
-    },
-  });
-}
-
-export function useApproveDiscoveredApp() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, appId }: { id: string; appId: string }) =>
-      approveDiscoveredApp({ data: { id, appId } }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["discovered-apps"] });
-      void qc.invalidateQueries({ queryKey: ["stats"] });
-      void qc.invalidateQueries({ queryKey: ["sources"] });
     },
   });
 }

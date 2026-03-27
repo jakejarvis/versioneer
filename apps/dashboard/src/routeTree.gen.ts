@@ -23,6 +23,7 @@ import { Route as AppsIndexRouteImport } from './routes/apps/index'
 import { Route as SourcesSourceIdRouteImport } from './routes/sources/$sourceId'
 import { Route as ReleasesReleaseIdRouteImport } from './routes/releases/$releaseId'
 import { Route as AppsAppIdRouteImport } from './routes/apps/$appId'
+import { Route as ApiAssetsSplatRouteImport } from './routes/api/assets/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -94,6 +95,11 @@ const AppsAppIdRoute = AppsAppIdRouteImport.update({
   path: '/apps/$appId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAssetsSplatRoute = ApiAssetsSplatRouteImport.update({
+  id: '/api/assets/$',
+  path: '/api/assets/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/releases/': typeof ReleasesIndexRoute
   '/review-queue/': typeof ReviewQueueIndexRoute
   '/sources/': typeof SourcesIndexRoute
+  '/api/assets/$': typeof ApiAssetsSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/releases': typeof ReleasesIndexRoute
   '/review-queue': typeof ReviewQueueIndexRoute
   '/sources': typeof SourcesIndexRoute
+  '/api/assets/$': typeof ApiAssetsSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -143,6 +151,7 @@ export interface FileRoutesById {
   '/releases/': typeof ReleasesIndexRoute
   '/review-queue/': typeof ReviewQueueIndexRoute
   '/sources/': typeof SourcesIndexRoute
+  '/api/assets/$': typeof ApiAssetsSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/releases/'
     | '/review-queue/'
     | '/sources/'
+    | '/api/assets/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/releases'
     | '/review-queue'
     | '/sources'
+    | '/api/assets/$'
   id:
     | '__root__'
     | '/'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/releases/'
     | '/review-queue/'
     | '/sources/'
+    | '/api/assets/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -210,6 +222,7 @@ export interface RootRouteChildren {
   ReleasesIndexRoute: typeof ReleasesIndexRoute
   ReviewQueueIndexRoute: typeof ReviewQueueIndexRoute
   SourcesIndexRoute: typeof SourcesIndexRoute
+  ApiAssetsSplatRoute: typeof ApiAssetsSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -312,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppsAppIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/assets/$': {
+      id: '/api/assets/$'
+      path: '/api/assets/$'
+      fullPath: '/api/assets/$'
+      preLoaderRoute: typeof ApiAssetsSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -330,6 +350,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReleasesIndexRoute: ReleasesIndexRoute,
   ReviewQueueIndexRoute: ReviewQueueIndexRoute,
   SourcesIndexRoute: SourcesIndexRoute,
+  ApiAssetsSplatRoute: ApiAssetsSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

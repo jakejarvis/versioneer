@@ -118,7 +118,11 @@ const sourceInputSchema = z.object({
 const onboardDiscoveredAppSchema = z.object({
   discoveredAppId: z.string().min(1),
   app: z.object({
-    slug: z.string().min(1).max(200),
+    slug: z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Slug must be lowercase alphanumeric with hyphens"),
     canonicalName: z.string().min(1).max(500),
     vendorName: z.string().max(500).optional(),
     homepageUrl: z.string().url().max(2000).optional(),
@@ -143,24 +147,32 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     const now = new Date().toISOString();
     const appId = generateId(idPrefixes.app);
 
-    // 1. Create app (with icon if discovered app has one)
-    let catalogIconR2Key: string | null = null;
+    // 0. Validate discovered app exists and hasn't been onboarded already
     const discoveredAppRow = await db
-      .select({ iconR2Key: discoveredApps.iconR2Key })
+      .select()
       .from(discoveredApps)
       .where(eq(discoveredApps.id, data.discoveredAppId))
       .get();
+    if (!discoveredAppRow) throw new Error("Discovered app not found");
+    if (discoveredAppRow.status === "approved") throw new Error("Discovered app already onboarded");
 
-    if (discoveredAppRow?.iconR2Key) {
-      const bucket = env.ASSETS_BUCKET as unknown as R2Bucket;
-      const existingObject = await bucket.get(discoveredAppRow.iconR2Key);
-      if (existingObject) {
-        const pathParts = discoveredAppRow.iconR2Key.split("/");
-        const filename = pathParts[pathParts.length - 1]!;
-        catalogIconR2Key = `icons/${data.app.slug}/${filename}`;
-        await bucket.put(catalogIconR2Key, existingObject.body, {
-          httpMetadata: existingObject.httpMetadata,
-        });
+    // 1. Create app (with icon if discovered app has one)
+    let catalogIconR2Key: string | null = null;
+    if (discoveredAppRow.iconR2Key) {
+      try {
+        const bucket = env.ASSETS_BUCKET as unknown as R2Bucket;
+        const existingObject = await bucket.get(discoveredAppRow.iconR2Key);
+        if (existingObject) {
+          const pathParts = discoveredAppRow.iconR2Key.split("/");
+          const filename = pathParts[pathParts.length - 1]!;
+          catalogIconR2Key = `icons/${data.app.slug}/${filename}`;
+          await bucket.put(catalogIconR2Key, existingObject.body, {
+            httpMetadata: existingObject.httpMetadata,
+          });
+          await bucket.delete(discoveredAppRow.iconR2Key);
+        }
+      } catch {
+        // Icon transfer is non-critical — continue with onboarding
       }
     }
 
@@ -229,12 +241,13 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       updatedAt: now,
     });
 
-    // 5. Approve discovered app
+    // 5. Approve discovered app and clear the old icon reference
     await db
       .update(discoveredApps)
       .set({
         status: "approved",
         onboardedAppId: appId,
+        iconR2Key: null,
         updatedAt: now,
       })
       .where(eq(discoveredApps.id, data.discoveredAppId));

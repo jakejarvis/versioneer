@@ -1,19 +1,20 @@
 import { cn } from "@/lib/utils";
 
-const ASSETS_BASE_URL = import.meta.env.VITE_ASSETS_BASE_URL ?? "";
-
 interface AppIconProps {
   iconR2Key: string | null;
+  /** Full resolved URL — pass this instead of iconR2Key when the server has already built the URL. */
+  iconUrl?: string | null;
   appName: string;
   size?: number;
   className?: string;
 }
 
-export function AppIcon({ iconR2Key, appName, size = 32, className }: AppIconProps) {
-  if (iconR2Key) {
+export function AppIcon({ iconR2Key, iconUrl, appName, size = 32, className }: AppIconProps) {
+  const src = iconUrl ?? (iconR2Key ? `/api/assets/${iconR2Key}` : null);
+  if (src) {
     return (
       <img
-        src={`${ASSETS_BASE_URL}/${iconR2Key}`}
+        src={src}
         alt={`${appName} icon`}
         width={size}
         height={size}

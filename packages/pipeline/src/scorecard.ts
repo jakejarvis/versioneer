@@ -13,6 +13,8 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
+
+import { autoPromoteVerification } from "./verification";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 import type { Env } from "./types";
@@ -346,4 +348,8 @@ export async function handleComputeScorecard(appId: string, env: Env): Promise<v
         .where(eq(onboardingChecklists.id, checklist.id));
     }
   }
+
+  // Attempt automatic verification tier promotion (unverified → provisional → verified).
+  // This runs after every scorecard computation since we now have fresh pipeline data.
+  await autoPromoteVerification(db, appId);
 }
