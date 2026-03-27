@@ -18,6 +18,7 @@ import { eq, and, desc } from "drizzle-orm";
 
 import { generatePublicationExplanation, generateArtifactSelectionExplanation } from "./explain";
 import { classifyInstallability } from "./installability";
+import { handleComputeScorecard } from "./scorecard";
 import type { Env, RecomputeLatestJob } from "./types";
 
 const CHANNELS = ["stable", "beta", "nightly"] as const;
@@ -113,6 +114,12 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
       publication: publicationExplanation,
       artifact: artifactExplanation,
     });
+
+    // Ensure the scorecard and quality state are fresh before gating.
+    // Without this, a newly onboarded app's first recompute would see stale
+    // qualityState="unknown" (from before any pipeline data existed) and gate
+    // the release to the review queue unnecessarily.
+    await handleComputeScorecard(job.appId, env);
 
     // Publication gating: check verification tier and quality state
     const app = await db.select().from(apps).where(eq(apps.id, job.appId)).get();

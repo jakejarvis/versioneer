@@ -8,6 +8,23 @@ export interface Env {
   ARTIFACT_VERIFY_QUEUE: Queue;
   RECOMPUTE_LATEST_QUEUE: Queue;
   ENVIRONMENT: string;
+  GITHUB_TOKEN?: string;
+}
+
+/**
+ * Builds standard headers for GitHub API requests.
+ * Uses token authentication when available (5,000 req/hr),
+ * falls back to unauthenticated (60 req/hr).
+ */
+export function githubApiHeaders(token?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github.v3+json",
+    "User-Agent": "Versioneer/1.0 (https://versioneer.app)",
+  };
+  if (token) {
+    headers["Authorization"] = `token ${token}`;
+  }
+  return headers;
 }
 
 export interface SourceFetchJob {

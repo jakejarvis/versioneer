@@ -131,6 +131,10 @@ export const reEnrichDiscoveredApp = createServerFn({ method: "POST" })
   .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data: { id } }) => {
     const db = createDb(env.DB);
-    const result = await enrichDiscoveredApp({ discoveredAppId: id, db });
+    const result = await enrichDiscoveredApp({
+      discoveredAppId: id,
+      db,
+      githubToken: env.GITHUB_TOKEN,
+    });
     return result;
   });

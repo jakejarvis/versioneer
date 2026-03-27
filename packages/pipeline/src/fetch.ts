@@ -3,6 +3,7 @@ import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/sche
 import { eq } from "drizzle-orm";
 
 import { incrementHealthMetric } from "./health";
+import { githubApiHeaders } from "./types";
 import type { Env, SourceFetchJob } from "./types";
 
 export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<void> {
@@ -38,11 +39,8 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
 
   // Perform HTTP fetch
   try {
-    const headers: Record<string, string> = {};
-    if (source.sourceType === "github_releases") {
-      headers["Accept"] = "application/vnd.github.v3+json";
-      headers["User-Agent"] = "Versioneer/1.0 (https://versioneer.app)";
-    }
+    const headers: Record<string, string> =
+      source.sourceType === "github_releases" ? githubApiHeaders(env.GITHUB_TOKEN) : {};
 
     // Use etag/last-modified for conditional requests
     const lastFetch = await db

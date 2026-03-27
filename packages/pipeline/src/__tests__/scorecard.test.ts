@@ -78,6 +78,21 @@ describe("classifyQualityState", () => {
     };
     expect(classifyQualityState(scorecard)).toBe("unknown");
   });
+
+  it("returns unknown when confidence is null but fetch/parse have data", () => {
+    const scorecard: ScorecardData = {
+      sourceTypesPresent: ["sparkle"],
+      latestFetchSuccessAt: "2026-03-25T00:00:00Z",
+      recentFetchSuccessRate: 100,
+      recentParseSuccessRate: 100,
+      latestReleaseConfidence: null,
+      artifactTrustStatus: null,
+      inventoryMatchSuccessRate: null,
+      ambiguityRate: null,
+      activeOverrideCount: 0,
+    };
+    expect(classifyQualityState(scorecard)).toBe("unknown");
+  });
 });
 
 describe("computeQualityScore", () => {
@@ -96,7 +111,7 @@ describe("computeQualityScore", () => {
     expect(computeQualityScore(scorecard)).toBe(100);
   });
 
-  it("returns 0 when no data", () => {
+  it("returns null when no data", () => {
     const scorecard: ScorecardData = {
       sourceTypesPresent: [],
       latestFetchSuccessAt: null,
@@ -108,7 +123,7 @@ describe("computeQualityScore", () => {
       ambiguityRate: null,
       activeOverrideCount: 0,
     };
-    expect(computeQualityScore(scorecard)).toBe(0);
+    expect(computeQualityScore(scorecard)).toBeNull();
   });
 
   it("computes weighted average correctly with partial data", () => {

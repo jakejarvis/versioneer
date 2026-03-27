@@ -732,7 +732,11 @@ publicRoutes.post("/inventory/check", async (c) => {
 
           // Enrich if stale or never enriched
           if (shouldEnrich(existing)) {
-            await enrichDiscoveredApp({ discoveredAppId: existing.id, db });
+            await enrichDiscoveredApp({
+              discoveredAppId: existing.id,
+              db,
+              githubToken: c.env.GITHUB_TOKEN,
+            });
           }
         } else {
           const sampleVersions = app.version ? [app.version] : [];
@@ -761,7 +765,11 @@ publicRoutes.post("/inventory/check", async (c) => {
 
           // Enrich newly discovered app if it has a feed URL
           if (app.sparkleFeedUrl || app.electronUpdateUrl) {
-            await enrichDiscoveredApp({ discoveredAppId: newId, db });
+            await enrichDiscoveredApp({
+              discoveredAppId: newId,
+              db,
+              githubToken: c.env.GITHUB_TOKEN,
+            });
           }
         }
       }

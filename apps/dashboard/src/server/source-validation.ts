@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { sparkleParser, githubReleasesParser } from "@versioneer/parsers";
+import { githubApiHeaders } from "@versioneer/pipeline";
+import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 export const validateSource = createServerFn({ method: "POST" })
@@ -14,11 +16,8 @@ export const validateSource = createServerFn({ method: "POST" })
 
     let response: Response;
     try {
-      const headers: Record<string, string> = {};
-      if (sourceType === "github_releases") {
-        headers["Accept"] = "application/vnd.github.v3+json";
-        headers["User-Agent"] = "Versioneer/1.0";
-      }
+      const headers: Record<string, string> =
+        sourceType === "github_releases" ? githubApiHeaders(env.GITHUB_TOKEN) : {};
       response = await fetch(url, {
         signal: AbortSignal.timeout(10_000),
         headers,

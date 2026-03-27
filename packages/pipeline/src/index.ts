@@ -5,6 +5,7 @@ export type {
   ArtifactVerifyJob,
   RecomputeLatestJob,
 } from "./types";
+export { githubApiHeaders } from "./types";
 export { handleSourceFetch } from "./fetch";
 export { handleSourceParse } from "./parse";
 export { handleRecomputeLatest } from "./recompute";

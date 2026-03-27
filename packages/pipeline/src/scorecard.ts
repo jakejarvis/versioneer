@@ -9,6 +9,7 @@ import {
   clientInventoryApps,
   adminOverrides,
   appScorecards,
+  onboardingChecklists,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
@@ -183,14 +184,20 @@ export function classifyQualityState(scorecard: ScorecardData): QualityState {
     return "unknown";
   }
 
-  // Unknown: not enough data to judge
-  if (scorecard.recentFetchSuccessRate === null && scorecard.recentParseSuccessRate === null) {
+  // Unknown: not enough data to judge — if any critical metric is still null,
+  // we don't have sufficient signal to classify. Treating null as 0 would
+  // incorrectly mark newly onboarded apps as "red".
+  if (
+    scorecard.recentFetchSuccessRate === null ||
+    scorecard.recentParseSuccessRate === null ||
+    scorecard.latestReleaseConfidence === null
+  ) {
     return "unknown";
   }
 
-  const fetchRate = scorecard.recentFetchSuccessRate ?? 0;
-  const parseRate = scorecard.recentParseSuccessRate ?? 0;
-  const confidence = scorecard.latestReleaseConfidence ?? 0;
+  const fetchRate = scorecard.recentFetchSuccessRate;
+  const parseRate = scorecard.recentParseSuccessRate;
+  const confidence = scorecard.latestReleaseConfidence;
 
   // Red: any critical metric below threshold
   if (fetchRate < 70 || parseRate < 70 || confidence < 60) {
@@ -206,7 +213,7 @@ export function classifyQualityState(scorecard: ScorecardData): QualityState {
   return "yellow";
 }
 
-export function computeQualityScore(scorecard: ScorecardData): number {
+export function computeQualityScore(scorecard: ScorecardData): number | null {
   const weights = {
     fetchRate: 25,
     parseRate: 25,
@@ -244,7 +251,7 @@ export function computeQualityScore(scorecard: ScorecardData): number {
     totalWeight += weights.ambiguity;
   }
 
-  if (totalWeight === 0) return 0;
+  if (totalWeight === 0) return null;
   return Math.round(weightedSum / totalWeight);
 }
 
@@ -305,4 +312,38 @@ export async function handleComputeScorecard(appId: string, env: Env): Promise<v
       updatedAt: now,
     })
     .where(eq(apps.id, appId));
+
+  // Auto-mark qualityScoreAcceptable on the onboarding checklist when quality
+  // reaches green or yellow (not red, not unknown).
+  if (qualityState === "green" || qualityState === "yellow") {
+    const checklist = await db
+      .select()
+      .from(onboardingChecklists)
+      .where(eq(onboardingChecklists.appId, appId))
+      .get();
+
+    if (checklist && !checklist.qualityScoreAcceptable) {
+      const updates: Record<string, unknown> = {
+        qualityScoreAcceptable: true,
+        updatedAt: now,
+      };
+      const merged = { ...checklist, qualityScoreAcceptable: true };
+      const allComplete =
+        merged.hasCanonicalRecord &&
+        merged.hasAliases &&
+        merged.hasSource &&
+        merged.parserOutputVerified &&
+        merged.latestReleasePublished &&
+        merged.reviewQueueClear &&
+        merged.qualityScoreAcceptable;
+      if (allComplete) {
+        updates.isComplete = true;
+        updates.completedAt = now;
+      }
+      await db
+        .update(onboardingChecklists)
+        .set(updates)
+        .where(eq(onboardingChecklists.id, checklist.id));
+    }
+  }
 }

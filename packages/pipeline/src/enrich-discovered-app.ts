@@ -4,6 +4,8 @@ import { discoveredApps } from "@versioneer/schema";
 import { toGitHubApiReleasesUrl } from "@versioneer/validation";
 import { eq } from "drizzle-orm";
 
+import { githubApiHeaders } from "./types";
+
 export interface EnrichmentResult {
   enrichmentStatus: "success" | "failed" | "skipped";
   enrichmentError?: string;
@@ -42,8 +44,9 @@ export function shouldEnrich(row: {
 export async function enrichDiscoveredApp(params: {
   discoveredAppId: string;
   db: ReturnType<typeof createDb>;
+  githubToken?: string;
 }): Promise<EnrichmentResult> {
-  const { discoveredAppId, db } = params;
+  const { discoveredAppId, db, githubToken } = params;
 
   const row = await db
     .select()
@@ -94,7 +97,7 @@ export async function enrichDiscoveredApp(params: {
     if (result.sourceValidationStatus !== "valid" && row.electronUpdateUrl) {
       const apiUrl = toGitHubApiReleasesUrl(row.electronUpdateUrl);
       if (apiUrl) {
-        await enrichFromGitHubReleases(apiUrl, result);
+        await enrichFromGitHubReleases(apiUrl, result, githubToken);
       }
     }
 
@@ -205,15 +208,16 @@ async function enrichFromSparkleFeed(url: string, result: EnrichmentResult): Pro
   }
 }
 
-async function enrichFromGitHubReleases(apiUrl: string, result: EnrichmentResult): Promise<void> {
+async function enrichFromGitHubReleases(
+  apiUrl: string,
+  result: EnrichmentResult,
+  githubToken?: string,
+): Promise<void> {
   let response: Response;
   try {
     response = await fetch(apiUrl, {
       signal: AbortSignal.timeout(10_000),
-      headers: {
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "Versioneer/1.0",
-      },
+      headers: githubApiHeaders(githubToken),
     });
   } catch {
     result.sourceValidationStatus = "timeout";

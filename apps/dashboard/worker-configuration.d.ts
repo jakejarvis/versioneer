@@ -7,6 +7,7 @@ declare namespace Cloudflare {
     SOURCE_PARSE_QUEUE: Queue;
     ARTIFACT_VERIFY_QUEUE: Queue;
     RECOMPUTE_LATEST_QUEUE: Queue;
+    GITHUB_TOKEN?: string;
   }
 }
 

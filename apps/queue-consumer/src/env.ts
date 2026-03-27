@@ -8,4 +8,5 @@ export interface Env {
   ARTIFACT_VERIFY_QUEUE: Queue;
   RECOMPUTE_LATEST_QUEUE: Queue;
   ENVIRONMENT: string;
+  GITHUB_TOKEN?: string;
 }
