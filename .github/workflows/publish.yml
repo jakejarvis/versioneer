@@ -1,0 +1,219 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Marketing version to ship (for example 1.2.3)
+        required: true
+        type: string
+      build:
+        description: Internal build number (for example 45)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish desktop release
+    runs-on: macos-latest
+    env:
+      DOWNLOADS_BUCKET: versioneer-releases
+      DOWNLOADS_HOST: https://dl.versioneer.app
+      ARCHIVE_STEM: Versioneer-${{ inputs.version }}-${{ inputs.build }}
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      BUILD_NUMBER: ${{ inputs.build }}
+      APPLE_DEVELOPER_IDENTITY: ${{ secrets.APPLE_DEVELOPER_IDENTITY }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_SIGNING_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_SIGNING_CERTIFICATE_P12_BASE64 }}
+      APPLE_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_SIGNING_CERTIFICATE_PASSWORD }}
+      APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+      APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+      APPLE_NOTARY_PRIVATE_KEY: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY }}
+      SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+      SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Ensure GitHub release exists
+        run: |
+          set -euo pipefail
+          TAG="v${VERSION}"
+          if gh release view "$TAG" --json id >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "Versioneer ${VERSION}" --latest
+          else
+            gh release create "$TAG" \
+              --title "Versioneer ${VERSION}" \
+              --generate-notes \
+              --latest \
+              --target "${GITHUB_SHA}"
+          fi
+
+      - name: Capture GitHub release body
+        run: |
+          set -euo pipefail
+          TAG="v${VERSION}"
+          gh release view "$TAG" --json body --jq .body > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Import Developer ID certificate
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/versioneer-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          CERT_PATH="$RUNNER_TEMP/versioneer-signing.p12"
+
+          printf '%s' "$APPLE_SIGNING_CERTIFICATE_P12_BASE64" | base64 -D > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_SIGNING_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/xcodebuild
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -d user -s "$KEYCHAIN_PATH"
+
+          {
+            echo "KEYCHAIN_PATH=$KEYCHAIN_PATH"
+            echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Resolve package dependencies
+        run: |
+          set -euo pipefail
+          mkdir -p "$PWD/.build/DerivedData" "$PWD/.build/DerivedData/SourcePackages"
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project apps/desktop/Versioneer.xcodeproj \
+            -scheme Versioneer \
+            -derivedDataPath "$PWD/.build/DerivedData" \
+            -clonedSourcePackagesDirPath "$PWD/.build/DerivedData/SourcePackages"
+
+      - name: Locate Sparkle tools
+        run: |
+          set -euo pipefail
+          SPARKLE_BIN_DIR="$(dirname "$(find "$PWD/.build/DerivedData" "$HOME/Library/Caches/org.swift.swiftpm" -path '*Sparkle/bin/generate_appcast' -print -quit)")"
+          if [ -z "$SPARKLE_BIN_DIR" ]; then
+            echo "Could not locate Sparkle release tools." >&2
+            exit 1
+          fi
+          echo "SPARKLE_BIN_DIR=$SPARKLE_BIN_DIR" >> "$GITHUB_ENV"
+
+      - name: Archive release build
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project apps/desktop/Versioneer.xcodeproj \
+            -scheme Versioneer \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/Versioneer.xcarchive" \
+            -derivedDataPath "$PWD/.build/DerivedData" \
+            -clonedSourcePackagesDirPath "$PWD/.build/DerivedData/SourcePackages" \
+            archive \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$APPLE_DEVELOPER_IDENTITY" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            ENABLE_USER_SCRIPT_SANDBOXING=NO \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            SPARKLE_PUBLIC_ED_KEY="$SPARKLE_PUBLIC_ED_KEY"
+
+      - name: Notarize and package app
+        run: |
+          set -euo pipefail
+          APP_PATH="$RUNNER_TEMP/Versioneer.xcarchive/Products/Applications/Versioneer.app"
+          NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
+          ARCHIVES_DIR="$RUNNER_TEMP/sparkle-archives"
+          ARCHIVE_ZIP_PATH="$ARCHIVES_DIR/${ARCHIVE_STEM}.zip"
+
+          mkdir -p "$ARCHIVES_DIR"
+          printf '%s' "$APPLE_NOTARY_PRIVATE_KEY" > "$NOTARY_KEY_PATH"
+
+          xcrun notarytool submit "$APP_PATH" \
+            --key "$NOTARY_KEY_PATH" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple "$APP_PATH"
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ARCHIVE_ZIP_PATH"
+
+          {
+            echo "ARCHIVES_DIR=$ARCHIVES_DIR"
+            echo "ARCHIVE_ZIP_PATH=$ARCHIVE_ZIP_PATH"
+          } >> "$GITHUB_ENV"
+
+      - name: Render release notes HTML
+        run: |
+          set -euo pipefail
+          RELEASE_NOTES_HTML_PATH="$ARCHIVES_DIR/${VERSION}.html"
+          APPCAST_RELEASE_NOTES_PATH="$ARCHIVES_DIR/${ARCHIVE_STEM}.html"
+
+          pnpm exec tsx apps/desktop/scripts/render-release-notes.ts \
+            --input "$RUNNER_TEMP/release-notes.md" \
+            --output "$RELEASE_NOTES_HTML_PATH" \
+            --title "Versioneer ${VERSION}"
+
+          cp "$RELEASE_NOTES_HTML_PATH" "$APPCAST_RELEASE_NOTES_PATH"
+
+      - name: Generate Sparkle appcast
+        run: |
+          set -euo pipefail
+          printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$SPARKLE_BIN_DIR/generate_appcast" \
+            --ed-key-file - \
+            --download-url-prefix "$DOWNLOADS_HOST/downloads/" \
+            --release-notes-url-prefix "$DOWNLOADS_HOST/release-notes/" \
+            --link "https://versioneer.app" \
+            "$ARCHIVES_DIR"
+
+          if [ "$ARCHIVE_STEM" != "$VERSION" ]; then
+            cp "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" "$ARCHIVES_DIR/${VERSION}.html"
+            perl -0pi -e 's/\Q'"$DOWNLOADS_HOST/release-notes/$ARCHIVE_STEM.html"'\E/'"$DOWNLOADS_HOST/release-notes/$VERSION.html"'/g' "$ARCHIVES_DIR/appcast.xml"
+            printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$SPARKLE_BIN_DIR/sign_update" --ed-key-file - "$ARCHIVES_DIR/appcast.xml"
+          fi
+
+      - name: Upload release artifacts to R2
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          WRANGLER="pnpm --filter @versioneer/web exec wrangler"
+
+          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/downloads/${ARCHIVE_STEM}.zip" \
+            --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.zip" \
+            --remote \
+            --content-type application/zip
+
+          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/release-notes/${ARCHIVE_STEM}.html" \
+            --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" \
+            --remote \
+            --content-type "text/html; charset=utf-8"
+
+          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/release-notes/${VERSION}.html" \
+            --file "$ARCHIVES_DIR/${VERSION}.html" \
+            --remote \
+            --content-type "text/html; charset=utf-8"
+
+          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/appcast.xml" \
+            --file "$ARCHIVES_DIR/appcast.xml" \
+            --remote \
+            --content-type "application/xml; charset=utf-8"
+
+          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/latest/Versioneer.zip" \
+            --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.zip" \
+            --remote \
+            --content-type application/zip

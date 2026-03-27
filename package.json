@@ -1,5 +1,5 @@
 {
-  "name": "versioneer",
+  "name": "versioneer-mono",
   "private": true,
   "scripts": {
     "build": "turbo run build",
@@ -19,6 +19,7 @@
     "@types/node": "^25.5.0",
     "oxfmt": "^0.42.0",
     "oxlint": "^1.57.0",
+    "tsx": "^4.21.0",
     "turbo": "^2.8.20",
     "typescript": "catalog:",
     "vitest": "catalog:"

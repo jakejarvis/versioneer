@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Run tests
+  services-test:
+    name: Run services tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,9 +38,42 @@ jobs:
       - name: Test
         run: pnpm run test
 
-  deploy:
-    name: Deploy
-    needs: test
+  desktop-test:
+    name: Run macOS unit tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run macOS unit tests
+        run: |
+          set -euo pipefail
+          mkdir -p "$PWD/.build/DerivedData" "$PWD/.build/DerivedData/SourcePackages" "$PWD/.build/home"
+          HOME="$PWD/.build/home" \
+          xcodebuild \
+            -project apps/desktop/Versioneer.xcodeproj \
+            -scheme Versioneer \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$PWD/.build/DerivedData" \
+            -clonedSourcePackagesDirPath "$PWD/.build/DerivedData/SourcePackages" \
+            ENABLE_USER_SCRIPT_SANDBOXING=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            test
+
+  services-deploy:
+    name: Deploy backend services
+    needs:
+      - services-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:

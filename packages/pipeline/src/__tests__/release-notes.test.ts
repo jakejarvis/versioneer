@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { normalizeReleaseNotes } from "../release-notes";
+import { normalizeReleaseNotes, renderReleaseNotesDocument } from "../release-notes";
 import { sanitizeHtml } from "../sanitize-html";
 
 describe("sanitizeHtml", () => {
@@ -87,5 +87,33 @@ describe("normalizeReleaseNotes", () => {
     const result = normalizeReleaseNotes(md, "markdown");
     expect(result).toContain('href="https://example.com"');
     expect(result).toContain('rel="noopener noreferrer"');
+  });
+});
+
+describe("renderReleaseNotesDocument", () => {
+  it("wraps normalized notes in a full HTML document", () => {
+    const result = renderReleaseNotesDocument(
+      "## Changes\n- Added self-update support",
+      "markdown",
+      "Versioneer 1.2.0",
+    );
+
+    expect(result).toContain("<!doctype html>");
+    expect(result).toContain("<title>Versioneer 1.2.0</title>");
+    expect(result).toContain("<h1>Versioneer 1.2.0</h1>");
+    expect(result).toContain("<li>Added self-update support</li>");
+  });
+
+  it("uses a fallback message when notes are empty", () => {
+    const result = renderReleaseNotesDocument("", "markdown", "Versioneer 1.2.0");
+
+    expect(result).toContain("Release notes were not provided for this release.");
+  });
+
+  it("escapes the document title", () => {
+    const result = renderReleaseNotesDocument("Hello", "markdown", 'Versioneer <"beta">');
+
+    expect(result).toContain("&lt;&quot;beta&quot;&gt;");
+    expect(result).not.toContain('<title>Versioneer <"beta"></title>');
   });
 });

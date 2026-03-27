@@ -1,6 +1,6 @@
 # Versioneer
 
-macOS app update tracking backend. Scans installed apps, maintains a catalog of canonical app identities, ingests update information from sources (Sparkle appcasts, GitHub releases), and returns update decisions to clients.
+macOS app update tracker. A native desktop app scans installed apps and checks for updates; a Cloudflare-based backend maintains a catalog of canonical app identities, ingests update information from sources (Sparkle appcasts, GitHub releases), and returns update decisions to clients.
 
 ## Commands
 
@@ -38,6 +38,8 @@ Cloudflare-native monorepo. pnpm workspaces + Turborepo.
 | `apps/api`            | Hono on CF Workers        | Cloudflare Workers |
 | `apps/queue-consumer` | CF Workers queue consumer | Cloudflare Workers |
 | `apps/dashboard`      | React + Vite SPA          | Cloudflare Pages   |
+| `apps/web`            | React + Vite landing page | Cloudflare Pages   |
+| `apps/desktop`        | Swift/SwiftUI macOS app   | GitHub Releases    |
 
 ### Packages
 
@@ -62,25 +64,28 @@ The API worker and queue consumer share these bindings:
 
 - **D1** (`DB`): Relational source of truth
 - **R2** (`RAW_BUCKET`): Raw source fetch bodies
+- **R2** (`ASSETS_BUCKET`): Desktop release artifacts and assets
 - **KV** (`CACHE_KV`): Hot-path latest release cache
 - **KV** (`CONFIG_KV`): Feature flags, kill switches
 - **Queues**: `source-fetch`, `source-parse`, `artifact-verify`, `recompute-latest`, `dlq`
 
 ### API Routes
 
-Public (`/v1`): `POST /v1/inventory/check`, `GET /v1/apps/:appId`, `GET /v1/apps/:appId/releases`
+Public (`/v1`): `POST /v1/inventory/check`, `GET /v1/apps/:appId`, `GET /v1/apps/:appId/releases`, `POST /v1/install/prepare`, `POST /v1/install/executions/:executionId/status`, `GET /v1/releases/:releaseId/notes`, `POST /v1/feedback`
 
 Internal (`/internal`): Full CRUD for apps, aliases, sources, releases, install-rules, overrides, review-queue, job-failures, audit-log, stats. Sub-routers in `apps/api/src/routes/internal/`.
 
 ### Queue Pipeline
 
-`source-fetch` -> `source-parse` -> `recompute-latest`. Handlers in `packages/pipeline/src/`. The queue consumer dispatches by queue name in `apps/queue-consumer/src/index.ts`.
+`source-fetch` -> `source-parse` -> `recompute-latest`. Handlers in `packages/pipeline/src/`. The queue consumer dispatches by queue name in `apps/queue-consumer/src/index.ts`. A scheduled handler runs `handleComputeScorecard` to compute per-app quality scores.
+
+Additional pipeline modules: `release-notes.ts` (normalize/render release notes), `sanitize-html.ts`, `scorecard.ts` (quality metrics), `verification.ts` (verification tiers), `installability.ts` (installability classification), `explain.ts` (decision rationale).
 
 ## Key Patterns
 
 ### ID System
 
-All entities use prefixed nanoid text IDs: `app_xxx`, `src_xxx`, `rel_xxx`, etc. Generated via `generateId(idPrefixes.app)` from `@versioneer/schema`.
+All entities use prefixed nanoid text IDs: `app_xxx`, `src_xxx`, `rel_xxx`, etc. Generated via `generateId(idPrefixes.app)` from `@versioneer/schema`. Full prefix list: `app`, `alias`, `mr`, `src`, `fetch`, `parse`, `rel`, `obs`, `art`, `artc`, `alr`, `ir`, `cli`, `snap`, `cia`, `ovr`, `jf`, `rq`, `al`, `asc`, `shm`, `onb`, `fb`, `arto`, `exec`, `dapp`.
 
 ### TypeScript Config
 
@@ -94,13 +99,26 @@ All packages use `noEmit` — no `dist/` is produced. Apps resolve workspace pac
 
 ### Dashboard
 
-React 19 + Vite 8 + TanStack Router (manual route tree, not codegen) + TanStack Query + shadcn/ui (new-york style) + Tailwind v4.
+React 19 + Vite 8 + TanStack Router (file-based, auto-generated route tree) + TanStack Query + shadcn/ui (new-york style) + Tailwind v4.
 
-- Route tree: `src/routeTree.gen.ts` (manually maintained, uses `createRoute` not `createFileRoute`)
+- Route tree: `src/routeTree.gen.ts` (auto-generated — do not edit directly)
 - API client: `src/api/client.ts` — fetch wrapper prepending `/internal`
 - Hooks: `src/api/hooks/use-*.ts` — TanStack Query hooks per resource
 - Shared components: `src/components/shared/` (DataTable, StatusBadge, TimeAgo, IdDisplay, etc.)
 - Vite proxies `/internal/*` to `:8787` in dev
+
+### Desktop App
+
+Swift/SwiftUI native macOS app. Xcode project at `apps/desktop/Versioneer.xcodeproj`.
+
+- Scans `/Applications` and `~/Applications` for installed apps, submits inventory to the API, displays update decisions
+- Multi-strategy version checking: backend API + local Sparkle appcast parsing + Electron update feed checking
+- Installation orchestration: Sparkle, ZIP replace, DMG copy, PKG install — routes through local or privileged helper as needed
+- Privileged helper (`VersioneerPrivilegedHelper`) is an XPC service for admin-required installs
+- Self-updates via Sparkle framework (appcast at `dl.versioneer.app/appcast.xml`)
+- Firebase Analytics + Crashlytics for telemetry
+- Tests use Swift Testing framework (not XCTest), 12 test files in `VersioneerTests/`
+- `scripts/render-release-notes.ts` renders markdown release notes to HTML using the pipeline package
 
 ### Database Migrations
 
