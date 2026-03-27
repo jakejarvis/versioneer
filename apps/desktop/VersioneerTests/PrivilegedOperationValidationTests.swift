@@ -67,7 +67,8 @@ struct PrivilegedOperationValidationTests {
       sourceRelativePath: "payload/Test.app",
       destinationPath: symlinkedAppsDirectory.appendingPathComponent("Test.app").path,
       backupRelativePath: "backup/Test.app",
-      installTarget: nil
+      installTarget: nil,
+      caskToken: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 
@@ -98,7 +99,8 @@ struct PrivilegedOperationValidationTests {
       sourceRelativePath: "payload/payload.pkg",
       destinationPath: "/",
       backupRelativePath: nil,
-      installTarget: "/"
+      installTarget: "/",
+      caskToken: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 
@@ -133,7 +135,8 @@ struct PrivilegedOperationValidationTests {
       sourceRelativePath: "payload/Test.pkg",
       destinationPath: sandbox.root.appendingPathComponent("Applications/Test.app").path,
       backupRelativePath: "backup/Test.app",
-      installTarget: nil
+      installTarget: nil,
+      caskToken: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 
@@ -162,7 +165,8 @@ struct PrivilegedOperationValidationTests {
       sourceRelativePath: "payload/Test.app",
       destinationPath: destinationParent.appendingPathComponent("Test").path,
       backupRelativePath: "backup/Test.app",
-      installTarget: nil
+      installTarget: nil,
+      caskToken: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 
@@ -190,7 +194,8 @@ struct PrivilegedOperationValidationTests {
       sourceRelativePath: "payload/payload.zip",
       destinationPath: "/",
       backupRelativePath: nil,
-      installTarget: "/"
+      installTarget: "/",
+      caskToken: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 
@@ -217,7 +222,8 @@ struct PrivilegedOperationValidationTests {
       sourceRelativePath: "payload/payload.pkg",
       destinationPath: "/Applications",
       backupRelativePath: nil,
-      installTarget: "/Applications"
+      installTarget: "/Applications",
+      caskToken: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 

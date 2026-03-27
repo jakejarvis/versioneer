@@ -65,6 +65,7 @@ enum DesktopUITestFixtures {
       latestVersion: latestVersion,
       latestVersionRaw: latestVersion,
       latestReleaseId: nil,
+      homebrewCaskToken: nil,
       releasedAt: releasedAt,
       iconUrl: nil,
       artifact: artifact,
@@ -90,7 +91,9 @@ enum DesktopUITestFixtures {
       electronUpdateUrl: nil,
       codeSigningAuthority: nil,
       appCategory: nil,
-      minMacOSVersion: nil
+      minMacOSVersion: nil,
+      isHomebrewInstalled: false,
+      homebrewCaskToken: nil
     )
   }
 

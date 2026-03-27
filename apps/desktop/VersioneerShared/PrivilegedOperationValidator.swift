@@ -98,12 +98,18 @@ nonisolated struct PrivilegedOperationValidator {
       throw PrivilegedOperationValidationError.manifestInvalid
     }
 
-    let sourceURL = try validateRelativePath(
-      manifest.sourceRelativePath,
-      in: stagingDirectory,
-      expectedExtension: manifest.operationType == .replaceApp ? "app" : "pkg",
-      errorBuilder: PrivilegedOperationValidationError.sourcePathInvalid
-    )
+    let sourceURL: URL
+    switch manifest.operationType {
+    case .replaceApp, .installPackage:
+      sourceURL = try validateRelativePath(
+        manifest.sourceRelativePath,
+        in: stagingDirectory,
+        expectedExtension: manifest.operationType == .replaceApp ? "app" : "pkg",
+        errorBuilder: PrivilegedOperationValidationError.sourcePathInvalid
+      )
+    case .brewUpgrade:
+      sourceURL = stagingDirectory
+    }
 
     let destinationURL: URL?
     switch manifest.operationType {
@@ -118,6 +124,8 @@ nonisolated struct PrivilegedOperationValidator {
           manifest.installTarget ?? manifest.destinationPath)
       }
       destinationURL = URL(fileURLWithPath: "/")
+    case .brewUpgrade:
+      destinationURL = nil
     }
 
     let backupURL: URL?
@@ -148,6 +156,8 @@ nonisolated struct PrivilegedOperationValidator {
         throw PrivilegedOperationValidationError.unsupportedInstallTarget(
           manifest.installTarget ?? "")
       }
+      backupURL = nil
+    case .brewUpgrade:
       backupURL = nil
     }
 

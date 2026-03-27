@@ -252,7 +252,7 @@ final class InstallCoordinator {
             stagingDirectory: stagingDir
           )
 
-        case .sparkle, .privilegedPackage:
+        case .sparkle, .privilegedPackage, .brewUpgrade:
           throw InstallError.unsupportedStrategy
         }
 
@@ -448,7 +448,7 @@ final class InstallCoordinator {
         stagingDirectory: stagingDirectory
       )
 
-      cleanUpStagingDirectory(stagingDirectory)
+      cleanupStagingDirectory(stagingDirectory)
 
       updateState(
         for: operationKey,

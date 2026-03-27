@@ -195,6 +195,7 @@
         latestVersion: latestVersion,
         latestVersionRaw: latestVersionRaw,
         latestReleaseId: nil,
+        homebrewCaskToken: nil,
         releasedAt: releasedAt,
         iconUrl: nil,
         artifact: artifact,
@@ -220,7 +221,9 @@
         electronUpdateUrl: nil,
         codeSigningAuthority: nil,
         appCategory: nil,
-        minMacOSVersion: nil
+        minMacOSVersion: nil,
+        isHomebrewInstalled: false,
+        homebrewCaskToken: nil
       )
     }
 
