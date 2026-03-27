@@ -50,6 +50,7 @@ export const discoveredApps = sqliteTable(
       .notNull()
       .default("untested"),
     confidenceScore: integer("confidence_score"),
+    iconR2Key: text("icon_r2_key"),
 
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),

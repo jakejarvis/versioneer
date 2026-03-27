@@ -16,6 +16,7 @@ export const installedAppSchema = z.object({
   codeSigningAuthority: z.string().max(500).optional(),
   appCategory: z.string().max(200).optional(),
   minMacOSVersion: z.string().max(50).optional(),
+  iconBase64: z.string().max(200000).optional(),
 });
 
 export type InstalledApp = z.infer<typeof installedAppSchema>;

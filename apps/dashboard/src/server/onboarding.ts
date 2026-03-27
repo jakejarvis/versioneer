@@ -143,7 +143,27 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     const now = new Date().toISOString();
     const appId = generateId(idPrefixes.app);
 
-    // 1. Create app
+    // 1. Create app (with icon if discovered app has one)
+    let catalogIconR2Key: string | null = null;
+    const discoveredAppRow = await db
+      .select({ iconR2Key: discoveredApps.iconR2Key })
+      .from(discoveredApps)
+      .where(eq(discoveredApps.id, data.discoveredAppId))
+      .get();
+
+    if (discoveredAppRow?.iconR2Key) {
+      const bucket = env.ASSETS_BUCKET as unknown as R2Bucket;
+      const existingObject = await bucket.get(discoveredAppRow.iconR2Key);
+      if (existingObject) {
+        const pathParts = discoveredAppRow.iconR2Key.split("/");
+        const filename = pathParts[pathParts.length - 1]!;
+        catalogIconR2Key = `icons/${data.app.slug}/${filename}`;
+        await bucket.put(catalogIconR2Key, existingObject.body, {
+          httpMetadata: existingObject.httpMetadata,
+        });
+      }
+    }
+
     await db.insert(apps).values({
       id: appId,
       slug: data.app.slug,
@@ -151,6 +171,7 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       vendorName: data.app.vendorName ?? null,
       homepageUrl: data.app.homepageUrl ?? null,
       notes: data.app.notes ?? null,
+      iconR2Key: catalogIconR2Key,
       status: "active",
       createdAt: now,
       updatedAt: now,

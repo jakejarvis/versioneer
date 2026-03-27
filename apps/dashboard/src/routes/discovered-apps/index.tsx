@@ -9,6 +9,7 @@ import {
   useReEnrichDiscoveredApp,
 } from "@/api/hooks/use-discovered-apps";
 import { OnboardingDrawer } from "@/components/onboarding-drawer";
+import { AppIcon } from "@/components/shared/app-icon";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
@@ -51,6 +52,7 @@ interface DiscoveredApp {
   sourceValidationStatus: string;
   confidenceScore: number | null;
   enrichedLatestVersion: string | null;
+  iconR2Key: string | null;
 }
 
 function DiscoveredAppsPage() {
@@ -152,14 +154,17 @@ function DiscoveredAppsPage() {
       key: "appName",
       header: "App",
       cell: (row) => (
-        <div>
-          <div className="font-medium">{row.appName}</div>
-          {row.bundleId && (
-            <div className="text-xs font-mono text-muted-foreground">{row.bundleId}</div>
-          )}
-          {row.enrichedVendorName && (
-            <div className="text-xs text-muted-foreground">by {row.enrichedVendorName}</div>
-          )}
+        <div className="flex items-center gap-2.5">
+          <AppIcon iconR2Key={row.iconR2Key} appName={row.appName} size={28} />
+          <div>
+            <div className="font-medium">{row.appName}</div>
+            {row.bundleId && (
+              <div className="text-xs font-mono text-muted-foreground">{row.bundleId}</div>
+            )}
+            {row.enrichedVendorName && (
+              <div className="text-xs text-muted-foreground">by {row.enrichedVendorName}</div>
+            )}
+          </div>
         </div>
       ),
     },

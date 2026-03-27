@@ -78,6 +78,13 @@
       "when": 1774626460262,
       "tag": "0010_high_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1774630797565,
+      "tag": "0011_round_hellion",
+      "breakpoints": true
     }
   ]
 }

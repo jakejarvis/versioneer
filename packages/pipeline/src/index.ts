@@ -25,3 +25,11 @@ export { normalizeReleaseNotes, renderReleaseNotesDocument } from "./release-not
 export { sanitizeHtml } from "./sanitize-html";
 export { enrichDiscoveredApp, shouldEnrich, ENRICHMENT_STALE_MS } from "./enrich-discovered-app";
 export type { EnrichmentResult } from "./enrich-discovered-app";
+export {
+  fetchAndParse,
+  extractIconUrl,
+  extractOpenGraph,
+  extractLinks,
+  extractTitle,
+} from "./scrape-html";
+export type { CheerioDoc } from "./scrape-html";

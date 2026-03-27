@@ -29,5 +29,6 @@ nonisolated struct InventoryCheckRequest: Codable, Sendable {
     let codeSigningAuthority: String?
     let appCategory: String?
     let minMacOSVersion: String?
+    let iconBase64: String?
   }
 }

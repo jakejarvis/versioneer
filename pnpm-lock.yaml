@@ -412,6 +412,9 @@ importers:
       '@versioneer/versioning':
         specifier: workspace:*
         version: link:../versioning
+      cheerio:
+        specifier: ^1.2.0
+        version: 1.2.0
       dom-serializer:
         specifier: ^3.0.0
         version: 3.0.0

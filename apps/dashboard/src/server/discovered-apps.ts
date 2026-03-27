@@ -135,6 +135,7 @@ export const reEnrichDiscoveredApp = createServerFn({ method: "POST" })
       discoveredAppId: id,
       db,
       githubToken: env.GITHUB_TOKEN,
+      assetsBucket: env.ASSETS_BUCKET,
     });
     return result;
   });

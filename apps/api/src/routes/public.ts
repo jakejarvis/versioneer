@@ -78,6 +78,49 @@ async function hashPath(path: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function storeDiscoveredIcon(
+  bucket: R2Bucket,
+  lookupKey: string,
+  iconBase64: string,
+): Promise<string | null> {
+  try {
+    const binaryString = atob(iconBase64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)!;
+    }
+    const body = bytes.buffer as ArrayBuffer;
+
+    if (body.byteLength > 512 * 1024) return null;
+
+    const keyBytes = new TextEncoder().encode(lookupKey);
+    const keyDigest = await crypto.subtle.digest("SHA-256", keyBytes);
+    const lookupKeyHash = Array.from(new Uint8Array(keyDigest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 16);
+
+    const contentDigest = await crypto.subtle.digest("SHA-256", body);
+    const contentHash = Array.from(new Uint8Array(contentDigest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 12);
+
+    const r2Key = `discovered-icons/${lookupKeyHash}/${contentHash}.png`;
+
+    await bucket.put(r2Key, body, {
+      httpMetadata: {
+        contentType: "image/png",
+        cacheControl: "public, max-age=31536000, immutable",
+      },
+    });
+
+    return r2Key;
+  } catch {
+    return null;
+  }
+}
+
 function deriveInstallabilityClass(params: {
   verificationTier: string | null;
   installRule: { strategy: string; enabled: boolean } | null;
@@ -664,6 +707,7 @@ publicRoutes.post("/inventory/check", async (c) => {
           codeSigningAuthority?: string | null;
           appCategory?: string | null;
           minMacOSVersion?: string | null;
+          iconBase64?: string | null;
         }
       >();
       for (const installedApp of request.apps) {
@@ -686,6 +730,7 @@ publicRoutes.post("/inventory/check", async (c) => {
             codeSigningAuthority: installedApp.codeSigningAuthority,
             appCategory: installedApp.appCategory,
             minMacOSVersion: installedApp.minMacOSVersion,
+            iconBase64: installedApp.iconBase64,
           });
         }
       }
@@ -730,12 +775,24 @@ publicRoutes.post("/inventory/check", async (c) => {
             })
             .where(eq(discoveredApps.id, existing.id));
 
+          // Store icon if not yet present
+          if (!existing.iconR2Key && app.iconBase64) {
+            const iconKey = await storeDiscoveredIcon(c.env.ASSETS_BUCKET, key, app.iconBase64);
+            if (iconKey) {
+              await db
+                .update(discoveredApps)
+                .set({ iconR2Key: iconKey })
+                .where(eq(discoveredApps.id, existing.id));
+            }
+          }
+
           // Enrich if stale or never enriched
           if (shouldEnrich(existing)) {
             await enrichDiscoveredApp({
               discoveredAppId: existing.id,
               db,
               githubToken: c.env.GITHUB_TOKEN,
+              assetsBucket: c.env.ASSETS_BUCKET,
             });
           }
         } else {
@@ -763,12 +820,24 @@ publicRoutes.post("/inventory/check", async (c) => {
             updatedAt: now,
           });
 
+          // Store icon if provided
+          if (app.iconBase64) {
+            const iconKey = await storeDiscoveredIcon(c.env.ASSETS_BUCKET, key, app.iconBase64);
+            if (iconKey) {
+              await db
+                .update(discoveredApps)
+                .set({ iconR2Key: iconKey })
+                .where(eq(discoveredApps.id, newId));
+            }
+          }
+
           // Enrich newly discovered app if it has a feed URL
           if (app.sparkleFeedUrl || app.electronUpdateUrl) {
             await enrichDiscoveredApp({
               discoveredAppId: newId,
               db,
               githubToken: c.env.GITHUB_TOKEN,
+              assetsBucket: c.env.ASSETS_BUCKET,
             });
           }
         }

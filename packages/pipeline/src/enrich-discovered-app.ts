@@ -4,6 +4,7 @@ import { discoveredApps } from "@versioneer/schema";
 import { toGitHubApiReleasesUrl } from "@versioneer/validation";
 import { eq } from "drizzle-orm";
 
+import { fetchAndParse, extractIconUrl } from "./scrape-html";
 import { githubApiHeaders } from "./types";
 
 export interface EnrichmentResult {
@@ -45,6 +46,7 @@ export async function enrichDiscoveredApp(params: {
   discoveredAppId: string;
   db: ReturnType<typeof createDb>;
   githubToken?: string;
+  assetsBucket?: R2Bucket;
 }): Promise<EnrichmentResult> {
   const { discoveredAppId, db, githubToken } = params;
 
@@ -114,6 +116,20 @@ export async function enrichDiscoveredApp(params: {
       hasVendorInfo: !!result.enrichedVendorName,
       hasHomepageUrl: !!result.enrichedHomepageUrl,
     });
+
+    // Scrape homepage for icon if none exists yet
+    if (params.assetsBucket && !row.iconR2Key) {
+      const homepage = result.enrichedHomepageUrl;
+      if (homepage) {
+        const iconKey = await scrapeHomepageIcon(homepage, params.assetsBucket, row.lookupKey);
+        if (iconKey) {
+          await db
+            .update(discoveredApps)
+            .set({ iconR2Key: iconKey, updatedAt: new Date().toISOString() })
+            .where(eq(discoveredApps.id, discoveredAppId));
+        }
+      }
+    }
 
     // Persist enrichment results
     const now = new Date().toISOString();
@@ -315,4 +331,67 @@ function computeConfidenceScore(factors: {
   if (factors.hasVendorInfo) score += 15;
   if (factors.hasHomepageUrl) score += 15;
   return score;
+}
+
+// ──────────────────────────────────────────────────────────
+// Homepage icon scraping
+// ──────────────────────────────────────────────────────────
+
+async function scrapeHomepageIcon(
+  homepageUrl: string,
+  bucket: R2Bucket,
+  lookupKey: string,
+): Promise<string | null> {
+  try {
+    const doc = await fetchAndParse(homepageUrl);
+    if (!doc) return null;
+
+    const iconUrl = extractIconUrl(doc, homepageUrl);
+    if (!iconUrl) return null;
+
+    const iconResponse = await fetch(iconUrl, { signal: AbortSignal.timeout(10_000) });
+    if (!iconResponse.ok) return null;
+
+    const contentType = iconResponse.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) return null;
+
+    const body = await iconResponse.arrayBuffer();
+    if (body.byteLength > 512 * 1024) return null;
+
+    const ext = contentType.includes("png")
+      ? "png"
+      : contentType.includes("jpeg") || contentType.includes("jpg")
+        ? "jpg"
+        : contentType.includes("svg")
+          ? "svg"
+          : contentType.includes("webp")
+            ? "webp"
+            : "png";
+
+    const keyBytes = new TextEncoder().encode(lookupKey);
+    const keyDigest = await crypto.subtle.digest("SHA-256", keyBytes);
+    const lookupKeyHash = Array.from(new Uint8Array(keyDigest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 16);
+
+    const contentDigest = await crypto.subtle.digest("SHA-256", body);
+    const contentHash = Array.from(new Uint8Array(contentDigest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 12);
+
+    const r2Key = `discovered-icons/${lookupKeyHash}/${contentHash}.${ext}`;
+
+    await bucket.put(r2Key, body, {
+      httpMetadata: {
+        contentType,
+        cacheControl: "public, max-age=31536000, immutable",
+      },
+    });
+
+    return r2Key;
+  } catch {
+    return null;
+  }
 }

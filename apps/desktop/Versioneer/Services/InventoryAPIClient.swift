@@ -1,3 +1,4 @@
+import AppKit
 import CryptoKit
 import Foundation
 import Logging
@@ -176,7 +177,8 @@ nonisolated struct InventoryAPIClient: Sendable {
         electronUpdateUrl: app.electronUpdateUrl,
         codeSigningAuthority: app.codeSigningAuthority,
         appCategory: app.appCategory,
-        minMacOSVersion: app.minMacOSVersion
+        minMacOSVersion: app.minMacOSVersion,
+        iconBase64: Self.extractIconBase64(for: app)
       )
     }
 
@@ -231,6 +233,32 @@ nonisolated struct InventoryAPIClient: Sendable {
   private func pathHash(_ path: String) -> String {
     let digest = SHA256.hash(data: Data(path.utf8))
     return digest.map { String(format: "%02x", $0) }.joined()
+  }
+
+  /// Extracts the app's icon as a 128x128 PNG encoded in base64.
+  /// Returns nil if the app path doesn't exist or icon extraction fails.
+  private static func extractIconBase64(for app: InstalledApp) -> String? {
+    guard FileManager.default.fileExists(atPath: app.path) else { return nil }
+
+    let icon = NSWorkspace.shared.icon(forFile: app.path)
+    let targetSize = NSSize(width: 128, height: 128)
+
+    let resized = NSImage(size: targetSize)
+    resized.lockFocus()
+    icon.draw(
+      in: NSRect(origin: .zero, size: targetSize),
+      from: NSRect(origin: .zero, size: icon.size),
+      operation: .copy,
+      fraction: 1.0
+    )
+    resized.unlockFocus()
+
+    guard let tiff = resized.tiffRepresentation,
+      let bitmap = NSBitmapImageRep(data: tiff),
+      let png = bitmap.representation(using: .png, properties: [:])
+    else { return nil }
+
+    return png.base64EncodedString()
   }
 }
 

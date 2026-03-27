@@ -18,6 +18,7 @@ import {
   useOnboardDiscoveredApp,
   useValidateSource,
 } from "@/api/hooks/use-onboarding";
+import { AppIcon } from "@/components/shared/app-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -293,6 +294,11 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                 <div className="rounded-lg border border-border/60 bg-muted/30 p-3.5">
                   <div className="flex items-center gap-3">
                     <ConfidenceRing score={confidenceScore} />
+                    <AppIcon
+                      iconR2Key={discoveredApp.iconR2Key ?? null}
+                      appName={discoveredApp.appName}
+                      size={40}
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{discoveredApp.appName}</div>
                       {discoveredApp.bundleId && (
