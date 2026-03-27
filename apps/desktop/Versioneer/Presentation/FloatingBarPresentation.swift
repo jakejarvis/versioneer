@@ -54,8 +54,8 @@ nonisolated struct FloatingBarPresentation: Equatable, Sendable {
         ))
     }
 
-    // Multi-select
-    if !selectedIDs.isEmpty {
+    // Multi-select (single selection drives the detail panel, not the bar)
+    if selectedIDs.count > 1 {
       let updatableCount = updatableResults.filter { selectedIDs.contains($0.id) }.count
       return FloatingBarPresentation(
         mode: .selection(

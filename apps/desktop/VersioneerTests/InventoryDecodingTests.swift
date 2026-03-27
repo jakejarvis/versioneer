@@ -37,7 +37,10 @@ struct InventoryDecodingTests {
       """
 
     let data = Data(json.utf8)
-    let response = try JSONDecoder().decode(InventoryCheckResponse.self, from: data)
+    let response = try JSONDecoder().decode(
+      InventoryCheckResponse.self,
+      from: data
+    )
 
     #expect(response.snapshotId == "cis_abc123")
     #expect(response.results.count == 1)
@@ -83,7 +86,10 @@ struct InventoryDecodingTests {
       """
 
     let data = Data(json.utf8)
-    let response = try JSONDecoder().decode(InventoryCheckResponse.self, from: data)
+    let response = try JSONDecoder().decode(
+      InventoryCheckResponse.self,
+      from: data
+    )
     let result = response.results[0]
 
     #expect(result.bundleId == nil)
@@ -96,7 +102,8 @@ struct InventoryDecodingTests {
 
   @Test func decodesAllDecisionTypes() throws {
     let decisions = [
-      "unknown", "up_to_date", "update_available", "ambiguous", "unsupported", "ignored",
+      "unknown", "up_to_date", "update_available", "ambiguous",
+      "unsupported", "ignored",
     ]
 
     for decisionStr in decisions {
@@ -132,7 +139,10 @@ struct InventoryDecodingTests {
         """
 
       let data = Data(json.utf8)
-      let response = try JSONDecoder().decode(InventoryCheckResponse.self, from: data)
+      let response = try JSONDecoder().decode(
+        InventoryCheckResponse.self,
+        from: data
+      )
       #expect(response.results[0].decision.rawValue == decisionStr)
     }
   }
@@ -157,14 +167,18 @@ struct InventoryDecodingTests {
           architecture: nil,
           sparkleFeedUrl: nil,
           isMasApp: nil,
-          electronUpdateUrl: nil
+          electronUpdateUrl: nil,
+          codeSigningAuthority: nil,
+          appCategory: nil,
+          minMacOSVersion: nil
         )
       ],
       scanDurationMs: 500
     )
 
     let data = try JSONEncoder().encode(request)
-    let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+    let dict =
+      try JSONSerialization.jsonObject(with: data) as! [String: Any]
 
     let client = dict["client"] as! [String: Any]
     #expect(client["installId"] as? String == "test-id")

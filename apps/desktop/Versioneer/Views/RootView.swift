@@ -18,17 +18,10 @@ struct RootView: View {
           }
       }
 
-      // Detail panel overlay
+      // Detail panel overlay (no blocking overlay — list stays interactive)
       if let detailResult = appState.detailResult {
-        Color.black.opacity(0.001)
-          .ignoresSafeArea()
-          .onTapGesture {
-            withAnimation(.snappy(duration: 0.3)) {
-              appState.closeDetail()
-            }
-          }
-
         DetailPanelView(result: detailResult)
+          .id(detailResult.id)
           .frame(width: 420)
           .frame(maxHeight: .infinity)
           .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -46,6 +39,7 @@ struct RootView: View {
 
   @ViewBuilder
   private var listContent: some View {
+    @Bindable var appState = appState
     let rows = appState.resultsBrowserRows
 
     if appState.loadState == .idle && rows.isEmpty && !appState.hasCachedResults {
@@ -70,27 +64,28 @@ struct RootView: View {
         Text("No apps match the current filter.")
       }
     } else {
-      List(selection: binding(for: \.selectedResultIDs)) {
+      List(selection: $appState.selectedResultIDs) {
         ForEach(rows) { row in
           AppListRowView(row: row)
             .tag(row.id)
-            .onTapGesture {
-              withAnimation(.snappy(duration: 0.3)) {
-                appState.openDetail(id: row.id)
-              }
-            }
         }
       }
       .listStyle(.inset)
+      .onChange(of: appState.selectedResultIDs) { oldValue, newValue in
+        guard !newValue.isEmpty else {
+          withAnimation(.snappy(duration: 0.3)) {
+            appState.detailResult = nil
+          }
+          return
+        }
+        let added = newValue.subtracting(oldValue)
+        if let id = added.first ?? newValue.first {
+          withAnimation(.snappy(duration: 0.3)) {
+            appState.openDetail(id: id)
+          }
+        }
+      }
     }
   }
 
-  private func binding<Value>(for keyPath: ReferenceWritableKeyPath<AppState, Value>) -> Binding<
-    Value
-  > {
-    Binding(
-      get: { appState[keyPath: keyPath] },
-      set: { appState[keyPath: keyPath] = $0 }
-    )
-  }
 }

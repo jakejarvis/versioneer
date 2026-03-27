@@ -515,6 +515,7 @@ final class AppState {
 
   func closeDetail() {
     detailResult = nil
+    selectedResultIDs.removeAll()
   }
 
   func installAll(ids: Set<String>? = nil) async {
@@ -586,5 +587,9 @@ final class AppState {
   private func restoreSelection(with id: String?) {
     guard let id else { return }
     selectResult(id: id)
+    // Refresh the detail panel with updated data from the new inventory results
+    if detailResult != nil {
+      detailResult = inventoryResults.first { $0.id == id }
+    }
   }
 }

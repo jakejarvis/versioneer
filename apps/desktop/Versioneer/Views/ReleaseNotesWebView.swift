@@ -11,11 +11,14 @@ struct ReleaseNotesWebView: NSViewRepresentable {
     webView.navigationDelegate = context.coordinator
     webView.setValue(false, forKey: "drawsBackground")
     loadHTML(in: webView)
+    context.coordinator.lastLoadedHTML = html
     return webView
   }
 
   func updateNSView(_ webView: WKWebView, context: Context) {
+    guard html != context.coordinator.lastLoadedHTML else { return }
     loadHTML(in: webView)
+    context.coordinator.lastLoadedHTML = html
   }
 
   func makeCoordinator() -> Coordinator {
@@ -77,6 +80,7 @@ struct ReleaseNotesWebView: NSViewRepresentable {
   }
 
   final class Coordinator: NSObject, WKNavigationDelegate {
+    var lastLoadedHTML: String?
     func webView(
       _ webView: WKWebView,
       decidePolicyFor navigationAction: WKNavigationAction,
