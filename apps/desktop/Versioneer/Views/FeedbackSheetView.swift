@@ -22,8 +22,7 @@ struct FeedbackSheetView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
-      VersioneerSectionHeader(
-        eyebrow: "Feedback",
+      SectionHeader(
         title: "Report Issue",
         subtitle: "Send catalog feedback without leaving the desktop app."
       )
@@ -59,6 +58,7 @@ struct FeedbackSheetView: View {
           .keyboardShortcut(.cancelAction)
 
         Button("Submit", action: onSubmit)
+          .buttonStyle(.glassProminent)
           .keyboardShortcut(.defaultAction)
           .disabled(feedbackSubmitting)
       }

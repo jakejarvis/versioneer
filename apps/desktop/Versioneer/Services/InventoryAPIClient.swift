@@ -250,8 +250,10 @@ nonisolated struct InventoryAPIClient: Sendable {
   private static func gzipCompress(_ data: Data) -> Data? {
     var stream = z_stream()
     // windowBits = 15 + 16 tells zlib to produce gzip format (with header/trailer)
-    guard deflateInit2_(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8,
-                        Z_DEFAULT_STRATEGY, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) == Z_OK
+    guard
+      deflateInit2_(
+        &stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8,
+        Z_DEFAULT_STRATEGY, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) == Z_OK
     else { return nil }
 
     defer { deflateEnd(&stream) }
@@ -260,7 +262,8 @@ nonisolated struct InventoryAPIClient: Sendable {
     var output = Data()
 
     data.withUnsafeBytes { inputPtr in
-      stream.next_in = UnsafeMutablePointer(mutating: inputPtr.baseAddress!.assumingMemoryBound(to: UInt8.self))
+      stream.next_in = UnsafeMutablePointer(
+        mutating: inputPtr.baseAddress!.assumingMemoryBound(to: UInt8.self))
       stream.avail_in = uInt(data.count)
 
       var chunk = Data(count: chunkSize)

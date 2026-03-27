@@ -7,99 +7,37 @@ struct RootView: View {
   var body: some View {
     @Bindable var appState = appState
 
-    NavigationSplitView {
-      sidebar
-    } detail: {
-      ZStack(alignment: .trailing) {
+    ZStack {
+      // Main content
+      VStack(spacing: 0) {
+        FilterChipBar()
         listContent
-          .safeAreaInset(edge: .bottom) {
-            FloatingActionBarView()
-          }
-
-        if let detailResult = appState.detailResult {
-          DetailPanelView(result: detailResult)
-            .id(detailResult.id)
-            .frame(width: 420)
-            .frame(maxHeight: .infinity)
-            .transition(.move(edge: .trailing).combined(with: .opacity))
-        }
+        StatusBarView()
       }
-      .animation(.snappy(duration: 0.3), value: appState.detailResult?.id)
-      .searchable(text: $appState.searchText, prompt: "Filter apps")
-      .toolbar {
-        ToolbarItemGroup(placement: .primaryAction) {
-          sortPicker
-          scanButton
-        }
+
+      // Full-window overlay
+      if appState.detailResult != nil {
+        DetailOverlayView()
+          .animation(.spring(duration: 0.3), value: appState.detailResult?.id)
       }
     }
-    .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
-    .frame(minWidth: 900, minHeight: 560)
+    .searchable(text: $appState.searchText, placement: .toolbar, prompt: "Filter apps")
+    .toolbarRole(.editor)
+    .frame(minWidth: 500, minHeight: 400)
+    .background(TranslucentWindowBackground())
     .versioneerAnalyticsScreen(name: "main_window", class: "RootView")
+    .onKeyPress(.escape) {
+      if appState.detailResult != nil {
+        withAnimation(.spring(duration: 0.3)) {
+          appState.closeDetail()
+        }
+        return .handled
+      }
+      return .ignored
+    }
     .task {
       await Task.yield()
       await appState.scanAndSubmit()
-    }
-  }
-
-  // MARK: - Sidebar
-
-  private var sidebar: some View {
-    @Bindable var appState = appState
-    return List(selection: $appState.selectedSection) {
-      ForEach(AppState.SidebarSection.allCases) { section in
-        Label(section.rawValue, systemImage: section.systemImage)
-          .badge(sidebarCount(for: section))
-          .tag(section)
-      }
-    }
-    .navigationTitle("Versioneer")
-  }
-
-  private func sidebarCount(for section: AppState.SidebarSection) -> Int {
-    let summary = appState.scanSummary
-    return switch section {
-    case .all: summary.totalApps
-    case .updatesAvailable: summary.updatesAvailableCount
-    case .unknown: summary.unknownCount
-    case .unsupported: summary.unsupportedCount
-    }
-  }
-
-  // MARK: - Toolbar Items
-
-  private var sortPicker: some View {
-    @Bindable var appState = appState
-    return Picker("Sort", selection: $appState.resultsSort) {
-      ForEach(ResultsBrowserSort.allCases) { sort in
-        Text(sort.title).tag(sort)
-      }
-    }
-    .pickerStyle(.menu)
-    .fixedSize()
-  }
-
-  private var scanButton: some View {
-    Button {
-      Task { await appState.scanAndSubmit() }
-    } label: {
-      HStack(spacing: 8) {
-        if appState.loadState == .scanning || appState.loadState == .submitting {
-          ProgressView()
-            .controlSize(.small)
-        }
-        Text(scanButtonLabel)
-      }
-    }
-    .buttonStyle(.borderedProminent)
-    .disabled(appState.loadState == .scanning || appState.loadState == .submitting)
-  }
-
-  private var scanButtonLabel: String {
-    switch appState.loadState {
-    case .scanning: "Scanning…"
-    case .submitting: "Checking…"
-    default: "Scan & Check"
     }
   }
 
@@ -107,16 +45,14 @@ struct RootView: View {
 
   @ViewBuilder
   private var listContent: some View {
-    @Bindable var appState = appState
     let rows = appState.resultsBrowserRows
 
     if appState.loadState == .idle && rows.isEmpty && !appState.hasCachedResults {
-      ContentUnavailableView {
-        ProgressView()
-          .controlSize(.large)
-      } description: {
-        Text("Discovering your apps…")
-      }
+      ScannerAnimationView()
+    } else if case .scanning = appState.loadState, !appState.hasCachedResults {
+      ScannerAnimationView()
+    } else if case .submitting = appState.loadState, !appState.hasCachedResults {
+      ScannerAnimationView()
     } else if case .error(let message) = appState.loadState, !appState.hasCachedResults {
       ErrorStateView(
         message: message,
@@ -131,27 +67,40 @@ struct RootView: View {
         Text("No apps match the current filter.")
       }
     } else {
-      List(selection: $appState.selectedResultIDs) {
-        ForEach(rows) { row in
-          AppListRowView(row: row)
-            .tag(row.id)
-        }
+      appList(rows: rows)
+    }
+  }
+
+  private func appList(rows: [ResultsBrowserRowPresentation]) -> some View {
+    @Bindable var appState = appState
+
+    return List(selection: $appState.selectedAppID) {
+      ForEach(rows) { row in
+        AppListRowView(row: row)
+          .tag(row.id)
       }
-      .listStyle(.inset)
-      .onChange(of: appState.selectedResultIDs) { oldValue, newValue in
-        guard !newValue.isEmpty else {
-          withAnimation(.snappy(duration: 0.3)) {
-            appState.detailResult = nil
-          }
-          return
+    }
+    .listStyle(.inset)
+    .scrollContentBackground(.hidden)
+    .onChange(of: appState.selectedAppID) { _, newValue in
+      guard let newValue else {
+        withAnimation(.spring(duration: 0.3)) {
+          appState.detailResult = nil
         }
-        let added = newValue.subtracting(oldValue)
-        if let id = added.first ?? newValue.first {
-          withAnimation(.snappy(duration: 0.3)) {
-            appState.openDetail(id: id)
-          }
-        }
+        return
       }
+      withAnimation(.spring(duration: 0.3)) {
+        appState.openDetail(id: newValue)
+      }
+    }
+    .onKeyPress(.return) {
+      if let selectedID = appState.selectedAppID, appState.detailResult == nil {
+        withAnimation(.spring(duration: 0.3)) {
+          appState.openDetail(id: selectedID)
+        }
+        return .handled
+      }
+      return .ignored
     }
   }
 }

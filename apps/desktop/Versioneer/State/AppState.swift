@@ -27,11 +27,11 @@ final class AppState {
 
   // MARK: - Navigation
 
-  enum SidebarSection: String, CaseIterable, Identifiable {
+  enum FilterSection: String, CaseIterable, Identifiable {
     case all = "All Apps"
     case updatesAvailable = "Updates Available"
-    case unsupported = "Unsupported"
     case unknown = "Unknown"
+    case unsupported = "Unsupported"
 
     var id: String { rawValue }
 
@@ -54,10 +54,10 @@ final class AppState {
     }
   }
 
-  var selectedSection: SidebarSection = .all
+  var selectedSection: FilterSection = .all
   var selectedResult: AppDecision?
   var detailResult: AppDecision?
-  var selectedResultIDs: Set<String> = []
+  var selectedAppID: String?
   var resultsSort: ResultsBrowserSort = .updatesFirst
 
   // MARK: - Data
@@ -147,14 +147,12 @@ final class AppState {
     inventoryResults.filter { $0.decision == .updateAvailable }
   }
 
-  var floatingBarPresentation: FloatingBarPresentation {
-    FloatingBarPresentation.make(
-      loadState: loadState,
-      scanSummary: scanSummary,
-      selectedIDs: selectedResultIDs,
-      updatableResults: updatableResults,
-      activeInstall: installCoordinator.primaryOperationState
-    )
+  var statusBarPresentation: StatusBarPresentation {
+    StatusBarPresentation.make(summary: scanSummary, loadState: loadState)
+  }
+
+  var filterPresentation: FilterPresentation {
+    FilterPresentation.make(summary: scanSummary, selectedSection: selectedSection)
   }
 
   // MARK: - Computed filtered results
@@ -186,7 +184,7 @@ final class AppState {
 
   // MARK: - Badge counts
 
-  func badgeCount(for section: SidebarSection) -> Int? {
+  func badgeCount(for section: FilterSection) -> Int? {
     switch section {
     case .updatesAvailable:
       let count = inventoryResults.filter { $0.decision == .updateAvailable }.count
@@ -522,21 +520,16 @@ final class AppState {
   func openDetail(id: String) {
     detailResult = inventoryResults.first { $0.id == id }
     selectedResult = detailResult
+    selectedAppID = id
   }
 
   func closeDetail() {
     detailResult = nil
-    selectedResultIDs.removeAll()
+    selectedAppID = nil
   }
 
-  func installAll(ids: Set<String>? = nil) async {
-    let targets: [AppDecision]
-    if let ids {
-      targets = updatableResults.filter { ids.contains($0.id) }
-    } else {
-      targets = updatableResults
-    }
-    for target in targets {
+  func installAll() async {
+    for target in updatableResults {
       await install(target)
     }
   }

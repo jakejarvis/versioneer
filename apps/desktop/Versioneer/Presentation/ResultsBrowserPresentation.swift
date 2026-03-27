@@ -26,9 +26,9 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Sendable {
   enum Tone: String, Sendable {
     case accent
     case positive
-    case secondary
-    case warning
-    case negative
+    case attention
+    case error
+    case neutral
   }
 
   let id: String
@@ -103,21 +103,21 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Sendable {
     case .completed:
       ("Updated", .positive, "checkmark.circle.fill")
     case .failed:
-      ("Install Failed", .negative, "xmark.circle.fill")
+      ("Install Failed", .error, "xmark.circle.fill")
     case .idle:
       switch result.decision {
       case .upToDate:
         ("Up to Date", .positive, "checkmark.circle.fill")
       case .updateAvailable:
-        ("Update Available", .warning, "arrow.up.circle.fill")
+        ("Update Available", .attention, "arrow.up.circle.fill")
       case .unknown:
-        ("Unknown", .secondary, "questionmark.circle")
+        ("Unknown", .neutral, "questionmark.circle")
       case .ambiguous:
-        ("Needs Review", .warning, "scope")
+        ("Needs Review", .attention, "scope")
       case .unsupported:
-        ("Unsupported", .negative, "xmark.circle.fill")
+        ("Unsupported", .error, "xmark.circle.fill")
       case .ignored:
-        ("Ignored", .secondary, "minus.circle")
+        ("Ignored", .neutral, "minus.circle")
       }
     }
   }

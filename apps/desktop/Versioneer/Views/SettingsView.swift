@@ -11,7 +11,7 @@ struct SettingsView: View {
       }
     }
     .scenePadding()
-    .frame(width: 520, height: 360)
+    .frame(width: 480, height: 340)
     .versioneerAnalyticsScreen(name: "settings", class: "SettingsView")
   }
 }
@@ -53,7 +53,7 @@ private struct GeneralSettingsTab: View {
 
       Section {
         HStack(alignment: .top, spacing: 12) {
-          VersioneerStatusChip(
+          StatusChip(
             title: updateStatusTitle,
             tint: updateStatusTint,
             systemImage: updateStatusSymbol
@@ -223,7 +223,7 @@ private struct AdvancedSettingsTab: View {
 
       Section {
         HStack(alignment: .top, spacing: 12) {
-          VersioneerStatusChip(
+          StatusChip(
             title: helperStateTitle,
             tint: helperTint,
             systemImage: helperSymbol
@@ -256,20 +256,13 @@ private struct AdvancedSettingsTab: View {
 
   private var helperStateTitle: String {
     switch helperState {
-    case .notNeeded:
-      "Ready on Demand"
-    case .notRegistered:
-      "Ready on Demand"
-    case .preparing:
-      "Preparing"
-    case .ready:
-      "Enabled"
-    case .approvalRequired:
-      "Approval Required"
-    case .unavailable:
-      "Unavailable"
-    case .failed:
-      "Failed"
+    case .notNeeded: "Ready on Demand"
+    case .notRegistered: "Ready on Demand"
+    case .preparing: "Preparing"
+    case .ready: "Enabled"
+    case .approvalRequired: "Approval Required"
+    case .unavailable: "Unavailable"
+    case .failed: "Failed"
     }
   }
 
@@ -292,31 +285,21 @@ private struct AdvancedSettingsTab: View {
 
   private var helperTint: Color {
     switch helperState {
-    case .ready:
-      .green
-    case .approvalRequired:
-      .orange
-    case .unavailable, .failed:
-      .red
-    case .preparing:
-      .accentColor
-    case .notNeeded, .notRegistered:
-      .secondary
+    case .ready: .green
+    case .approvalRequired: .orange
+    case .unavailable, .failed: .red
+    case .preparing: .accentColor
+    case .notNeeded, .notRegistered: .secondary
     }
   }
 
   private var helperSymbol: String {
     switch helperState {
-    case .ready:
-      "checkmark.circle.fill"
-    case .approvalRequired:
-      "lock.trianglebadge.exclamationmark"
-    case .unavailable, .failed:
-      "xmark.octagon.fill"
-    case .preparing:
-      "arrow.trianglehead.2.clockwise"
-    case .notNeeded, .notRegistered:
-      "wrench.and.screwdriver"
+    case .ready: "checkmark.circle.fill"
+    case .approvalRequired: "lock.trianglebadge.exclamationmark"
+    case .unavailable, .failed: "xmark.octagon.fill"
+    case .preparing: "arrow.trianglehead.2.clockwise"
+    case .notNeeded, .notRegistered: "wrench.and.screwdriver"
     }
   }
 

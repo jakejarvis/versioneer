@@ -1,48 +1,30 @@
 import SwiftUI
 
-// MARK: - Card Modifier
+// MARK: - Glass Card Modifier
 
-struct VersioneerCardModifier: ViewModifier {
-  var glass: Bool
+struct GlassCardModifier: ViewModifier {
   var interactive: Bool = false
   var cornerRadius: CGFloat = 22
   var padding: CGFloat = 18
 
   func body(content: Content) -> some View {
-    let card =
-      content
+    content
       .padding(padding)
-      .overlay {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-          .strokeBorder(.white.opacity(glass ? 0.16 : 0.08), lineWidth: 1)
-      }
-
-    if glass {
-      card
-        .glassEffect(
-          interactive ? .regular.interactive() : .regular,
-          in: .rect(cornerRadius: cornerRadius)
-        )
-    } else {
-      card
-        .background(
-          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(.ultraThinMaterial.opacity(0.9))
-        )
-    }
+      .glassEffect(
+        interactive ? .regular.interactive() : .regular,
+        in: .rect(cornerRadius: cornerRadius)
+      )
   }
 }
 
 extension View {
-  func versioneerCard(
-    glass: Bool = false,
+  func glassCard(
     interactive: Bool = false,
     cornerRadius: CGFloat = 22,
     padding: CGFloat = 18
   ) -> some View {
     modifier(
-      VersioneerCardModifier(
-        glass: glass,
+      GlassCardModifier(
         interactive: interactive,
         cornerRadius: cornerRadius,
         padding: padding
@@ -50,17 +32,36 @@ extension View {
   }
 }
 
+// MARK: - Tone
+
+enum DesignTone: String, Sendable {
+  case accent
+  case positive
+  case attention
+  case error
+  case neutral
+
+  var color: Color {
+    switch self {
+    case .accent: .accentColor
+    case .positive: .green
+    case .attention: .orange
+    case .error: .red
+    case .neutral: .secondary
+    }
+  }
+}
+
 // MARK: - Status Chip
 
-struct VersioneerStatusChip: View {
+struct StatusChip: View {
   let title: String
   let tint: Color
   var systemImage: String?
   var showsProgress = false
-  var glass = false
 
   var body: some View {
-    HStack(spacing: 8) {
+    HStack(spacing: 6) {
       if showsProgress {
         ProgressView()
           .controlSize(.small)
@@ -76,23 +77,13 @@ struct VersioneerStatusChip: View {
     .foregroundStyle(tint)
     .padding(.horizontal, 10)
     .padding(.vertical, 6)
-    .background {
-      Capsule(style: .continuous)
-        .fill(tint.opacity(glass ? 0.15 : 0.12))
-    }
-    .overlay {
-      Capsule(style: .continuous)
-        .strokeBorder(tint.opacity(0.2), lineWidth: 1)
-    }
-    .if(glass) { view in
-      view.glassEffect(.regular, in: .capsule)
-    }
+    .glassEffect(.regular, in: .capsule)
   }
 }
 
-// MARK: - Banner
+// MARK: - Glass Banner
 
-struct VersioneerBannerView: View {
+struct GlassBanner: View {
   let title: String
   let detail: String
   let tint: Color
@@ -115,28 +106,20 @@ struct VersioneerBannerView: View {
 
       Spacer(minLength: 0)
     }
-    .versioneerCard(glass: true, cornerRadius: 18, padding: 14)
+    .glassCard(cornerRadius: 18, padding: 14)
   }
 }
 
 // MARK: - Section Header
 
-struct VersioneerSectionHeader: View {
-  let eyebrow: String?
+struct SectionHeader: View {
   let title: String
-  let subtitle: String?
+  var subtitle: String?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 5) {
-      if let eyebrow {
-        Text(eyebrow.uppercased())
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(.secondary)
-          .tracking(0.8)
-      }
-
+    VStack(alignment: .leading, spacing: 4) {
       Text(title)
-        .font(.title3.weight(.semibold))
+        .font(.subheadline.weight(.semibold))
 
       if let subtitle {
         Text(subtitle)
@@ -230,15 +213,21 @@ struct InstallProgressView: View {
           .foregroundStyle(.secondary)
       }
 
-      HStack(spacing: 8) {
-        ForEach(1...progress.totalSteps, id: \.self) { step in
-          Capsule(style: .continuous)
-            .fill(step <= progress.currentStep ? Color.accentColor : Color.white.opacity(0.08))
-            .frame(height: 7)
+      GlassEffectContainer(spacing: 4) {
+        HStack(spacing: 4) {
+          ForEach(1...progress.totalSteps, id: \.self) { step in
+            Capsule(style: .continuous)
+              .fill(step <= progress.currentStep ? Color.accentColor : Color.white.opacity(0.08))
+              .frame(height: 6)
+              .glassEffect(
+                step <= progress.currentStep ? .regular : .regular,
+                in: .capsule
+              )
+          }
         }
       }
     }
-    .versioneerCard(glass: false, cornerRadius: 18, padding: 14)
+    .glassCard(cornerRadius: 18, padding: 14)
   }
 }
 
@@ -258,23 +247,40 @@ struct DetailFactRow: View {
   }
 }
 
-// MARK: - Vibrant Color Helpers
+// MARK: - Row Tone Color Mapping
 
 extension ResultsBrowserRowPresentation.Tone {
   var color: Color {
     switch self {
-    case .accent:
-      .accentColor
-    case .positive:
-      .green
-    case .warning:
-      .orange
-    case .negative:
-      .red
-    case .secondary:
-      .purple
+    case .accent: .accentColor
+    case .positive: .green
+    case .attention: .orange
+    case .error: .red
+    case .neutral: .secondary
     }
   }
+}
+
+// MARK: - Translucent Window Background
+
+import AppKit
+
+struct TranslucentWindowBackground: NSViewRepresentable {
+  func makeNSView(context: Context) -> NSVisualEffectView {
+    let view = NSVisualEffectView()
+    view.material = .underWindowBackground
+    view.blendingMode = .behindWindow
+    view.state = .active
+
+    DispatchQueue.main.async {
+      view.window?.isOpaque = false
+      view.window?.backgroundColor = .clear
+    }
+
+    return view
+  }
+
+  func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 // MARK: - Conditional Modifier

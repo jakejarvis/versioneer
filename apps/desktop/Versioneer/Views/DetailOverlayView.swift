@@ -1,6 +1,37 @@
 import SwiftUI
 
-struct DetailPanelView: View {
+struct DetailOverlayView: View {
+  @Environment(AppState.self) private var appState
+  @Environment(InstallCoordinator.self) private var installCoordinator
+
+  var body: some View {
+    if let result = appState.detailResult {
+      ZStack {
+        // Dimmed backdrop — fade only, tap to dismiss
+        Color.black.opacity(0.3)
+          .ignoresSafeArea()
+          .transition(.opacity)
+          .onTapGesture {
+            withAnimation(.spring(duration: 0.3)) {
+              appState.closeDetail()
+            }
+          }
+
+        // Detail card — fade + scale
+        DetailCardView(result: result)
+          .frame(maxWidth: 460)
+          .frame(maxHeight: .infinity)
+          .padding(.vertical, 24)
+          .padding(.horizontal, 20)
+          .transition(.opacity.combined(with: .scale(scale: 0.95)))
+      }
+    }
+  }
+}
+
+// MARK: - Detail Card
+
+private struct DetailCardView: View {
   @Environment(AppState.self) private var appState
   @Environment(InstallCoordinator.self) private var installCoordinator
 
@@ -29,12 +60,38 @@ struct DetailPanelView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      dismissBar
-      scrollContent
+      // Close button row
+      HStack {
+        Spacer()
+        Button {
+          withAnimation(.spring(duration: 0.3)) {
+            appState.closeDetail()
+          }
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.title2)
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding(.horizontal, 16)
+      .padding(.top, 12)
+      .padding(.bottom, 2)
+
+      // Scrollable content
+      ScrollView {
+        VStack(alignment: .leading, spacing: 20) {
+          heroSection
+          actionSection
+          releaseNotesSection
+          footerSection
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 20)
+      }
     }
-    .background(.ultraThinMaterial)
-    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    .shadow(color: .black.opacity(0.3), radius: 20, x: -5)
+    .glassEffect(.regular, in: .rect(cornerRadius: 22))
     .task(id: result.latestReleaseId) {
       await loadReleaseNotes()
     }
@@ -70,55 +127,19 @@ struct DetailPanelView: View {
     }
   }
 
-  // MARK: - Dismiss Bar
-
-  private var dismissBar: some View {
-    HStack {
-      Spacer()
-      Button {
-        appState.closeDetail()
-      } label: {
-        Image(systemName: "xmark.circle.fill")
-          .font(.title2)
-          .foregroundStyle(.secondary)
-      }
-      .buttonStyle(.plain)
-    }
-    .padding(.horizontal, 16)
-    .padding(.top, 12)
-    .padding(.bottom, 4)
-  }
-
-  // MARK: - Scroll Content
-
-  private var scrollContent: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        heroSection
-        actionSection
-        releaseNotesSection
-        footerSection
-      }
-      .padding(.horizontal, 20)
-      .padding(.bottom, 20)
-    }
-  }
-
   // MARK: - Hero Section
 
   private var heroSection: some View {
     VStack(alignment: .leading, spacing: 14) {
-      HStack(spacing: 16) {
+      HStack(spacing: 14) {
         Image(nsImage: appState.appIcon(for: result))
           .resizable()
           .aspectRatio(contentMode: .fit)
-          .frame(width: 64, height: 64)
-          .background(
-            .white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+          .frame(width: 48, height: 48)
 
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
           Text(result.matchedAppName ?? result.appName)
-            .font(.title2.weight(.semibold))
+            .font(.title3.weight(.semibold))
             .lineLimit(2)
 
           if result.decision == .updateAvailable,
@@ -141,36 +162,35 @@ struct DetailPanelView: View {
         MetadataPopoverButton(result: result)
       }
 
-      HStack(spacing: 10) {
-        VersioneerStatusChip(
-          title: decisionTitle,
-          tint: decisionTint,
-          systemImage: decisionSymbol,
-          glass: true
-        )
-
-        if appState.isHomebrewInstalled(for: result) {
-          VersioneerStatusChip(
-            title: "Homebrew",
-            tint: .green,
-            systemImage: "mug.fill",
-            glass: true
+      GlassEffectContainer(spacing: 8) {
+        HStack(spacing: 8) {
+          StatusChip(
+            title: decisionTitle,
+            tint: decisionTint,
+            systemImage: decisionSymbol
           )
-        }
 
-        if let confidence = result.matchConfidence {
-          VersioneerStatusChip(
-            title: VersionFormatting.confidenceLabel(confidence),
-            tint: .secondary,
-            systemImage: "scope",
-            glass: true
-          )
-        }
+          if appState.isHomebrewInstalled(for: result) {
+            StatusChip(
+              title: "Homebrew",
+              tint: .green,
+              systemImage: "mug.fill"
+            )
+          }
 
-        if let releasedAt = result.releasedAt {
-          Text(VersionFormatting.relativeDate(from: releasedAt))
-            .font(.caption)
-            .foregroundStyle(.secondary)
+          if let confidence = result.matchConfidence {
+            StatusChip(
+              title: VersionFormatting.confidenceLabel(confidence),
+              tint: .secondary,
+              systemImage: "scope"
+            )
+          }
+
+          if let releasedAt = result.releasedAt {
+            Text(VersionFormatting.relativeDate(from: releasedAt))
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
         }
       }
     }
@@ -197,41 +217,7 @@ struct DetailPanelView: View {
           .foregroundStyle(.secondary)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .versioneerCard(glass: false, cornerRadius: 18, padding: 16)
-    }
-  }
-
-  // MARK: - Release Notes Section
-
-  @ViewBuilder
-  private var releaseNotesSection: some View {
-    if result.latestReleaseId != nil {
-      VStack(alignment: .leading, spacing: 12) {
-        Text("What's New")
-          .font(.subheadline.weight(.semibold))
-
-        if releaseNotesLoading {
-          HStack(spacing: 8) {
-            ProgressView()
-              .controlSize(.small)
-            Text("Loading release notes…")
-              .font(.callout)
-              .foregroundStyle(.secondary)
-          }
-        } else if let releaseNotesHtml, !releaseNotesHtml.isEmpty {
-          ReleaseNotesWebView(html: releaseNotesHtml)
-            .frame(minHeight: 100, maxHeight: 380)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay {
-              RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-            }
-        } else {
-          Text("No release notes available.")
-            .font(.callout)
-            .foregroundStyle(.secondary)
-        }
-      }
+      .glassCard(cornerRadius: 18, padding: 16)
     }
   }
 
@@ -239,7 +225,6 @@ struct DetailPanelView: View {
 
   private var brewUpgradeActionSection: some View {
     VStack(alignment: .leading, spacing: 14) {
-      // Progress/status from install coordinator (reused for brew upgrades)
       if installState.isRunning {
         if let progress = installPresentation.progress {
           InstallProgressView(progress: progress)
@@ -269,7 +254,6 @@ struct DetailPanelView: View {
         }
       }
 
-      // Primary: Update via Homebrew
       Button {
         Task { await appState.brewUpgrade(result) }
       } label: {
@@ -277,11 +261,10 @@ struct DetailPanelView: View {
           .font(.body.weight(.semibold))
           .frame(maxWidth: .infinity)
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.glassProminent)
       .controlSize(.large)
       .disabled(installState.isRunning)
 
-      // Secondary: Install directly (with warning)
       if result.install.canInstall {
         Button {
           showBrewBypassWarning = true
@@ -300,7 +283,7 @@ struct DetailPanelView: View {
       .font(.caption)
       .foregroundStyle(.secondary)
     }
-    .versioneerCard(glass: true, interactive: true, cornerRadius: 22, padding: 18)
+    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
     .alert("Install directly?", isPresented: $showBrewBypassWarning) {
       Button("Install Directly", role: .destructive) {
         Task { await appState.install(result) }
@@ -317,16 +300,14 @@ struct DetailPanelView: View {
 
   private var standardInstallActionSection: some View {
     VStack(alignment: .leading, spacing: 14) {
-      // Banners
       ForEach(installPresentation.banners) { banner in
-        VersioneerBannerView(
+        GlassBanner(
           title: banner.title,
           detail: banner.detail,
           tint: tint(for: banner.tone)
         )
       }
 
-      // Progress
       if let progress = installPresentation.progress {
         InstallProgressView(progress: progress)
       }
@@ -339,7 +320,6 @@ struct DetailPanelView: View {
           .foregroundStyle(.secondary)
       }
 
-      // Install button
       Button {
         handlePrimaryInstallAction()
       } label: {
@@ -347,7 +327,7 @@ struct DetailPanelView: View {
           .font(.body.weight(.semibold))
           .frame(maxWidth: .infinity)
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.glassProminent)
       .controlSize(.large)
       .disabled(installPresentation.primaryActionDisabled)
 
@@ -358,7 +338,6 @@ struct DetailPanelView: View {
         .buttonStyle(.link)
       }
 
-      // Trust summary
       if !installPresentation.trustSummary.isEmpty {
         VStack(alignment: .leading, spacing: 6) {
           ForEach(installPresentation.trustSummary, id: \.self) { item in
@@ -369,7 +348,37 @@ struct DetailPanelView: View {
         }
       }
     }
-    .versioneerCard(glass: true, interactive: true, cornerRadius: 22, padding: 18)
+    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
+  }
+
+  // MARK: - Release Notes Section
+
+  @ViewBuilder
+  private var releaseNotesSection: some View {
+    if result.latestReleaseId != nil {
+      VStack(alignment: .leading, spacing: 12) {
+        Text("What's New")
+          .font(.subheadline.weight(.semibold))
+
+        if releaseNotesLoading {
+          HStack(spacing: 8) {
+            ProgressView()
+              .controlSize(.small)
+            Text("Loading release notes…")
+              .font(.callout)
+              .foregroundStyle(.secondary)
+          }
+        } else if let releaseNotesHtml, !releaseNotesHtml.isEmpty {
+          ReleaseNotesWebView(html: releaseNotesHtml)
+            .frame(minHeight: 100, maxHeight: 300)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        } else {
+          Text("No release notes available.")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+      }
+    }
   }
 
   // MARK: - Footer Section
@@ -404,10 +413,9 @@ struct DetailPanelView: View {
     switch result.decision {
     case .updateAvailable: .orange
     case .upToDate: .green
-    case .unknown: .purple
-    case .ambiguous: .yellow
+    case .unknown, .ignored: .secondary
+    case .ambiguous: .orange
     case .unsupported: .red
-    case .ignored: .secondary
     }
   }
 
@@ -426,8 +434,10 @@ struct DetailPanelView: View {
     switch result.install.eligibility {
     case .masApp: "Mac App Store apps must be updated through the App Store."
     case .manualOnly: "This app is currently configured for manual updates only."
-    case .requiresWarning, .eligible: "Versioneer is ready to run the install flow for this update."
-    case .notSupported: "Versioneer does not currently have an install path for this update."
+    case .requiresWarning, .eligible:
+      "Versioneer is ready to run the install flow for this update."
+    case .notSupported:
+      "Versioneer does not currently have an install path for this update."
     }
   }
 

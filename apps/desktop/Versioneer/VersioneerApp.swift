@@ -7,13 +7,13 @@ struct VersioneerApp: App {
   @State private var selfUpdateService = SelfUpdateService()
 
   var body: some Scene {
-    WindowGroup {
+    Window("Versioneer", id: "main") {
       RootView()
         .environment(appState)
         .environment(appState.installCoordinator)
         .environment(selfUpdateService)
     }
-    .defaultSize(width: 1100, height: 700)
+    .defaultSize(width: 600, height: 500)
     .windowResizability(.contentMinSize)
     .windowToolbarStyle(.unified(showsTitle: false))
     .commands {
@@ -22,6 +22,14 @@ struct VersioneerApp: App {
           selfUpdateService.checkForUpdates()
         }
         .disabled(!selfUpdateService.canCheckForUpdates)
+      }
+      CommandGroup(after: .toolbar) {
+        @Bindable var appState = appState
+        Picker("Sort By", selection: $appState.resultsSort) {
+          ForEach(ResultsBrowserSort.allCases) { sort in
+            Text(sort.title).tag(sort)
+          }
+        }
       }
     }
 

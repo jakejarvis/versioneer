@@ -106,7 +106,8 @@ nonisolated enum PrivilegedOperationPerformer {
       throw PrivilegedOperationExecutionError.commandFailed(
         command: "brew upgrade --cask \(caskToken)",
         status: 1,
-        output: "Homebrew is not installed. Could not find brew at /opt/homebrew/bin/brew or /usr/local/bin/brew."
+        output:
+          "Homebrew is not installed. Could not find brew at /opt/homebrew/bin/brew or /usr/local/bin/brew."
       )
     }
 

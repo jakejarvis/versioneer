@@ -16,33 +16,37 @@ struct AppListRowView: View {
   }
 
   var body: some View {
-    HStack(spacing: 14) {
+    HStack(spacing: 12) {
       appIcon
 
-      VStack(alignment: .leading, spacing: 3) {
+      VStack(alignment: .leading, spacing: 2) {
         HStack(spacing: 5) {
           Text(row.appName)
             .font(.body.weight(.medium))
             .lineLimit(1)
+            .truncationMode(.tail)
 
           if let result, appState.isHomebrewInstalled(for: result) {
             Image(systemName: "mug.fill")
               .font(.caption2)
-              .foregroundStyle(.green)
+              .foregroundStyle(.secondary)
               .help("Installed via Homebrew")
           }
         }
 
         subtitleText
       }
+      .layoutPriority(1)
 
-      Spacer(minLength: 8)
+      Spacer(minLength: 4)
 
       trailingContent
+        .fixedSize()
     }
-    .padding(.vertical, 6)
+    .padding(.vertical, 5)
     .padding(.horizontal, 4)
     .contentShape(Rectangle())
+    .animation(.spring(duration: 0.25), value: installState.phase)
   }
 
   private var appIcon: some View {
@@ -57,18 +61,23 @@ struct AppListRowView: View {
       }
     }
     .aspectRatio(contentMode: .fit)
-    .frame(width: 32, height: 32)
+    .frame(width: 28, height: 28)
   }
 
   @ViewBuilder
   private var subtitleText: some View {
     if installState.isRunning {
-      Text(
-        installState.detail.isEmpty ? installState.phase.rawValue.capitalized : installState.detail
-      )
+      HStack(spacing: 6) {
+        ProgressView()
+          .controlSize(.mini)
+        Text(
+          installState.detail.isEmpty
+            ? installState.phase.rawValue.capitalized : installState.detail
+        )
+        .lineLimit(1)
+      }
       .font(.caption)
       .foregroundStyle(Color.accentColor)
-      .lineLimit(1)
       .transition(.opacity)
     } else if let versionDiff = row.versionDiffText {
       Text(versionDiff)
@@ -86,17 +95,21 @@ struct AppListRowView: View {
   @ViewBuilder
   private var trailingContent: some View {
     if installState.isRunning {
-      inlineProgress
-        .transition(.opacity.combined(with: .scale))
+      StatusChip(
+        title: installState.phase.rawValue.capitalized,
+        tint: .accentColor,
+        showsProgress: true
+      )
+      .transition(.opacity.combined(with: .scale))
     } else if installState.phase == .completed {
-      VersioneerStatusChip(
+      StatusChip(
         title: "Updated",
         tint: .green,
         systemImage: "checkmark.circle.fill"
       )
       .transition(.scale.combined(with: .opacity))
     } else if installState.phase == .failed {
-      VersioneerStatusChip(
+      StatusChip(
         title: "Failed",
         tint: .red,
         systemImage: "xmark.circle.fill"
@@ -110,31 +123,17 @@ struct AppListRowView: View {
           Task { await appState.install(result) }
         }
       } label: {
-        Text(result.map { appState.isHomebrewInstalled(for: $0) } == true ? "Brew Update" : "Update")
+        Text("Update")
           .font(.caption.weight(.semibold))
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.glass)
       .controlSize(.small)
     } else {
-      VersioneerStatusChip(
+      StatusChip(
         title: row.statusText,
         tint: row.statusTone.color,
         systemImage: row.statusSystemImage
       )
     }
-  }
-
-  private var inlineProgress: some View {
-    HStack(spacing: 8) {
-      ProgressView()
-        .controlSize(.small)
-
-      Text(installState.phase.rawValue.capitalized)
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(Color.accentColor)
-        .lineLimit(1)
-    }
-    .padding(.horizontal, 10)
-    .padding(.vertical, 6)
   }
 }
