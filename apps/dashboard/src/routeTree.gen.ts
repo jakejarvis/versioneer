@@ -14,7 +14,6 @@ import { Route as SourcesIndexRouteImport } from './routes/sources/index'
 import { Route as ReviewQueueIndexRouteImport } from './routes/review-queue/index'
 import { Route as ReleasesIndexRouteImport } from './routes/releases/index'
 import { Route as OverridesIndexRouteImport } from './routes/overrides/index'
-import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
 import { Route as JobFailuresIndexRouteImport } from './routes/job-failures/index'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback/index'
 import { Route as ExecutionsIndexRouteImport } from './routes/executions/index'
@@ -48,11 +47,6 @@ const ReleasesIndexRoute = ReleasesIndexRouteImport.update({
 const OverridesIndexRoute = OverridesIndexRouteImport.update({
   id: '/overrides/',
   path: '/overrides/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
-  id: '/onboarding/',
-  path: '/onboarding/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JobFailuresIndexRoute = JobFailuresIndexRouteImport.update({
@@ -112,7 +106,6 @@ export interface FileRoutesByFullPath {
   '/executions/': typeof ExecutionsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/job-failures/': typeof JobFailuresIndexRoute
-  '/onboarding/': typeof OnboardingIndexRoute
   '/overrides/': typeof OverridesIndexRoute
   '/releases/': typeof ReleasesIndexRoute
   '/review-queue/': typeof ReviewQueueIndexRoute
@@ -129,7 +122,6 @@ export interface FileRoutesByTo {
   '/executions': typeof ExecutionsIndexRoute
   '/feedback': typeof FeedbackIndexRoute
   '/job-failures': typeof JobFailuresIndexRoute
-  '/onboarding': typeof OnboardingIndexRoute
   '/overrides': typeof OverridesIndexRoute
   '/releases': typeof ReleasesIndexRoute
   '/review-queue': typeof ReviewQueueIndexRoute
@@ -147,7 +139,6 @@ export interface FileRoutesById {
   '/executions/': typeof ExecutionsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/job-failures/': typeof JobFailuresIndexRoute
-  '/onboarding/': typeof OnboardingIndexRoute
   '/overrides/': typeof OverridesIndexRoute
   '/releases/': typeof ReleasesIndexRoute
   '/review-queue/': typeof ReviewQueueIndexRoute
@@ -166,7 +157,6 @@ export interface FileRouteTypes {
     | '/executions/'
     | '/feedback/'
     | '/job-failures/'
-    | '/onboarding/'
     | '/overrides/'
     | '/releases/'
     | '/review-queue/'
@@ -183,7 +173,6 @@ export interface FileRouteTypes {
     | '/executions'
     | '/feedback'
     | '/job-failures'
-    | '/onboarding'
     | '/overrides'
     | '/releases'
     | '/review-queue'
@@ -200,7 +189,6 @@ export interface FileRouteTypes {
     | '/executions/'
     | '/feedback/'
     | '/job-failures/'
-    | '/onboarding/'
     | '/overrides/'
     | '/releases/'
     | '/review-queue/'
@@ -218,7 +206,6 @@ export interface RootRouteChildren {
   ExecutionsIndexRoute: typeof ExecutionsIndexRoute
   FeedbackIndexRoute: typeof FeedbackIndexRoute
   JobFailuresIndexRoute: typeof JobFailuresIndexRoute
-  OnboardingIndexRoute: typeof OnboardingIndexRoute
   OverridesIndexRoute: typeof OverridesIndexRoute
   ReleasesIndexRoute: typeof ReleasesIndexRoute
   ReviewQueueIndexRoute: typeof ReviewQueueIndexRoute
@@ -260,13 +247,6 @@ declare module '@tanstack/react-router' {
       path: '/overrides'
       fullPath: '/overrides/'
       preLoaderRoute: typeof OverridesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding/': {
-      id: '/onboarding/'
-      path: '/onboarding'
-      fullPath: '/onboarding/'
-      preLoaderRoute: typeof OnboardingIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/job-failures/': {
@@ -346,7 +326,6 @@ const rootRouteChildren: RootRouteChildren = {
   ExecutionsIndexRoute: ExecutionsIndexRoute,
   FeedbackIndexRoute: FeedbackIndexRoute,
   JobFailuresIndexRoute: JobFailuresIndexRoute,
-  OnboardingIndexRoute: OnboardingIndexRoute,
   OverridesIndexRoute: OverridesIndexRoute,
   ReleasesIndexRoute: ReleasesIndexRoute,
   ReviewQueueIndexRoute: ReviewQueueIndexRoute,
