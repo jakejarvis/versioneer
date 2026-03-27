@@ -1,11 +1,15 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { useApps, useCreateApp } from "@/api/hooks/use-apps";
-import type { App } from "@/api/types";
-import { DataTable, type Column } from "@/components/shared/data-table";
+import type { AppListItem } from "@/api/types";
+import { DataTable } from "@/components/shared/data-table";
+import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { AppEntityLink } from "@/components/shared/entity-link";
 import { QualityBadge } from "@/components/shared/quality-badge";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
@@ -28,64 +32,128 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  applyPaginationToSearch,
+  applySortingToSearch,
+  paginatedSearchShape,
+  paginationFromSearch,
+  sortingFromSearch,
+} from "@/lib/data-table-search";
+
+const appsSearchSchema = z.object({
+  ...paginatedSearchShape,
+  search: z.string().catch(""),
+  status: z.enum(["all", "active", "deprecated", "merged", "unlisted"]).catch("all"),
+});
 
 export const Route = createFileRoute("/apps/")({
+  validateSearch: (search) => appsSearchSchema.parse(search),
   component: AppsPage,
 });
 
 function AppsPage() {
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | "active" | "deprecated" | "merged" | "unlisted"
-  >("all");
-  const [offset, setOffset] = useState(0);
+  const searchState = Route.useSearch();
   const [createOpen, setCreateOpen] = useState(false);
+  const pagination = paginationFromSearch(searchState);
+  const sorting = sortingFromSearch(searchState);
 
   const { data, isLoading } = useApps({
-    search: search || undefined,
-    status: statusFilter !== "all" ? statusFilter : undefined,
-    limit: 50,
-    offset,
+    search: searchState.search || undefined,
+    status: searchState.status !== "all" ? searchState.status : undefined,
+    limit: pagination.pageSize,
+    offset: pagination.pageIndex * pagination.pageSize,
+    sortBy: searchState.sortBy,
+    sortDir: searchState.sortDir,
   });
 
-  const columns: Column<App>[] = [
-    {
-      key: "canonicalName",
-      header: "Name",
-      cell: (row) => <span className="font-medium">{row.canonicalName}</span>,
-    },
-    {
-      key: "slug",
-      header: "Slug",
-      cell: (row) => <span className="font-mono text-sm text-muted-foreground">{row.slug}</span>,
-    },
-    {
-      key: "vendorName",
-      header: "Vendor",
-      cell: (row) => row.vendorName ?? "--",
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (row) => <StatusBadge status={row.status} />,
-    },
-    {
-      key: "qualityState",
-      header: "Quality",
-      cell: (row) => <QualityBadge state={row.qualityState} />,
-    },
-    {
-      key: "verificationTier",
-      header: "Verification",
-      cell: (row) => <VerificationBadge tier={row.verificationTier} />,
-    },
-    {
-      key: "updatedAt",
-      header: "Updated",
-      cell: (row) => <TimeAgo date={row.updatedAt} />,
-    },
-  ];
+  const columns = useMemo<ColumnDef<AppListItem>[]>(
+    () => [
+      {
+        accessorKey: "canonicalName",
+        meta: { label: "App" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="App" />,
+        cell: ({ row }) => (
+          <AppEntityLink
+            app={{
+              id: row.original.id,
+              canonicalName: row.original.canonicalName,
+              slug: row.original.slug,
+              vendorName: row.original.vendorName,
+              iconR2Key: row.original.iconR2Key,
+              status: row.original.status,
+            }}
+            showId
+          />
+        ),
+      },
+      {
+        accessorKey: "sourceCount",
+        meta: { label: "Sources" },
+        enableSorting: false,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Sources" />,
+        cell: ({ row }) => (
+          <span className="font-semibold tabular-nums">{row.original.sourceCount}</span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        meta: { label: "Status" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: "qualityScore",
+        meta: { label: "Quality" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Quality" />,
+        cell: ({ row }) => (
+          <div className="flex min-w-0 flex-col gap-1">
+            <QualityBadge state={row.original.qualityState} />
+            <span className="text-xs text-muted-foreground">
+              {row.original.qualityScore != null
+                ? `Score ${row.original.qualityScore}`
+                : "No score"}
+            </span>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "verificationTier",
+        meta: { label: "Verification" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Verification" />,
+        cell: ({ row }) => <VerificationBadge tier={row.original.verificationTier} />,
+      },
+      {
+        accessorKey: "updatedAt",
+        meta: { label: "Updated" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Updated" />,
+        cell: ({ row }) => <TimeAgo date={row.original.updatedAt} />,
+      },
+      {
+        id: "actions",
+        meta: { label: "Actions" },
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/apps/$appId" params={{ appId: row.original.id }}>
+              Open
+            </Link>
+          </Button>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const handleSortingChange = (updater: SortingState | ((prev: SortingState) => SortingState)) => {
+    void navigate({
+      to: "/apps",
+      search: applySortingToSearch(searchState, updater),
+    });
+  };
+
+  const pageCount = data ? Math.max(1, Math.ceil(data.total / pagination.pageSize)) : 0;
 
   return (
     <div>
@@ -100,56 +168,77 @@ function AppsPage() {
         </Button>
       </div>
 
-      <div className="mt-4 flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search apps..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setOffset(0);
-            }}
-            className="pl-9"
-          />
-        </div>
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => {
-            setStatusFilter(v as typeof statusFilter);
-            setOffset(0);
-          }}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="deprecated">Deprecated</SelectItem>
-            <SelectItem value="merged">Merged</SelectItem>
-            <SelectItem value="unlisted">Unlisted</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="mt-4">
         <DataTable
           columns={columns}
           data={data?.items ?? []}
           isLoading={isLoading}
           emptyMessage="No apps found."
+          sorting={sorting}
+          onSortingChange={handleSortingChange}
+          manualSorting
+          enableColumnVisibility
+          toolbar={
+            <>
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search apps..."
+                  value={searchState.search}
+                  onChange={(event) =>
+                    void navigate({
+                      to: "/apps",
+                      search: {
+                        ...searchState,
+                        page: 1,
+                        search: event.target.value,
+                      },
+                    })
+                  }
+                  className="pl-9"
+                />
+              </div>
+              <Select
+                value={searchState.status}
+                onValueChange={(value) =>
+                  void navigate({
+                    to: "/apps",
+                    search: {
+                      ...searchState,
+                      page: 1,
+                      status: value as typeof searchState.status,
+                    },
+                  })
+                }
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="deprecated">Deprecated</SelectItem>
+                  <SelectItem value="merged">Merged</SelectItem>
+                  <SelectItem value="unlisted">Unlisted</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          }
           pagination={
             data
               ? {
                   total: data.total,
-                  limit: data.limit,
-                  offset: data.offset,
-                  onOffsetChange: setOffset,
+                  pageIndex: pagination.pageIndex,
+                  pageSize: pagination.pageSize,
+                  pageCount,
+                  onPaginationChange: (updater) =>
+                    void navigate({
+                      to: "/apps",
+                      search: applyPaginationToSearch(searchState, updater),
+                    }),
                 }
               : undefined
           }
-          onRowClick={(row) => navigate({ to: "/apps/$appId", params: { appId: row.id } })}
         />
       </div>
 

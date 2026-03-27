@@ -19,10 +19,50 @@ import {
   installRuleCreateSchema,
 } from "@versioneer/validation";
 import { env } from "cloudflare:workers";
-import { eq, like, sql, and, desc } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { buildAppSortDescriptors } from "./list-helpers";
 import { authMiddleware } from "./middleware";
+
+const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
+
+function appOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
+  const sortColumns = {
+    canonicalName: apps.canonicalName,
+    slug: apps.slug,
+    vendorName: apps.vendorName,
+    status: apps.status,
+    qualityScore: apps.qualityScore,
+    qualityState: apps.qualityState,
+    verificationTier: apps.verificationTier,
+    updatedAt: apps.updatedAt,
+  };
+
+  return buildAppSortDescriptors(sortBy, sortDir).map((descriptor) =>
+    (descriptor.dir === "asc" ? asc : desc)(
+      sortColumns[descriptor.field as keyof typeof sortColumns],
+    ),
+  );
+}
+
+function appReleaseOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
+  const direction = sortDir === "asc" ? asc : desc;
+
+  switch (sortBy) {
+    case "versionRaw":
+      return [direction(releases.versionNormalized), direction(releases.versionRaw)];
+    case "channel":
+      return [direction(releases.channel), desc(releases.createdAt)];
+    case "status":
+      return [direction(releases.status), desc(releases.createdAt)];
+    case "releasedAt":
+      return [direction(releases.releasedAt), desc(releases.createdAt)];
+    case "createdAt":
+    default:
+      return [desc(releases.createdAt)];
+  }
+}
 
 // GET /apps - list with pagination, status/search filters
 export const listApps = createServerFn({ method: "GET" })
@@ -32,11 +72,13 @@ export const listApps = createServerFn({ method: "GET" })
       offset: z.number().int().min(0).default(0),
       status: z.enum(["active", "deprecated", "merged", "unlisted"]).optional(),
       search: z.string().optional(),
+      sortBy: z.string().optional(),
+      sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
     const db = createDb(env.DB);
-    const { limit, offset, status, search } = data;
+    const { limit, offset, status, search, sortBy, sortDir } = data;
 
     const conditions = [];
     if (status) conditions.push(eq(apps.status, status));
@@ -52,11 +94,37 @@ export const listApps = createServerFn({ method: "GET" })
       .select()
       .from(apps)
       .where(where)
-      .orderBy(desc(apps.updatedAt))
+      .orderBy(...appOrderBy(sortBy, sortDir))
       .limit(limit)
       .offset(offset);
 
-    return { items, total: countResult?.count ?? 0, limit, offset };
+    const countRows =
+      items.length > 0
+        ? await db
+            .select({
+              appId: sources.appId,
+              count: sql<number>`count(*)`,
+            })
+            .from(sources)
+            .where(
+              inArray(
+                sources.appId,
+                items.map((item) => item.id),
+              ),
+            )
+            .groupBy(sources.appId)
+            .all()
+        : [];
+    const sourceCounts = new Map(countRows.map((row) => [row.appId, row.count]));
+
+    return {
+      items: items.map((item) =>
+        Object.assign({}, item, { sourceCount: sourceCounts.get(item.id) ?? 0 }),
+      ),
+      total: countResult?.count ?? 0,
+      limit,
+      offset,
+    };
   });
 
 // GET /apps/:id - detail with latestReleases, sourceCount, scorecard
@@ -231,10 +299,12 @@ export const getAppReleases = createServerFn({ method: "GET" })
       offset: z.number().int().min(0).default(0),
       channel: z.enum(["stable", "beta", "nightly"]).optional(),
       status: z.enum(["active", "retracted", "superseded", "draft"]).optional(),
+      sortBy: z.string().optional(),
+      sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
-    const { appId, limit, offset, channel, status } = data;
+    const { appId, limit, offset, channel, status, sortBy, sortDir } = data;
     const db = createDb(env.DB);
 
     const conditions = [eq(releases.appId, appId)];
@@ -249,7 +319,7 @@ export const getAppReleases = createServerFn({ method: "GET" })
       .select()
       .from(releases)
       .where(and(...conditions))
-      .orderBy(desc(releases.createdAt))
+      .orderBy(...appReleaseOrderBy(sortBy, sortDir))
       .limit(limit)
       .offset(offset);
 
@@ -304,6 +374,75 @@ export const createInstallRule = createServerFn({ method: "POST" })
     });
 
     return { id, status: "created" };
+  });
+
+export const updateInstallRule = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(
+    z.object({
+      id: z.string().min(1),
+      strategy: installRuleCreateSchema.shape.strategy.optional(),
+      requiresQuit: z.boolean().optional(),
+      requiresAdmin: z.boolean().optional(),
+      supportsSilent: z.boolean().optional(),
+      rollbackSupported: z.boolean().optional(),
+      ruleConfidence: z.number().int().min(0).max(100).nullable().optional(),
+      enabled: z.boolean().optional(),
+      notes: z.string().nullable().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { id, ...fields } = data;
+    const db = createDb(env.DB);
+    const existing = await db.select().from(installRules).where(eq(installRules.id, id)).get();
+    if (!existing) throw new Error("Not found");
+
+    const now = new Date().toISOString();
+    await db
+      .update(installRules)
+      .set({
+        ...fields,
+        updatedAt: now,
+      })
+      .where(eq(installRules.id, id));
+
+    await db.insert(auditLog).values({
+      id: generateId(idPrefixes.auditLog),
+      eventType: "install_rule_updated",
+      actorType: "admin",
+      actorId: context.user.email,
+      targetType: "install_rule",
+      targetId: id,
+      payloadJson: JSON.stringify(fields),
+      createdAt: now,
+    });
+
+    return { status: "updated" };
+  });
+
+export const deleteInstallRule = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(z.object({ id: z.string().min(1) }))
+  .handler(async ({ data: { id }, context }) => {
+    const db = createDb(env.DB);
+    const existing = await db.select().from(installRules).where(eq(installRules.id, id)).get();
+    if (!existing) throw new Error("Not found");
+
+    await db.delete(installRules).where(eq(installRules.id, id));
+
+    const now = new Date().toISOString();
+    await db.insert(auditLog).values({
+      id: generateId(idPrefixes.auditLog),
+      eventType: "install_rule_deleted",
+      actorType: "admin",
+      actorId: context.user.email,
+      targetType: "install_rule",
+      targetId: id,
+      payloadJson: JSON.stringify({ appId: existing.appId }),
+      createdAt: now,
+    });
+
+    return { status: "deleted" };
   });
 
 // POST /apps/:id/recompute-latest

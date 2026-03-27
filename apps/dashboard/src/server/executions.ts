@@ -2,8 +2,33 @@ import { createServerFn } from "@tanstack/react-start";
 import { createDb } from "@versioneer/db";
 import { updateExecutions } from "@versioneer/schema";
 import { env } from "cloudflare:workers";
-import { eq, sql, desc } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
+
+import {
+  loadAppsByIds,
+  loadReleasesByIds,
+  toAppSummary,
+  toReleaseSummary,
+} from "./entity-summaries";
+
+const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
+
+function executionOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
+  const direction = sortDir === "asc" ? asc : desc;
+
+  switch (sortBy) {
+    case "actionType":
+      return [direction(updateExecutions.actionType), desc(updateExecutions.initiatedAt)];
+    case "actionStatus":
+      return [direction(updateExecutions.actionStatus), desc(updateExecutions.initiatedAt)];
+    case "durationMs":
+      return [direction(updateExecutions.durationMs), desc(updateExecutions.initiatedAt)];
+    case "initiatedAt":
+    default:
+      return [desc(updateExecutions.initiatedAt)];
+  }
+}
 
 export const listExecutions = createServerFn({ method: "GET" })
   .inputValidator(
@@ -12,6 +37,8 @@ export const listExecutions = createServerFn({ method: "GET" })
       offset: z.number().optional(),
       appId: z.string().optional(),
       actionStatus: z.string().optional(),
+      sortBy: z.string().optional(),
+      sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
@@ -39,11 +66,34 @@ export const listExecutions = createServerFn({ method: "GET" })
       .select()
       .from(updateExecutions)
       .where(where)
-      .orderBy(desc(updateExecutions.initiatedAt))
+      .orderBy(...executionOrderBy(data.sortBy, data.sortDir))
       .limit(limit)
       .offset(offset);
+    const [appMap, releaseMap] = await Promise.all([
+      loadAppsByIds(
+        db,
+        items.map((item) => item.appId),
+      ),
+      loadReleasesByIds(
+        db,
+        items.map((item) => item.releaseId),
+      ),
+    ]);
 
-    return { items, total: countResult?.count ?? 0, limit, offset };
+    return {
+      items: items.map((item) => {
+        const app = appMap.get(item.appId) ?? null;
+        const release = releaseMap.get(item.releaseId) ?? null;
+
+        return Object.assign({}, item, {
+          app: app ? toAppSummary(app) : null,
+          release: release ? toReleaseSummary(release, app) : null,
+        });
+      }),
+      total: countResult?.count ?? 0,
+      limit,
+      offset,
+    };
   });
 
 export const getExecutionDetail = createServerFn({ method: "GET" })
@@ -56,7 +106,18 @@ export const getExecutionDetail = createServerFn({ method: "GET" })
       .where(eq(updateExecutions.id, data.id))
       .get();
     if (!item) throw new Error("Not found");
-    return item;
+    const [appMap, releaseMap] = await Promise.all([
+      loadAppsByIds(db, [item.appId]),
+      loadReleasesByIds(db, [item.releaseId]),
+    ]);
+    const app = appMap.get(item.appId) ?? null;
+    const release = releaseMap.get(item.releaseId) ?? null;
+
+    return {
+      ...item,
+      app: app ? toAppSummary(app) : null,
+      release: release ? toReleaseSummary(release, app) : null,
+    };
   });
 
 export const getExecutionStats = createServerFn({ method: "GET" }).handler(async () => {

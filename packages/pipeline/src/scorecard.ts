@@ -13,11 +13,10 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
-
-import { autoPromoteVerification } from "./verification";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 import type { Env } from "./types";
+import { autoPromoteVerification } from "./verification";
 
 export interface ScorecardData {
   sourceTypesPresent: string[];

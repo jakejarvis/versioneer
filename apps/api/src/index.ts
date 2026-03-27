@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 import type { Env } from "./env";
-import { publicRoutes } from "./routes/public";
+import { publicRoutes } from "./routes/public/index";
 
 const app = new Hono<{ Bindings: Env }>();
 

@@ -6,6 +6,8 @@ interface UseOverridesParams {
   active?: boolean;
   limit?: number;
   offset?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
 }
 
 export function useOverrides(params: UseOverridesParams = {}) {

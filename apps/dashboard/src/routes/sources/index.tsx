@@ -1,11 +1,15 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Zap } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { useSources, useTriggerSourceFetch } from "@/api/hooks/use-sources";
-import type { Source } from "@/api/types";
-import { DataTable, type Column } from "@/components/shared/data-table";
+import type { SourceListItem } from "@/api/types";
+import { DataTable, type BulkAction } from "@/components/shared/data-table";
+import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { AppEntityLink, SourceEntityLink } from "@/components/shared/entity-link";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
@@ -16,91 +20,143 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  applyPaginationToSearch,
+  applySortingToSearch,
+  paginatedSearchShape,
+  paginationFromSearch,
+  sortingFromSearch,
+} from "@/lib/data-table-search";
+
+const sourcesSearchSchema = z.object({
+  ...paginatedSearchShape,
+  status: z.enum(["all", "active", "paused", "disabled", "error"]).catch("all"),
+  type: z.enum(["all", "sparkle", "github_releases", "manual"]).catch("all"),
+});
 
 export const Route = createFileRoute("/sources/")({
+  validateSearch: (search) => sourcesSearchSchema.parse(search),
   component: SourcesPage,
 });
 
 function SourcesPage() {
-  const navigate = useNavigate();
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | "active" | "paused" | "disabled" | "error"
-  >("all");
-  const [typeFilter, setTypeFilter] = useState<"all" | "sparkle" | "github_releases" | "manual">(
-    "all",
-  );
-  const [offset, setOffset] = useState(0);
+  const navigate = Route.useNavigate();
+  const searchState = Route.useSearch();
+  const pagination = paginationFromSearch(searchState);
+  const sorting = sortingFromSearch(searchState);
   const triggerFetch = useTriggerSourceFetch();
 
   const { data, isLoading } = useSources({
-    status: statusFilter !== "all" ? statusFilter : undefined,
-    sourceType: typeFilter !== "all" ? typeFilter : undefined,
-    limit: 50,
-    offset,
+    status: searchState.status !== "all" ? searchState.status : undefined,
+    sourceType: searchState.type !== "all" ? searchState.type : undefined,
+    limit: pagination.pageSize,
+    offset: pagination.pageIndex * pagination.pageSize,
+    sortBy: searchState.sortBy,
+    sortDir: searchState.sortDir,
   });
 
-  const columns: Column<Source>[] = [
-    {
-      key: "label",
-      header: "Label",
-      cell: (row) => <span className="font-medium">{row.label ?? row.sourceType}</span>,
-    },
-    {
-      key: "sourceType",
-      header: "Type",
-      cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.sourceType}</span>
+  const queueFetch = useCallback(
+    (sourceId: string) =>
+      triggerFetch.mutate(
+        { sourceId },
+        {
+          onSuccess: () => toast.success("Fetch queued"),
+          onError: (err) => toast.error(err.message),
+        },
       ),
-    },
+    [triggerFetch],
+  );
+
+  const columns = useMemo<ColumnDef<SourceListItem>[]>(
+    () => [
+      {
+        accessorKey: "label",
+        meta: { label: "Source" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Source" />,
+        cell: ({ row }) => (
+          <SourceEntityLink
+            source={{
+              id: row.original.id,
+              label: row.original.label,
+              sourceType: row.original.sourceType,
+              parserKey: row.original.parserKey,
+              status: row.original.status,
+              app: row.original.app,
+            }}
+            showId
+          />
+        ),
+      },
+      {
+        id: "app",
+        meta: { label: "App" },
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.app ? <AppEntityLink app={row.original.app} showId /> : <span>--</span>,
+      },
+      {
+        accessorKey: "sourceType",
+        meta: { label: "Type" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+        cell: ({ row }) => (
+          <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+            {row.original.sourceType}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        meta: { label: "Status" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: "pollIntervalMinutes",
+        meta: { label: "Interval" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Interval" />,
+        cell: ({ row }) => `${row.original.pollIntervalMinutes}m`,
+      },
+      {
+        accessorKey: "lastFetchedAt",
+        meta: { label: "Last Fetch" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Last Fetch" />,
+        cell: ({ row }) => <TimeAgo date={row.original.lastFetchedAt} />,
+      },
+      {
+        accessorKey: "lastSuccessAt",
+        meta: { label: "Last Success" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Last Success" />,
+        cell: ({ row }) => <TimeAgo date={row.original.lastSuccessAt} />,
+      },
+      {
+        id: "actions",
+        meta: { label: "Actions" },
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <Button variant="outline" size="sm" onClick={() => queueFetch(row.original.id)}>
+            <Zap className="mr-1 h-3 w-3" />
+            Fetch
+          </Button>
+        ),
+      },
+    ],
+    [queueFetch],
+  );
+
+  const bulkActions: BulkAction<SourceListItem>[] = [
     {
-      key: "parserKey",
-      header: "Parser",
-      cell: (row) => <span className="font-mono text-xs">{row.parserKey}</span>,
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (row) => <StatusBadge status={row.status} />,
-    },
-    {
-      key: "pollInterval",
-      header: "Interval",
-      cell: (row) => `${row.pollIntervalMinutes}m`,
-    },
-    {
-      key: "lastFetchedAt",
-      header: "Last Fetch",
-      cell: (row) => <TimeAgo date={row.lastFetchedAt} />,
-    },
-    {
-      key: "lastSuccessAt",
-      header: "Last Success",
-      cell: (row) => <TimeAgo date={row.lastSuccessAt} />,
-    },
-    {
-      key: "actions",
-      header: "",
-      cell: (row) => (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            triggerFetch.mutate(
-              { sourceId: row.id },
-              {
-                onSuccess: () => toast.success("Fetch queued"),
-                onError: (err) => toast.error(err.message),
-              },
-            );
-          }}
-        >
-          <Zap className="mr-1 h-3 w-3" />
-          Fetch
-        </Button>
-      ),
+      label: "Fetch Selected",
+      disabled: triggerFetch.isPending,
+      onClick: async (rows) => {
+        for (const row of rows) {
+          queueFetch(row.id);
+        }
+      },
     },
   ];
+
+  const pageCount = data ? Math.max(1, Math.ceil(data.total / pagination.pageSize)) : 0;
 
   return (
     <div>
@@ -109,65 +165,85 @@ function SourcesPage() {
         Manage update data sources and their fetch pipelines.
       </p>
 
-      <div className="mt-4 flex items-center gap-3">
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => {
-            setStatusFilter(v as typeof statusFilter);
-            setOffset(0);
-          }}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="paused">Paused</SelectItem>
-            <SelectItem value="disabled">Disabled</SelectItem>
-            <SelectItem value="error">Error</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          value={typeFilter}
-          onValueChange={(v) => {
-            setTypeFilter(v as typeof typeFilter);
-            setOffset(0);
-          }}
-        >
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            <SelectItem value="sparkle">Sparkle</SelectItem>
-            <SelectItem value="github_releases">GitHub Releases</SelectItem>
-            <SelectItem value="manual">Manual</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="mt-4">
         <DataTable
           columns={columns}
           data={data?.items ?? []}
           isLoading={isLoading}
           emptyMessage="No sources found."
+          sorting={sorting}
+          onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
+            void navigate({ to: "/sources", search: applySortingToSearch(searchState, updater) })
+          }
+          manualSorting
+          enableColumnVisibility
+          enableRowSelection
+          bulkActions={bulkActions}
+          toolbar={
+            <>
+              <Select
+                value={searchState.status}
+                onValueChange={(value) =>
+                  void navigate({
+                    to: "/sources",
+                    search: {
+                      ...searchState,
+                      page: 1,
+                      status: value as typeof searchState.status,
+                    },
+                  })
+                }
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="paused">Paused</SelectItem>
+                  <SelectItem value="disabled">Disabled</SelectItem>
+                  <SelectItem value="error">Error</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={searchState.type}
+                onValueChange={(value) =>
+                  void navigate({
+                    to: "/sources",
+                    search: {
+                      ...searchState,
+                      page: 1,
+                      type: value as typeof searchState.type,
+                    },
+                  })
+                }
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  <SelectItem value="sparkle">Sparkle</SelectItem>
+                  <SelectItem value="github_releases">GitHub Releases</SelectItem>
+                  <SelectItem value="manual">Manual</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          }
           pagination={
             data
               ? {
                   total: data.total,
-                  limit: data.limit,
-                  offset: data.offset,
-                  onOffsetChange: setOffset,
+                  pageIndex: pagination.pageIndex,
+                  pageSize: pagination.pageSize,
+                  pageCount,
+                  onPaginationChange: (updater) =>
+                    void navigate({
+                      to: "/sources",
+                      search: applyPaginationToSearch(searchState, updater),
+                    }),
                 }
               : undefined
-          }
-          onRowClick={(row) =>
-            navigate({
-              to: "/sources/$sourceId",
-              params: { sourceId: row.id },
-            })
           }
         />
       </div>

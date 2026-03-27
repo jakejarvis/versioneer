@@ -7,6 +7,8 @@ interface UseExecutionsParams {
   actionStatus?: string;
   limit?: number;
   offset?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
 }
 
 export function useExecutions(params: UseExecutionsParams = {}) {

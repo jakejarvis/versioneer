@@ -1,12 +1,18 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { type ColumnDef, type SortingState } from "@tanstack/react-table";
+import { useCallback, useMemo } from "react";
+import { toast } from "sonner";
+import { z } from "zod";
 
 import { useReleases } from "@/api/hooks/use-releases";
-import type { Release } from "@/api/types";
-import { DataTable, type Column } from "@/components/shared/data-table";
-import { IdDisplay } from "@/components/shared/id-display";
+import { usePinRelease, useUnpinRelease } from "@/api/hooks/use-releases";
+import type { ReleaseListItem } from "@/api/types";
+import { DataTable } from "@/components/shared/data-table";
+import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { AppEntityLink, ReleaseEntityLink } from "@/components/shared/entity-link";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -14,106 +20,146 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  applyPaginationToSearch,
+  applySortingToSearch,
+  paginatedSearchShape,
+  paginationFromSearch,
+  sortingFromSearch,
+} from "@/lib/data-table-search";
+
+const releasesSearchSchema = z.object({
+  ...paginatedSearchShape,
+  channel: z.enum(["all", "stable", "beta", "nightly"]).catch("all"),
+  status: z.enum(["all", "active", "retracted", "superseded", "draft"]).catch("all"),
+});
 
 export const Route = createFileRoute("/releases/")({
+  validateSearch: (search) => releasesSearchSchema.parse(search),
   component: ReleasesPage,
 });
 
 function ReleasesPage() {
-  const navigate = useNavigate();
-  const [channelFilter, setChannelFilter] = useState<"all" | "stable" | "beta" | "nightly">("all");
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | "active" | "retracted" | "superseded" | "draft"
-  >("all");
-  const [offset, setOffset] = useState(0);
+  const navigate = Route.useNavigate();
+  const searchState = Route.useSearch();
+  const pagination = paginationFromSearch(searchState);
+  const sorting = sortingFromSearch(searchState);
+  const pinRelease = usePinRelease();
+  const unpinRelease = useUnpinRelease();
 
   const { data, isLoading } = useReleases({
-    channel: channelFilter !== "all" ? channelFilter : undefined,
-    status: statusFilter !== "all" ? statusFilter : undefined,
-    limit: 50,
-    offset,
+    channel: searchState.channel !== "all" ? searchState.channel : undefined,
+    status: searchState.status !== "all" ? searchState.status : undefined,
+    limit: pagination.pageSize,
+    offset: pagination.pageIndex * pagination.pageSize,
+    sortBy: searchState.sortBy,
+    sortDir: searchState.sortDir,
   });
 
-  const columns: Column<Release>[] = [
-    {
-      key: "appId",
-      header: "App",
-      cell: (row) => <IdDisplay id={row.appId} />,
+  const togglePin = useCallback(
+    (row: ReleaseListItem) => {
+      const mutation = row.isPinnedLatest ? unpinRelease : pinRelease;
+      mutation.mutate(row.id, {
+        onSuccess: () => toast.success(row.isPinnedLatest ? "Release unpinned" : "Release pinned"),
+        onError: (err) => toast.error(err.message),
+      });
     },
-    {
-      key: "versionRaw",
-      header: "Version",
-      cell: (row) => <span className="font-mono font-medium">{row.versionRaw}</span>,
-    },
-    {
-      key: "channel",
-      header: "Channel",
-      cell: (row) => <StatusBadge status={row.channel} />,
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (row) => <StatusBadge status={row.status} />,
-    },
-    {
-      key: "isPrerelease",
-      header: "Pre",
-      cell: (row) => (row.isPrerelease ? "Yes" : ""),
-    },
-    {
-      key: "releasedAt",
-      header: "Released",
-      cell: (row) => <TimeAgo date={row.releasedAt} />,
-    },
-    {
-      key: "createdAt",
-      header: "Created",
-      cell: (row) => <TimeAgo date={row.createdAt} />,
-    },
-  ];
+    [pinRelease, unpinRelease],
+  );
+
+  const columns = useMemo<ColumnDef<ReleaseListItem>[]>(
+    () => [
+      {
+        id: "app",
+        meta: { label: "App" },
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.app ? <AppEntityLink app={row.original.app} showId /> : <span>--</span>,
+      },
+      {
+        accessorKey: "versionRaw",
+        meta: { label: "Version" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Version" />,
+        cell: ({ row }) => (
+          <div className="flex min-w-0 flex-col gap-1">
+            <ReleaseEntityLink
+              release={{
+                id: row.original.id,
+                versionRaw: row.original.versionRaw,
+                channel: row.original.channel,
+                status: row.original.status,
+                isPrerelease: row.original.isPrerelease,
+                releasedAt: row.original.releasedAt,
+                app: row.original.app,
+              }}
+              showId
+            />
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {row.original.isLatestForChannel ? (
+                <span className="rounded bg-muted px-2 py-0.5">Latest</span>
+              ) : null}
+              {row.original.isPinnedLatest ? (
+                <span className="rounded bg-muted px-2 py-0.5">Pinned</span>
+              ) : null}
+              {row.original.isPrerelease ? (
+                <span className="rounded bg-muted px-2 py-0.5">Prerelease</span>
+              ) : null}
+            </div>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "channel",
+        meta: { label: "Channel" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Channel" />,
+        cell: ({ row }) => <StatusBadge status={row.original.channel} />,
+      },
+      {
+        accessorKey: "status",
+        meta: { label: "Status" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: "releasedAt",
+        meta: { label: "Released" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Released" />,
+        cell: ({ row }) => <TimeAgo date={row.original.releasedAt} />,
+      },
+      {
+        accessorKey: "createdAt",
+        meta: { label: "Created" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Created" />,
+        cell: ({ row }) => <TimeAgo date={row.original.createdAt} />,
+      },
+      {
+        id: "actions",
+        meta: { label: "Actions" },
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/releases/$releaseId" params={{ releaseId: row.original.id }}>
+                Open
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => togglePin(row.original)}>
+              {row.original.isPinnedLatest ? "Unpin" : "Pin"}
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [togglePin],
+  );
+
+  const pageCount = data ? Math.max(1, Math.ceil(data.total / pagination.pageSize)) : 0;
 
   return (
     <div>
       <h2 className="text-xl font-semibold tracking-tight">Releases</h2>
       <p className="mt-1 text-muted-foreground">Browse release records across all apps.</p>
-
-      <div className="mt-4 flex items-center gap-3">
-        <Select
-          value={channelFilter}
-          onValueChange={(v) => {
-            setChannelFilter(v as typeof channelFilter);
-            setOffset(0);
-          }}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Channel" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All channels</SelectItem>
-            <SelectItem value="stable">Stable</SelectItem>
-            <SelectItem value="beta">Beta</SelectItem>
-            <SelectItem value="nightly">Nightly</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => {
-            setStatusFilter(v as typeof statusFilter);
-            setOffset(0);
-          }}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="retracted">Retracted</SelectItem>
-            <SelectItem value="superseded">Superseded</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
 
       <div className="mt-4">
         <DataTable
@@ -121,21 +167,77 @@ function ReleasesPage() {
           data={data?.items ?? []}
           isLoading={isLoading}
           emptyMessage="No releases found."
+          sorting={sorting}
+          onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
+            void navigate({ to: "/releases", search: applySortingToSearch(searchState, updater) })
+          }
+          manualSorting
+          enableColumnVisibility
+          toolbar={
+            <>
+              <Select
+                value={searchState.channel}
+                onValueChange={(value) =>
+                  void navigate({
+                    to: "/releases",
+                    search: {
+                      ...searchState,
+                      page: 1,
+                      channel: value as typeof searchState.channel,
+                    },
+                  })
+                }
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Channel" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All channels</SelectItem>
+                  <SelectItem value="stable">Stable</SelectItem>
+                  <SelectItem value="beta">Beta</SelectItem>
+                  <SelectItem value="nightly">Nightly</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={searchState.status}
+                onValueChange={(value) =>
+                  void navigate({
+                    to: "/releases",
+                    search: {
+                      ...searchState,
+                      page: 1,
+                      status: value as typeof searchState.status,
+                    },
+                  })
+                }
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="retracted">Retracted</SelectItem>
+                  <SelectItem value="superseded">Superseded</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          }
           pagination={
             data
               ? {
                   total: data.total,
-                  limit: data.limit,
-                  offset: data.offset,
-                  onOffsetChange: setOffset,
+                  pageIndex: pagination.pageIndex,
+                  pageSize: pagination.pageSize,
+                  pageCount,
+                  onPaginationChange: (updater) =>
+                    void navigate({
+                      to: "/releases",
+                      search: applyPaginationToSearch(searchState, updater),
+                    }),
                 }
               : undefined
-          }
-          onRowClick={(row) =>
-            navigate({
-              to: "/releases/$releaseId",
-              params: { releaseId: row.id },
-            })
           }
         />
       </div>

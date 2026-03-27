@@ -11,6 +11,8 @@ interface UseJobFailuresParams {
   status?: "open" | "retrying" | "resolved" | "abandoned";
   limit?: number;
   offset?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
 }
 
 export function useJobFailures(params: UseJobFailuresParams = {}) {

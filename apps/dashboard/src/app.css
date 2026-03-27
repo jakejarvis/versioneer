@@ -1,6 +1,8 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 @import "@fontsource/geist-sans/latin.css";
 @import "@fontsource/geist-mono/latin.css";
-@import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
 

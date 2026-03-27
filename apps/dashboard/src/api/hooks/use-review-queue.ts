@@ -11,6 +11,8 @@ interface UseReviewQueueParams {
   status?: "pending" | "in_progress" | "resolved" | "dismissed";
   limit?: number;
   offset?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
 }
 
 export function useReviewQueue(params: UseReviewQueueParams = {}) {

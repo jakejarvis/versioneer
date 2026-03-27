@@ -3,10 +3,30 @@ import { createDb } from "@versioneer/db";
 import { enrichDiscoveredApp } from "@versioneer/pipeline";
 import { discoveredApps, auditLog, generateId, idPrefixes } from "@versioneer/schema";
 import { env } from "cloudflare:workers";
-import { desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { authMiddleware } from "./middleware";
+
+const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
+
+function discoveredAppOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
+  const direction = sortDir === "asc" ? asc : desc;
+
+  switch (sortBy) {
+    case "confidenceScore":
+      return [direction(discoveredApps.confidenceScore), desc(discoveredApps.sightingCount)];
+    case "appName":
+      return [direction(discoveredApps.appName), desc(discoveredApps.lastSeenAt)];
+    case "status":
+      return [direction(discoveredApps.status), desc(discoveredApps.lastSeenAt)];
+    case "lastSeenAt":
+      return [direction(discoveredApps.lastSeenAt), desc(discoveredApps.sightingCount)];
+    case "sightingCount":
+    default:
+      return [desc(discoveredApps.sightingCount), desc(discoveredApps.lastSeenAt)];
+  }
+}
 
 export const listDiscoveredApps = createServerFn({ method: "GET" })
   .inputValidator(
@@ -14,10 +34,12 @@ export const listDiscoveredApps = createServerFn({ method: "GET" })
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
       status: z.enum(["pending", "approved", "dismissed", "mas_app"]).default("pending"),
+      sortBy: z.string().optional(),
+      sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
-    const { limit, offset, status } = data;
+    const { limit, offset, status, sortBy, sortDir } = data;
     const db = createDb(env.DB);
 
     const [countResult] = await db
@@ -28,7 +50,7 @@ export const listDiscoveredApps = createServerFn({ method: "GET" })
       .select()
       .from(discoveredApps)
       .where(eq(discoveredApps.status, status))
-      .orderBy(desc(discoveredApps.sightingCount), desc(discoveredApps.lastSeenAt))
+      .orderBy(...discoveredAppOrderBy(sortBy, sortDir))
       .limit(limit)
       .offset(offset);
 

@@ -13,6 +13,8 @@ import {
   getAppLatest,
   getAppInstallRules,
   createInstallRule,
+  updateInstallRule,
+  deleteInstallRule,
   recomputeLatest,
 } from "@/server/apps";
 import { uploadAppIcon, deleteAppIcon } from "@/server/icons";
@@ -23,6 +25,8 @@ interface UseAppsParams {
   search?: string;
   limit?: number;
   offset?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
 }
 
 export function useApps(params: UseAppsParams = {}) {
@@ -134,6 +138,8 @@ interface UseAppReleasesParams {
   status?: "active" | "retracted" | "superseded" | "draft";
   limit?: number;
   offset?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
 }
 
 export function useAppReleases(appId: string, params: UseAppReleasesParams = {}) {
@@ -178,6 +184,41 @@ export function useCreateInstallRule(appId: string) {
       ruleConfidence?: number;
       notes?: string;
     }) => createInstallRule({ data: { appId, ...input } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["apps", appId, "install-rules"] }),
+  });
+}
+
+export function useUpdateInstallRule(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...input
+    }: {
+      id: string;
+      strategy?:
+        | "sparkle"
+        | "zip_replace"
+        | "dmg_copy_replace"
+        | "pkg_install"
+        | "pkg_manual"
+        | "manual_only";
+      requiresQuit?: boolean;
+      requiresAdmin?: boolean;
+      supportsSilent?: boolean;
+      rollbackSupported?: boolean;
+      ruleConfidence?: number | null;
+      enabled?: boolean;
+      notes?: string | null;
+    }) => updateInstallRule({ data: { id, ...input } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["apps", appId, "install-rules"] }),
+  });
+}
+
+export function useDeleteInstallRule(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteInstallRule({ data: { id } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["apps", appId, "install-rules"] }),
   });
 }

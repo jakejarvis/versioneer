@@ -1,13 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { useOverrides, useCreateOverride, useDeactivateOverride } from "@/api/hooks/use-overrides";
-import type { Override } from "@/api/types";
+import type { OverrideListItem } from "@/api/types";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { DataTable, type Column } from "@/components/shared/data-table";
-import { IdDisplay } from "@/components/shared/id-display";
+import { DataTable, type BulkAction } from "@/components/shared/data-table";
+import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { EntityReferenceLink } from "@/components/shared/entity-link";
 import { JsonViewer } from "@/components/shared/json-viewer";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
@@ -21,90 +24,139 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  applyPaginationToSearch,
+  applySortingToSearch,
+  paginatedSearchShape,
+  paginationFromSearch,
+  sortingFromSearch,
+} from "@/lib/data-table-search";
+
+const overridesSearchSchema = z.object({
+  ...paginatedSearchShape,
+  active: z.enum(["all", "active", "inactive"]).catch("all"),
+});
 
 export const Route = createFileRoute("/overrides/")({
+  validateSearch: (search) => overridesSearchSchema.parse(search),
   component: OverridesPage,
 });
 
 function OverridesPage() {
-  const [offset, setOffset] = useState(0);
+  const navigate = Route.useNavigate();
+  const searchState = Route.useSearch();
+  const pagination = paginationFromSearch(searchState);
+  const sorting = sortingFromSearch(searchState);
   const [createOpen, setCreateOpen] = useState(false);
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
-  const [viewPayload, setViewPayload] = useState<Override | null>(null);
+  const [viewPayload, setViewPayload] = useState<OverrideListItem | null>(null);
   const deactivate = useDeactivateOverride();
 
-  const { data, isLoading } = useOverrides({ limit: 50, offset });
+  const { data, isLoading } = useOverrides({
+    active: searchState.active === "all" ? undefined : searchState.active === "active",
+    limit: pagination.pageSize,
+    offset: pagination.pageIndex * pagination.pageSize,
+    sortBy: searchState.sortBy,
+    sortDir: searchState.sortDir,
+  });
 
-  const columns: Column<Override>[] = [
-    {
-      key: "overrideType",
-      header: "Type",
-      cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.overrideType}</span>
-      ),
-    },
-    {
-      key: "targetType",
-      header: "Target",
-      cell: (row) => (
-        <span className="text-sm">
-          {row.targetType}: <IdDisplay id={row.targetId} />
-        </span>
-      ),
-    },
-    {
-      key: "reason",
-      header: "Reason",
-      cell: (row) => row.reason ?? "--",
-    },
-    {
-      key: "createdBy",
-      header: "Created By",
-      cell: (row) => row.createdBy ?? "--",
-    },
-    {
-      key: "isActive",
-      header: "Active",
-      cell: (row) => <StatusBadge status={row.isActive ? "active" : "disabled"} />,
-    },
-    {
-      key: "createdAt",
-      header: "Created",
-      cell: (row) => <TimeAgo date={row.createdAt} />,
-    },
-    {
-      key: "actions",
-      header: "",
-      cell: (row) => (
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              setViewPayload(row);
-            }}
-          >
-            View
-          </Button>
-          {row.isActive && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeactivateId(row.id);
-              }}
-            >
-              Deactivate
+  const columns = useMemo<ColumnDef<OverrideListItem>[]>(
+    () => [
+      {
+        accessorKey: "overrideType",
+        meta: { label: "Type" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+        cell: ({ row }) => (
+          <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+            {row.original.overrideType}
+          </span>
+        ),
+      },
+      {
+        id: "targetRef",
+        meta: { label: "Target" },
+        enableSorting: false,
+        cell: ({ row }) => <EntityReferenceLink refItem={row.original.targetRef} />,
+      },
+      {
+        accessorKey: "reason",
+        meta: { label: "Reason" },
+        enableSorting: false,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Reason" />,
+        cell: ({ row }) => row.original.reason ?? "--",
+      },
+      {
+        accessorKey: "createdBy",
+        meta: { label: "Created By" },
+        enableSorting: false,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Created By" />,
+        cell: ({ row }) => row.original.createdBy ?? "--",
+      },
+      {
+        accessorKey: "isActive",
+        meta: { label: "Active" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Active" />,
+        cell: ({ row }) => <StatusBadge status={row.original.isActive ? "active" : "disabled"} />,
+      },
+      {
+        accessorKey: "createdAt",
+        meta: { label: "Created" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Created" />,
+        cell: ({ row }) => <TimeAgo date={row.original.createdAt} />,
+      },
+      {
+        id: "actions",
+        meta: { label: "Actions" },
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={() => setViewPayload(row.original)}>
+              View
             </Button>
-          )}
-        </div>
-      ),
+            {row.original.isActive ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                onClick={() => setDeactivateId(row.original.id)}
+              >
+                Deactivate
+              </Button>
+            ) : null}
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const bulkActions: BulkAction<OverrideListItem>[] = [
+    {
+      label: "Deactivate Selected",
+      variant: "destructive",
+      onClick: async (rows) => {
+        for (const row of rows) {
+          if (row.isActive) {
+            deactivate.mutate(row.id, {
+              onSuccess: () => toast.success("Override deactivated"),
+              onError: (err) => toast.error(err.message),
+            });
+          }
+        }
+      },
     },
   ];
+
+  const pageCount = data ? Math.max(1, Math.ceil(data.total / pagination.pageSize)) : 0;
 
   return (
     <div>
@@ -122,18 +174,58 @@ function OverridesPage() {
       </div>
 
       <div className="mt-4">
+        <div className="mb-4">
+          <Select
+            value={searchState.active}
+            onValueChange={(value) =>
+              void navigate({
+                to: "/overrides",
+                search: {
+                  ...searchState,
+                  page: 1,
+                  active: value as typeof searchState.active,
+                },
+              })
+            }
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All overrides</SelectItem>
+              <SelectItem value="active">Active only</SelectItem>
+              <SelectItem value="inactive">Inactive only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <DataTable
           columns={columns}
           data={data?.items ?? []}
           isLoading={isLoading}
           emptyMessage="No overrides."
+          sorting={sorting}
+          onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
+            void navigate({
+              to: "/overrides",
+              search: applySortingToSearch(searchState, updater),
+            })
+          }
+          manualSorting
+          enableColumnVisibility
+          enableRowSelection
+          bulkActions={bulkActions}
           pagination={
             data
               ? {
                   total: data.total,
-                  limit: data.limit,
-                  offset: data.offset,
-                  onOffsetChange: setOffset,
+                  pageIndex: pagination.pageIndex,
+                  pageSize: pagination.pageSize,
+                  pageCount,
+                  onPaginationChange: (updater) =>
+                    void navigate({
+                      to: "/overrides",
+                      search: applyPaginationToSearch(searchState, updater),
+                    }),
                 }
               : undefined
           }

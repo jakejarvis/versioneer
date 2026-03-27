@@ -11,6 +11,8 @@ interface UseDiscoveredAppsParams {
   status?: "pending" | "approved" | "dismissed" | "mas_app";
   limit?: number;
   offset?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
 }
 
 export function useDiscoveredApps(params: UseDiscoveredAppsParams = {}) {

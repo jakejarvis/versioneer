@@ -7,6 +7,8 @@ interface UseAuditLogParams {
   targetType?: string;
   limit?: number;
   offset?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
 }
 
 export function useAuditLog(params: UseAuditLogParams = {}) {

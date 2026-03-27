@@ -1,16 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { MoreHorizontal, RefreshCw, CheckCircle, Ban } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import {
   useJobFailures,
   useUpdateJobFailure,
   useRetryJobFailure,
 } from "@/api/hooks/use-job-failures";
-import type { JobFailure } from "@/api/types";
-import { DataTable, type Column } from "@/components/shared/data-table";
-import { IdDisplay } from "@/components/shared/id-display";
+import type { JobFailureListItem } from "@/api/types";
+import { DataTable, type BulkAction } from "@/components/shared/data-table";
+import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { EntityReferenceLink } from "@/components/shared/entity-link";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
@@ -28,118 +31,180 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  applyPaginationToSearch,
+  applySortingToSearch,
+  paginatedSearchShape,
+  paginationFromSearch,
+  sortingFromSearch,
+} from "@/lib/data-table-search";
+
+const jobFailuresSearchSchema = z.object({
+  ...paginatedSearchShape,
+  status: z.enum(["open", "retrying", "resolved", "abandoned"]).catch("open"),
+});
 
 export const Route = createFileRoute("/job-failures/")({
+  validateSearch: (search) => jobFailuresSearchSchema.parse(search),
   component: JobFailuresPage,
 });
 
 function JobFailuresPage() {
-  const [statusFilter, setStatusFilter] = useState<"open" | "retrying" | "resolved" | "abandoned">(
-    "open",
-  );
-  const [offset, setOffset] = useState(0);
-  const [selectedFailure, setSelectedFailure] = useState<JobFailure | null>(null);
+  const navigate = Route.useNavigate();
+  const searchState = Route.useSearch();
+  const pagination = paginationFromSearch(searchState);
+  const sorting = sortingFromSearch(searchState);
+  const [selectedFailure, setSelectedFailure] = useState<JobFailureListItem | null>(null);
   const updateFailure = useUpdateJobFailure();
   const retryFailure = useRetryJobFailure();
 
   const { data, isLoading } = useJobFailures({
-    status: statusFilter,
-    limit: 50,
-    offset,
+    status: searchState.status,
+    limit: pagination.pageSize,
+    offset: pagination.pageIndex * pagination.pageSize,
+    sortBy: searchState.sortBy,
+    sortDir: searchState.sortDir,
   });
 
-  const handleRetry = (id: string) => {
-    retryFailure.mutate(id, {
-      onSuccess: () => toast.success("Job re-enqueued"),
-      onError: (err) => toast.error(err.message),
-    });
-  };
-
-  const handleStatusChange = (id: string, status: "resolved" | "abandoned" | "retrying") => {
-    updateFailure.mutate(
-      { id, status },
-      {
-        onSuccess: () => toast.success(`Marked as ${status}`),
+  const handleRetry = useCallback(
+    (id: string) => {
+      retryFailure.mutate(id, {
+        onSuccess: () => toast.success("Job re-enqueued"),
         onError: (err) => toast.error(err.message),
-      },
-    );
-  };
+      });
+    },
+    [retryFailure],
+  );
 
-  const columns: Column<JobFailure>[] = [
-    {
-      key: "jobType",
-      header: "Job Type",
-      cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.jobType}</span>
-      ),
+  const handleStatusChange = useCallback(
+    (id: string, status: "resolved" | "abandoned" | "retrying") => {
+      updateFailure.mutate(
+        { id, status },
+        {
+          onSuccess: () => toast.success(`Marked as ${status}`),
+          onError: (err) => toast.error(err.message),
+        },
+      );
     },
-    {
-      key: "relatedId",
-      header: "Related",
-      cell: (row) => (row.relatedId ? <IdDisplay id={row.relatedId} /> : "--"),
-    },
-    {
-      key: "errorMessage",
-      header: "Error",
-      cell: (row) =>
-        row.errorMessage ? (
-          <span
-            className="text-xs text-red-600 dark:text-red-400 truncate max-w-48 block cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedFailure(row);
-            }}
-          >
-            {row.errorMessage}
+    [updateFailure],
+  );
+
+  const columns = useMemo<ColumnDef<JobFailureListItem>[]>(
+    () => [
+      {
+        accessorKey: "jobType",
+        meta: { label: "Job Type" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Job Type" />,
+        cell: ({ row }) => (
+          <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+            {row.original.jobType}
           </span>
-        ) : (
-          "--"
         ),
+      },
+      {
+        id: "relatedRef",
+        meta: { label: "Related" },
+        enableSorting: false,
+        cell: ({ row }) => <EntityReferenceLink refItem={row.original.relatedRef} />,
+      },
+      {
+        id: "errorMessage",
+        meta: { label: "Error" },
+        enableSorting: false,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Error" />,
+        cell: ({ row }) =>
+          row.original.errorMessage ? (
+            <span
+              className="block max-w-56 cursor-pointer truncate text-xs text-red-600 dark:text-red-400"
+              onClick={() => setSelectedFailure(row.original)}
+            >
+              {row.original.errorMessage}
+            </span>
+          ) : (
+            "--"
+          ),
+      },
+      {
+        accessorKey: "retryCount",
+        meta: { label: "Retries" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Retries" />,
+        cell: ({ row }) => row.original.retryCount,
+      },
+      {
+        accessorKey: "status",
+        meta: { label: "Status" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: "createdAt",
+        meta: { label: "Created" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Created" />,
+        cell: ({ row }) => <TimeAgo date={row.original.createdAt} />,
+      },
+      {
+        id: "actions",
+        meta: { label: "Actions" },
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) =>
+          row.original.status === "open" || row.original.status === "retrying" ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleRetry(row.original.id)}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Retry
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleStatusChange(row.original.id, "resolved")}>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Resolve
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleStatusChange(row.original.id, "abandoned")}>
+                  <Ban className="mr-2 h-4 w-4" />
+                  Abandon
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null,
+      },
+    ],
+    [handleRetry, handleStatusChange],
+  );
+
+  const bulkActions: BulkAction<JobFailureListItem>[] = [
+    {
+      label: "Retry Selected",
+      onClick: async (rows) => {
+        for (const row of rows) {
+          handleRetry(row.id);
+        }
+      },
     },
     {
-      key: "retryCount",
-      header: "Retries",
-      cell: (row) => row.retryCount,
+      label: "Resolve Selected",
+      onClick: async (rows) => {
+        for (const row of rows) {
+          handleStatusChange(row.id, "resolved");
+        }
+      },
     },
     {
-      key: "status",
-      header: "Status",
-      cell: (row) => <StatusBadge status={row.status} />,
-    },
-    {
-      key: "createdAt",
-      header: "Created",
-      cell: (row) => <TimeAgo date={row.createdAt} />,
-    },
-    {
-      key: "actions",
-      header: "",
-      cell: (row) =>
-        row.status === "open" || row.status === "retrying" ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleRetry(row.id)}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Retry
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleStatusChange(row.id, "resolved")}>
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Resolve
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleStatusChange(row.id, "abandoned")}>
-                <Ban className="mr-2 h-4 w-4" />
-                Abandon
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null,
+      label: "Abandon Selected",
+      variant: "destructive",
+      onClick: async (rows) => {
+        for (const row of rows) {
+          handleStatusChange(row.id, "abandoned");
+        }
+      },
     },
   ];
+
+  const pageCount = data ? Math.max(1, Math.ceil(data.total / pagination.pageSize)) : 0;
 
   return (
     <div>
@@ -148,11 +213,17 @@ function JobFailuresPage() {
 
       <div className="mt-4">
         <Select
-          value={statusFilter}
-          onValueChange={(v) => {
-            setStatusFilter(v as typeof statusFilter);
-            setOffset(0);
-          }}
+          value={searchState.status}
+          onValueChange={(value) =>
+            void navigate({
+              to: "/job-failures",
+              search: {
+                ...searchState,
+                page: 1,
+                status: value as typeof searchState.status,
+              },
+            })
+          }
         >
           <SelectTrigger className="w-40">
             <SelectValue />
@@ -172,13 +243,29 @@ function JobFailuresPage() {
           data={data?.items ?? []}
           isLoading={isLoading}
           emptyMessage="No job failures."
+          sorting={sorting}
+          onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
+            void navigate({
+              to: "/job-failures",
+              search: applySortingToSearch(searchState, updater),
+            })
+          }
+          manualSorting
+          enableColumnVisibility
+          enableRowSelection
+          bulkActions={bulkActions}
           pagination={
             data
               ? {
                   total: data.total,
-                  limit: data.limit,
-                  offset: data.offset,
-                  onOffsetChange: setOffset,
+                  pageIndex: pagination.pageIndex,
+                  pageSize: pagination.pageSize,
+                  pageCount,
+                  onPaginationChange: (updater) =>
+                    void navigate({
+                      to: "/job-failures",
+                      search: applyPaginationToSearch(searchState, updater),
+                    }),
                 }
               : undefined
           }

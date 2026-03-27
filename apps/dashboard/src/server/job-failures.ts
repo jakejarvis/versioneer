@@ -2,10 +2,29 @@ import { createServerFn } from "@tanstack/react-start";
 import { createDb } from "@versioneer/db";
 import { jobFailures } from "@versioneer/schema";
 import { env } from "cloudflare:workers";
-import { eq, sql, desc } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { loadEntityRefsByIds } from "./entity-summaries";
 import { authMiddleware } from "./middleware";
+
+const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
+
+function jobFailureOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
+  const direction = sortDir === "asc" ? asc : desc;
+
+  switch (sortBy) {
+    case "jobType":
+      return [direction(jobFailures.jobType), desc(jobFailures.createdAt)];
+    case "retryCount":
+      return [direction(jobFailures.retryCount), desc(jobFailures.createdAt)];
+    case "status":
+      return [direction(jobFailures.status), desc(jobFailures.createdAt)];
+    case "createdAt":
+    default:
+      return [desc(jobFailures.createdAt)];
+  }
+}
 
 // GET /job-failures - list with pagination, default status="open"
 export const listJobFailures = createServerFn({ method: "GET" })
@@ -14,10 +33,12 @@ export const listJobFailures = createServerFn({ method: "GET" })
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
       status: z.enum(["open", "retrying", "resolved", "abandoned"]).default("open"),
+      sortBy: z.string().optional(),
+      sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
-    const { limit, offset, status } = data;
+    const { limit, offset, status, sortBy, sortDir } = data;
     const db = createDb(env.DB);
 
     const [countResult] = await db
@@ -28,11 +49,24 @@ export const listJobFailures = createServerFn({ method: "GET" })
       .select()
       .from(jobFailures)
       .where(eq(jobFailures.status, status))
-      .orderBy(desc(jobFailures.createdAt))
+      .orderBy(...jobFailureOrderBy(sortBy, sortDir))
       .limit(limit)
       .offset(offset);
+    const relatedRefMap = await loadEntityRefsByIds(
+      db,
+      items.map((item) => item.relatedId),
+    );
 
-    return { items, total: countResult?.count ?? 0, limit, offset };
+    return {
+      items: items.map((item) =>
+        Object.assign({}, item, {
+          relatedRef: item.relatedId ? (relatedRefMap.get(item.relatedId) ?? null) : null,
+        }),
+      ),
+      total: countResult?.count ?? 0,
+      limit,
+      offset,
+    };
   });
 
 // GET /job-failures/:id - detail

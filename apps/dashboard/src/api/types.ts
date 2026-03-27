@@ -37,6 +37,46 @@ export interface App {
   updatedAt: string;
 }
 
+export interface AppSummary {
+  id: string;
+  slug: string;
+  canonicalName: string;
+  vendorName: string | null;
+  iconR2Key: string | null;
+  status: App["status"];
+}
+
+export interface SourceSummary {
+  id: string;
+  sourceType: "sparkle" | "github_releases" | "manual";
+  label: string | null;
+  parserKey: string;
+  status: "active" | "paused" | "disabled" | "error";
+  app: AppSummary | null;
+}
+
+export interface ReleaseSummary {
+  id: string;
+  versionRaw: string;
+  channel: "stable" | "beta" | "nightly";
+  status: "active" | "retracted" | "superseded" | "draft";
+  isPrerelease: boolean;
+  releasedAt: string | null;
+  app: AppSummary | null;
+}
+
+export interface LinkedEntityRef {
+  kind: "app" | "source" | "release" | "override" | "review_queue" | "job_failure" | "feedback";
+  id: string;
+  label: string;
+  description: string | null;
+  iconR2Key: string | null;
+}
+
+export interface AppListItem extends App {
+  sourceCount: number;
+}
+
 export interface AppAlias {
   id: string;
   appId: string;
@@ -74,6 +114,14 @@ export interface Source {
   lastFetchedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SourceListItem extends Source {
+  app: AppSummary | null;
+}
+
+export interface SourceDetail extends Source {
+  app: AppSummary | null;
 }
 
 export interface SourceFetch {
@@ -118,6 +166,18 @@ export interface Release {
   releaseNotesHtml: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ReleaseListItem extends Release {
+  app: AppSummary | null;
+  isLatestForChannel: boolean;
+  isPinnedLatest: boolean;
+}
+
+export interface ReleaseDetail extends Release {
+  app: AppSummary | null;
+  isLatestForChannel: boolean;
+  isPinnedLatest: boolean;
 }
 
 export interface Artifact {
@@ -212,6 +272,10 @@ export interface ReviewQueueItem {
   resolvedAt: string | null;
 }
 
+export interface ReviewQueueListItem extends ReviewQueueItem {
+  relatedRef: LinkedEntityRef | null;
+}
+
 export interface JobFailure {
   id: string;
   jobType: string;
@@ -222,6 +286,10 @@ export interface JobFailure {
   status: "open" | "retrying" | "resolved" | "abandoned";
   createdAt: string;
   resolvedAt: string | null;
+}
+
+export interface JobFailureListItem extends JobFailure {
+  relatedRef: LinkedEntityRef | null;
 }
 
 export interface Override {
@@ -236,6 +304,10 @@ export interface Override {
   createdAt: string;
 }
 
+export interface OverrideListItem extends Override {
+  targetRef: LinkedEntityRef | null;
+}
+
 export interface AuditLogEntry {
   id: string;
   eventType: string;
@@ -245,6 +317,10 @@ export interface AuditLogEntry {
   targetId: string | null;
   payloadJson: string | null;
   createdAt: string;
+}
+
+export interface AuditLogListItem extends AuditLogEntry {
+  targetRef: LinkedEntityRef | null;
 }
 
 export interface AppScorecard {
@@ -316,6 +392,11 @@ export interface UpdateExecution {
   completedAt: string | null;
 }
 
+export interface ExecutionListItem extends UpdateExecution {
+  app: AppSummary | null;
+  release: ReleaseSummary | null;
+}
+
 export interface MatchExplanation {
   method: string;
   confidence: number;
@@ -351,4 +432,8 @@ export interface FeedbackItem {
   reviewQueueItemId: string | null;
   resolvedAt: string | null;
   createdAt: string;
+}
+
+export interface FeedbackListItem extends FeedbackItem {
+  targetApp: AppSummary | null;
 }

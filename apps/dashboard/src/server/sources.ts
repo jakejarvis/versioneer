@@ -11,10 +11,51 @@ import {
 } from "@versioneer/schema";
 import { sourceCreateSchema, sourceUpdateSchema } from "@versioneer/validation";
 import { env } from "cloudflare:workers";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { authMiddleware } from "./middleware";
+
+const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
+
+function sourceOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
+  const direction = sortDir === "asc" ? asc : desc;
+
+  switch (sortBy) {
+    case "label":
+      return [direction(sources.label), desc(sources.updatedAt)];
+    case "sourceType":
+      return [direction(sources.sourceType), desc(sources.updatedAt)];
+    case "parserKey":
+      return [direction(sources.parserKey), desc(sources.updatedAt)];
+    case "status":
+      return [direction(sources.status), desc(sources.updatedAt)];
+    case "pollIntervalMinutes":
+      return [direction(sources.pollIntervalMinutes), desc(sources.updatedAt)];
+    case "lastFetchedAt":
+      return [direction(sources.lastFetchedAt), desc(sources.updatedAt)];
+    case "lastSuccessAt":
+      return [direction(sources.lastSuccessAt), desc(sources.updatedAt)];
+    case "updatedAt":
+    default:
+      return [desc(sources.updatedAt)];
+  }
+}
+
+function sourceFetchOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
+  const direction = sortDir === "asc" ? asc : desc;
+
+  switch (sortBy) {
+    case "fetchStatus":
+      return [direction(sourceFetches.fetchStatus), desc(sourceFetches.fetchedAt)];
+    case "httpStatus":
+      return [direction(sourceFetches.httpStatus), desc(sourceFetches.fetchedAt)];
+    case "fetchedAt":
+    default:
+      return [desc(sourceFetches.fetchedAt)];
+  }
+}
 
 // GET /sources - list with pagination and filters
 export const listSources = createServerFn({ method: "GET" })
@@ -25,10 +66,12 @@ export const listSources = createServerFn({ method: "GET" })
       status: z.enum(["active", "paused", "disabled", "error"]).optional(),
       sourceType: z.enum(["sparkle", "github_releases", "manual"]).optional(),
       appId: z.string().optional(),
+      sortBy: z.string().optional(),
+      sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
-    const { limit, offset, status, sourceType, appId } = data;
+    const { limit, offset, status, sourceType, appId, sortBy, sortDir } = data;
     const db = createDb(env.DB);
 
     const conditions = [];
@@ -46,11 +89,24 @@ export const listSources = createServerFn({ method: "GET" })
       .select()
       .from(sources)
       .where(where)
-      .orderBy(desc(sources.updatedAt))
+      .orderBy(...sourceOrderBy(sortBy, sortDir))
       .limit(limit)
       .offset(offset);
+    const appMap = await loadAppsByIds(
+      db,
+      items.map((item) => item.appId),
+    );
 
-    return { items, total: countResult?.count ?? 0, limit, offset };
+    return {
+      items: items.map((item) =>
+        Object.assign({}, item, {
+          app: appMap.get(item.appId) ? toAppSummary(appMap.get(item.appId)!) : null,
+        }),
+      ),
+      total: countResult?.count ?? 0,
+      limit,
+      offset,
+    };
   });
 
 // GET /sources/:id - detail
@@ -60,7 +116,12 @@ export const getSource = createServerFn({ method: "GET" })
     const db = createDb(env.DB);
     const source = await db.select().from(sources).where(eq(sources.id, id)).get();
     if (!source) throw new Error("Not found");
-    return source;
+    const appMap = await loadAppsByIds(db, [source.appId]);
+
+    return {
+      ...source,
+      app: appMap.get(source.appId) ? toAppSummary(appMap.get(source.appId)!) : null,
+    };
   });
 
 // POST /sources - create
@@ -163,10 +224,12 @@ export const getSourceFetches = createServerFn({ method: "GET" })
       sourceId: z.string().min(1),
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
+      sortBy: z.string().optional(),
+      sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
-    const { sourceId, limit, offset } = data;
+    const { sourceId, limit, offset, sortBy, sortDir } = data;
     const db = createDb(env.DB);
 
     const [countResult] = await db
@@ -177,7 +240,7 @@ export const getSourceFetches = createServerFn({ method: "GET" })
       .select()
       .from(sourceFetches)
       .where(eq(sourceFetches.sourceId, sourceId))
-      .orderBy(desc(sourceFetches.fetchedAt))
+      .orderBy(...sourceFetchOrderBy(sortBy, sortDir))
       .limit(limit)
       .offset(offset);
 

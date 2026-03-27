@@ -1,12 +1,29 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createDb } from "@versioneer/db";
-import { clientFeedback, auditLog, generateId, idPrefixes } from "@versioneer/schema";
+import { auditLog, clientFeedback, generateId, idPrefixes } from "@versioneer/schema";
 import { feedbackUpdateSchema } from "@versioneer/validation";
 import { env } from "cloudflare:workers";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { authMiddleware } from "./middleware";
+
+const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
+
+function feedbackOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
+  const direction = sortDir === "asc" ? asc : desc;
+
+  switch (sortBy) {
+    case "feedbackType":
+      return [direction(clientFeedback.feedbackType), desc(clientFeedback.createdAt)];
+    case "status":
+      return [direction(clientFeedback.status), desc(clientFeedback.createdAt)];
+    case "createdAt":
+    default:
+      return [desc(clientFeedback.createdAt)];
+  }
+}
 
 export const listFeedback = createServerFn({ method: "GET" })
   .inputValidator(
@@ -16,6 +33,8 @@ export const listFeedback = createServerFn({ method: "GET" })
       status: z.string().optional(),
       feedbackType: z.string().optional(),
       targetAppId: z.string().optional(),
+      sortBy: z.string().optional(),
+      sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
@@ -47,11 +66,27 @@ export const listFeedback = createServerFn({ method: "GET" })
       .select()
       .from(clientFeedback)
       .where(where)
-      .orderBy(desc(clientFeedback.createdAt))
+      .orderBy(...feedbackOrderBy(data.sortBy, data.sortDir))
       .limit(limit)
       .offset(offset);
+    const appMap = await loadAppsByIds(
+      db,
+      items.map((item) => item.targetAppId),
+    );
 
-    return { items, total: countResult?.count ?? 0, limit, offset };
+    return {
+      items: items.map((item) =>
+        Object.assign({}, item, {
+          targetApp:
+            item.targetAppId && appMap.get(item.targetAppId)
+              ? toAppSummary(appMap.get(item.targetAppId)!)
+              : null,
+        }),
+      ),
+      total: countResult?.count ?? 0,
+      limit,
+      offset,
+    };
   });
 
 export const getFeedbackDetail = createServerFn({ method: "GET" })

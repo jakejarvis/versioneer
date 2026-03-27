@@ -19,6 +19,8 @@ interface UseSourcesParams {
   appId?: string;
   limit?: number;
   offset?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
 }
 
 export function useSources(params: UseSourcesParams = {}) {
@@ -65,7 +67,7 @@ export function useUpdateSource(id: string) {
 
 export function useSourceFetches(
   sourceId: string,
-  params: { limit?: number; offset?: number } = {},
+  params: { limit?: number; offset?: number; sortBy?: string; sortDir?: "asc" | "desc" } = {},
 ) {
   return useQuery({
     queryKey: ["sources", sourceId, "fetches", params],

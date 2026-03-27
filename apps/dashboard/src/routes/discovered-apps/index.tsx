@@ -1,7 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { MoreHorizontal, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import {
   useDiscoveredApps,
@@ -10,7 +12,8 @@ import {
 } from "@/api/hooks/use-discovered-apps";
 import { OnboardingDrawer } from "@/components/onboarding-drawer";
 import { AppIcon } from "@/components/shared/app-icon";
-import { DataTable, type Column } from "@/components/shared/data-table";
+import { DataTable, type BulkAction } from "@/components/shared/data-table";
+import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Badge } from "@/components/ui/badge";
@@ -28,8 +31,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  applyPaginationToSearch,
+  applySortingToSearch,
+  paginatedSearchShape,
+  paginationFromSearch,
+  sortingFromSearch,
+} from "@/lib/data-table-search";
+
+const discoveredAppsSearchSchema = z.object({
+  ...paginatedSearchShape,
+  status: z.enum(["pending", "approved", "dismissed", "mas_app"]).catch("pending"),
+});
 
 export const Route = createFileRoute("/discovered-apps/")({
+  validateSearch: (search) => discoveredAppsSearchSchema.parse(search),
   component: DiscoveredAppsPage,
 });
 
@@ -56,11 +72,10 @@ interface DiscoveredApp {
 }
 
 function DiscoveredAppsPage() {
-  const navigate = useNavigate();
-  const [statusFilter, setStatusFilter] = useState<
-    "pending" | "approved" | "dismissed" | "mas_app"
-  >("pending");
-  const [offset, setOffset] = useState(0);
+  const navigate = Route.useNavigate();
+  const searchState = Route.useSearch();
+  const pagination = paginationFromSearch(searchState);
+  const sorting = sortingFromSearch(searchState);
   const dismissMutation = useDismissDiscoveredApp();
   const reEnrichMutation = useReEnrichDiscoveredApp();
 
@@ -69,24 +84,32 @@ function DiscoveredAppsPage() {
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
 
   const { data, isLoading } = useDiscoveredApps({
-    status: statusFilter,
-    limit: 50,
-    offset,
+    status: searchState.status,
+    limit: pagination.pageSize,
+    offset: pagination.pageIndex * pagination.pageSize,
+    sortBy: searchState.sortBy,
+    sortDir: searchState.sortDir,
   });
 
-  const handleDismiss = (id: string) => {
-    dismissMutation.mutate(id, {
-      onSuccess: () => toast.success("Discovered app dismissed"),
-      onError: (err) => toast.error(err.message),
-    });
-  };
+  const handleDismiss = useCallback(
+    (id: string) => {
+      dismissMutation.mutate(id, {
+        onSuccess: () => toast.success("Discovered app dismissed"),
+        onError: (err) => toast.error(err.message),
+      });
+    },
+    [dismissMutation],
+  );
 
-  const handleReEnrich = (id: string) => {
-    reEnrichMutation.mutate(id, {
-      onSuccess: () => toast.success("Re-enrichment complete"),
-      onError: (err) => toast.error(err.message),
-    });
-  };
+  const handleReEnrich = useCallback(
+    (id: string) => {
+      reEnrichMutation.mutate(id, {
+        onSuccess: () => toast.success("Re-enrichment complete"),
+        onError: (err) => toast.error(err.message),
+      });
+    },
+    [reEnrichMutation],
+  );
 
   const handleOnboard = (id: string) => {
     setSelectedAppId(id);
@@ -144,109 +167,153 @@ function DiscoveredAppsPage() {
     }
   };
 
-  const columns: Column<DiscoveredApp>[] = [
-    {
-      key: "confidenceScore",
-      header: "Score",
-      cell: (row) => confidenceBadge(row.confidenceScore),
-    },
-    {
-      key: "appName",
-      header: "App",
-      cell: (row) => (
-        <div className="flex items-center gap-2.5">
-          <AppIcon iconR2Key={row.iconR2Key} appName={row.appName} size={28} />
-          <div>
-            <div className="font-medium">{row.appName}</div>
-            {row.bundleId && (
-              <div className="text-xs font-mono text-muted-foreground">{row.bundleId}</div>
-            )}
-            {row.enrichedVendorName && (
-              <div className="text-xs text-muted-foreground">by {row.enrichedVendorName}</div>
-            )}
+  const columns = useMemo<ColumnDef<DiscoveredApp>[]>(
+    () => [
+      {
+        accessorKey: "confidenceScore",
+        meta: { label: "Score" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Score" />,
+        cell: ({ row }) => confidenceBadge(row.original.confidenceScore),
+      },
+      {
+        accessorKey: "appName",
+        meta: { label: "App" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="App" />,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2.5">
+            <AppIcon iconR2Key={row.original.iconR2Key} appName={row.original.appName} size={28} />
+            <div className="min-w-0">
+              <div className="truncate font-medium">{row.original.appName}</div>
+              {row.original.bundleId ? (
+                <div className="truncate text-xs font-mono text-muted-foreground">
+                  {row.original.bundleId}
+                </div>
+              ) : null}
+              {row.original.enrichedVendorName ? (
+                <div className="truncate text-xs text-muted-foreground">
+                  by {row.original.enrichedVendorName}
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
-      ),
-    },
-    {
-      key: "enrichmentStatus",
-      header: "Enrichment",
-      cell: (row) => (
-        <div className="flex flex-col gap-1">
-          {enrichmentBadge(row.enrichmentStatus)}
-          {row.sourceValidationStatus === "valid" && (
-            <Badge variant="outline" className="text-[10px] text-emerald-600">
-              feed ok
-            </Badge>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "enrichedLatestVersion",
-      header: "Latest",
-      cell: (row) =>
-        row.enrichedLatestVersion ? (
-          <span className="text-xs font-mono">{row.enrichedLatestVersion}</span>
-        ) : (
-          <span className="text-xs text-muted-foreground">--</span>
         ),
-    },
+      },
+      {
+        accessorKey: "enrichmentStatus",
+        meta: { label: "Enrichment" },
+        enableSorting: false,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Enrichment" />,
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-1">
+            {enrichmentBadge(row.original.enrichmentStatus)}
+            {row.original.sourceValidationStatus === "valid" ? (
+              <Badge variant="outline" className="text-[10px] text-emerald-600">
+                feed ok
+              </Badge>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "enrichedLatestVersion",
+        meta: { label: "Latest" },
+        enableSorting: false,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Latest" />,
+        cell: ({ row }) =>
+          row.original.enrichedLatestVersion ? (
+            <span className="text-xs font-mono">{row.original.enrichedLatestVersion}</span>
+          ) : (
+            <span className="text-xs text-muted-foreground">--</span>
+          ),
+      },
+      {
+        accessorKey: "sightingCount",
+        meta: { label: "Sightings" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Sightings" />,
+        cell: ({ row }) => (
+          <span className="font-semibold tabular-nums">{row.original.sightingCount}</span>
+        ),
+      },
+      {
+        accessorKey: "lastSeenAt",
+        meta: { label: "Last Seen" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Last Seen" />,
+        cell: ({ row }) => <TimeAgo date={row.original.lastSeenAt} />,
+      },
+      {
+        accessorKey: "status",
+        meta: { label: "Status" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => {
+          if (row.original.status === "approved" && row.original.onboardedAppId) {
+            return (
+              <Link
+                to="/apps/$appId"
+                params={{ appId: row.original.onboardedAppId }}
+                className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+              >
+                Approved
+              </Link>
+            );
+          }
+          return <StatusBadge status={row.original.status} />;
+        },
+      },
+      {
+        id: "actions",
+        meta: { label: "Actions" },
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) =>
+          row.original.status === "pending" ? (
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" onClick={() => handleOnboard(row.original.id)}>
+                Onboard
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => handleReEnrich(row.original.id)}>
+                    <RefreshCw className="mr-2 h-3 w-3" />
+                    Re-enrich
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDismiss(row.original.id)}>
+                    Dismiss
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : null,
+      },
+    ],
+    [handleDismiss, handleReEnrich],
+  );
+
+  const bulkActions: BulkAction<DiscoveredApp>[] = [
     {
-      key: "sightingCount",
-      header: "Sightings",
-      cell: (row) => <span className="font-semibold tabular-nums">{row.sightingCount}</span>,
-    },
-    {
-      key: "lastSeenAt",
-      header: "Last Seen",
-      cell: (row) => <TimeAgo date={row.lastSeenAt} />,
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (row) => {
-        if (row.status === "approved" && row.onboardedAppId) {
-          return (
-            <Link
-              to="/apps/$appId"
-              params={{ appId: row.onboardedAppId }}
-              className="text-emerald-600 dark:text-emerald-400 hover:underline text-xs font-medium"
-            >
-              Approved
-            </Link>
-          );
+      label: "Re-enrich Selected",
+      onClick: async (rows) => {
+        for (const row of rows) {
+          handleReEnrich(row.id);
         }
-        return <StatusBadge status={row.status} />;
       },
     },
     {
-      key: "actions",
-      header: "",
-      cell: (row) =>
-        row.status === "pending" ? (
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="sm" onClick={() => handleOnboard(row.id)}>
-              Onboard
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => handleReEnrich(row.id)}>
-                  <RefreshCw className="mr-2 h-3 w-3" />
-                  Re-enrich
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDismiss(row.id)}>Dismiss</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : null,
+      label: "Dismiss Selected",
+      variant: "destructive",
+      onClick: async (rows) => {
+        for (const row of rows) {
+          handleDismiss(row.id);
+        }
+      },
     },
   ];
+
+  const pageCount = data ? Math.max(1, Math.ceil(data.total / pagination.pageSize)) : 0;
 
   return (
     <div>
@@ -257,11 +324,17 @@ function DiscoveredAppsPage() {
 
       <div className="mt-4 flex items-center gap-3">
         <Select
-          value={statusFilter}
-          onValueChange={(v) => {
-            setStatusFilter(v as typeof statusFilter);
-            setOffset(0);
-          }}
+          value={searchState.status}
+          onValueChange={(value) =>
+            void navigate({
+              to: "/discovered-apps",
+              search: {
+                ...searchState,
+                page: 1,
+                status: value as typeof searchState.status,
+              },
+            })
+          }
         >
           <SelectTrigger className="w-36">
             <SelectValue />
@@ -281,13 +354,29 @@ function DiscoveredAppsPage() {
           data={data?.items ?? []}
           isLoading={isLoading}
           emptyMessage="No discovered apps."
+          sorting={sorting}
+          onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
+            void navigate({
+              to: "/discovered-apps",
+              search: applySortingToSearch(searchState, updater),
+            })
+          }
+          manualSorting
+          enableColumnVisibility
+          enableRowSelection
+          bulkActions={bulkActions}
           pagination={
             data
               ? {
                   total: data.total,
-                  limit: data.limit,
-                  offset: data.offset,
-                  onOffsetChange: setOffset,
+                  pageIndex: pagination.pageIndex,
+                  pageSize: pagination.pageSize,
+                  pageCount,
+                  onPaginationChange: (updater) =>
+                    void navigate({
+                      to: "/discovered-apps",
+                      search: applyPaginationToSearch(searchState, updater),
+                    }),
                 }
               : undefined
           }

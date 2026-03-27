@@ -1,11 +1,15 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { MoreHorizontal } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { useFeedback, useUpdateFeedback } from "@/api/hooks/use-feedback";
-import type { FeedbackItem } from "@/api/types";
-import { DataTable, type Column } from "@/components/shared/data-table";
+import type { FeedbackListItem } from "@/api/types";
+import { DataTable, type BulkAction } from "@/components/shared/data-table";
+import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { AppEntityLink } from "@/components/shared/entity-link";
 import { IdDisplay } from "@/components/shared/id-display";
 import { JsonViewer } from "@/components/shared/json-viewer";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -25,104 +29,159 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  applyPaginationToSearch,
+  applySortingToSearch,
+  paginatedSearchShape,
+  paginationFromSearch,
+  sortingFromSearch,
+} from "@/lib/data-table-search";
+
+const feedbackSearchSchema = z.object({
+  ...paginatedSearchShape,
+  status: z.string().catch("new"),
+  type: z.string().catch("all"),
+});
 
 export const Route = createFileRoute("/feedback/")({
+  validateSearch: (search) => feedbackSearchSchema.parse(search),
   component: FeedbackPage,
 });
 
 function FeedbackPage() {
-  const [statusFilter, setStatusFilter] = useState<string>("new");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [offset, setOffset] = useState(0);
-  const [selectedItem, setSelectedItem] = useState<FeedbackItem | null>(null);
+  const navigate = Route.useNavigate();
+  const searchState = Route.useSearch();
+  const pagination = paginationFromSearch(searchState);
+  const sorting = sortingFromSearch(searchState);
+  const [selectedItem, setSelectedItem] = useState<FeedbackListItem | null>(null);
   const updateFeedback = useUpdateFeedback();
 
   const { data, isLoading } = useFeedback({
-    status: statusFilter !== "all" ? statusFilter : undefined,
-    feedbackType: typeFilter !== "all" ? typeFilter : undefined,
-    limit: 50,
-    offset,
+    status: searchState.status !== "all" ? searchState.status : undefined,
+    feedbackType: searchState.type !== "all" ? searchState.type : undefined,
+    limit: pagination.pageSize,
+    offset: pagination.pageIndex * pagination.pageSize,
+    sortBy: searchState.sortBy,
+    sortDir: searchState.sortDir,
   });
 
-  const handleStatusChange = (id: string, status: "new" | "triaged" | "resolved" | "dismissed") => {
-    updateFeedback.mutate(
-      { id, status },
-      {
-        onSuccess: () => toast.success(`Feedback ${status}`),
-        onError: (err) => toast.error(err.message),
-      },
-    );
-  };
+  const handleStatusChange = useCallback(
+    (id: string, status: "new" | "triaged" | "resolved" | "dismissed") => {
+      updateFeedback.mutate(
+        { id, status },
+        {
+          onSuccess: () => toast.success(`Feedback ${status}`),
+          onError: (err) => toast.error(err.message),
+        },
+      );
+    },
+    [updateFeedback],
+  );
 
-  const columns: Column<FeedbackItem>[] = [
-    {
-      key: "feedbackType",
-      header: "Type",
-      cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.feedbackType}</span>
-      ),
-    },
-    {
-      key: "appName",
-      header: "App",
-      cell: (row) => row.appName ?? row.bundleId ?? "--",
-    },
-    {
-      key: "targetAppId",
-      header: "Target",
-      cell: (row) =>
-        row.targetAppId ? (
-          <Link
-            to="/apps/$appId"
-            params={{ appId: row.targetAppId }}
-            className="text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            <IdDisplay id={row.targetAppId} />
-          </Link>
-        ) : (
-          "--"
+  const columns = useMemo<ColumnDef<FeedbackListItem>[]>(
+    () => [
+      {
+        accessorKey: "feedbackType",
+        meta: { label: "Type" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+        cell: ({ row }) => (
+          <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+            {row.original.feedbackType}
+          </span>
         ),
+      },
+      {
+        id: "app",
+        meta: { label: "App" },
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.targetApp ? (
+            <AppEntityLink app={row.original.targetApp} showId />
+          ) : (
+            <div className="min-w-0">
+              <div className="truncate font-medium">{row.original.appName ?? "Unknown app"}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {row.original.bundleId ?? "--"}
+              </div>
+            </div>
+          ),
+      },
+      {
+        accessorKey: "status",
+        meta: { label: "Status" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: "createdAt",
+        meta: { label: "Created" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Created" />,
+        cell: ({ row }) => <TimeAgo date={row.original.createdAt} />,
+      },
+      {
+        id: "actions",
+        meta: { label: "Actions" },
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedItem(row.original)}>
+              View
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => handleStatusChange(row.original.id, "triaged")}>
+                  Triage
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleStatusChange(row.original.id, "resolved")}>
+                  Resolve
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleStatusChange(row.original.id, "dismissed")}>
+                  Dismiss
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+      },
+    ],
+    [handleStatusChange],
+  );
+
+  const bulkActions: BulkAction<FeedbackListItem>[] = [
+    {
+      label: "Triage Selected",
+      onClick: async (rows) => {
+        for (const row of rows) {
+          handleStatusChange(row.id, "triaged");
+        }
+      },
     },
     {
-      key: "status",
-      header: "Status",
-      cell: (row) => <StatusBadge status={row.status} />,
+      label: "Resolve Selected",
+      onClick: async (rows) => {
+        for (const row of rows) {
+          handleStatusChange(row.id, "resolved");
+        }
+      },
     },
     {
-      key: "createdAt",
-      header: "Created",
-      cell: (row) => <TimeAgo date={row.createdAt} />,
-    },
-    {
-      key: "actions",
-      header: "",
-      cell: (row) => (
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => setSelectedItem(row)}>
-            View
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => handleStatusChange(row.id, "triaged")}>
-                Triage
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleStatusChange(row.id, "resolved")}>
-                Resolve
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleStatusChange(row.id, "dismissed")}>
-                Dismiss
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
+      label: "Dismiss Selected",
+      variant: "destructive",
+      onClick: async (rows) => {
+        for (const row of rows) {
+          handleStatusChange(row.id, "dismissed");
+        }
+      },
     },
   ];
+
+  const pageCount = data ? Math.max(1, Math.ceil(data.total / pagination.pageSize)) : 0;
 
   return (
     <div>
@@ -133,11 +192,17 @@ function FeedbackPage() {
 
       <div className="mt-4 flex items-center gap-3">
         <Select
-          value={statusFilter}
-          onValueChange={(v) => {
-            setStatusFilter(v);
-            setOffset(0);
-          }}
+          value={searchState.status}
+          onValueChange={(value) =>
+            void navigate({
+              to: "/feedback",
+              search: {
+                ...searchState,
+                page: 1,
+                status: value,
+              },
+            })
+          }
         >
           <SelectTrigger className="w-36">
             <SelectValue />
@@ -151,11 +216,17 @@ function FeedbackPage() {
           </SelectContent>
         </Select>
         <Select
-          value={typeFilter}
-          onValueChange={(v) => {
-            setTypeFilter(v);
-            setOffset(0);
-          }}
+          value={searchState.type}
+          onValueChange={(value) =>
+            void navigate({
+              to: "/feedback",
+              search: {
+                ...searchState,
+                page: 1,
+                type: value,
+              },
+            })
+          }
         >
           <SelectTrigger className="w-44">
             <SelectValue />
@@ -176,13 +247,29 @@ function FeedbackPage() {
           data={data?.items ?? []}
           isLoading={isLoading}
           emptyMessage="No feedback items."
+          sorting={sorting}
+          onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
+            void navigate({
+              to: "/feedback",
+              search: applySortingToSearch(searchState, updater),
+            })
+          }
+          manualSorting
+          enableColumnVisibility
+          enableRowSelection
+          bulkActions={bulkActions}
           pagination={
             data
               ? {
                   total: data.total,
-                  limit: data.limit,
-                  offset: data.offset,
-                  onOffsetChange: setOffset,
+                  pageIndex: pagination.pageIndex,
+                  pageSize: pagination.pageSize,
+                  pageCount,
+                  onPaginationChange: (updater) =>
+                    void navigate({
+                      to: "/feedback",
+                      search: applyPaginationToSearch(searchState, updater),
+                    }),
                 }
               : undefined
           }

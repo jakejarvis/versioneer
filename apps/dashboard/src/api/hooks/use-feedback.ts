@@ -8,6 +8,8 @@ interface UseFeedbackParams {
   targetAppId?: string;
   limit?: number;
   offset?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
 }
 
 export function useFeedback(params: UseFeedbackParams = {}) {

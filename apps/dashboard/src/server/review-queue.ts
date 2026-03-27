@@ -9,10 +9,29 @@ import {
   idPrefixes,
 } from "@versioneer/schema";
 import { env } from "cloudflare:workers";
-import { eq, sql, desc } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { loadEntityRefsByIds } from "./entity-summaries";
+import { buildReviewQueueSortDescriptors } from "./list-helpers";
 import { authMiddleware } from "./middleware";
+
+const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
+
+function reviewQueueOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
+  const sortColumns = {
+    reviewType: reviewQueue.reviewType,
+    status: reviewQueue.status,
+    createdAt: reviewQueue.createdAt,
+    priority: reviewQueue.priority,
+  };
+
+  return buildReviewQueueSortDescriptors(sortBy, sortDir).map((descriptor) =>
+    (descriptor.dir === "asc" ? asc : desc)(
+      sortColumns[descriptor.field as keyof typeof sortColumns],
+    ),
+  );
+}
 
 // GET /review-queue - list with pagination, default status="pending"
 export const listReviewQueue = createServerFn({ method: "GET" })
@@ -21,10 +40,12 @@ export const listReviewQueue = createServerFn({ method: "GET" })
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
       status: z.enum(["pending", "in_progress", "resolved", "dismissed"]).default("pending"),
+      sortBy: z.string().optional(),
+      sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
-    const { limit, offset, status } = data;
+    const { limit, offset, status, sortBy, sortDir } = data;
     const db = createDb(env.DB);
 
     const [countResult] = await db
@@ -35,11 +56,24 @@ export const listReviewQueue = createServerFn({ method: "GET" })
       .select()
       .from(reviewQueue)
       .where(eq(reviewQueue.status, status))
-      .orderBy(desc(reviewQueue.priority), desc(reviewQueue.createdAt))
+      .orderBy(...reviewQueueOrderBy(sortBy, sortDir))
       .limit(limit)
       .offset(offset);
+    const relatedRefMap = await loadEntityRefsByIds(
+      db,
+      items.map((item) => item.relatedId),
+    );
 
-    return { items, total: countResult?.count ?? 0, limit, offset };
+    return {
+      items: items.map((item) =>
+        Object.assign({}, item, {
+          relatedRef: item.relatedId ? (relatedRefMap.get(item.relatedId) ?? null) : null,
+        }),
+      ),
+      total: countResult?.count ?? 0,
+      limit,
+      offset,
+    };
   });
 
 // GET /review-queue/:id - detail

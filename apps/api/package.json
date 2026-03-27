@@ -12,6 +12,7 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@hono/zod-validator": "^0.7.6",
     "@versioneer/cache": "workspace:*",
     "@versioneer/contracts": "workspace:*",
     "@versioneer/db": "workspace:*",

@@ -1,87 +1,104 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { z } from "zod";
 
 import { useAuditLog } from "@/api/hooks/use-audit-log";
-import type { AuditLogEntry } from "@/api/types";
-import { DataTable, type Column } from "@/components/shared/data-table";
-import { IdDisplay } from "@/components/shared/id-display";
+import type { AuditLogListItem } from "@/api/types";
+import { DataTable } from "@/components/shared/data-table";
+import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { EntityReferenceLink } from "@/components/shared/entity-link";
 import { JsonViewer } from "@/components/shared/json-viewer";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  applyPaginationToSearch,
+  applySortingToSearch,
+  paginatedSearchShape,
+  paginationFromSearch,
+  sortingFromSearch,
+} from "@/lib/data-table-search";
+
+const auditLogSearchSchema = z.object({
+  ...paginatedSearchShape,
+  eventType: z.string().catch(""),
+});
 
 export const Route = createFileRoute("/audit-log/")({
+  validateSearch: (search) => auditLogSearchSchema.parse(search),
   component: AuditLogPage,
 });
 
 function AuditLogPage() {
-  const [eventTypeFilter, setEventTypeFilter] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [selectedEntry, setSelectedEntry] = useState<AuditLogEntry | null>(null);
+  const searchState = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const pagination = paginationFromSearch(searchState);
+  const sorting = sortingFromSearch(searchState);
+  const [selectedEntry, setSelectedEntry] = useState<AuditLogListItem | null>(null);
 
   const { data, isLoading } = useAuditLog({
-    eventType: eventTypeFilter || undefined,
-    limit: 50,
-    offset,
+    eventType: searchState.eventType || undefined,
+    limit: pagination.pageSize,
+    offset: pagination.pageIndex * pagination.pageSize,
+    sortBy: searchState.sortBy,
+    sortDir: searchState.sortDir,
   });
 
-  const columns: Column<AuditLogEntry>[] = [
-    {
-      key: "eventType",
-      header: "Event",
-      cell: (row) => (
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{row.eventType}</span>
-      ),
-    },
-    {
-      key: "actorType",
-      header: "Actor",
-      cell: (row) => (
-        <span className="text-sm">
-          {row.actorType ?? "--"}
-          {row.actorId ? `: ${row.actorId}` : ""}
-        </span>
-      ),
-    },
-    {
-      key: "targetType",
-      header: "Target",
-      cell: (row) =>
-        row.targetType ? (
-          <span className="text-sm">
-            {row.targetType}
-            {row.targetId ? ": " : ""}
-            {row.targetId && <IdDisplay id={row.targetId} />}
+  const columns = useMemo<ColumnDef<AuditLogListItem>[]>(
+    () => [
+      {
+        accessorKey: "eventType",
+        meta: { label: "Event" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Event" />,
+        cell: ({ row }) => (
+          <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+            {row.original.eventType}
           </span>
-        ) : (
-          "--"
         ),
-    },
-    {
-      key: "createdAt",
-      header: "Time",
-      cell: (row) => <TimeAgo date={row.createdAt} />,
-    },
-    {
-      key: "actions",
-      header: "",
-      cell: (row) =>
-        row.payloadJson ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedEntry(row);
-            }}
-          >
-            Payload
-          </Button>
-        ) : null,
-    },
-  ];
+      },
+      {
+        accessorKey: "actorType",
+        meta: { label: "Actor" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Actor" />,
+        cell: ({ row }) => (
+          <span className="text-sm">
+            {row.original.actorType ?? "--"}
+            {row.original.actorId ? `: ${row.original.actorId}` : ""}
+          </span>
+        ),
+      },
+      {
+        id: "targetRef",
+        meta: { label: "Target" },
+        enableSorting: false,
+        cell: ({ row }) => <EntityReferenceLink refItem={row.original.targetRef} />,
+      },
+      {
+        accessorKey: "createdAt",
+        meta: { label: "Time" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Time" />,
+        cell: ({ row }) => <TimeAgo date={row.original.createdAt} />,
+      },
+      {
+        id: "actions",
+        meta: { label: "Actions" },
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) =>
+          row.original.payloadJson ? (
+            <Button variant="ghost" size="sm" onClick={() => setSelectedEntry(row.original)}>
+              Payload
+            </Button>
+          ) : null,
+      },
+    ],
+    [],
+  );
+
+  const pageCount = data ? Math.max(1, Math.ceil(data.total / pagination.pageSize)) : 0;
 
   return (
     <div>
@@ -93,11 +110,17 @@ function AuditLogPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Filter by event type..."
-            value={eventTypeFilter}
-            onChange={(e) => {
-              setEventTypeFilter(e.target.value);
-              setOffset(0);
-            }}
+            value={searchState.eventType}
+            onChange={(e) =>
+              void navigate({
+                to: "/audit-log",
+                search: {
+                  ...searchState,
+                  page: 1,
+                  eventType: e.target.value,
+                },
+              })
+            }
             className="pl-9"
           />
         </div>
@@ -109,13 +132,27 @@ function AuditLogPage() {
           data={data?.items ?? []}
           isLoading={isLoading}
           emptyMessage="No audit log entries."
+          sorting={sorting}
+          onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
+            void navigate({
+              to: "/audit-log",
+              search: applySortingToSearch(searchState, updater),
+            })
+          }
+          manualSorting
+          enableColumnVisibility
           pagination={
             data
               ? {
                   total: data.total,
-                  limit: data.limit,
-                  offset: data.offset,
-                  onOffsetChange: setOffset,
+                  pageIndex: pagination.pageIndex,
+                  pageSize: pagination.pageSize,
+                  pageCount,
+                  onPaginationChange: (updater) =>
+                    void navigate({
+                      to: "/audit-log",
+                      search: applyPaginationToSearch(searchState, updater),
+                    }),
                 }
               : undefined
           }

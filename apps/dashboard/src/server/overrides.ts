@@ -3,10 +3,29 @@ import { createDb } from "@versioneer/db";
 import { adminOverrides, auditLog, generateId, idPrefixes } from "@versioneer/schema";
 import { overrideCreateSchema } from "@versioneer/validation";
 import { env } from "cloudflare:workers";
-import { eq, sql, desc } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { resolveTargetRefs } from "./entity-summaries";
 import { authMiddleware } from "./middleware";
+
+const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
+
+function overrideOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
+  const direction = sortDir === "asc" ? asc : desc;
+
+  switch (sortBy) {
+    case "overrideType":
+      return [direction(adminOverrides.overrideType), desc(adminOverrides.createdAt)];
+    case "targetType":
+      return [direction(adminOverrides.targetType), desc(adminOverrides.createdAt)];
+    case "isActive":
+      return [direction(adminOverrides.isActive), desc(adminOverrides.createdAt)];
+    case "createdAt":
+    default:
+      return [desc(adminOverrides.createdAt)];
+  }
+}
 
 export const listOverrides = createServerFn({ method: "GET" })
   .inputValidator(
@@ -14,6 +33,8 @@ export const listOverrides = createServerFn({ method: "GET" })
       limit: z.number().optional(),
       offset: z.number().optional(),
       active: z.boolean().optional(),
+      sortBy: z.string().optional(),
+      sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
@@ -33,11 +54,27 @@ export const listOverrides = createServerFn({ method: "GET" })
       .select()
       .from(adminOverrides)
       .where(where)
-      .orderBy(desc(adminOverrides.createdAt))
+      .orderBy(...overrideOrderBy(data.sortBy, data.sortDir))
       .limit(limit)
       .offset(offset);
+    const targetRefMap = await resolveTargetRefs(
+      db,
+      items.map((item) => ({
+        targetType: item.targetType,
+        targetId: item.targetId,
+      })),
+    );
 
-    return { items, total: countResult?.count ?? 0, limit, offset };
+    return {
+      items: items.map((item) =>
+        Object.assign({}, item, {
+          targetRef: targetRefMap.get(`${item.targetType}:${item.targetId}`) ?? null,
+        }),
+      ),
+      total: countResult?.count ?? 0,
+      limit,
+      offset,
+    };
   });
 
 export const getOverride = createServerFn({ method: "GET" })

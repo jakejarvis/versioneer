@@ -205,8 +205,9 @@ async function enrichFromSparkleFeed(url: string, result: EnrichmentResult): Pro
   result.enrichedReleaseCount = parsed.releases.length;
 
   // Find latest stable release
-  const stableReleases = parsed.releases.filter((r) => r.channel === "stable" && !r.isPrerelease);
-  const latest = stableReleases[0] ?? parsed.releases[0];
+  const latest =
+    parsed.releases.find((release) => release.channel === "stable" && !release.isPrerelease) ??
+    parsed.releases[0];
   if (latest) {
     result.enrichedLatestVersion = latest.versionRaw;
     result.enrichedLatestPublishedAt = latest.publishedAt ?? null;
@@ -256,8 +257,9 @@ async function enrichFromGitHubReleases(
   result.sourceValidationStatus = "valid";
   result.enrichedReleaseCount = parsed.releases.length;
 
-  const stableReleases = parsed.releases.filter((r) => r.channel === "stable" && !r.isPrerelease);
-  const latest = stableReleases[0] ?? parsed.releases[0];
+  const latest =
+    parsed.releases.find((release) => release.channel === "stable" && !release.isPrerelease) ??
+    parsed.releases[0];
   if (latest) {
     result.enrichedLatestVersion = latest.versionRaw;
     result.enrichedLatestPublishedAt = latest.publishedAt ?? null;
