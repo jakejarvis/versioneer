@@ -5,7 +5,6 @@ nonisolated struct FloatingBarPresentation: Equatable, Sendable {
     case idle
     case scanning(detail: String)
     case submitting(detail: String)
-    case updates(count: Int)
     case selection(count: Int, updatableCount: Int)
     case installing(appName: String, phase: String)
     case error(message: String)
@@ -62,12 +61,6 @@ nonisolated struct FloatingBarPresentation: Equatable, Sendable {
           count: selectedIDs.count,
           updatableCount: updatableCount
         ))
-    }
-
-    // Updates available
-    let updateCount = scanSummary.updatesAvailableCount
-    if updateCount > 0 {
-      return FloatingBarPresentation(mode: .updates(count: updateCount))
     }
 
     return FloatingBarPresentation(mode: .idle)

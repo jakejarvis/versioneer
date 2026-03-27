@@ -35,6 +35,15 @@ final class AppState {
 
     var id: String { rawValue }
 
+    var shortTitle: String {
+      switch self {
+      case .all: "All"
+      case .updatesAvailable: "Updates"
+      case .unsupported: "Unsupported"
+      case .unknown: "Unknown"
+      }
+    }
+
     var systemImage: String {
       switch self {
       case .all: "app.dashed"

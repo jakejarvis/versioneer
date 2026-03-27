@@ -12,9 +12,9 @@ struct FloatingActionBarView: View {
       barContent
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: 600)
         .glassEffect(.regular, in: .rect(cornerRadius: 22))
-        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity)
         .padding(.bottom, 12)
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .animation(.snappy(duration: 0.3), value: presentation.mode)
@@ -48,24 +48,6 @@ struct FloatingActionBarView: View {
           .foregroundStyle(.secondary)
           .lineLimit(1)
         Spacer()
-      }
-
-    case .updates(let count):
-      HStack(spacing: 12) {
-        Image(systemName: "arrow.up.circle.fill")
-          .foregroundStyle(.orange)
-        Text("\(count) update\(count == 1 ? "" : "s") available")
-          .font(.subheadline.weight(.medium))
-          .contentTransition(.numericText())
-        Spacer()
-        Button {
-          Task { await appState.installAll() }
-        } label: {
-          Text("Update All")
-            .font(.subheadline.weight(.semibold))
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.small)
       }
 
     case .selection(let count, let updatableCount):

@@ -7,29 +7,34 @@ struct RootView: View {
   var body: some View {
     @Bindable var appState = appState
 
-    ZStack(alignment: .trailing) {
-      // Main content: header + list
-      VStack(spacing: 0) {
-        AppListHeaderView()
-
+    NavigationSplitView {
+      sidebar
+    } detail: {
+      ZStack(alignment: .trailing) {
         listContent
           .safeAreaInset(edge: .bottom) {
             FloatingActionBarView()
           }
-      }
 
-      // Detail panel overlay (no blocking overlay — list stays interactive)
-      if let detailResult = appState.detailResult {
-        DetailPanelView(result: detailResult)
-          .id(detailResult.id)
-          .frame(width: 420)
-          .frame(maxHeight: .infinity)
-          .transition(.move(edge: .trailing).combined(with: .opacity))
+        if let detailResult = appState.detailResult {
+          DetailPanelView(result: detailResult)
+            .id(detailResult.id)
+            .frame(width: 420)
+            .frame(maxHeight: .infinity)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+        }
+      }
+      .animation(.snappy(duration: 0.3), value: appState.detailResult?.id)
+      .searchable(text: $appState.searchText, prompt: "Filter apps")
+      .toolbar {
+        ToolbarItemGroup(placement: .primaryAction) {
+          sortPicker
+          scanButton
+        }
       }
     }
-    .animation(.snappy(duration: 0.3), value: appState.detailResult?.id)
+    .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
     .frame(minWidth: 900, minHeight: 560)
-    .searchable(text: $appState.searchText, prompt: "Filter apps")
     .versioneerAnalyticsScreen(name: "main_window", class: "RootView")
     .task {
       await Task.yield()
@@ -37,13 +42,75 @@ struct RootView: View {
     }
   }
 
+  // MARK: - Sidebar
+
+  private var sidebar: some View {
+    @Bindable var appState = appState
+    return List(selection: $appState.selectedSection) {
+      ForEach(AppState.SidebarSection.allCases) { section in
+        Label(section.rawValue, systemImage: section.systemImage)
+          .badge(sidebarCount(for: section))
+          .tag(section)
+      }
+    }
+    .navigationTitle("Versioneer")
+  }
+
+  private func sidebarCount(for section: AppState.SidebarSection) -> Int {
+    let summary = appState.scanSummary
+    return switch section {
+    case .all: summary.totalApps
+    case .updatesAvailable: summary.updatesAvailableCount
+    case .unknown: summary.unknownCount
+    case .unsupported: summary.unsupportedCount
+    }
+  }
+
+  // MARK: - Toolbar Items
+
+  private var sortPicker: some View {
+    @Bindable var appState = appState
+    return Picker("Sort", selection: $appState.resultsSort) {
+      ForEach(ResultsBrowserSort.allCases) { sort in
+        Text(sort.title).tag(sort)
+      }
+    }
+    .pickerStyle(.menu)
+    .fixedSize()
+  }
+
+  private var scanButton: some View {
+    Button {
+      Task { await appState.scanAndSubmit() }
+    } label: {
+      HStack(spacing: 8) {
+        if appState.loadState == .scanning || appState.loadState == .submitting {
+          ProgressView()
+            .controlSize(.small)
+        }
+        Text(scanButtonLabel)
+      }
+    }
+    .buttonStyle(.borderedProminent)
+    .disabled(appState.loadState == .scanning || appState.loadState == .submitting)
+  }
+
+  private var scanButtonLabel: String {
+    switch appState.loadState {
+    case .scanning: "Scanning…"
+    case .submitting: "Checking…"
+    default: "Scan & Check"
+    }
+  }
+
+  // MARK: - List Content
+
   @ViewBuilder
   private var listContent: some View {
     @Bindable var appState = appState
     let rows = appState.resultsBrowserRows
 
     if appState.loadState == .idle && rows.isEmpty && !appState.hasCachedResults {
-      // Scanning in progress — first launch
       ContentUnavailableView {
         ProgressView()
           .controlSize(.large)
@@ -87,5 +154,4 @@ struct RootView: View {
       }
     }
   }
-
 }
