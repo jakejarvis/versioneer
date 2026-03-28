@@ -30,7 +30,7 @@ export function DataTableColumnHeader<TData, TValue>({
       onClick={() => column.toggleSorting(sorted === "asc")}
     >
       <span>{title}</span>
-      <Icon className="size-4 text-muted-foreground" />
+      <Icon className="text-muted-foreground" />
     </Button>
   );
 }

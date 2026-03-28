@@ -135,7 +135,7 @@ function SourcesPage() {
         enableHiding: false,
         cell: ({ row }) => (
           <Button variant="outline" size="sm" onClick={() => queueFetch(row.original.id)}>
-            <Zap className="mr-1 h-3 w-3" />
+            <Zap />
             Fetch
           </Button>
         ),

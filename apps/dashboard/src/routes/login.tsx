@@ -34,7 +34,7 @@ function LoginPage() {
         }}
         disabled={isLoading}
       >
-        {isLoading ? <Loader2 className="size-4 animate-spin" /> : <OcticonMarkGithub16 />}
+        {isLoading ? <Loader2 className="animate-spin" /> : <OcticonMarkGithub16 />}
         {isLoading ? "Loading…" : "Sign in with GitHub"}
       </Button>
     </div>

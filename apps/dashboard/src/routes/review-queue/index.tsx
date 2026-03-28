@@ -280,7 +280,7 @@ function ReviewQueuePage() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm">
-                      <MoreHorizontal className="h-4 w-4" />
+                      <MoreHorizontal />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -288,16 +288,16 @@ function ReviewQueuePage() {
                       <DropdownMenuItem
                         onClick={() => handleAction(row.original.id, "in_progress")}
                       >
-                        <Workflow className="mr-2 h-4 w-4" />
+                        <Workflow />
                         Mark In Progress
                       </DropdownMenuItem>
                     ) : null}
                     <DropdownMenuItem onClick={() => handleAction(row.original.id, "resolved")}>
-                      <CheckCircle className="mr-2 h-4 w-4" />
+                      <CheckCircle />
                       Resolve
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleAction(row.original.id, "dismissed")}>
-                      <XCircle className="mr-2 h-4 w-4" />
+                      <XCircle />
                       Dismiss
                     </DropdownMenuItem>
                   </DropdownMenuContent>

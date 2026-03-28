@@ -316,7 +316,7 @@ export function DataTable<T>({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
-                <Settings2 className="size-4" />
+                <Settings2 />
                 Columns
               </Button>
             </DropdownMenuTrigger>

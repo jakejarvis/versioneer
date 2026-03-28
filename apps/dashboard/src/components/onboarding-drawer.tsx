@@ -353,7 +353,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
               className="h-7 w-7 p-0 -mr-1 -mt-1"
               onClick={() => onOpenChange(false)}
             >
-              <X className="h-4 w-4" />
+              <X />
             </Button>
           </div>
         </SheetHeader>
@@ -520,7 +520,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                       className="h-6 text-xs text-muted-foreground hover:text-foreground"
                       onClick={addAlias}
                     >
-                      <Plus className="mr-1 h-3 w-3" />
+                      <Plus />
                       Add
                     </Button>
                   </div>
@@ -572,7 +572,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                       className="h-6 text-xs text-muted-foreground hover:text-foreground"
                       onClick={addSource}
                     >
-                      <Plus className="mr-1 h-3 w-3" />
+                      <Plus />
                       Add
                     </Button>
                   </div>
@@ -606,11 +606,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                   size="sm"
                   className="flex-1 h-8"
                 >
-                  {onboard.isPending ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Zap className="mr-1.5 h-3.5 w-3.5" />
-                  )}
+                  {onboard.isPending ? <Loader2 className="animate-spin" /> : <Zap />}
                   {onboard.isPending ? "Onboarding..." : "Onboard App"}
                 </Button>
                 <Button
@@ -701,11 +697,7 @@ function SourceCard({
             onClick={handleTestFeed}
             disabled={validateMutation.isPending}
           >
-            {validateMutation.isPending ? (
-              <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-1 h-2.5 w-2.5" />
-            )}
+            {validateMutation.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
             Test
           </Button>
           {validateMutation.data && (

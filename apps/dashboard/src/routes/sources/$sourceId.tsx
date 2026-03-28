@@ -134,7 +134,7 @@ function SourceDetailPage() {
             }
             disabled={triggerFetch.isPending}
           >
-            <Zap className="mr-2 h-4 w-4" />
+            <Zap />
             Trigger Fetch
           </Button>
         </div>
@@ -315,7 +315,7 @@ function FetchHistoryTable({
               {expandedFetch === row.original.id ? "Hide Runs" : "Parser Runs"}
             </Button>
             <Button variant="outline" size="sm" onClick={() => queueReparse(row.original.id)}>
-              <RefreshCw className="mr-1 h-3 w-3" />
+              <RefreshCw />
               Reparse
             </Button>
           </div>

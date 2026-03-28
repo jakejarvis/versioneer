@@ -272,7 +272,7 @@ function OverviewTab({
             }}
             disabled={recomputeLatest.isPending}
           >
-            <RefreshCw className="mr-2 h-3 w-3" />
+            <RefreshCw />
             Recompute Latest
           </Button>
         </div>
@@ -434,7 +434,7 @@ function AliasesTab({ appId }: { appId: string }) {
           </p>
         </div>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 h-3 w-3" />
+          <Plus />
           Add Alias
         </Button>
       </div>
@@ -614,7 +614,7 @@ function SourcesTab({ appId }: { appId: string }) {
               </Link>
             </Button>
             <Button variant="outline" size="sm" onClick={() => queueFetch(row.original.id)}>
-              <Zap className="mr-1 h-3 w-3" />
+              <Zap />
               Fetch
             </Button>
           </div>
@@ -770,7 +770,7 @@ function QualityTab({
             }
             disabled={recomputeScorecard.isPending}
           >
-            <BarChart3 className="mr-2 h-3 w-3" />
+            <BarChart3 />
             Recompute Scorecard
           </Button>
           {verificationTier !== "verified" ? (
@@ -963,7 +963,7 @@ function InstallRulesTab({ appId }: { appId: string }) {
             setDialogOpen(true);
           }}
         >
-          <Plus className="mr-2 h-3 w-3" />
+          <Plus />
           Add Rule
         </Button>
       </div>

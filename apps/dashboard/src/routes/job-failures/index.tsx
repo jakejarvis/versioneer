@@ -152,20 +152,20 @@ function JobFailuresPage() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm">
-                  <MoreHorizontal className="h-4 w-4" />
+                  <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => handleRetry(row.original.id)}>
-                  <RefreshCw className="mr-2 h-4 w-4" />
+                  <RefreshCw />
                   Retry
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleStatusChange(row.original.id, "resolved")}>
-                  <CheckCircle className="mr-2 h-4 w-4" />
+                  <CheckCircle />
                   Resolve
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleStatusChange(row.original.id, "abandoned")}>
-                  <Ban className="mr-2 h-4 w-4" />
+                  <Ban />
                   Abandon
                 </DropdownMenuItem>
               </DropdownMenuContent>

@@ -190,11 +190,7 @@ function JobsPage() {
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={handlePollSources} disabled={pollSources.isPending}>
-            {pollSources.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Radio className="mr-2 h-4 w-4" />
-            )}
+            {pollSources.isPending ? <Loader2 className="animate-spin" /> : <Radio />}
             Poll Sources
           </Button>
           <div className="flex items-center gap-1.5">
@@ -214,20 +210,12 @@ function JobsPage() {
           onClick={handleRecomputeScorecards}
           disabled={recomputeScorecards.isPending}
         >
-          {recomputeScorecards.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
-          )}
+          {recomputeScorecards.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
           Recompute Scorecards
         </Button>
 
         <Button size="sm" onClick={handleCaskSync} disabled={caskSync.isPending}>
-          {caskSync.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Package className="mr-2 h-4 w-4" />
-          )}
+          {caskSync.isPending ? <Loader2 className="animate-spin" /> : <Package />}
           Cask Index Sync
         </Button>
       </div>

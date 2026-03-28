@@ -63,7 +63,7 @@ export function PaginationControls({
           onClick={() => onPageIndexChange(Math.max(0, pageIndex - 1))}
           disabled={pageIndex === 0}
         >
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeft />
           Previous
         </Button>
         <span className="text-sm text-muted-foreground">
@@ -76,7 +76,7 @@ export function PaginationControls({
           disabled={pageIndex + 1 >= totalPages}
         >
           Next
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight />
         </Button>
       </div>
     </div>

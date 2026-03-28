@@ -285,12 +285,12 @@ function DiscoveredAppsPage() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm">
-                    <MoreHorizontal className="h-4 w-4" />
+                    <MoreHorizontal />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
                   <DropdownMenuItem onClick={() => handleReEnrich(row.original.id)}>
-                    <RefreshCw className="mr-2 h-3 w-3" />
+                    <RefreshCw />
                     Re-enrich
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleDismiss(row.original.id)}>

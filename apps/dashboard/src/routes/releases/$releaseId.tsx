@@ -133,7 +133,7 @@ function ReleaseDetailPage() {
                 })
               }
             >
-              <ShieldCheck className="mr-1 h-3 w-3" />
+              <ShieldCheck />
               Verify
             </Button>
           </div>

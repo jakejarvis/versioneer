@@ -163,7 +163,7 @@ function AppsPage() {
           <p className="mt-1 text-muted-foreground">Manage the application catalog.</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus />
           Create App
         </Button>
       </div>
