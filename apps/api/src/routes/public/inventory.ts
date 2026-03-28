@@ -37,9 +37,13 @@ function computeLookupKey(appName: string, bundleId?: string | null): string {
     .replace(/\.app$/, "")}`;
 }
 
-async function storeDiscoveredIcon(
+/**
+ * Decodes base64 icon data, hashes it, and stores it in R2.
+ * Returns the R2 key or null on failure.
+ */
+async function storeIconToR2(
   bucket: R2Bucket,
-  lookupKey: string,
+  r2Prefix: string,
   iconBase64: string,
 ): Promise<string | null> {
   try {
@@ -52,20 +56,13 @@ async function storeDiscoveredIcon(
 
     if (body.byteLength > 512 * 1024) return null;
 
-    const keyBytes = new TextEncoder().encode(lookupKey);
-    const keyDigest = await crypto.subtle.digest("SHA-256", keyBytes);
-    const lookupKeyHash = Array.from(new Uint8Array(keyDigest))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-      .slice(0, 16);
-
     const contentDigest = await crypto.subtle.digest("SHA-256", body);
     const contentHash = Array.from(new Uint8Array(contentDigest))
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("")
       .slice(0, 12);
 
-    const r2Key = `discovered-icons/${lookupKeyHash}/${contentHash}.png`;
+    const r2Key = `${r2Prefix}/${contentHash}.png`;
 
     await bucket.put(r2Key, body, {
       httpMetadata: {
@@ -78,6 +75,20 @@ async function storeDiscoveredIcon(
   } catch {
     return null;
   }
+}
+
+async function storeDiscoveredIcon(
+  bucket: R2Bucket,
+  lookupKey: string,
+  iconBase64: string,
+): Promise<string | null> {
+  const keyBytes = new TextEncoder().encode(lookupKey);
+  const keyDigest = await crypto.subtle.digest("SHA-256", keyBytes);
+  const lookupKeyHash = Array.from(new Uint8Array(keyDigest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16);
+  return storeIconToR2(bucket, `discovered-icons/${lookupKeyHash}`, iconBase64);
 }
 
 function defaultInstallMetadata(
@@ -716,6 +727,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 db,
                 githubToken: c.env.GITHUB_TOKEN,
                 assetsBucket: c.env.ASSETS_BUCKET,
+                configKv: c.env.CONFIG_KV,
               });
             }
           } else {
@@ -761,8 +773,43 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 db,
                 githubToken: c.env.GITHUB_TOKEN,
                 assetsBucket: c.env.ASSETS_BUCKET,
+                configKv: c.env.CONFIG_KV,
               });
             }
+          }
+        }
+
+        // Backfill icons for matched catalog apps that are missing them
+        for (const installedApp of request.apps) {
+          if (!installedApp.iconBase64) continue;
+          const result = results.find(
+            (r) =>
+              r.appName === installedApp.appName && r.bundleId === (installedApp.bundleId ?? null),
+          );
+          if (!result?.matchedAppId) continue;
+
+          // Re-check from DB to avoid races with concurrent requests
+          const appRow = await db
+            .select({ id: apps.id, slug: apps.slug, iconR2Key: apps.iconR2Key })
+            .from(apps)
+            .where(eq(apps.id, result.matchedAppId))
+            .get();
+          if (!appRow || appRow.iconR2Key) continue;
+
+          try {
+            const iconKey = await storeIconToR2(
+              c.env.ASSETS_BUCKET,
+              `icons/${appRow.slug}`,
+              installedApp.iconBase64,
+            );
+            if (iconKey) {
+              await db
+                .update(apps)
+                .set({ iconR2Key: iconKey, updatedAt: now })
+                .where(eq(apps.id, appRow.id));
+            }
+          } catch {
+            // Non-critical — continue
           }
         }
       })(),

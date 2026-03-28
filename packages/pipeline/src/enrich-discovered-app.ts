@@ -47,6 +47,7 @@ export async function enrichDiscoveredApp(params: {
   db: ReturnType<typeof createDb>;
   githubToken?: string;
   assetsBucket?: R2Bucket;
+  configKv?: KVNamespace;
 }): Promise<EnrichmentResult> {
   const { discoveredAppId, db, githubToken } = params;
 
@@ -113,6 +114,23 @@ export async function enrichDiscoveredApp(params: {
       result.enrichedHomepageUrl = row.homebrewCaskHomepage;
     }
 
+    // Look up Homebrew Cask token from KV-cached index if not already set
+    let hasHomebrewCask = !!row.homebrewCaskToken;
+    if (!row.homebrewCaskToken && row.bundleId && params.configKv) {
+      const caskToken = await lookupCaskTokenByBundleId(params.configKv, row.bundleId);
+      if (caskToken) {
+        hasHomebrewCask = true;
+        await db
+          .update(discoveredApps)
+          .set({
+            homebrewCaskToken: caskToken,
+            homebrewCaskMatchedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(discoveredApps.id, discoveredAppId));
+      }
+    }
+
     // Compute confidence score
     result.confidenceScore = computeConfidenceScore({
       hasBundleId: !!row.bundleId,
@@ -120,7 +138,7 @@ export async function enrichDiscoveredApp(params: {
       hasReleases: (result.enrichedReleaseCount ?? 0) > 0,
       hasVendorInfo: !!result.enrichedVendorName,
       hasHomepageUrl: !!result.enrichedHomepageUrl,
-      hasHomebrewCask: !!row.homebrewCaskToken,
+      hasHomebrewCask,
     });
 
     // Scrape homepage for icon if none exists yet
@@ -347,6 +365,23 @@ function computeConfidenceScore(factors: {
 // ──────────────────────────────────────────────────────────
 // Homepage icon scraping
 // ──────────────────────────────────────────────────────────
+
+/**
+ * Looks up a Homebrew Cask token from the KV-cached bundle-ID index.
+ */
+export async function lookupCaskTokenByBundleId(
+  configKv: KVNamespace,
+  bundleId: string,
+): Promise<string | null> {
+  const cached = await configKv.get("cask-bundle-id-map");
+  if (!cached) return null;
+  try {
+    const map = JSON.parse(cached) as Record<string, string>;
+    return map[bundleId.toLowerCase()] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 async function scrapeHomepageIcon(
   homepageUrl: string,

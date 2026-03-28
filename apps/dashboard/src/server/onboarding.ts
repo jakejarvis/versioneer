@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createDb } from "@versioneer/db";
+import { lookupCaskTokenByBundleId } from "@versioneer/pipeline";
 import {
   apps,
   appAliases,
@@ -287,4 +288,15 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     }
 
     return { id: appId, status: "onboarded" };
+  });
+
+// ──────────────────────────────────────────────────────────
+// On-demand cask token lookup
+// ──────────────────────────────────────────────────────────
+
+export const lookupCaskToken = createServerFn({ method: "GET" })
+  .inputValidator(z.object({ bundleId: z.string().min(1) }))
+  .handler(async ({ data: { bundleId } }) => {
+    const token = await lookupCaskTokenByBundleId(env.CONFIG_KV, bundleId);
+    return { caskToken: token };
   });

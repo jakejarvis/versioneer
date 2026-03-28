@@ -45,19 +45,6 @@ function ReleaseDetailPage() {
   const pinRelease = usePinRelease();
   const unpinRelease = useUnpinRelease();
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-5 w-64" />
-      </div>
-    );
-  }
-
-  if (!release) {
-    return <p className="text-muted-foreground">Release not found.</p>;
-  }
-
   const artifactColumns = useMemo<ColumnDef<Artifact>[]>(
     () => [
       {
@@ -243,6 +230,19 @@ function ReleaseDetailPage() {
     ],
     [],
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-5 w-64" />
+      </div>
+    );
+  }
+
+  if (!release) {
+    return <p className="text-muted-foreground">Release not found.</p>;
+  }
 
   return (
     <div>

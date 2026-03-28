@@ -18,6 +18,13 @@
     }
   ],
 
+  "kv_namespaces": [
+    {
+      "binding": "CONFIG_KV",
+      "id": "6d27b272dbd9466fb1d7bcc2ce83f501"
+    }
+  ],
+
   "d1_databases": [
     {
       "binding": "DB",
@@ -62,6 +69,12 @@
         "ENVIRONMENT": "production",
         "ASSETS_BASE_URL": "https://assets-prod.versioneer.app"
       },
+      "kv_namespaces": [
+        {
+          "binding": "CONFIG_KV",
+          "id": "babe0cb4a83642b0943226af13862149"
+        }
+      ],
       "r2_buckets": [
         {
           "binding": "ASSETS_BUCKET",

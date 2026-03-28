@@ -5,6 +5,7 @@ import {
   updateOnboardingChecklist,
   onboardDiscoveredApp,
   checkSlugAvailable,
+  lookupCaskToken,
 } from "@/server/onboarding";
 import { validateSource } from "@/server/source-validation";
 
@@ -42,6 +43,14 @@ export function useValidateSource() {
   });
 }
 
+export function useLookupCaskToken(bundleId: string | null) {
+  return useQuery({
+    queryKey: ["cask-token-lookup", bundleId],
+    queryFn: () => lookupCaskToken({ data: { bundleId: bundleId! } }),
+    enabled: !!bundleId,
+  });
+}
+
 export function useOnboardDiscoveredApp() {
   const qc = useQueryClient();
   return useMutation({
@@ -55,26 +64,9 @@ export function useOnboardDiscoveredApp() {
         notes?: string;
       };
       aliases: {
-        aliasType:
-          | "bundle_id"
-          | "name"
-          | "team_id"
-          | "sparkle_feed"
-          | "homepage"
-          | "download_pattern"
-          | "github_repo"
-          | "mas_app_id"
-          | "homebrew_cask";
+        aliasType: "bundle_id" | "name" | "team_id" | "homebrew_cask" | "mas_app_id";
         value: string;
       }[];
-      source?: {
-        sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
-        baseUrl: string;
-        parserKey: string;
-        pollIntervalMinutes?: number;
-        label?: string;
-        status?: "active" | "paused";
-      };
       sources?: {
         sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
         baseUrl: string;

@@ -209,6 +209,13 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
     }
   }
 
+  // Persist a lightweight bundle-ID-to-cask-token index in KV for on-demand lookups
+  const bundleIdToCask: Record<string, string> = {};
+  for (const [bid, cask] of casksByBundleId) {
+    bundleIdToCask[bid] = cask.token;
+  }
+  await env.CONFIG_KV.put("cask-bundle-id-map", JSON.stringify(bundleIdToCask));
+
   // Load discovered apps with bundle IDs
   const discoveredWithBundleId = await db
     .select({
