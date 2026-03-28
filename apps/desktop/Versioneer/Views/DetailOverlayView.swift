@@ -212,7 +212,7 @@ private struct DetailCardView: View {
       ignoredActionSection
     } else if isBrewApp && result.decision == .updateAvailable {
       brewUpgradeActionSection
-    } else if result.install.canInstall {
+    } else if result.canInstall {
       standardInstallActionSection
     } else if result.decision == .updateAvailable {
       VStack(alignment: .leading, spacing: 8) {
@@ -302,7 +302,7 @@ private struct DetailCardView: View {
       .controlSize(.large)
       .disabled(installState.isRunning)
 
-      if result.install.canInstall {
+      if result.canInstall {
         Button {
           showBrewBypassWarning = true
         } label: {
@@ -439,10 +439,8 @@ private struct DetailCardView: View {
     switch result.decision {
     case .updateAvailable: "Update Available"
     case .upToDate: "Up to Date"
-    case .unknown: "Unknown"
     case .ambiguous: "Needs Review"
-    case .unsupported: "Unsupported"
-    case .ignored: "Ignored"
+    case .notTracked: "Not Tracked"
     }
   }
 
@@ -450,9 +448,8 @@ private struct DetailCardView: View {
     switch result.decision {
     case .updateAvailable: .orange
     case .upToDate: .green
-    case .unknown, .ignored: .secondary
     case .ambiguous: .orange
-    case .unsupported: .red
+    case .notTracked: .secondary
     }
   }
 
@@ -460,21 +457,16 @@ private struct DetailCardView: View {
     switch result.decision {
     case .updateAvailable: "arrow.up.circle.fill"
     case .upToDate: "checkmark.circle.fill"
-    case .unknown: "questionmark.circle"
     case .ambiguous: "scope"
-    case .unsupported: "xmark.circle.fill"
-    case .ignored: "minus.circle"
+    case .notTracked: "questionmark.circle"
     }
   }
 
   private var unavailableInstallReason: String {
-    switch result.install.eligibility {
-    case .masApp: "Mac App Store apps must be updated through the App Store."
-    case .manualOnly: "This app is currently configured for manual updates only."
-    case .requiresWarning, .eligible:
-      "Versioneer is ready to run the install flow for this update."
-    case .notSupported:
+    if result.installStrategy == nil {
       "Versioneer does not currently have an install path for this update."
+    } else {
+      "Versioneer is ready to run the install flow for this update."
     }
   }
 
@@ -489,8 +481,8 @@ private struct DetailCardView: View {
   }
 
   private func handlePrimaryInstallAction() {
-    guard result.install.canInstall else { return }
-    if result.install.eligibility == .requiresWarning {
+    guard result.canInstall else { return }
+    if !result.isVerified {
       showInstallWarning = true
     } else {
       Task { await appState.install(result) }

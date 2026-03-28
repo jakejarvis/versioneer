@@ -6,10 +6,8 @@ struct VersionFormattingTests {
   @Test func statusLabelsAreReadable() {
     #expect(VersionFormatting.statusLabel(for: .upToDate) == "Up to Date")
     #expect(VersionFormatting.statusLabel(for: .updateAvailable) == "Update Available")
-    #expect(VersionFormatting.statusLabel(for: .unknown) == "Unknown")
     #expect(VersionFormatting.statusLabel(for: .ambiguous) == "Ambiguous")
-    #expect(VersionFormatting.statusLabel(for: .unsupported) == "Unsupported")
-    #expect(VersionFormatting.statusLabel(for: .ignored) == "Ignored")
+    #expect(VersionFormatting.statusLabel(for: .notTracked) == "Not Tracked")
   }
 
   @Test func displayVersionShowsDash() {

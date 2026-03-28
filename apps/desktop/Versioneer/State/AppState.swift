@@ -30,8 +30,7 @@ final class AppState {
   enum FilterSection: String, CaseIterable, Identifiable {
     case all = "All Apps"
     case updatesAvailable = "Updates Available"
-    case unknown = "Unknown"
-    case unsupported = "Unsupported"
+    case notTracked = "Not Tracked"
     case ignored = "Ignored"
 
     var id: String { rawValue }
@@ -40,8 +39,7 @@ final class AppState {
       switch self {
       case .all: "All"
       case .updatesAvailable: "Updates"
-      case .unsupported: "Unsupported"
-      case .unknown: "Unknown"
+      case .notTracked: "Not Tracked"
       case .ignored: "Ignored"
       }
     }
@@ -50,8 +48,7 @@ final class AppState {
       switch self {
       case .all: "app.dashed"
       case .updatesAvailable: "arrow.up.circle"
-      case .unsupported: "xmark.circle"
-      case .unknown: "questionmark.circle"
+      case .notTracked: "questionmark.circle"
       case .ignored: "minus.circle"
       }
     }
@@ -133,8 +130,7 @@ final class AppState {
   struct ScanSummary: Equatable, Sendable {
     let totalApps: Int
     let updatesAvailableCount: Int
-    let unknownCount: Int
-    let unsupportedCount: Int
+    let notTrackedCount: Int
     let ignoredCount: Int
     let lastCompletedAt: Date?
   }
@@ -142,8 +138,7 @@ final class AppState {
   private(set) var scanSummary = ScanSummary(
     totalApps: 0,
     updatesAvailableCount: 0,
-    unknownCount: 0,
-    unsupportedCount: 0,
+    notTrackedCount: 0,
     ignoredCount: 0,
     lastCompletedAt: nil
   )
@@ -154,10 +149,8 @@ final class AppState {
     scanSummary = ScanSummary(
       totalApps: visibleResults.count,
       updatesAvailableCount: inventoryResults.filter { $0.decision == .updateAvailable }.count,
-      unknownCount: inventoryResults.filter { $0.decision == .unknown || $0.decision == .ambiguous }
-        .count,
-      unsupportedCount: inventoryResults.filter {
-        ($0.decision == .unsupported || $0.decision == .ignored) && !isUserIgnored($0)
+      notTrackedCount: inventoryResults.filter {
+        ($0.decision == .notTracked || $0.decision == .ambiguous) && !isUserIgnored($0)
       }.count,
       ignoredCount: userIgnoredResultIDs.count,
       lastCompletedAt: lastScanCompletedAt
@@ -206,13 +199,9 @@ final class AppState {
       sectionFiltered = inventoryResults.filter { !isUserIgnored($0) }
     case .updatesAvailable:
       sectionFiltered = inventoryResults.filter { $0.decision == .updateAvailable }
-    case .unsupported:
+    case .notTracked:
       sectionFiltered = inventoryResults.filter {
-        ($0.decision == .unsupported || $0.decision == .ignored) && !isUserIgnored($0)
-      }
-    case .unknown:
-      sectionFiltered = inventoryResults.filter {
-        $0.decision == .unknown || $0.decision == .ambiguous
+        ($0.decision == .notTracked || $0.decision == .ambiguous) && !isUserIgnored($0)
       }
     case .ignored:
       sectionFiltered = inventoryResults.filter { isUserIgnored($0) }
@@ -233,9 +222,10 @@ final class AppState {
     case .updatesAvailable:
       let count = inventoryResults.filter { $0.decision == .updateAvailable }.count
       return count > 0 ? count : nil
-    case .unknown:
-      let count = inventoryResults.filter { $0.decision == .unknown || $0.decision == .ambiguous }
-        .count
+    case .notTracked:
+      let count = inventoryResults.filter {
+        ($0.decision == .notTracked || $0.decision == .ambiguous) && !isUserIgnored($0)
+      }.count
       return count > 0 ? count : nil
     case .ignored:
       let count = userIgnoredResultIDs.count
@@ -487,16 +477,8 @@ final class AppState {
     for (index, decision) in results.enumerated() {
       let matchingApp = findInstalledApp(for: decision, in: apps)
 
-      // Flag MAS apps that the backend doesn't know about
-      if let matchingApp, matchingApp.isMasApp,
-        decision.decision == .unknown || decision.decision == .unsupported
-      {
-        results[index] = decision.replacing(decision: .ignored)
-        continue
-      }
-
       // For unmatched apps, try local version data
-      guard decision.decision == .unknown || decision.decision == .unsupported else { continue }
+      guard decision.decision == .notTracked else { continue }
       guard let matchingApp, let localInfo = local[matchingApp.id] else { continue }
 
       results[index] = AppDecision(
@@ -510,14 +492,16 @@ final class AppState {
           latest: localInfo.latestVersion,
           installed: decision.installedVersion
         ),
+        isVerified: decision.isVerified,
         latestVersion: localInfo.latestVersion ?? decision.latestVersion,
         latestVersionRaw: localInfo.latestVersion ?? decision.latestVersionRaw,
         latestReleaseId: decision.latestReleaseId,
         homebrewCaskToken: decision.homebrewCaskToken,
         releasedAt: localInfo.publishedAt ?? decision.releasedAt,
+        staleSince: decision.staleSince,
         iconUrl: decision.iconUrl,
         artifact: decision.artifact,
-        install: decision.install
+        installStrategy: decision.installStrategy
       )
     }
 
@@ -534,16 +518,12 @@ final class AppState {
       let latestVersion: String?
       let releasedAt: String?
 
-      if app.isMasApp {
-        decision = .ignored
-        latestVersion = nil
-        releasedAt = nil
-      } else if let info = local[app.id] {
+      if let info = local[app.id] {
         decision = decisionFromVersion(latest: info.latestVersion, installed: app.version)
         latestVersion = info.latestVersion
         releasedAt = info.publishedAt
       } else {
-        decision = .unknown
+        decision = .notTracked
         latestVersion = nil
         releasedAt = nil
       }
@@ -556,14 +536,16 @@ final class AppState {
         matchedAppName: nil,
         matchConfidence: nil,
         decision: decision,
+        isVerified: false,
         latestVersion: latestVersion,
         latestVersionRaw: latestVersion,
         latestReleaseId: nil,
         homebrewCaskToken: nil,
         releasedAt: releasedAt,
+        staleSince: nil,
         iconUrl: nil,
         artifact: nil,
-        install: .unavailable
+        installStrategy: nil
       )
     }
   }
@@ -579,7 +561,7 @@ final class AppState {
 
   /// Determines update decision by comparing version strings.
   private func decisionFromVersion(latest: String?, installed: String?) -> AppDecision.Decision {
-    guard let latest, let installed else { return .unknown }
+    guard let latest, let installed else { return .notTracked }
     if latest == installed { return .upToDate }
     if compareVersionStrings(latest, isNewerThan: installed) {
       return .updateAvailable
@@ -728,10 +710,7 @@ final class AppState {
         return decision.id
       })
 
-    inventoryResults = rawInventoryResults.map { decision in
-      guard userIgnoredResultIDs.contains(decision.id) else { return decision }
-      return decision.replacing(decision: .ignored)
-    }
+    inventoryResults = rawInventoryResults
     inventoryResultsByID = Dictionary(uniqueKeysWithValues: inventoryResults.map { ($0.id, $0) })
     rebuildScanSummary()
     rebuildResultsBrowserRows()

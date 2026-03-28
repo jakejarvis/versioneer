@@ -53,7 +53,7 @@ nonisolated struct InventoryAPIClient: Sendable {
   ) async throws -> InstallPrepareResponse {
     guard let matchedAppId = result.matchedAppId,
       let releaseId = result.latestReleaseId,
-      let strategy = result.install.strategy
+      let strategy = result.installStrategy
     else {
       throw APIError.installNotAvailable
     }

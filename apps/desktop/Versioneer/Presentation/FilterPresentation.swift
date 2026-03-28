@@ -22,8 +22,7 @@ nonisolated struct FilterPresentation: Equatable, Sendable {
         switch section {
         case .all: summary.totalApps
         case .updatesAvailable: summary.updatesAvailableCount
-        case .unknown: summary.unknownCount
-        case .unsupported: summary.unsupportedCount
+        case .notTracked: summary.notTrackedCount
         case .ignored: summary.ignoredCount
         }
       return Chip(

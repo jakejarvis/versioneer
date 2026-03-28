@@ -121,7 +121,7 @@ nonisolated struct InstallPresentation: Equatable, Sendable {
     case .failed:
       "Retry Install"
     default:
-      result.install.eligibility == .requiresWarning ? "Install with Warning" : "Install Update"
+      !result.isVerified ? "Install with Warning" : "Install Update"
     }
   }
 
@@ -131,7 +131,7 @@ nonisolated struct InstallPresentation: Equatable, Sendable {
   ) -> [Banner] {
     var banners: [Banner] = []
 
-    if result.install.eligibility == .requiresWarning {
+    if !result.isVerified {
       banners.append(
         Banner(
           id: "provisional",
@@ -142,7 +142,7 @@ nonisolated struct InstallPresentation: Equatable, Sendable {
         ))
     }
 
-    if result.install.requiresAdmin {
+    if result.installStrategy?.requiresAdmin ?? false {
       banners.append(
         Banner(
           id: "admin",
@@ -187,13 +187,13 @@ nonisolated struct InstallPresentation: Equatable, Sendable {
 
   private static func trustSummary(result: AppDecision) -> [String] {
     var parts: [String] = []
-    if let strategy = result.install.strategy {
+    if let strategy = result.installStrategy {
       parts.append("Strategy: \(strategy.rawValue)")
     }
-    if result.install.requiresAdmin {
+    if result.installStrategy?.requiresAdmin ?? false {
       parts.append("Admin authentication may be required")
     }
-    if result.install.requiresQuit {
+    if result.installStrategy?.requiresQuit ?? false {
       parts.append("The app will need to quit first")
     }
     if let artifact = result.artifact,

@@ -7,62 +7,51 @@ struct InstallCoordinatorRoutingTests {
   @MainActor
   @Test func nonAdminReplaceStaysLocal() throws {
     let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
-    let plan = makePlan(strategy: .zipReplace, requiresAdmin: false)
+    let prepared = makePrepared(strategy: .zipReplace)
     let destination = try makeWritableDestination(named: "Local.app")
 
-    #expect(coordinator.executionRoute(for: plan, destinationAppURL: destination) == .localReplace)
+    #expect(
+      coordinator.executionRoute(for: prepared, destinationAppURL: destination) == .localReplace)
   }
 
   @MainActor
   @Test func adminReplaceUsesPrivilegedHelper() throws {
     let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
-    let plan = makePlan(strategy: .dmgCopyReplace, requiresAdmin: true)
-    let destination = try makeWritableDestination(named: "Admin.app")
+    // pkgInstall requires admin by default; for dmgCopyReplace, admin is determined by
+    // file system writability. Use an unwritable destination to trigger privileged path.
+    let prepared = makePrepared(strategy: .dmgCopyReplace)
+    let destination = URL(fileURLWithPath: "/Applications/Admin.app")
 
     #expect(
-      coordinator.executionRoute(for: plan, destinationAppURL: destination) == .privilegedReplace)
+      coordinator.executionRoute(for: prepared, destinationAppURL: destination) == .privilegedReplace
+    )
   }
 
   @MainActor
   @Test func packageInstallAlwaysUsesPrivilegedHelper() {
     let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
-    let plan = makePlan(strategy: .pkgInstall, requiresAdmin: false)
+    let prepared = makePrepared(strategy: .pkgInstall)
 
-    #expect(coordinator.executionRoute(for: plan) == .privilegedPackage)
+    #expect(coordinator.executionRoute(for: prepared) == .privilegedPackage)
   }
 
   @MainActor
   @Test func sparkleBypassesPrivilegedHelper() {
     let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
-    let plan = makePlan(strategy: .sparkle, requiresAdmin: false)
+    let prepared = makePrepared(strategy: .sparkle)
 
-    #expect(coordinator.executionRoute(for: plan) == .sparkle)
+    #expect(coordinator.executionRoute(for: prepared) == .sparkle)
   }
 
-  private func makePlan(
-    strategy: AppDecision.Install.Strategy,
-    requiresAdmin: Bool
-  ) -> InstallPlan {
-    InstallPlan(
+  private func makePrepared(
+    strategy: InstallStrategy
+  ) -> InstallPrepareResponse {
+    InstallPrepareResponse(
       executionId: "exec_test",
+      strategy: strategy,
       appId: "app_test",
       releaseId: "rel_test",
-      strategy: strategy,
-      installabilityClass: .assistedReplace,
-      warningLevel: .none,
-      requiresQuit: true,
-      requiresAdmin: requiresAdmin,
-      supportsSilent: false,
-      relaunchAfterInstall: true,
-      artifact: nil,
-      localVerification: .init(
-        requireHash: false,
-        requireSignature: false,
-        requireNotarization: false,
-        requireBundleIdMatch: false,
-        requireTeamIdMatch: false,
-        requireVersionMatch: false
-      )
+      artifact: nil
     )
   }
 

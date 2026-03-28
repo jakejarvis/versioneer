@@ -73,7 +73,7 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
       latestVersionText: VersionFormatting.displayVersion(result.latestVersion),
       releasedDateText: VersionFormatting.relativeDate(from: result.releasedAt),
       isUpdateAvailable: isUpdate,
-      canInstall: result.install.canInstall && installState.phase == .idle,
+      canInstall: result.canInstall && installState.phase == .idle,
       versionDiffText: versionDiff,
       defaultSortRank: defaultSortRank(result: result, installState: installState),
       latestVersionSortKey: result.latestVersionRaw ?? result.latestVersion ?? "",
@@ -110,14 +110,10 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
         ("Up to Date", .positive, "checkmark.circle.fill")
       case .updateAvailable:
         ("Update Available", .attention, "arrow.up.circle.fill")
-      case .unknown:
-        ("Unknown", .neutral, "questionmark.circle")
       case .ambiguous:
         ("Needs Review", .attention, "scope")
-      case .unsupported:
-        ("Unsupported", .error, "xmark.circle.fill")
-      case .ignored:
-        ("Ignored", .neutral, "minus.circle")
+      case .notTracked:
+        ("Not Tracked", .neutral, "questionmark.circle")
       }
     }
   }
@@ -137,11 +133,11 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
       switch result.decision {
       case .updateAvailable:
         return 3
-      case .ambiguous, .unknown:
+      case .ambiguous:
         return 4
       case .upToDate:
         return 5
-      case .unsupported, .ignored:
+      case .notTracked:
         return 6
       }
     }

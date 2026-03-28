@@ -3,36 +3,6 @@ import Foundation
 @testable import Versioneer
 
 enum DesktopUITestFixtures {
-  static let eligibleInstall = AppDecision.Install(
-    canInstall: true,
-    installabilityClass: .assistedReplace,
-    strategy: .zipReplace,
-    requiresQuit: true,
-    requiresAdmin: false,
-    supportsSilent: false,
-    eligibility: .eligible
-  )
-
-  static let provisionalInstall = AppDecision.Install(
-    canInstall: true,
-    installabilityClass: .assistedReplace,
-    strategy: .dmgCopyReplace,
-    requiresQuit: true,
-    requiresAdmin: false,
-    supportsSilent: false,
-    eligibility: .requiresWarning
-  )
-
-  static let adminInstall = AppDecision.Install(
-    canInstall: true,
-    installabilityClass: .automationCandidate,
-    strategy: .pkgInstall,
-    requiresQuit: true,
-    requiresAdmin: true,
-    supportsSilent: true,
-    eligibility: .eligible
-  )
-
   static func makeDecision(
     appName: String,
     bundleId: String,
@@ -40,7 +10,8 @@ enum DesktopUITestFixtures {
     installedVersion: String = "1.0",
     latestVersion: String = "2.0",
     releasedAt: String? = isoString(daysAgo: 2),
-    install: AppDecision.Install = eligibleInstall,
+    isVerified: Bool = true,
+    installStrategy: InstallStrategy? = .zipReplace,
     artifact: AppDecision.Artifact? = AppDecision.Artifact(
       id: "artifact",
       downloadUrl: "https://example.com/app.zip",
@@ -48,10 +19,7 @@ enum DesktopUITestFixtures {
       minOsVersion: "13.0",
       artifactType: "zip",
       sizeBytes: 50_000_000,
-      sha256: "hash",
-      expectedTeamId: "TEAM123456",
-      expectedBundleId: "com.example.app",
-      expectedVersionRaw: "2.0"
+      sha256: "hash"
     )
   ) -> AppDecision {
     AppDecision(
@@ -62,14 +30,16 @@ enum DesktopUITestFixtures {
       matchedAppName: appName,
       matchConfidence: 97,
       decision: decision,
+      isVerified: isVerified,
       latestVersion: latestVersion,
       latestVersionRaw: latestVersion,
       latestReleaseId: nil,
       homebrewCaskToken: nil,
       releasedAt: releasedAt,
+      staleSince: nil,
       iconUrl: nil,
       artifact: artifact,
-      install: install
+      installStrategy: installStrategy
     )
   }
 
@@ -79,7 +49,7 @@ enum DesktopUITestFixtures {
       bundleId: result.bundleId,
       version: result.installedVersion,
       buildNumber: nil,
-      teamId: result.artifact?.expectedTeamId,
+      teamId: nil,
       path: "/Applications/\(result.appName).app",
       architecture: result.artifact?.architecture,
       sparkleFeedUrl: nil,

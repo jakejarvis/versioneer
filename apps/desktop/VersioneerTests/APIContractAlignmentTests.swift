@@ -18,6 +18,7 @@ struct APIContractAlignmentTests {
             "matchedAppName": "Mozilla Firefox",
             "matchConfidence": 98.0,
             "decision": "update_available",
+            "isVerified": true,
             "latestVersion": "127.0",
             "latestVersionRaw": "127.0",
             "latestReleaseId": "rel_firefox",
@@ -30,20 +31,9 @@ struct APIContractAlignmentTests {
               "minOsVersion": "13.0",
               "artifactType": "zip",
               "sizeBytes": 182452384,
-              "sha256": "abc123",
-              "expectedTeamId": "43AQ936H96",
-              "expectedBundleId": "org.mozilla.firefox",
-              "expectedVersionRaw": "127.0"
+              "sha256": "abc123"
             },
-            "install": {
-              "canInstall": true,
-              "installabilityClass": "assisted_replace",
-              "strategy": "zip_replace",
-              "requiresQuit": true,
-              "requiresAdmin": false,
-              "supportsSilent": false,
-              "eligibility": "eligible"
-            }
+            "installStrategy": "zip_replace"
           }
         ]
       }
@@ -54,9 +44,9 @@ struct APIContractAlignmentTests {
 
     #expect(result.latestReleaseId == "rel_firefox")
     #expect(result.iconUrl == "https://assets.example.com/firefox.png")
-    #expect(result.artifact?.expectedBundleId == "org.mozilla.firefox")
-    #expect(result.install.strategy == .zipReplace)
-    #expect(result.install.installabilityClass == .assistedReplace)
+    #expect(result.installStrategy == .zipReplace)
+    #expect(result.isVerified == true)
+    #expect(result.canInstall == true)
   }
 
   @Test func installPrepareRequestEncodesBackendFieldNames() throws {

@@ -5,12 +5,10 @@ nonisolated enum VersionFormatting {
   /// Returns a human-readable label for a decision status.
   static func statusLabel(for decision: AppDecision.Decision) -> String {
     switch decision {
-    case .unknown: "Unknown"
     case .upToDate: "Up to Date"
     case .updateAvailable: "Update Available"
     case .ambiguous: "Ambiguous"
-    case .unsupported: "Unsupported"
-    case .ignored: "Ignored"
+    case .notTracked: "Not Tracked"
     }
   }
 

@@ -18,12 +18,13 @@ struct InstallPresentationTests {
     #expect(presentation.progress == nil)
   }
 
-  @Test func provisionalInstallShowsWarningCTAAndBanner() {
+  @Test func unverifiedInstallShowsWarningCTAAndBanner() {
     let result = DesktopUITestFixtures.makeDecision(
       appName: "OBS Studio",
       bundleId: "com.obsproject.obs-studio",
       decision: .updateAvailable,
-      install: DesktopUITestFixtures.provisionalInstall
+      isVerified: false,
+      installStrategy: .dmgCopyReplace
     )
 
     let presentation = InstallPresentation.make(result: result, state: .idle)
@@ -37,7 +38,7 @@ struct InstallPresentationTests {
       appName: "TextMate",
       bundleId: "com.macromates.TextMate",
       decision: .updateAvailable,
-      install: DesktopUITestFixtures.adminInstall,
+      installStrategy: .pkgInstall,
       artifact: AppDecision.Artifact(
         id: "pkg",
         downloadUrl: "https://example.com/textmate.pkg",
@@ -45,10 +46,7 @@ struct InstallPresentationTests {
         minOsVersion: "14.0",
         artifactType: "pkg",
         sizeBytes: 46_000_000,
-        sha256: "pkg_hash",
-        expectedTeamId: "TEAM123456",
-        expectedBundleId: "com.macromates.TextMate",
-        expectedVersionRaw: "2.0"
+        sha256: "pkg_hash"
       )
     )
     let state = DesktopUITestFixtures.operationState(

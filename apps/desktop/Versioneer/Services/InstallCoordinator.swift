@@ -127,7 +127,7 @@ final class InstallCoordinator {
     snapshotId: String,
     apiClient: InventoryAPIClient
   ) async -> Bool {
-    guard result.install.canInstall else { return false }
+    guard result.canInstall else { return false }
     if state(for: result).isRunning { return false }
 
     let startedAt = Date()
@@ -135,7 +135,7 @@ final class InstallCoordinator {
     let appDisplayName = result.matchedAppName ?? result.appName
     var executionId: String?
     var verificationSummary = VerificationSummary(
-      strategy: result.install.strategy?.rawValue ?? "unknown")
+      strategy: result.installStrategy?.rawValue ?? "unknown")
     var stagedDirectory: URL?
     var usedPrivilegedHelper = false
 
@@ -165,10 +165,10 @@ final class InstallCoordinator {
         executionId: prepared.executionId,
         status: .inProgress,
         startedAt: startedAt,
-        details: ["phase": "preparing", "strategy": prepared.plan.strategy.rawValue]
+        details: ["phase": "preparing", "strategy": prepared.strategy.rawValue]
       )
 
-      switch prepared.plan.strategy {
+      switch prepared.strategy {
       case .sparkle:
         updateState(
           for: operationKey,
@@ -181,13 +181,14 @@ final class InstallCoordinator {
           helperStatus: .notNeeded
         )
         try await ExternalSparkleInstaller().install(appAt: URL(fileURLWithPath: installedApp.path))
-        verificationSummary = VerificationSummary(strategy: prepared.plan.strategy.rawValue)
+        verificationSummary = VerificationSummary(strategy: prepared.strategy.rawValue)
 
       case .zipReplace, .dmgCopyReplace:
         guard let stagingDir = stagedDirectory else { throw InstallError.missingStagingDirectory }
-        let artifactURL = try await downloadArtifact(plan: prepared.plan, to: stagingDir)
+        let artifactURL = try await downloadArtifact(
+          artifact: prepared.artifact, strategy: prepared.strategy, to: stagingDir)
         let preparedBundle = try await prepareAppBundle(
-          strategy: prepared.plan.strategy,
+          strategy: prepared.strategy,
           artifactURL: artifactURL,
           stagingDirectory: stagingDir
         )
@@ -212,13 +213,15 @@ final class InstallCoordinator {
         verificationSummary = try await verifyAppBundle(
           bundleURL: preparedBundle.appBundleURL,
           downloadedArtifactURL: artifactURL,
-          plan: prepared.plan
+          expectedHash: prepared.artifact?.sha256,
+          installedApp: installedApp,
+          strategy: prepared.strategy
         )
 
         try await ensureTargetAppIsClosed(installedApp: installedApp)
 
         let destinationAppURL = URL(fileURLWithPath: installedApp.path)
-        switch executionRoute(for: prepared.plan, destinationAppURL: destinationAppURL) {
+        switch executionRoute(for: prepared, destinationAppURL: destinationAppURL) {
         case .localReplace:
           updateState(
             for: operationKey,
@@ -259,7 +262,7 @@ final class InstallCoordinator {
           throw InstallError.unsupportedStrategy
         }
 
-        if prepared.plan.relaunchAfterInstall {
+        if prepared.strategy.requiresQuit {
           updateState(
             for: operationKey,
             phase: .relaunching,
@@ -275,7 +278,8 @@ final class InstallCoordinator {
 
       case .pkgInstall:
         guard let stagingDir = stagedDirectory else { throw InstallError.missingStagingDirectory }
-        let artifactURL = try await downloadArtifact(plan: prepared.plan, to: stagingDir)
+        let artifactURL = try await downloadArtifact(
+          artifact: prepared.artifact, strategy: prepared.strategy, to: stagingDir)
 
         updateState(
           for: operationKey,
@@ -289,7 +293,9 @@ final class InstallCoordinator {
         )
         verificationSummary = try await verifyPackage(
           packageURL: artifactURL,
-          plan: prepared.plan
+          expectedHash: prepared.artifact?.sha256,
+          installedApp: installedApp,
+          strategy: prepared.strategy
         )
 
         usedPrivilegedHelper = true
@@ -309,7 +315,7 @@ final class InstallCoordinator {
           stagingDirectory: stagingDir
         )
 
-      case .pkgManual, .manualOnly:
+      case .manualOnly:
         throw InstallError.unsupportedStrategy
       }
 
@@ -517,8 +523,12 @@ final class InstallCoordinator {
     )
   }
 
-  private func downloadArtifact(plan: InstallPlan, to stagingDirectory: URL) async throws -> URL {
-    guard let artifact = plan.artifact,
+  private func downloadArtifact(
+    artifact: AppDecision.Artifact?,
+    strategy: InstallStrategy,
+    to stagingDirectory: URL
+  ) async throws -> URL {
+    guard let artifact,
       let downloadURLString = artifact.downloadUrl,
       let downloadURL = URL(string: downloadURLString)
     else {
@@ -529,7 +539,7 @@ final class InstallCoordinator {
       if !downloadURL.pathExtension.isEmpty {
         downloadURL.pathExtension
       } else {
-        switch plan.strategy {
+        switch strategy {
         case .zipReplace: "zip"
         case .dmgCopyReplace: "dmg"
         case .pkgInstall: "pkg"
@@ -560,7 +570,7 @@ final class InstallCoordinator {
   }
 
   private func prepareAppBundle(
-    strategy: AppDecision.Install.Strategy,
+    strategy: InstallStrategy,
     artifactURL: URL,
     stagingDirectory: URL
   ) async throws -> PreparedBundle {
@@ -616,59 +626,54 @@ final class InstallCoordinator {
   private func verifyAppBundle(
     bundleURL: URL,
     downloadedArtifactURL: URL,
-    plan: InstallPlan
+    expectedHash: String?,
+    installedApp: InstalledApp,
+    strategy: InstallStrategy
   ) async throws -> VerificationSummary {
-    var summary = VerificationSummary(strategy: plan.strategy.rawValue)
-    try await verifyArtifactHashIfNeeded(
-      artifactURL: downloadedArtifactURL,
-      expectedHash: plan.artifact?.sha256,
-      required: plan.localVerification.requireHash
-    )
-    summary.hashVerified = plan.localVerification.requireHash ? true : nil
+    var summary = VerificationSummary(strategy: strategy.rawValue)
+
+    // Verify hash if the server provided one
+    if let expectedHash {
+      try await verifyArtifactHash(artifactURL: downloadedArtifactURL, expectedHash: expectedHash)
+      summary.hashVerified = true
+    }
 
     let metadata = readBundleMetadata(at: bundleURL)
     summary.observedBundleId = metadata.bundleId
     summary.observedVersion = metadata.version
     summary.observedTeamId = metadata.teamId
 
-    if plan.localVerification.requireSignature || plan.localVerification.requireTeamIdMatch {
-      let result = try await ProcessRunner.runSuccessful(
-        "/usr/bin/codesign",
-        arguments: ["-dv", "--verbose=4", bundleURL.path]
-      )
-      let combinedOutput = result.stdout + "\n" + result.stderr
-      summary.signatureVerified = true
-      summary.observedTeamId =
-        parseCodesignField("TeamIdentifier", from: combinedOutput) ?? summary.observedTeamId
-    }
+    // Always verify code signature
+    let result = try await ProcessRunner.runSuccessful(
+      "/usr/bin/codesign",
+      arguments: ["-dv", "--verbose=4", bundleURL.path]
+    )
+    let combinedOutput = result.stdout + "\n" + result.stderr
+    summary.signatureVerified = true
+    summary.observedTeamId =
+      parseCodesignField("TeamIdentifier", from: combinedOutput) ?? summary.observedTeamId
 
-    if plan.localVerification.requireNotarization {
-      _ = try await ProcessRunner.runSuccessful(
-        "/usr/sbin/spctl",
-        arguments: ["--assess", "--type", "execute", "-vv", bundleURL.path]
-      )
-      summary.notarizationVerified = true
-    }
+    // Always verify notarization
+    _ = try await ProcessRunner.runSuccessful(
+      "/usr/sbin/spctl",
+      arguments: ["--assess", "--type", "execute", "-vv", bundleURL.path]
+    )
+    summary.notarizationVerified = true
 
-    if plan.localVerification.requireBundleIdMatch {
-      guard summary.observedBundleId == plan.artifact?.expectedBundleId else {
-        throw InstallError.verificationFailed("Bundle identifier did not match the install plan")
+    // Verify bundle ID matches the installed app
+    if let expectedBundleId = installedApp.bundleId {
+      guard summary.observedBundleId == expectedBundleId else {
+        throw InstallError.verificationFailed("Bundle identifier did not match the installed app")
       }
       summary.bundleIdMatch = true
     }
 
-    if plan.localVerification.requireTeamIdMatch {
-      guard summary.observedTeamId == plan.artifact?.expectedTeamId else {
-        throw InstallError.verificationFailed("Team identifier did not match the install plan")
+    // Verify team ID matches the installed app
+    if let expectedTeamId = installedApp.teamId {
+      guard summary.observedTeamId == expectedTeamId else {
+        throw InstallError.verificationFailed("Team identifier did not match the installed app")
       }
       summary.teamIdMatch = true
-    }
-
-    if plan.localVerification.requireVersionMatch {
-      guard summary.observedVersion == plan.artifact?.expectedVersionRaw else {
-        throw InstallError.verificationFailed("Version did not match the install plan")
-      }
-      summary.versionMatch = true
     }
 
     return summary
@@ -676,38 +681,38 @@ final class InstallCoordinator {
 
   private func verifyPackage(
     packageURL: URL,
-    plan: InstallPlan
+    expectedHash: String?,
+    installedApp: InstalledApp,
+    strategy: InstallStrategy
   ) async throws -> VerificationSummary {
-    var summary = VerificationSummary(strategy: plan.strategy.rawValue)
+    var summary = VerificationSummary(strategy: strategy.rawValue)
 
-    try await verifyArtifactHashIfNeeded(
-      artifactURL: packageURL,
-      expectedHash: plan.artifact?.sha256,
-      required: plan.localVerification.requireHash
+    // Verify hash if the server provided one
+    if let expectedHash {
+      try await verifyArtifactHash(artifactURL: packageURL, expectedHash: expectedHash)
+      summary.hashVerified = true
+    }
+
+    // Always verify package signature
+    let result = try await ProcessRunner.runSuccessful(
+      "/usr/sbin/pkgutil",
+      arguments: ["--check-signature", packageURL.path]
     )
-    summary.hashVerified = plan.localVerification.requireHash ? true : nil
+    summary.signatureVerified = true
+    summary.observedTeamId = parseTeamIDFromPackageSignature(result.stdout + "\n" + result.stderr)
 
-    if plan.localVerification.requireSignature || plan.localVerification.requireTeamIdMatch {
-      let result = try await ProcessRunner.runSuccessful(
-        "/usr/sbin/pkgutil",
-        arguments: ["--check-signature", packageURL.path]
-      )
-      summary.signatureVerified = true
-      summary.observedTeamId = parseTeamIDFromPackageSignature(result.stdout + "\n" + result.stderr)
-    }
+    // Always verify notarization
+    _ = try await ProcessRunner.runSuccessful(
+      "/usr/sbin/spctl",
+      arguments: ["--assess", "--type", "install", "-vv", packageURL.path]
+    )
+    summary.notarizationVerified = true
 
-    if plan.localVerification.requireNotarization {
-      _ = try await ProcessRunner.runSuccessful(
-        "/usr/sbin/spctl",
-        arguments: ["--assess", "--type", "install", "-vv", packageURL.path]
-      )
-      summary.notarizationVerified = true
-    }
-
-    if plan.localVerification.requireTeamIdMatch {
-      guard summary.observedTeamId == plan.artifact?.expectedTeamId else {
+    // Verify team ID matches the installed app
+    if let expectedTeamId = installedApp.teamId {
+      guard summary.observedTeamId == expectedTeamId else {
         throw InstallError.verificationFailed(
-          "Installer team identifier did not match the install plan")
+          "Installer team identifier did not match the installed app")
       }
       summary.teamIdMatch = true
     }
@@ -715,17 +720,10 @@ final class InstallCoordinator {
     return summary
   }
 
-  private func verifyArtifactHashIfNeeded(
+  private func verifyArtifactHash(
     artifactURL: URL,
-    expectedHash: String?,
-    required: Bool
+    expectedHash: String
   ) async throws {
-    guard required else { return }
-    guard let expectedHash else {
-      throw InstallError.verificationFailed(
-        "Install plan required a SHA-256 hash but none was supplied")
-    }
-
     let result = try await ProcessRunner.runSuccessful(
       "/usr/bin/shasum",
       arguments: ["-a", "256", artifactURL.path]
@@ -773,22 +771,22 @@ final class InstallCoordinator {
   }
 
   func executionRoute(
-    for plan: InstallPlan,
+    for prepared: InstallPrepareResponse,
     destinationAppURL: URL? = nil
   ) -> ExecutionRoute {
-    switch plan.strategy {
+    switch prepared.strategy {
     case .sparkle:
       return .sparkle
     case .zipReplace, .dmgCopyReplace:
       guard let destinationAppURL else { return .localReplace }
       let needsPrivilege =
-        plan.requiresAdmin
+        prepared.strategy.requiresAdmin
         || !FileManager.default.isWritableFile(
           atPath: destinationAppURL.deletingLastPathComponent().path)
       return needsPrivilege ? .privilegedReplace : .localReplace
     case .pkgInstall:
       return .privilegedPackage
-    case .pkgManual, .manualOnly:
+    case .manualOnly:
       return .localReplace
     }
   }

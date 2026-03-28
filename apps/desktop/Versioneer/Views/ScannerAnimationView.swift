@@ -62,15 +62,17 @@ struct ScannerAnimationView: View {
       matchedAppId: nil,
       matchedAppName: nil,
       matchConfidence: nil,
-      decision: .unknown,
+      decision: .notTracked,
+      isVerified: false,
       latestVersion: nil,
       latestVersionRaw: nil,
       latestReleaseId: nil,
       homebrewCaskToken: nil,
       releasedAt: nil,
+      staleSince: nil,
       iconUrl: nil,
       artifact: nil,
-      install: .unavailable
+      installStrategy: nil
     )
   }
 

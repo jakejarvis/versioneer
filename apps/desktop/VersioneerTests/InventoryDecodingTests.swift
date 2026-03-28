@@ -18,19 +18,11 @@ struct InventoryDecodingTests {
             "matchedAppName": "Mozilla Firefox",
             "matchConfidence": 95.0,
             "decision": "up_to_date",
+            "isVerified": true,
             "latestVersion": "126.0",
             "latestVersionRaw": "126.0",
             "releasedAt": "2024-06-10T00:00:00Z",
-            "artifact": null,
-            "install": {
-              "canInstall": false,
-              "installabilityClass": null,
-              "strategy": null,
-              "requiresQuit": false,
-              "requiresAdmin": false,
-              "supportsSilent": false,
-              "eligibility": "not_supported"
-            }
+            "artifact": null
           }
         ]
       }
@@ -51,6 +43,7 @@ struct InventoryDecodingTests {
     #expect(result.decision == .upToDate)
     #expect(result.matchConfidence == 95.0)
     #expect(result.latestVersion == "126.0")
+    #expect(result.isVerified == true)
   }
 
   @Test func decodesNullableFields() throws {
@@ -66,20 +59,12 @@ struct InventoryDecodingTests {
             "matchedAppId": null,
             "matchedAppName": null,
             "matchConfidence": null,
-            "decision": "unknown",
+            "decision": "not_tracked",
+            "isVerified": false,
             "latestVersion": null,
             "latestVersionRaw": null,
             "releasedAt": null,
-            "artifact": null,
-            "install": {
-              "canInstall": false,
-              "installabilityClass": null,
-              "strategy": null,
-              "requiresQuit": false,
-              "requiresAdmin": false,
-              "supportsSilent": false,
-              "eligibility": "not_supported"
-            }
+            "artifact": null
           }
         ]
       }
@@ -96,14 +81,13 @@ struct InventoryDecodingTests {
     #expect(result.installedVersion == nil)
     #expect(result.matchedAppId == nil)
     #expect(result.matchConfidence == nil)
-    #expect(result.decision == .unknown)
+    #expect(result.decision == .notTracked)
     #expect(result.latestVersion == nil)
   }
 
   @Test func decodesAllDecisionTypes() throws {
     let decisions = [
-      "unknown", "up_to_date", "update_available", "ambiguous",
-      "unsupported", "ignored",
+      "up_to_date", "update_available", "ambiguous", "not_tracked",
     ]
 
     for decisionStr in decisions {
@@ -120,19 +104,11 @@ struct InventoryDecodingTests {
               "matchedAppName": null,
               "matchConfidence": null,
               "decision": "\(decisionStr)",
+              "isVerified": false,
               "latestVersion": null,
               "latestVersionRaw": null,
               "releasedAt": null,
-              "artifact": null,
-              "install": {
-                "canInstall": false,
-                "installabilityClass": null,
-                "strategy": null,
-                "requiresQuit": false,
-                "requiresAdmin": false,
-                "supportsSilent": false,
-                "eligibility": "not_supported"
-              }
+              "artifact": null
             }
           ]
         }

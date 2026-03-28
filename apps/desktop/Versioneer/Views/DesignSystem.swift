@@ -176,9 +176,6 @@ struct MetadataPopoverButton: View {
         if let matchedId = result.matchedAppId {
           metadataRow("Matched App ID", value: matchedId)
         }
-        if let teamId = result.artifact?.expectedTeamId {
-          metadataRow("Expected Team ID", value: teamId)
-        }
         if let minOS = result.artifact?.minOsVersion {
           metadataRow("Minimum macOS", value: minOS)
         }

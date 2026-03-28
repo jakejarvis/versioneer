@@ -10,6 +10,7 @@
       matchedAppName: "Mozilla Firefox",
       matchConfidence: 98,
       decision: .updateAvailable,
+      isVerified: true,
       latestVersion: "127.0",
       latestVersionRaw: "127.0",
       releasedAt: isoString(daysAgo: 3),
@@ -20,20 +21,9 @@
         minOsVersion: "13.0",
         artifactType: "zip",
         sizeBytes: 182_452_384,
-        sha256: "abc123",
-        expectedTeamId: "43AQ936H96",
-        expectedBundleId: "org.mozilla.firefox",
-        expectedVersionRaw: "127.0"
+        sha256: "abc123"
       ),
-      install: .init(
-        canInstall: true,
-        installabilityClass: .assistedReplace,
-        strategy: .zipReplace,
-        requiresQuit: true,
-        requiresAdmin: false,
-        supportsSilent: false,
-        eligibility: .eligible
-      )
+      installStrategy: .zipReplace
     )
 
     static let obs = makeDecision(
@@ -44,6 +34,7 @@
       matchedAppName: "OBS Studio",
       matchConfidence: 84,
       decision: .updateAvailable,
+      isVerified: false,
       latestVersion: "30.2.0",
       latestVersionRaw: "30.2.0",
       releasedAt: isoString(daysAgo: 7),
@@ -54,20 +45,9 @@
         minOsVersion: "13.0",
         artifactType: "dmg",
         sizeBytes: 231_000_000,
-        sha256: nil,
-        expectedTeamId: "W8PMY39565",
-        expectedBundleId: "com.obsproject.obs-studio",
-        expectedVersionRaw: "30.2.0"
+        sha256: nil
       ),
-      install: .init(
-        canInstall: true,
-        installabilityClass: .assistedReplace,
-        strategy: .dmgCopyReplace,
-        requiresQuit: true,
-        requiresAdmin: false,
-        supportsSilent: false,
-        eligibility: .requiresWarning
-      )
+      installStrategy: .dmgCopyReplace
     )
 
     static let textMate = makeDecision(
@@ -78,6 +58,7 @@
       matchedAppName: "TextMate",
       matchConfidence: 99,
       decision: .updateAvailable,
+      isVerified: true,
       latestVersion: "2.0.24",
       latestVersionRaw: "2.0.24",
       releasedAt: isoString(daysAgo: 1),
@@ -88,20 +69,9 @@
         minOsVersion: "14.0",
         artifactType: "pkg",
         sizeBytes: 46_000_000,
-        sha256: "def456",
-        expectedTeamId: "45Z5K3A9V7",
-        expectedBundleId: "com.macromates.TextMate",
-        expectedVersionRaw: "2.0.24"
+        sha256: "def456"
       ),
-      install: .init(
-        canInstall: true,
-        installabilityClass: .automationCandidate,
-        strategy: .pkgInstall,
-        requiresQuit: true,
-        requiresAdmin: true,
-        supportsSilent: true,
-        eligibility: .eligible
-      )
+      installStrategy: .pkgInstall
     )
 
     static let arc = makeDecision(
@@ -112,11 +82,12 @@
       matchedAppName: "Arc",
       matchConfidence: 99,
       decision: .upToDate,
+      isVerified: true,
       latestVersion: "1.84.0",
       latestVersionRaw: "1.84.0",
       releasedAt: isoString(daysAgo: 14),
       artifact: nil,
-      install: .unavailable
+      installStrategy: nil
     )
 
     static let allResults = [firefox, obs, textMate, arc]
@@ -192,11 +163,12 @@
       matchedAppName: String,
       matchConfidence: Double,
       decision: AppDecision.Decision,
+      isVerified: Bool,
       latestVersion: String,
       latestVersionRaw: String,
       releasedAt: String,
       artifact: AppDecision.Artifact?,
-      install: AppDecision.Install
+      installStrategy: InstallStrategy?
     ) -> AppDecision {
       AppDecision(
         appName: appName,
@@ -206,14 +178,16 @@
         matchedAppName: matchedAppName,
         matchConfidence: matchConfidence,
         decision: decision,
+        isVerified: isVerified,
         latestVersion: latestVersion,
         latestVersionRaw: latestVersionRaw,
         latestReleaseId: nil,
         homebrewCaskToken: nil,
         releasedAt: releasedAt,
+        staleSince: nil,
         iconUrl: nil,
         artifact: artifact,
-        install: install
+        installStrategy: installStrategy
       )
     }
 
@@ -223,7 +197,7 @@
         bundleId: result.bundleId,
         version: result.installedVersion,
         buildNumber: nil,
-        teamId: result.artifact?.expectedTeamId,
+        teamId: nil,
         path: "/Applications/\(result.appName).app",
         architecture: result.artifact?.architecture,
         sparkleFeedUrl: nil,
