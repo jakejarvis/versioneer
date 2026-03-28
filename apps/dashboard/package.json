@@ -13,7 +13,8 @@
     "fmt": "oxfmt --config ../../.oxfmtrc.json",
     "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
     "check-types": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typegen:workers": "wrangler types"
   },
   "dependencies": {
     "@fontsource/geist-mono": "^5.2.7",

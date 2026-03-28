@@ -13,7 +13,8 @@
     "test": "turbo run test",
     "db:generate": "pnpm --filter @versioneer/db db:generate",
     "db:migrate:local": "pnpm --filter @versioneer/db db:migrate:local",
-    "db:migrate:remote": "pnpm --filter @versioneer/db db:migrate:remote"
+    "db:migrate:remote": "pnpm --filter @versioneer/db db:migrate:remote",
+    "typegen:workers": "turbo run typegen:workers"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
