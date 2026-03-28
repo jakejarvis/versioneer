@@ -15,6 +15,7 @@ import { Route as SourcesIndexRouteImport } from './routes/sources/index'
 import { Route as ReviewQueueIndexRouteImport } from './routes/review-queue/index'
 import { Route as ReleasesIndexRouteImport } from './routes/releases/index'
 import { Route as OverridesIndexRouteImport } from './routes/overrides/index'
+import { Route as JobsIndexRouteImport } from './routes/jobs/index'
 import { Route as JobFailuresIndexRouteImport } from './routes/job-failures/index'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback/index'
 import { Route as ExecutionsIndexRouteImport } from './routes/executions/index'
@@ -55,6 +56,11 @@ const ReleasesIndexRoute = ReleasesIndexRouteImport.update({
 const OverridesIndexRoute = OverridesIndexRouteImport.update({
   id: '/overrides/',
   path: '/overrides/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JobsIndexRoute = JobsIndexRouteImport.update({
+  id: '/jobs/',
+  path: '/jobs/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JobFailuresIndexRoute = JobFailuresIndexRouteImport.update({
@@ -125,6 +131,7 @@ export interface FileRoutesByFullPath {
   '/executions/': typeof ExecutionsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/job-failures/': typeof JobFailuresIndexRoute
+  '/jobs/': typeof JobsIndexRoute
   '/overrides/': typeof OverridesIndexRoute
   '/releases/': typeof ReleasesIndexRoute
   '/review-queue/': typeof ReviewQueueIndexRoute
@@ -144,6 +151,7 @@ export interface FileRoutesByTo {
   '/executions': typeof ExecutionsIndexRoute
   '/feedback': typeof FeedbackIndexRoute
   '/job-failures': typeof JobFailuresIndexRoute
+  '/jobs': typeof JobsIndexRoute
   '/overrides': typeof OverridesIndexRoute
   '/releases': typeof ReleasesIndexRoute
   '/review-queue': typeof ReviewQueueIndexRoute
@@ -164,6 +172,7 @@ export interface FileRoutesById {
   '/executions/': typeof ExecutionsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/job-failures/': typeof JobFailuresIndexRoute
+  '/jobs/': typeof JobsIndexRoute
   '/overrides/': typeof OverridesIndexRoute
   '/releases/': typeof ReleasesIndexRoute
   '/review-queue/': typeof ReviewQueueIndexRoute
@@ -185,6 +194,7 @@ export interface FileRouteTypes {
     | '/executions/'
     | '/feedback/'
     | '/job-failures/'
+    | '/jobs/'
     | '/overrides/'
     | '/releases/'
     | '/review-queue/'
@@ -204,6 +214,7 @@ export interface FileRouteTypes {
     | '/executions'
     | '/feedback'
     | '/job-failures'
+    | '/jobs'
     | '/overrides'
     | '/releases'
     | '/review-queue'
@@ -223,6 +234,7 @@ export interface FileRouteTypes {
     | '/executions/'
     | '/feedback/'
     | '/job-failures/'
+    | '/jobs/'
     | '/overrides/'
     | '/releases/'
     | '/review-queue/'
@@ -243,6 +255,7 @@ export interface RootRouteChildren {
   ExecutionsIndexRoute: typeof ExecutionsIndexRoute
   FeedbackIndexRoute: typeof FeedbackIndexRoute
   JobFailuresIndexRoute: typeof JobFailuresIndexRoute
+  JobsIndexRoute: typeof JobsIndexRoute
   OverridesIndexRoute: typeof OverridesIndexRoute
   ReleasesIndexRoute: typeof ReleasesIndexRoute
   ReviewQueueIndexRoute: typeof ReviewQueueIndexRoute
@@ -293,6 +306,13 @@ declare module '@tanstack/react-router' {
       path: '/overrides'
       fullPath: '/overrides/'
       preLoaderRoute: typeof OverridesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/jobs/': {
+      id: '/jobs/'
+      path: '/jobs'
+      fullPath: '/jobs/'
+      preLoaderRoute: typeof JobsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/job-failures/': {
@@ -387,6 +407,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExecutionsIndexRoute: ExecutionsIndexRoute,
   FeedbackIndexRoute: FeedbackIndexRoute,
   JobFailuresIndexRoute: JobFailuresIndexRoute,
+  JobsIndexRoute: JobsIndexRoute,
   OverridesIndexRoute: OverridesIndexRoute,
   ReleasesIndexRoute: ReleasesIndexRoute,
   ReviewQueueIndexRoute: ReviewQueueIndexRoute,

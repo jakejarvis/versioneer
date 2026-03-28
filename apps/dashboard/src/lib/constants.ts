@@ -10,6 +10,7 @@ import {
   ScrollText,
   MessageSquare,
   Play,
+  Timer,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,6 +32,7 @@ export const navItems: NavItem[] = [
   { label: "Audit Log", path: "/audit-log", icon: ScrollText },
   { label: "Feedback", path: "/feedback", icon: MessageSquare },
   { label: "Executions", path: "/executions", icon: Play },
+  { label: "Jobs", path: "/jobs", icon: Timer },
 ];
 
 const SUCCESS = "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-400";
@@ -69,6 +71,7 @@ export const statusColors: Record<string, string> = {
 
   merged: INFO,
   in_progress: INFO,
+  running: INFO,
   beta: INFO,
   update_available: INFO,
   provisional: INFO,
@@ -103,6 +106,7 @@ export const statusLabels: Record<string, string> = {
   success: "Success",
   pending: "Pending",
   in_progress: "In Progress",
+  running: "Running",
   resolved: "Resolved",
   dismissed: "Dismissed",
   open: "Open",

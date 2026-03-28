@@ -77,3 +77,30 @@ export const auditLog = sqliteTable(
     index("idx_audit_target").on(table.targetType, table.targetId),
   ],
 );
+
+export const cronJobRuns = sqliteTable(
+  "cron_job_runs",
+  {
+    id: text("id").primaryKey(),
+    jobType: text("job_type", {
+      enum: ["poll_sources", "recompute_scorecards", "cask_index_sync"],
+    }).notNull(),
+    trigger: text("trigger", { enum: ["manual", "scheduled"] }).notNull(),
+    status: text("status", {
+      enum: ["running", "completed", "failed"],
+    })
+      .notNull()
+      .default("running"),
+    actorId: text("actor_id"),
+    itemsQueued: integer("items_queued"),
+    itemsTotal: integer("items_total"),
+    resultJson: text("result_json"),
+    errorMessage: text("error_message"),
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at"),
+  },
+  (table) => [
+    index("idx_cron_job_runs_type").on(table.jobType),
+    index("idx_cron_job_runs_started").on(table.startedAt),
+  ],
+);

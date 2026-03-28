@@ -35,4 +35,5 @@ export const idPrefixes = {
   artifactObservation: "arto",
   updateExecution: "exec",
   discoveredApp: "dapp",
+  cronJobRun: "cjr",
 } as const;

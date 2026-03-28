@@ -15,7 +15,7 @@ import type {
   RecomputeLatestJob,
   CaskIndexSyncJob,
 } from "@versioneer/pipeline";
-import { apps, jobFailures, generateId, idPrefixes } from "@versioneer/schema";
+import { apps, cronJobRuns, jobFailures, generateId, idPrefixes } from "@versioneer/schema";
 
 import type { Env } from "./env";
 // Import parsers to trigger auto-registration
@@ -113,56 +113,137 @@ export default {
   },
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
-    // Cron handler for poll-sources
     const db = createDb(env.DB);
     const { sources } = await import("@versioneer/schema");
     const { eq } = await import("drizzle-orm");
 
     const now = new Date();
-    const dueSources = await db.select().from(sources).where(eq(sources.status, "active")).all();
 
-    // Recompute scorecards for all active apps
-    const { eq: eqOp } = await import("drizzle-orm");
-    const allApps = await db
-      .select({ id: apps.id })
-      .from(apps)
-      .where(eqOp(apps.status, "active"))
-      .all();
-    for (const app of allApps) {
+    // --- Poll Sources ---
+    {
+      const runId = generateId(idPrefixes.cronJobRun);
+      const startedAt = new Date().toISOString();
       try {
-        await handleComputeScorecard(
-          app.id,
-          env as unknown as Parameters<typeof handleComputeScorecard>[1],
-        );
-      } catch (error) {
-        console.error(`Failed to compute scorecard for ${app.id}:`, error);
-      }
-    }
-
-    // Trigger cask index sync if due (every 6 hours)
-    try {
-      if (await isCaskSyncDue(env as unknown as Parameters<typeof isCaskSyncDue>[0])) {
-        await env.CASK_INDEX_SYNC_QUEUE.send({ reason: "scheduled", force: false });
-      }
-    } catch (error) {
-      console.error("Failed to check/queue cask index sync:", error);
-    }
-
-    for (const source of dueSources) {
-      // Check if source is due for polling
-      const lastFetched = source.lastFetchedAt ? new Date(source.lastFetchedAt) : null;
-      const intervalMs = source.pollIntervalMinutes * 60 * 1000;
-
-      if (!lastFetched || now.getTime() - lastFetched.getTime() >= intervalMs) {
-        try {
-          await env.SOURCE_FETCH_QUEUE.send({
-            sourceId: source.id,
-            reason: "scheduled",
-            force: false,
-          });
-        } catch (error) {
-          console.error(`Failed to queue source ${source.id}:`, error);
+        const activeSources = await db
+          .select()
+          .from(sources)
+          .where(eq(sources.status, "active"))
+          .all();
+        let queued = 0;
+        for (const source of activeSources) {
+          const lastFetched = source.lastFetchedAt ? new Date(source.lastFetchedAt) : null;
+          const intervalMs = source.pollIntervalMinutes * 60 * 1000;
+          if (!lastFetched || now.getTime() - lastFetched.getTime() >= intervalMs) {
+            try {
+              await env.SOURCE_FETCH_QUEUE.send({
+                sourceId: source.id,
+                reason: "scheduled",
+                force: false,
+              });
+              queued++;
+            } catch (error) {
+              console.error(`Failed to queue source ${source.id}:`, error);
+            }
+          }
         }
+        await db.insert(cronJobRuns).values({
+          id: runId,
+          jobType: "poll_sources",
+          trigger: "scheduled",
+          status: "completed",
+          itemsQueued: queued,
+          itemsTotal: activeSources.length,
+          startedAt,
+          completedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error("Poll sources scheduled job failed:", error);
+        await db.insert(cronJobRuns).values({
+          id: runId,
+          jobType: "poll_sources",
+          trigger: "scheduled",
+          status: "failed",
+          errorMessage: error instanceof Error ? error.message : String(error),
+          startedAt,
+          completedAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    // --- Recompute Scorecards ---
+    {
+      const runId = generateId(idPrefixes.cronJobRun);
+      const startedAt = new Date().toISOString();
+      try {
+        const allApps = await db
+          .select({ id: apps.id })
+          .from(apps)
+          .where(eq(apps.status, "active"))
+          .all();
+        let computed = 0;
+        for (const app of allApps) {
+          try {
+            await handleComputeScorecard(
+              app.id,
+              env as unknown as Parameters<typeof handleComputeScorecard>[1],
+            );
+            computed++;
+          } catch (error) {
+            console.error(`Failed to compute scorecard for ${app.id}:`, error);
+          }
+        }
+        await db.insert(cronJobRuns).values({
+          id: runId,
+          jobType: "recompute_scorecards",
+          trigger: "scheduled",
+          status: "completed",
+          itemsQueued: computed,
+          itemsTotal: allApps.length,
+          startedAt,
+          completedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error("Recompute scorecards scheduled job failed:", error);
+        await db.insert(cronJobRuns).values({
+          id: runId,
+          jobType: "recompute_scorecards",
+          trigger: "scheduled",
+          status: "failed",
+          errorMessage: error instanceof Error ? error.message : String(error),
+          startedAt,
+          completedAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    // --- Cask Index Sync ---
+    {
+      const runId = generateId(idPrefixes.cronJobRun);
+      const startedAt = new Date().toISOString();
+      try {
+        if (await isCaskSyncDue(env as unknown as Parameters<typeof isCaskSyncDue>[0])) {
+          await env.CASK_INDEX_SYNC_QUEUE.send({ reason: "scheduled", force: false });
+          await db.insert(cronJobRuns).values({
+            id: runId,
+            jobType: "cask_index_sync",
+            trigger: "scheduled",
+            status: "completed",
+            itemsQueued: 1,
+            startedAt,
+            completedAt: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        console.error("Failed to check/queue cask index sync:", error);
+        await db.insert(cronJobRuns).values({
+          id: runId,
+          jobType: "cask_index_sync",
+          trigger: "scheduled",
+          status: "failed",
+          errorMessage: error instanceof Error ? error.message : String(error),
+          startedAt,
+          completedAt: new Date().toISOString(),
+        });
       }
     }
   },
