@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		23AB35582F782C6300933422 /* AdSupport.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 23AB35572F782C6300933422 /* AdSupport.framework */; };
 		23EBFEDC2F75F5390026DE17 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 23EBFEDA2F75F5390026DE17 /* GoogleService-Info.plist */; };
 		23EBFEDF2F75F6CF0026DE17 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 23EBFEDE2F75F6CF0026DE17 /* FirebaseAnalytics */; };
 		23EBFEE12F75F6CF0026DE17 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 23EBFEE02F75F6CF0026DE17 /* FirebaseCore */; };
@@ -38,6 +39,7 @@
 		23967D222F74949F0012749C /* Versioneer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Versioneer.xcodeproj; sourceTree = "<group>"; };
 		23A5A6032F74908500245F54 /* Versioneer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Versioneer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		23A5A6102F74908600245F54 /* VersioneerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VersioneerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		23AB35572F782C6300933422 /* AdSupport.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AdSupport.framework; path = System/Library/Frameworks/AdSupport.framework; sourceTree = SDKROOT; };
 		23EBFED92F75F5390026DE17 /* Versioneer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Versioneer.entitlements; sourceTree = "<group>"; };
 		23EBFEDA2F75F5390026DE17 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		24B100012F8000010058763E /* VersioneerPrivilegedHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = VersioneerPrivilegedHelper; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -77,6 +79,7 @@
 				23EBFEE52F75F6CF0026DE17 /* FirebaseInstallations in Frameworks */,
 				23EBFEE12F75F6CF0026DE17 /* FirebaseCore in Frameworks */,
 				23EBFEDF2F75F6CF0026DE17 /* FirebaseAnalytics in Frameworks */,
+				23AB35582F782C6300933422 /* AdSupport.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -114,6 +117,7 @@
 				23967D082F74926F0012749C /* Versioneer-Info.plist */,
 				23EBFED92F75F5390026DE17 /* Versioneer.entitlements */,
 				23EBFEDA2F75F5390026DE17 /* GoogleService-Info.plist */,
+				23AB35562F782C6200933422 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -125,6 +129,14 @@
 				24B100012F8000010058763E /* VersioneerPrivilegedHelper */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		23AB35562F782C6200933422 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				23AB35572F782C6300933422 /* AdSupport.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -320,7 +332,6 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(BUILD_DIR)/../../SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/GoogleService-Info.plist",
 				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
 				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}",
@@ -335,7 +346,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${BUILD_DIR}/../../SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
+			shellScript = "\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -436,6 +447,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				OTHER_LDFLAGS = "-ObjC";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -494,6 +506,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				OTHER_LDFLAGS = "-ObjC";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -510,6 +523,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = B5ZWKBCUTU;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -563,6 +577,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = B5ZWKBCUTU;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
