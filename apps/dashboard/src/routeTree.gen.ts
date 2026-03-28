@@ -12,9 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SourcesIndexRouteImport } from './routes/sources/index'
-import { Route as ReviewQueueIndexRouteImport } from './routes/review-queue/index'
 import { Route as ReleasesIndexRouteImport } from './routes/releases/index'
-import { Route as OverridesIndexRouteImport } from './routes/overrides/index'
 import { Route as JobsIndexRouteImport } from './routes/jobs/index'
 import { Route as JobFailuresIndexRouteImport } from './routes/job-failures/index'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback/index'
@@ -43,19 +41,9 @@ const SourcesIndexRoute = SourcesIndexRouteImport.update({
   path: '/sources/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ReviewQueueIndexRoute = ReviewQueueIndexRouteImport.update({
-  id: '/review-queue/',
-  path: '/review-queue/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ReleasesIndexRoute = ReleasesIndexRouteImport.update({
   id: '/releases/',
   path: '/releases/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OverridesIndexRoute = OverridesIndexRouteImport.update({
-  id: '/overrides/',
-  path: '/overrides/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JobsIndexRoute = JobsIndexRouteImport.update({
@@ -132,9 +120,7 @@ export interface FileRoutesByFullPath {
   '/feedback/': typeof FeedbackIndexRoute
   '/job-failures/': typeof JobFailuresIndexRoute
   '/jobs/': typeof JobsIndexRoute
-  '/overrides/': typeof OverridesIndexRoute
   '/releases/': typeof ReleasesIndexRoute
-  '/review-queue/': typeof ReviewQueueIndexRoute
   '/sources/': typeof SourcesIndexRoute
   '/api/assets/$': typeof ApiAssetsSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -152,9 +138,7 @@ export interface FileRoutesByTo {
   '/feedback': typeof FeedbackIndexRoute
   '/job-failures': typeof JobFailuresIndexRoute
   '/jobs': typeof JobsIndexRoute
-  '/overrides': typeof OverridesIndexRoute
   '/releases': typeof ReleasesIndexRoute
-  '/review-queue': typeof ReviewQueueIndexRoute
   '/sources': typeof SourcesIndexRoute
   '/api/assets/$': typeof ApiAssetsSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -173,9 +157,7 @@ export interface FileRoutesById {
   '/feedback/': typeof FeedbackIndexRoute
   '/job-failures/': typeof JobFailuresIndexRoute
   '/jobs/': typeof JobsIndexRoute
-  '/overrides/': typeof OverridesIndexRoute
   '/releases/': typeof ReleasesIndexRoute
-  '/review-queue/': typeof ReviewQueueIndexRoute
   '/sources/': typeof SourcesIndexRoute
   '/api/assets/$': typeof ApiAssetsSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -195,9 +177,7 @@ export interface FileRouteTypes {
     | '/feedback/'
     | '/job-failures/'
     | '/jobs/'
-    | '/overrides/'
     | '/releases/'
-    | '/review-queue/'
     | '/sources/'
     | '/api/assets/$'
     | '/api/auth/$'
@@ -215,9 +195,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/job-failures'
     | '/jobs'
-    | '/overrides'
     | '/releases'
-    | '/review-queue'
     | '/sources'
     | '/api/assets/$'
     | '/api/auth/$'
@@ -235,9 +213,7 @@ export interface FileRouteTypes {
     | '/feedback/'
     | '/job-failures/'
     | '/jobs/'
-    | '/overrides/'
     | '/releases/'
-    | '/review-queue/'
     | '/sources/'
     | '/api/assets/$'
     | '/api/auth/$'
@@ -256,9 +232,7 @@ export interface RootRouteChildren {
   FeedbackIndexRoute: typeof FeedbackIndexRoute
   JobFailuresIndexRoute: typeof JobFailuresIndexRoute
   JobsIndexRoute: typeof JobsIndexRoute
-  OverridesIndexRoute: typeof OverridesIndexRoute
   ReleasesIndexRoute: typeof ReleasesIndexRoute
-  ReviewQueueIndexRoute: typeof ReviewQueueIndexRoute
   SourcesIndexRoute: typeof SourcesIndexRoute
   ApiAssetsSplatRoute: typeof ApiAssetsSplatRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -287,25 +261,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SourcesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/review-queue/': {
-      id: '/review-queue/'
-      path: '/review-queue'
-      fullPath: '/review-queue/'
-      preLoaderRoute: typeof ReviewQueueIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/releases/': {
       id: '/releases/'
       path: '/releases'
       fullPath: '/releases/'
       preLoaderRoute: typeof ReleasesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/overrides/': {
-      id: '/overrides/'
-      path: '/overrides'
-      fullPath: '/overrides/'
-      preLoaderRoute: typeof OverridesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/jobs/': {
@@ -408,9 +368,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeedbackIndexRoute: FeedbackIndexRoute,
   JobFailuresIndexRoute: JobFailuresIndexRoute,
   JobsIndexRoute: JobsIndexRoute,
-  OverridesIndexRoute: OverridesIndexRoute,
   ReleasesIndexRoute: ReleasesIndexRoute,
-  ReviewQueueIndexRoute: ReviewQueueIndexRoute,
   SourcesIndexRoute: SourcesIndexRoute,
   ApiAssetsSplatRoute: ApiAssetsSplatRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

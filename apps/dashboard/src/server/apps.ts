@@ -4,20 +4,13 @@ import {
   apps,
   appAliases,
   appLatestReleases,
-  appScorecards,
   sources,
   releases,
-  installRules,
   auditLog,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
-import {
-  appCreateSchema,
-  appUpdateSchema,
-  aliasCreateSchema,
-  installRuleCreateSchema,
-} from "@versioneer/validation";
+import { appCreateSchema, appUpdateSchema, aliasCreateSchema } from "@versioneer/validation";
 import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -33,9 +26,6 @@ function appOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
     slug: apps.slug,
     vendorName: apps.vendorName,
     status: apps.status,
-    qualityScore: apps.qualityScore,
-    qualityState: apps.qualityState,
-    verificationTier: apps.verificationTier,
     updatedAt: apps.updatedAt,
   };
 
@@ -127,7 +117,7 @@ export const listApps = createServerFn({ method: "GET" })
     };
   });
 
-// GET /apps/:id - detail with latestReleases, sourceCount, scorecard
+// GET /apps/:id - detail with latestReleases, sourceCount
 export const getApp = createServerFn({ method: "GET" })
   .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data: { id } }) => {
@@ -145,17 +135,11 @@ export const getApp = createServerFn({ method: "GET" })
       .select({ count: sql<number>`count(*)` })
       .from(sources)
       .where(eq(sources.appId, id));
-    const scorecard = await db
-      .select()
-      .from(appScorecards)
-      .where(eq(appScorecards.appId, id))
-      .get();
 
     return {
       ...app,
       latestReleases: latest,
       sourceCount: sourceCount?.count ?? 0,
-      scorecard: scorecard ?? null,
     };
   });
 
@@ -213,10 +197,10 @@ export const updateApp = createServerFn({ method: "POST" })
     if (fields.status !== undefined) updates.status = fields.status;
     if (fields.mergedIntoAppId !== undefined) updates.mergedIntoAppId = fields.mergedIntoAppId;
     if (fields.notes !== undefined) updates.notes = fields.notes;
-    if (fields.verificationTier !== undefined) updates.verificationTier = fields.verificationTier;
-    if (fields.qualityState !== undefined) updates.qualityState = fields.qualityState;
+    if (fields.isVerified !== undefined) updates.isVerified = fields.isVerified;
+    if (fields.installStrategyOverride !== undefined)
+      updates.installStrategyOverride = fields.installStrategyOverride;
     if (fields.iconR2Key !== undefined) updates.iconR2Key = fields.iconR2Key;
-    if (fields.lastReviewedAt !== undefined) updates.lastReviewedAt = fields.lastReviewedAt;
 
     await db.update(apps).set(updates).where(eq(apps.id, id));
 
@@ -337,112 +321,6 @@ export const getAppLatest = createServerFn({ method: "GET" })
       .where(eq(appLatestReleases.appId, appId))
       .all();
     return { items };
-  });
-
-// GET /apps/:id/install-rules
-export const getAppInstallRules = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ appId: z.string().min(1) }))
-  .handler(async ({ data: { appId } }) => {
-    const db = createDb(env.DB);
-    const items = await db.select().from(installRules).where(eq(installRules.appId, appId)).all();
-    return { items };
-  });
-
-// POST /apps/:id/install-rules
-export const createInstallRule = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .inputValidator(installRuleCreateSchema.extend({ appId: z.string().min(1) }))
-  .handler(async ({ data }) => {
-    const { appId, ...ruleData } = data;
-    const db = createDb(env.DB);
-    const now = new Date().toISOString();
-    const id = generateId(idPrefixes.installRule);
-
-    await db.insert(installRules).values({
-      id,
-      appId,
-      strategy: ruleData.strategy,
-      requiresQuit: ruleData.requiresQuit,
-      requiresAdmin: ruleData.requiresAdmin,
-      supportsSilent: ruleData.supportsSilent,
-      rollbackSupported: ruleData.rollbackSupported,
-      ruleConfidence: ruleData.ruleConfidence ?? null,
-      enabled: true,
-      notes: ruleData.notes ?? null,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    return { id, status: "created" };
-  });
-
-export const updateInstallRule = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .inputValidator(
-    z.object({
-      id: z.string().min(1),
-      strategy: installRuleCreateSchema.shape.strategy.optional(),
-      requiresQuit: z.boolean().optional(),
-      requiresAdmin: z.boolean().optional(),
-      supportsSilent: z.boolean().optional(),
-      rollbackSupported: z.boolean().optional(),
-      ruleConfidence: z.number().int().min(0).max(100).nullable().optional(),
-      enabled: z.boolean().optional(),
-      notes: z.string().nullable().optional(),
-    }),
-  )
-  .handler(async ({ data, context }) => {
-    const { id, ...fields } = data;
-    const db = createDb(env.DB);
-    const existing = await db.select().from(installRules).where(eq(installRules.id, id)).get();
-    if (!existing) throw new Error("Not found");
-
-    const now = new Date().toISOString();
-    await db
-      .update(installRules)
-      .set({
-        ...fields,
-        updatedAt: now,
-      })
-      .where(eq(installRules.id, id));
-
-    await db.insert(auditLog).values({
-      id: generateId(idPrefixes.auditLog),
-      eventType: "install_rule_updated",
-      actorType: "admin",
-      actorId: context.user.email,
-      targetType: "install_rule",
-      targetId: id,
-      payloadJson: JSON.stringify(fields),
-      createdAt: now,
-    });
-
-    return { status: "updated" };
-  });
-
-export const deleteInstallRule = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .inputValidator(z.object({ id: z.string().min(1) }))
-  .handler(async ({ data: { id }, context }) => {
-    const db = createDb(env.DB);
-    const existing = await db.select().from(installRules).where(eq(installRules.id, id)).get();
-    if (!existing) throw new Error("Not found");
-
-    await db.delete(installRules).where(eq(installRules.id, id));
-
-    const now = new Date().toISOString();
-    await db.insert(auditLog).values({
-      id: generateId(idPrefixes.auditLog),
-      eventType: "install_rule_deleted",
-      actorType: "admin",
-      actorId: context.user.email,
-      targetType: "install_rule",
-      targetId: id,
-      payloadJson: JSON.stringify({ appId: existing.appId }),
-      createdAt: now,
-    });
-
-    return { status: "deleted" };
   });
 
 // POST /apps/:id/recompute-latest

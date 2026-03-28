@@ -6,22 +6,35 @@ import {
   releases,
   artifacts,
   appLatestReleases,
-  adminOverrides,
-  installRules,
-  reviewQueue,
-  onboardingChecklists,
+  sources,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
 import { compareVersionStrings } from "@versioneer/versioning";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
-import { generatePublicationExplanation, generateArtifactSelectionExplanation } from "./explain";
-import { classifyInstallability } from "./installability";
-import { handleComputeScorecard } from "./scorecard";
 import type { Env, RecomputeLatestJob } from "./types";
 
 const CHANNELS = ["stable", "beta", "nightly"] as const;
+
+/**
+ * Infer install strategy from source type and artifact type.
+ * Admin override on the app record takes precedence.
+ */
+function inferInstallStrategy(
+  appOverride: string | null,
+  sourceType: string | null,
+  artifactType: string | null,
+): "sparkle" | "zip_replace" | "dmg_copy_replace" | "pkg_install" | "manual_only" {
+  if (appOverride) {
+    return appOverride as ReturnType<typeof inferInstallStrategy>;
+  }
+  if (sourceType === "sparkle") return "sparkle";
+  if (artifactType === "dmg") return "dmg_copy_replace";
+  if (artifactType === "zip") return "zip_replace";
+  if (artifactType === "pkg") return "pkg_install";
+  return "manual_only";
+}
 
 export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): Promise<void> {
   const db = createDb(env.DB);
@@ -29,8 +42,19 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
 
   const channels = job.channel ? [job.channel] : CHANNELS;
 
+  // Load app and its primary source type for strategy inference
+  const app = await db.select().from(apps).where(eq(apps.id, job.appId)).get();
+  if (!app) return;
+
+  const appSources = await db
+    .select({ sourceType: sources.sourceType })
+    .from(sources)
+    .where(and(eq(sources.appId, job.appId), eq(sources.status, "active")))
+    .all();
+  const primarySourceType = appSources[0]?.sourceType ?? null;
+
   for (const channel of channels) {
-    // Get all active releases for this app and channel
+    // Get all active, non-retracted releases for this app and channel
     const candidateReleases = await db
       .select()
       .from(releases)
@@ -57,28 +81,17 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
       continue;
     }
 
-    // Check for manual override
-    const override = await db
+    // Check for pinned release
+    const existingLatest = await db
       .select()
-      .from(adminOverrides)
-      .where(
-        and(
-          eq(adminOverrides.targetType, "app_latest"),
-          eq(adminOverrides.targetId, `${job.appId}:${channel}`),
-          eq(adminOverrides.isActive, true),
-        ),
-      )
+      .from(appLatestReleases)
+      .where(and(eq(appLatestReleases.appId, job.appId), eq(appLatestReleases.channel, channel)))
       .get();
 
     let winningRelease;
-    let decisionSource: "pipeline" | "override" = "pipeline";
 
-    if (override) {
-      const overridePayload = JSON.parse(override.payloadJson) as { releaseId: string };
-      winningRelease = candidateReleases.find((r) => r.id === overridePayload.releaseId);
-      if (winningRelease) {
-        decisionSource = "override";
-      }
+    if (existingLatest?.pinnedReleaseId) {
+      winningRelease = candidateReleases.find((r) => r.id === existingLatest.pinnedReleaseId);
     }
 
     if (!winningRelease) {
@@ -96,85 +109,15 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
       .where(and(eq(artifacts.releaseId, winningRelease.id), eq(artifacts.isPrimary, true)))
       .get();
 
-    // Generate decision explanation
-    const allArtifacts = await db
-      .select()
-      .from(artifacts)
-      .where(eq(artifacts.releaseId, winningRelease.id))
-      .all();
-
-    const publicationExplanation = generatePublicationExplanation(
-      winningRelease,
-      candidateReleases,
-      decisionSource === "override" ? override : null,
-      primaryArtifact,
+    // Infer install strategy
+    const installStrategy = inferInstallStrategy(
+      app.installStrategyOverride,
+      primarySourceType,
+      primaryArtifact?.artifactType ?? null,
     );
-    const artifactExplanation = generateArtifactSelectionExplanation(primaryArtifact, allArtifacts);
-    const decisionExplanationJson = JSON.stringify({
-      publication: publicationExplanation,
-      artifact: artifactExplanation,
-    });
-
-    // Ensure the scorecard and quality state are fresh before gating.
-    // Without this, a newly onboarded app's first recompute would see stale
-    // qualityState="unknown" (from before any pipeline data existed) and gate
-    // the release to the review queue unnecessarily.
-    await handleComputeScorecard(job.appId, env);
-
-    // Publication gating: check verification tier and quality state
-    const app = await db.select().from(apps).where(eq(apps.id, job.appId)).get();
-    const appRuleRecords = await db
-      .select()
-      .from(installRules)
-      .where(eq(installRules.appId, job.appId))
-      .orderBy(desc(installRules.updatedAt))
-      .all();
-    const selectedInstallRule =
-      appRuleRecords.find((rule) => rule.enabled) ?? appRuleRecords[0] ?? null;
-    const installabilityClass = classifyInstallability({
-      verificationTier: app?.verificationTier ?? null,
-      installRule: selectedInstallRule
-        ? { strategy: selectedInstallRule.strategy, enabled: selectedInstallRule.enabled }
-        : null,
-      hasArtifact: primaryArtifact != null,
-    });
-
-    if (app) {
-      const shouldGate =
-        (app.verificationTier === "unverified" && app.qualityState !== "green") ||
-        (app.verificationTier === "provisional" &&
-          (app.qualityState === "red" || app.qualityState === "unknown"));
-
-      if (shouldGate) {
-        // Route to review queue instead of publishing
-        await db.insert(reviewQueue).values({
-          id: generateId(idPrefixes.reviewQueue),
-          reviewType: "publication_gated",
-          relatedId: job.appId,
-          payloadJson: JSON.stringify({
-            channel,
-            releaseId: winningRelease.id,
-            version: winningRelease.versionRaw,
-            verificationTier: app.verificationTier,
-            qualityState: app.qualityState,
-            explanation: publicationExplanation,
-          }),
-          priority: 1,
-          status: "pending",
-          createdAt: now,
-        });
-        continue;
-      }
-    }
 
     // Upsert app_latest_releases
-    const existing = await db
-      .select()
-      .from(appLatestReleases)
-      .where(and(eq(appLatestReleases.appId, job.appId), eq(appLatestReleases.channel, channel)))
-      .get();
-
-    if (existing) {
+    if (existingLatest) {
       await db
         .update(appLatestReleases)
         .set({
@@ -183,13 +126,10 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
           versionNormalized: winningRelease.versionNormalized,
           versionRaw: winningRelease.versionRaw,
           releasedAt: winningRelease.releasedAt,
-          decisionSource,
-          confidence: winningRelease.sourceConfidence,
-          decisionExplanationJson,
-          installabilityClass,
+          installStrategy,
           updatedAt: now,
         })
-        .where(eq(appLatestReleases.id, existing.id));
+        .where(eq(appLatestReleases.id, existingLatest.id));
     } else {
       await db.insert(appLatestReleases).values({
         id: generateId(idPrefixes.appLatestRelease),
@@ -200,10 +140,7 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
         versionNormalized: winningRelease.versionNormalized,
         versionRaw: winningRelease.versionRaw,
         releasedAt: winningRelease.releasedAt,
-        decisionSource,
-        confidence: winningRelease.sourceConfidence,
-        decisionExplanationJson,
-        installabilityClass,
+        installStrategy,
         updatedAt: now,
       });
     }
@@ -219,56 +156,5 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
       releasedAt: winningRelease.releasedAt,
       updatedAt: now,
     });
-
-    // Dismiss any stale publication-gated review items for this app now that
-    // it has passed gating and published successfully.
-    await db
-      .update(reviewQueue)
-      .set({ status: "dismissed", resolvedAt: now })
-      .where(
-        and(
-          eq(reviewQueue.relatedId, job.appId),
-          eq(reviewQueue.reviewType, "publication_gated"),
-          eq(reviewQueue.status, "pending"),
-        ),
-      );
-  }
-
-  // Auto-update onboarding checklist: mark reviewQueueClear if no gated items
-  const checklist = await db
-    .select()
-    .from(onboardingChecklists)
-    .where(eq(onboardingChecklists.appId, job.appId))
-    .get();
-  if (checklist && !checklist.isComplete && !checklist.reviewQueueClear) {
-    const pendingReviews = await db
-      .select({ id: reviewQueue.id })
-      .from(reviewQueue)
-      .where(and(eq(reviewQueue.relatedId, job.appId), eq(reviewQueue.status, "pending")))
-      .get();
-
-    if (!pendingReviews) {
-      const updates: Record<string, unknown> = {
-        reviewQueueClear: true,
-        updatedAt: new Date().toISOString(),
-      };
-      const merged = { ...checklist, reviewQueueClear: true };
-      const allComplete =
-        merged.hasCanonicalRecord &&
-        merged.hasAliases &&
-        merged.hasSource &&
-        merged.parserOutputVerified &&
-        merged.latestReleasePublished &&
-        merged.reviewQueueClear &&
-        merged.qualityScoreAcceptable;
-      if (allComplete) {
-        updates.isComplete = true;
-        updates.completedAt = new Date().toISOString();
-      }
-      await db
-        .update(onboardingChecklists)
-        .set(updates)
-        .where(eq(onboardingChecklists.id, checklist.id));
-    }
   }
 }

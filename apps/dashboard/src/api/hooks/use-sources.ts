@@ -10,7 +10,6 @@ import {
   getParserRuns,
   triggerFetch,
   reparse,
-  getSourceHealth,
 } from "@/server/sources";
 
 interface UseSourcesParams {
@@ -104,13 +103,5 @@ export function useTriggerSourceFetch() {
 export function useReparse() {
   return useMutation({
     mutationFn: (fetchId: string) => reparse({ data: { sourceFetchId: fetchId } }),
-  });
-}
-
-export function useSourceHealth(sourceId: string) {
-  return useQuery({
-    queryKey: ["sources", sourceId, "health"],
-    queryFn: () => getSourceHealth({ data: { sourceId } }),
-    enabled: !!sourceId,
   });
 }

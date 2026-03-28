@@ -1,30 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import {
-  getOnboardingChecklist,
-  updateOnboardingChecklist,
-  onboardDiscoveredApp,
-  checkSlugAvailable,
-  lookupCaskToken,
-} from "@/server/onboarding";
+import { onboardDiscoveredApp, checkSlugAvailable, lookupCaskToken } from "@/server/onboarding";
 import { validateSource } from "@/server/source-validation";
-
-export function useOnboardingChecklist(appId: string) {
-  return useQuery({
-    queryKey: ["onboarding", appId],
-    queryFn: () => getOnboardingChecklist({ data: { appId } }),
-    enabled: !!appId,
-  });
-}
-
-export function useUpdateOnboardingChecklist(appId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: Record<string, boolean>) =>
-      updateOnboardingChecklist({ data: { appId, ...input } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["onboarding", appId] }),
-  });
-}
 
 export function useCheckSlugAvailable(slug: string) {
   return useQuery({

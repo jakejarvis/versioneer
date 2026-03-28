@@ -34,7 +34,7 @@ export const updateExecutions = sqliteTable(
     }).notNull(),
     clientVersionBefore: text("client_version_before"),
     clientVersionAfter: text("client_version_after"),
-    installabilityClass: text("installability_class"),
+    installStrategy: text("install_strategy"),
     errorMessage: text("error_message"),
     detailsJson: text("details_json"),
     durationMs: integer("duration_ms"),

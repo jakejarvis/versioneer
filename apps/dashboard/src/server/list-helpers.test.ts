@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { toAppSummary, toReleaseSummary, toSourceSummary } from "@/server/entity-summaries";
 
-import { buildAppSortDescriptors, buildReviewQueueSortDescriptors } from "./list-helpers";
+import { buildAppSortDescriptors } from "./list-helpers";
 
 describe("buildAppSortDescriptors", () => {
   it("defaults to updatedAt descending", () => {
@@ -12,31 +12,6 @@ describe("buildAppSortDescriptors", () => {
   it("respects explicit sortable fields and direction", () => {
     expect(buildAppSortDescriptors("canonicalName", "asc")).toEqual([
       { field: "canonicalName", dir: "asc" },
-    ]);
-    expect(buildAppSortDescriptors("qualityScore", "desc")).toEqual([
-      { field: "qualityScore", dir: "desc" },
-    ]);
-  });
-});
-
-describe("buildReviewQueueSortDescriptors", () => {
-  it("defaults to priority then createdAt descending", () => {
-    expect(buildReviewQueueSortDescriptors()).toEqual([
-      { field: "priority", dir: "desc" },
-      { field: "createdAt", dir: "desc" },
-    ]);
-  });
-
-  it("adds stable fallback ordering for status and type sorts", () => {
-    expect(buildReviewQueueSortDescriptors("status", "asc")).toEqual([
-      { field: "status", dir: "asc" },
-      { field: "priority", dir: "desc" },
-      { field: "createdAt", dir: "desc" },
-    ]);
-    expect(buildReviewQueueSortDescriptors("reviewType", "desc")).toEqual([
-      { field: "reviewType", dir: "desc" },
-      { field: "priority", dir: "desc" },
-      { field: "createdAt", dir: "desc" },
     ]);
   });
 });
@@ -52,11 +27,10 @@ describe("entity summary shaping", () => {
       status: "active",
       mergedIntoAppId: null,
       notes: null,
-      verificationTier: "verified",
-      qualityState: "green",
-      qualityScore: 99,
+      isVerified: true,
+      verifiedAt: "2026-01-01T00:00:00.000Z",
+      installStrategyOverride: null,
       iconR2Key: "icons/test.png",
-      lastReviewedAt: null,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-02T00:00:00.000Z",
     } as Parameters<typeof toAppSummary>[0];

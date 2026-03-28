@@ -1,55 +1,30 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
-import {
-  ArrowLeft,
-  BarChart3,
-  ExternalLink,
-  Plus,
-  RefreshCw,
-  Trash2,
-  Upload,
-  Zap,
-} from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ExternalLink, Plus, RefreshCw, Trash2, Upload, Zap } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
   useApp,
   useAppAliases,
-  useAppInstallRules,
   useAppReleases,
   useAppSources,
   useCreateAlias,
-  useCreateInstallRule,
   useDeleteAlias,
   useDeleteAppIcon,
-  useDeleteInstallRule,
   useRecomputeLatest,
   useTriggerFetch,
   useUpdateAlias,
-  useUpdateInstallRule,
   useUploadAppIcon,
 } from "@/api/hooks/use-apps";
-import { useOnboardingChecklist, useUpdateOnboardingChecklist } from "@/api/hooks/use-onboarding";
-import {
-  usePromoteVerification,
-  useRecomputeScorecard,
-  useScorecard,
-} from "@/api/hooks/use-scorecards";
-import type { AppAlias, AppLatestRelease, InstallRule, Release, Source } from "@/api/types";
+import type { AppAlias, AppLatestRelease, Release, Source } from "@/api/types";
 import { AppIcon } from "@/components/shared/app-icon";
-import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
-import { DecisionExplanationCard } from "@/components/shared/decision-explanation";
 import { SourceEntityLink } from "@/components/shared/entity-link";
 import { IdDisplay } from "@/components/shared/id-display";
-import { OnboardingChecklistCard } from "@/components/shared/onboarding-checklist";
-import { QualityBadge } from "@/components/shared/quality-badge";
-import { ScorecardCard } from "@/components/shared/scorecard-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
-import { VerificationBadge } from "@/components/shared/verification-badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -70,33 +45,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/apps/$appId")({
   component: AppDetailPage,
 });
-
-const installStrategies = [
-  "sparkle",
-  "zip_replace",
-  "dmg_copy_replace",
-  "pkg_install",
-  "pkg_manual",
-  "manual_only",
-] as const;
-
-type InstallStrategy = (typeof installStrategies)[number];
-
-const defaultInstallRuleForm = {
-  strategy: "sparkle" as InstallStrategy,
-  requiresQuit: false,
-  requiresAdmin: false,
-  supportsSilent: true,
-  rollbackSupported: false,
-  ruleConfidence: "80",
-  notes: "",
-  enabled: true,
-};
 
 function AppDetailPage() {
   const { appId } = Route.useParams();
@@ -181,8 +133,11 @@ function AppDetailPage() {
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold tracking-tight">{app.canonicalName}</h2>
               <StatusBadge status={app.status} />
-              <QualityBadge state={app.qualityState} />
-              <VerificationBadge tier={app.verificationTier} />
+              {app.isVerified ? (
+                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                  Verified
+                </span>
+              ) : null}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               <IdDisplay id={app.id} />
@@ -209,8 +164,6 @@ function AppDetailPage() {
           <TabsTrigger value="aliases">Aliases</TabsTrigger>
           <TabsTrigger value="sources">Sources</TabsTrigger>
           <TabsTrigger value="releases">Releases</TabsTrigger>
-          <TabsTrigger value="install-rules">Install Rules</TabsTrigger>
-          <TabsTrigger value="quality">Quality</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="mt-4">
           <OverviewTab appId={appId} app={app} />
@@ -223,16 +176,6 @@ function AppDetailPage() {
         </TabsContent>
         <TabsContent value="releases" className="mt-4">
           <ReleasesTab appId={appId} />
-        </TabsContent>
-        <TabsContent value="install-rules" className="mt-4">
-          <InstallRulesTab appId={appId} />
-        </TabsContent>
-        <TabsContent value="quality" className="mt-4">
-          <QualityTab
-            appId={appId}
-            verificationTier={app.verificationTier}
-            latestReleases={app.latestReleases ?? []}
-          />
         </TabsContent>
       </Tabs>
     </div>
@@ -296,13 +239,10 @@ function OverviewTab({
                     <IdDisplay id={latestRelease.releaseId} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>Decision: {latestRelease.decisionSource}</span>
-                    {latestRelease.installabilityClass ? (
-                      <span>Installability: {latestRelease.installabilityClass}</span>
+                    {latestRelease.installStrategy ? (
+                      <span>Strategy: {latestRelease.installStrategy}</span>
                     ) : null}
-                    {latestRelease.confidence != null ? (
-                      <span>Confidence: {latestRelease.confidence}</span>
-                    ) : null}
+                    {latestRelease.pinnedReleaseId ? <span>Pinned</span> : null}
                   </div>
                 </div>
                 <TimeAgo
@@ -736,476 +676,5 @@ function ReleasesTab({ appId }: { appId: string }) {
           : undefined
       }
     />
-  );
-}
-
-function QualityTab({
-  appId,
-  verificationTier,
-  latestReleases,
-}: {
-  appId: string;
-  verificationTier: string;
-  latestReleases: AppLatestRelease[];
-}) {
-  const { data: scorecard, isLoading: scorecardLoading } = useScorecard(appId);
-  const { data: checklist } = useOnboardingChecklist(appId);
-  const recomputeScorecard = useRecomputeScorecard();
-  const promoteVerification = usePromoteVerification();
-  const updateChecklist = useUpdateOnboardingChecklist(appId);
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium">Quality & Verification</h3>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              recomputeScorecard.mutate(appId, {
-                onSuccess: () => toast.success("Scorecard recomputed"),
-                onError: (error) => toast.error(error.message),
-              })
-            }
-            disabled={recomputeScorecard.isPending}
-          >
-            <BarChart3 />
-            Recompute Scorecard
-          </Button>
-          {verificationTier !== "verified" ? (
-            <Button
-              size="sm"
-              onClick={() =>
-                promoteVerification.mutate(appId, {
-                  onSuccess: (data) => toast.success(`Promoted to ${data.verificationTier}`),
-                  onError: (error) => toast.error(error.message),
-                })
-              }
-              disabled={promoteVerification.isPending}
-            >
-              Promote Verification
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      {scorecardLoading ? (
-        <Skeleton className="h-48 w-full" />
-      ) : scorecard ? (
-        <ScorecardCard scorecard={scorecard} />
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          No scorecard data yet. Click &quot;Recompute Scorecard&quot; to generate.
-        </p>
-      )}
-
-      {latestReleases.map((latestRelease) =>
-        latestRelease.decisionExplanationJson ? (
-          <div key={latestRelease.id}>
-            <h4 className="mb-2 text-sm font-medium">
-              Decision Explanation ({latestRelease.channel})
-            </h4>
-            <DecisionExplanationCard
-              explanation={JSON.parse(latestRelease.decisionExplanationJson).publication}
-            />
-          </div>
-        ) : null,
-      )}
-
-      {checklist ? (
-        <OnboardingChecklistCard
-          checklist={checklist}
-          onToggle={(key, value) =>
-            updateChecklist.mutate(
-              { [key]: value },
-              { onError: (error) => toast.error(error.message) },
-            )
-          }
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function InstallRulesTab({ appId }: { appId: string }) {
-  const { data, isLoading } = useAppInstallRules(appId);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingRule, setEditingRule] = useState<InstallRule | null>(null);
-  const [deleteRuleId, setDeleteRuleId] = useState<string | null>(null);
-  const updateInstallRule = useUpdateInstallRule(appId);
-  const deleteInstallRule = useDeleteInstallRule(appId);
-
-  const toggleInstallRule = useCallback(
-    (id: string, enabled: boolean) => {
-      updateInstallRule.mutate(
-        { id, enabled },
-        {
-          onSuccess: () =>
-            toast.success(enabled ? "Install rule enabled" : "Install rule disabled"),
-          onError: (error) => toast.error(error.message),
-        },
-      );
-    },
-    [updateInstallRule],
-  );
-
-  const columns = useMemo<ColumnDef<InstallRule>[]>(
-    () => [
-      {
-        accessorKey: "strategy",
-        meta: { label: "Strategy" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Strategy" />,
-        cell: ({ row }) => (
-          <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-            {row.original.strategy}
-          </span>
-        ),
-      },
-      {
-        id: "capabilities",
-        meta: { label: "Capabilities" },
-        enableSorting: false,
-        cell: ({ row }) => (
-          <div className="flex min-w-0 flex-col gap-1 text-sm">
-            <span>
-              Quit: {row.original.requiresQuit ? "Required" : "No"} · Admin:{" "}
-              {row.original.requiresAdmin ? "Required" : "No"}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Silent: {row.original.supportsSilent ? "Supported" : "No"} · Rollback:{" "}
-              {row.original.rollbackSupported ? "Supported" : "No"}
-            </span>
-          </div>
-        ),
-      },
-      {
-        accessorKey: "ruleConfidence",
-        meta: { label: "Confidence" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Confidence" />,
-        cell: ({ row }) =>
-          row.original.ruleConfidence != null ? `${row.original.ruleConfidence}%` : "--",
-      },
-      {
-        accessorKey: "notes",
-        meta: { label: "Notes" },
-        enableSorting: false,
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Notes" />,
-        cell: ({ row }) =>
-          row.original.notes ? (
-            <span className="block max-w-72 truncate text-sm">{row.original.notes}</span>
-          ) : (
-            "--"
-          ),
-      },
-      {
-        accessorKey: "updatedAt",
-        meta: { label: "Updated" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Updated" />,
-        cell: ({ row }) => <TimeAgo date={row.original.updatedAt} />,
-      },
-      {
-        accessorKey: "enabled",
-        meta: { label: "Enabled" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Enabled" />,
-        cell: ({ row }) => (
-          <Switch
-            checked={row.original.enabled}
-            onCheckedChange={(enabled) => toggleInstallRule(row.original.id, enabled)}
-          />
-        ),
-      },
-      {
-        id: "actions",
-        meta: { label: "Actions" },
-        enableSorting: false,
-        enableHiding: false,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setEditingRule(row.original);
-                setDialogOpen(true);
-              }}
-            >
-              Edit
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive"
-              onClick={() => setDeleteRuleId(row.original.id)}
-            >
-              Delete
-            </Button>
-          </div>
-        ),
-      },
-    ],
-    [toggleInstallRule],
-  );
-
-  return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h3 className="font-medium">Install Rules</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Operational strategies and installability constraints for this app.
-          </p>
-        </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditingRule(null);
-            setDialogOpen(true);
-          }}
-        >
-          <Plus />
-          Add Rule
-        </Button>
-      </div>
-      <DataTable
-        columns={columns}
-        data={data?.items ?? []}
-        isLoading={isLoading}
-        emptyMessage="No install rules configured."
-        enableColumnVisibility
-      />
-      <InstallRuleDialog
-        appId={appId}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        rule={editingRule}
-      />
-      <ConfirmDialog
-        open={Boolean(deleteRuleId)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleteRuleId(null);
-          }
-        }}
-        title="Delete Install Rule"
-        description="This will remove the install rule from the app configuration."
-        confirmLabel="Delete"
-        variant="destructive"
-        loading={deleteInstallRule.isPending}
-        onConfirm={() => {
-          if (!deleteRuleId) {
-            return;
-          }
-
-          deleteInstallRule.mutate(deleteRuleId, {
-            onSuccess: () => {
-              toast.success("Install rule deleted");
-              setDeleteRuleId(null);
-            },
-            onError: (error) => toast.error(error.message),
-          });
-        }}
-      />
-    </div>
-  );
-}
-
-function InstallRuleDialog({
-  appId,
-  open,
-  onOpenChange,
-  rule,
-}: {
-  appId: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  rule: InstallRule | null;
-}) {
-  const createInstallRule = useCreateInstallRule(appId);
-  const updateInstallRule = useUpdateInstallRule(appId);
-  const [form, setForm] = useState(defaultInstallRuleForm);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    if (rule) {
-      setForm({
-        strategy: rule.strategy,
-        requiresQuit: rule.requiresQuit,
-        requiresAdmin: rule.requiresAdmin,
-        supportsSilent: rule.supportsSilent,
-        rollbackSupported: rule.rollbackSupported,
-        ruleConfidence: rule.ruleConfidence != null ? String(rule.ruleConfidence) : "",
-        notes: rule.notes ?? "",
-        enabled: rule.enabled,
-      });
-      return;
-    }
-
-    setForm(defaultInstallRuleForm);
-  }, [open, rule]);
-
-  const isPending = createInstallRule.isPending || updateInstallRule.isPending;
-
-  const handleSubmit = () => {
-    const parsedConfidence = form.ruleConfidence.trim()
-      ? Number.parseInt(form.ruleConfidence, 10)
-      : null;
-
-    if (parsedConfidence != null && Number.isNaN(parsedConfidence)) {
-      toast.error("Confidence must be a number.");
-      return;
-    }
-
-    const payload = {
-      strategy: form.strategy,
-      requiresQuit: form.requiresQuit,
-      requiresAdmin: form.requiresAdmin,
-      supportsSilent: form.supportsSilent,
-      rollbackSupported: form.rollbackSupported,
-      ruleConfidence: parsedConfidence,
-      notes: form.notes.trim() || null,
-    };
-
-    if (rule) {
-      updateInstallRule.mutate(
-        {
-          id: rule.id,
-          ...payload,
-          enabled: form.enabled,
-        },
-        {
-          onSuccess: () => {
-            toast.success("Install rule updated");
-            onOpenChange(false);
-          },
-          onError: (error) => toast.error(error.message),
-        },
-      );
-      return;
-    }
-
-    createInstallRule.mutate(
-      {
-        ...payload,
-        ruleConfidence: parsedConfidence ?? undefined,
-        notes: form.notes.trim() || undefined,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Install rule created");
-          onOpenChange(false);
-        },
-        onError: (error) => toast.error(error.message),
-      },
-    );
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{rule ? "Edit Install Rule" : "Add Install Rule"}</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2 sm:col-span-2">
-            <Label>Strategy</Label>
-            <Select
-              value={form.strategy}
-              onValueChange={(value) =>
-                setForm((current) => ({ ...current, strategy: value as InstallStrategy }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sparkle">Sparkle</SelectItem>
-                <SelectItem value="zip_replace">ZIP Replace</SelectItem>
-                <SelectItem value="dmg_copy_replace">DMG Copy Replace</SelectItem>
-                <SelectItem value="pkg_install">PKG Install</SelectItem>
-                <SelectItem value="pkg_manual">PKG Manual</SelectItem>
-                <SelectItem value="manual_only">Manual Only</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
-            <Label>Requires Quit</Label>
-            <Switch
-              checked={form.requiresQuit}
-              onCheckedChange={(requiresQuit) =>
-                setForm((current) => ({ ...current, requiresQuit }))
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
-            <Label>Requires Admin</Label>
-            <Switch
-              checked={form.requiresAdmin}
-              onCheckedChange={(requiresAdmin) =>
-                setForm((current) => ({ ...current, requiresAdmin }))
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
-            <Label>Supports Silent Install</Label>
-            <Switch
-              checked={form.supportsSilent}
-              onCheckedChange={(supportsSilent) =>
-                setForm((current) => ({ ...current, supportsSilent }))
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
-            <Label>Rollback Supported</Label>
-            <Switch
-              checked={form.rollbackSupported}
-              onCheckedChange={(rollbackSupported) =>
-                setForm((current) => ({ ...current, rollbackSupported }))
-              }
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label>Rule Confidence</Label>
-            <Input
-              inputMode="numeric"
-              value={form.ruleConfidence}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, ruleConfidence: event.target.value }))
-              }
-            />
-          </div>
-          {rule ? (
-            <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <Label>Enabled</Label>
-              <Switch
-                checked={form.enabled}
-                onCheckedChange={(enabled) => setForm((current) => ({ ...current, enabled }))}
-              />
-            </div>
-          ) : null}
-          <div className="flex flex-col gap-2 sm:col-span-2">
-            <Label>Notes</Label>
-            <Textarea
-              rows={4}
-              value={form.notes}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, notes: event.target.value }))
-              }
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isPending}>
-            {isPending ? "Saving..." : rule ? "Save Changes" : "Create Rule"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

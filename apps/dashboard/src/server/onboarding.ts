@@ -6,77 +6,15 @@ import {
   appAliases,
   discoveredApps,
   sources,
-  onboardingChecklists,
   auditLog,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
-import { onboardingChecklistUpdateSchema } from "@versioneer/validation";
 import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { authMiddleware } from "./middleware";
-
-// ──────────────────────────────────────────────────────────
-// Checklist queries (unchanged)
-// ──────────────────────────────────────────────────────────
-
-export const getOnboardingChecklist = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ appId: z.string().min(1) }))
-  .handler(async ({ data: { appId } }) => {
-    const db = createDb(env.DB);
-    const checklist = await db
-      .select()
-      .from(onboardingChecklists)
-      .where(eq(onboardingChecklists.appId, appId))
-      .get();
-    if (!checklist) throw new Error("Not found");
-    return checklist;
-  });
-
-export const updateOnboardingChecklist = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .inputValidator(onboardingChecklistUpdateSchema.extend({ appId: z.string().min(1) }))
-  .handler(async ({ data }) => {
-    const { appId, ...fields } = data;
-    const db = createDb(env.DB);
-
-    const existing = await db
-      .select()
-      .from(onboardingChecklists)
-      .where(eq(onboardingChecklists.appId, appId))
-      .get();
-    if (!existing) throw new Error("Not found");
-
-    const now = new Date().toISOString();
-    const updates: Record<string, unknown> = { updatedAt: now };
-    for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) updates[key] = value;
-    }
-
-    const merged = { ...existing, ...fields };
-    const allComplete =
-      merged.hasCanonicalRecord &&
-      merged.hasAliases &&
-      merged.hasSource &&
-      merged.parserOutputVerified &&
-      merged.latestReleasePublished &&
-      merged.reviewQueueClear &&
-      merged.qualityScoreAcceptable;
-
-    if (allComplete && !existing.isComplete) {
-      updates.isComplete = true;
-      updates.completedAt = now;
-    }
-
-    await db
-      .update(onboardingChecklists)
-      .set(updates)
-      .where(eq(onboardingChecklists.id, existing.id));
-
-    return { status: "updated" };
-  });
 
 // ──────────────────────────────────────────────────────────
 // Slug availability check
@@ -194,7 +132,6 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     });
 
     // 2. Create aliases
-    const hasAliases = data.aliases.length > 0;
     for (const alias of data.aliases) {
       await db.insert(appAliases).values({
         id: generateId(idPrefixes.alias),
@@ -238,20 +175,7 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       }
     }
 
-    // 4. Create onboarding checklist with auto-marked items
-    await db.insert(onboardingChecklists).values({
-      id: generateId(idPrefixes.onboardingChecklist),
-      appId,
-      hasCanonicalRecord: true,
-      hasAliases,
-      hasSource,
-      parserOutputVerified: data.sourceValidated,
-      latestReleasePublished: data.enrichmentHasReleases,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    // 5. Approve discovered app and clear the old icon reference
+    // 4. Approve discovered app and clear the old icon reference
     await db
       .update(discoveredApps)
       .set({
@@ -262,7 +186,7 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       })
       .where(eq(discoveredApps.id, data.discoveredAppId));
 
-    // 6. Audit log
+    // 5. Audit log
     await db.insert(auditLog).values({
       id: generateId(idPrefixes.auditLog),
       eventType: "app_onboarded",
@@ -279,7 +203,7 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       createdAt: now,
     });
 
-    // 7. Enqueue first source fetch for active sources
+    // 6. Enqueue first source fetch for active sources
     for (const srcId of activeSourceIds) {
       await env.SOURCE_FETCH_QUEUE.send({
         sourceId: srcId,

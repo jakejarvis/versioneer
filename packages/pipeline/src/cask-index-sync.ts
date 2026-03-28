@@ -1,11 +1,5 @@
 import { createDb } from "@versioneer/db";
-import {
-  appAliases,
-  discoveredApps,
-  reviewQueue,
-  generateId,
-  idPrefixes,
-} from "@versioneer/schema";
+import { appAliases, discoveredApps, generateId, idPrefixes } from "@versioneer/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
 
 import type { Env } from "./types";
@@ -138,10 +132,6 @@ function extractAppcastUrl(cask: CaskIndexEntry): string | undefined {
   return undefined;
 }
 
-function normalizeName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Promise<void> {
   const db = createDb(env.DB);
   const now = new Date().toISOString();
@@ -190,7 +180,6 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
 
   // Build a map of cask bundle IDs -> cask entries
   const casksByBundleId = new Map<string, CaskIndexEntry>();
-  const casksByNormalizedName = new Map<string, CaskIndexEntry>();
 
   for (const cask of casks) {
     if (!cask.version || cask.version === "latest") continue;
@@ -201,11 +190,6 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
       for (const bid of bundleIds) {
         casksByBundleId.set(bid, cask);
       }
-    }
-
-    // Index by normalized name for fuzzy matching
-    if (cask.name?.[0]) {
-      casksByNormalizedName.set(normalizeName(cask.name[0]), cask);
     }
   }
 
@@ -247,7 +231,6 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
     .all();
 
   let bundleIdMatches = 0;
-  let nameMatches = 0;
   let errors = 0;
   const matchedCaskTokens = new Set<string>();
 
@@ -308,47 +291,6 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
     }
   }
 
-  // --- Phase 3: Name-based fuzzy matching (creates review queue items) ---
-  const discoveredPendingAll = await db
-    .select({
-      id: discoveredApps.id,
-      appName: discoveredApps.appName,
-      homebrewCaskToken: discoveredApps.homebrewCaskToken,
-    })
-    .from(discoveredApps)
-    .where(eq(discoveredApps.status, "pending"))
-    .all();
-
-  for (const dapp of discoveredPendingAll) {
-    if (dapp.homebrewCaskToken) continue; // Already matched
-    const normalizedName = normalizeName(dapp.appName);
-    const cask = casksByNormalizedName.get(normalizedName);
-    if (!cask || matchedCaskTokens.has(cask.token)) continue;
-
-    try {
-      await db.insert(reviewQueue).values({
-        id: generateId(idPrefixes.reviewQueue),
-        reviewType: "cask_name_match",
-        relatedId: dapp.id,
-        payloadJson: JSON.stringify({
-          discoveredAppId: dapp.id,
-          discoveredAppName: dapp.appName,
-          caskToken: cask.token,
-          caskName: cask.name?.[0],
-          caskVersion: cask.version,
-          caskHomepage: cask.homepage,
-        }),
-        priority: 0,
-        status: "pending",
-        createdAt: now,
-      });
-      nameMatches++;
-    } catch (e) {
-      console.error(`Failed to create review item for ${dapp.appName}:`, e);
-      errors++;
-    }
-  }
-
   // Store sync stats
   await env.CONFIG_KV.put(LAST_SYNC_KV_KEY, now);
   await env.CONFIG_KV.put(
@@ -357,14 +299,11 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
       lastSyncAt: now,
       totalCasks: casks.length,
       bundleIdMatches,
-      nameMatches,
       errors,
     }),
   );
 
-  console.log(
-    `Cask index sync complete: ${bundleIdMatches} bundle ID matches, ${nameMatches} name matches, ${errors} errors`,
-  );
+  console.log(`Cask index sync complete: ${bundleIdMatches} bundle ID matches, ${errors} errors`);
 }
 
 /**

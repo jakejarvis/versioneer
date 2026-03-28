@@ -37,10 +37,12 @@ describe("public contract schemas", () => {
           matchedAppName: "Mozilla Firefox",
           matchConfidence: 98,
           decision: "update_available",
+          isVerified: true,
           latestVersion: "127.0",
           latestVersionRaw: "127.0",
           latestReleaseId: "rel_firefox",
           releasedAt: "2026-03-20T12:00:00Z",
+          staleSince: null,
           iconUrl: "https://assets.example.com/firefox.png",
           artifact: {
             id: "artifact_firefox",
@@ -50,25 +52,14 @@ describe("public contract schemas", () => {
             artifactType: "zip",
             sizeBytes: 182452384,
             sha256: "abc123",
-            expectedTeamId: "43AQ936H96",
-            expectedBundleId: "org.mozilla.firefox",
-            expectedVersionRaw: "127.0",
           },
-          install: {
-            canInstall: true,
-            installabilityClass: "assisted_replace",
-            strategy: "zip_replace",
-            requiresQuit: true,
-            requiresAdmin: false,
-            supportsSilent: false,
-            eligibility: "eligible",
-          },
+          installStrategy: "zip_replace",
         },
       ],
     });
 
     expect(parsed.results[0]?.iconUrl).toBe("https://assets.example.com/firefox.png");
-    expect(parsed.results[0]?.install.strategy).toBe("zip_replace");
+    expect(parsed.results[0]?.installStrategy).toBe("zip_replace");
   });
 
   it("accepts install prepare requests from the desktop client", () => {

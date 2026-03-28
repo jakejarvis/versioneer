@@ -9,13 +9,9 @@ export interface DashboardStats {
   totalApps: number;
   activeSources: number;
   errorSources: number;
-  pendingReviews: number;
   openFailures: number;
   recentReleases: number;
   verifiedApps: number;
-  greenApps: number;
-  yellowApps: number;
-  redApps: number;
   pendingFeedback: number;
 }
 
@@ -28,11 +24,10 @@ export interface App {
   status: "active" | "deprecated" | "merged" | "unlisted";
   mergedIntoAppId: string | null;
   notes: string | null;
-  verificationTier: "unverified" | "provisional" | "verified";
-  qualityState: "green" | "yellow" | "red" | "unknown";
-  qualityScore: number | null;
+  isVerified: boolean;
+  verifiedAt: string | null;
+  installStrategyOverride: string | null;
   iconR2Key: string | null;
-  lastReviewedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,7 +61,7 @@ export interface ReleaseSummary {
 }
 
 export interface LinkedEntityRef {
-  kind: "app" | "source" | "release" | "override" | "review_queue" | "job_failure" | "feedback";
+  kind: "app" | "source" | "release" | "job_failure" | "feedback";
   id: string;
   label: string;
   description: string | null;
@@ -191,14 +186,6 @@ export interface Artifact {
   sizeBytes: number | null;
   architecture: string | null;
   minOsVersion: string | null;
-  signatureStatus: "unknown" | "valid" | "invalid" | "missing" | null;
-  notarizationStatus: "unknown" | "notarized" | "not_notarized" | null;
-  expectedTeamId: string | null;
-  observedTeamId: string | null;
-  teamIdMatch: "unknown" | "match" | "mismatch" | null;
-  signatureObservationJson: string | null;
-  notarizationObservationJson: string | null;
-  trustLevel: "unknown" | "untrusted" | "low" | "medium" | "high" | null;
   isPrimary: boolean;
   createdAt: string;
 }
@@ -229,52 +216,11 @@ export interface AppLatestRelease {
   versionNormalized: string;
   versionRaw: string;
   releasedAt: string | null;
-  decisionSource: "pipeline" | "override" | "manual";
-  confidence: number | null;
-  decisionExplanationJson: string | null;
-  installabilityClass:
-    | "notify_only"
-    | "assisted_download"
-    | "assisted_replace"
-    | "automation_candidate"
-    | null;
+  pinnedReleaseId: string | null;
+  pinnedAt: string | null;
+  pinnedBy: string | null;
+  installStrategy: string | null;
   updatedAt: string;
-}
-
-export interface InstallRule {
-  id: string;
-  appId: string;
-  strategy:
-    | "sparkle"
-    | "zip_replace"
-    | "dmg_copy_replace"
-    | "pkg_install"
-    | "pkg_manual"
-    | "manual_only";
-  requiresQuit: boolean;
-  requiresAdmin: boolean;
-  supportsSilent: boolean;
-  rollbackSupported: boolean;
-  ruleConfidence: number | null;
-  enabled: boolean;
-  notes: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ReviewQueueItem {
-  id: string;
-  reviewType: string;
-  relatedId: string | null;
-  payloadJson: string | null;
-  priority: number;
-  status: "pending" | "in_progress" | "resolved" | "dismissed";
-  createdAt: string;
-  resolvedAt: string | null;
-}
-
-export interface ReviewQueueListItem extends ReviewQueueItem {
-  relatedRef: LinkedEntityRef | null;
 }
 
 export interface JobFailure {
@@ -293,22 +239,6 @@ export interface JobFailureListItem extends JobFailure {
   relatedRef: LinkedEntityRef | null;
 }
 
-export interface Override {
-  id: string;
-  overrideType: string;
-  targetType: string;
-  targetId: string;
-  payloadJson: string;
-  reason: string | null;
-  createdBy: string | null;
-  isActive: boolean;
-  createdAt: string;
-}
-
-export interface OverrideListItem extends Override {
-  targetRef: LinkedEntityRef | null;
-}
-
 export interface AuditLogEntry {
   id: string;
   eventType: string;
@@ -322,51 +252,6 @@ export interface AuditLogEntry {
 
 export interface AuditLogListItem extends AuditLogEntry {
   targetRef: LinkedEntityRef | null;
-}
-
-export interface AppScorecard {
-  id: string;
-  appId: string;
-  sourceTypesPresent: string | null;
-  latestFetchSuccessAt: string | null;
-  recentFetchSuccessRate: number | null;
-  recentParseSuccessRate: number | null;
-  latestReleaseConfidence: number | null;
-  artifactTrustStatus: string | null;
-  inventoryMatchSuccessRate: number | null;
-  ambiguityRate: number | null;
-  activeOverrideCount: number;
-  updatedAt: string;
-}
-
-export interface OnboardingChecklist {
-  id: string;
-  appId: string;
-  hasCanonicalRecord: boolean;
-  hasAliases: boolean;
-  hasSource: boolean;
-  parserOutputVerified: boolean;
-  latestReleasePublished: boolean;
-  reviewQueueClear: boolean;
-  qualityScoreAcceptable: boolean;
-  isComplete: boolean;
-  completedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SourceHealthMetric {
-  id: string;
-  sourceId: string;
-  periodStart: string;
-  fetchAttempts: number;
-  fetchSuccesses: number;
-  fetchFailures: number;
-  parseAttempts: number;
-  parseSuccesses: number;
-  parseFailures: number;
-  reviewItemsCreated: number;
-  createdAt: string;
 }
 
 export interface UpdateExecution {
@@ -386,7 +271,7 @@ export interface UpdateExecution {
   actionStatus: "initiated" | "in_progress" | "completed" | "failed" | "cancelled";
   clientVersionBefore: string | null;
   clientVersionAfter: string | null;
-  installabilityClass: string | null;
+  installStrategy: string | null;
   errorMessage: string | null;
   detailsJson: string | null;
   durationMs: number | null;
@@ -410,16 +295,6 @@ export interface MatchExplanation {
   topCandidates: { appId: string; appName: string; method: string; confidence: number }[];
 }
 
-export interface DecisionExplanation {
-  selectedReleaseId: string;
-  selectedVersion: string;
-  reason: "highest_version" | "override";
-  overrideId: string | null;
-  candidateCount: number;
-  alternatesRejected: { releaseId: string; version: string; reason: string }[];
-  sourceConfidence: number | null;
-}
-
 export interface FeedbackItem {
   id: string;
   clientId: string;
@@ -431,7 +306,6 @@ export interface FeedbackItem {
   appName: string | null;
   payloadJson: string | null;
   status: "new" | "triaged" | "resolved" | "dismissed";
-  reviewQueueItemId: string | null;
   resolvedAt: string | null;
   createdAt: string;
 }

@@ -52,10 +52,6 @@
         "queue": "versioneer-source-parse-dev"
       },
       {
-        "binding": "ARTIFACT_VERIFY_QUEUE",
-        "queue": "versioneer-artifact-verify-dev"
-      },
-      {
         "binding": "RECOMPUTE_LATEST_QUEUE",
         "queue": "versioneer-recompute-latest-dev"
       },
@@ -117,10 +113,6 @@
           {
             "binding": "SOURCE_PARSE_QUEUE",
             "queue": "versioneer-source-parse-production"
-          },
-          {
-            "binding": "ARTIFACT_VERIFY_QUEUE",
-            "queue": "versioneer-artifact-verify-production"
           },
           {
             "binding": "RECOMPUTE_LATEST_QUEUE",

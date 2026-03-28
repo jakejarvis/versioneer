@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createDb } from "@versioneer/db";
-import { apps, cronJobRuns, generateId, idPrefixes, sources } from "@versioneer/schema";
+import { cronJobRuns, generateId, idPrefixes, sources } from "@versioneer/schema";
 import { env } from "cloudflare:workers";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -30,7 +30,7 @@ export const listCronJobRuns = createServerFn({ method: "GET" })
     z.object({
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
-      jobType: z.enum(["poll_sources", "recompute_scorecards", "cask_index_sync"]).optional(),
+      jobType: z.enum(["poll_sources", "cask_index_sync"]).optional(),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,
     }),
@@ -111,61 +111,6 @@ export const triggerPollSources = createServerFn({ method: "POST" })
         status: "completed" as const,
         itemsQueued: dueSources.length,
         itemsTotal: activeSources.length,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      await db
-        .update(cronJobRuns)
-        .set({
-          status: "failed",
-          errorMessage,
-          completedAt: new Date().toISOString(),
-        })
-        .where(eq(cronJobRuns.id, runId));
-      throw error;
-    }
-  });
-
-export const triggerRecomputeScorecards = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .handler(async ({ context }) => {
-    const db = createDb(env.DB);
-    const runId = generateId(idPrefixes.cronJobRun);
-
-    await db.insert(cronJobRuns).values({
-      id: runId,
-      jobType: "recompute_scorecards",
-      trigger: "manual",
-      status: "running",
-      actorId: context.user.email,
-      startedAt: new Date().toISOString(),
-    });
-
-    try {
-      const allApps = await db
-        .select({ id: apps.id })
-        .from(apps)
-        .where(eq(apps.status, "active"))
-        .all();
-
-      for (const app of allApps) {
-        await env.RECOMPUTE_LATEST_QUEUE.send({ appId: app.id });
-      }
-
-      await db
-        .update(cronJobRuns)
-        .set({
-          status: "completed",
-          itemsQueued: allApps.length,
-          itemsTotal: allApps.length,
-          completedAt: new Date().toISOString(),
-        })
-        .where(eq(cronJobRuns.id, runId));
-
-      return {
-        id: runId,
-        status: "completed" as const,
-        itemsQueued: allApps.length,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

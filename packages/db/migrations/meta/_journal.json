@@ -113,6 +113,13 @@
       "when": 1774717959772,
       "tag": "0015_living_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1774731707434,
+      "tag": "0016_fuzzy_absorbing_man",
+      "breakpoints": true
     }
   ]
 }

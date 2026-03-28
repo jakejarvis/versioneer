@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { appArtifactSchema, appInstallMetadataSchema } from "./install";
+import { appArtifactSchema, installStrategySchema } from "./install";
 
 export const installedAppSchema = z.object({
   appName: z.string().min(1).max(500),
@@ -43,22 +43,17 @@ export const appDecisionSchema = z.object({
   matchedAppId: z.string().nullable(),
   matchedAppName: z.string().nullable(),
   matchConfidence: z.number().nullable(),
-  decision: z.enum([
-    "unknown",
-    "up_to_date",
-    "update_available",
-    "ambiguous",
-    "unsupported",
-    "ignored",
-  ]),
+  decision: z.enum(["up_to_date", "update_available", "ambiguous", "not_tracked"]),
+  isVerified: z.boolean(),
   latestVersion: z.string().nullable(),
   latestVersionRaw: z.string().nullable(),
   latestReleaseId: z.string().nullable(),
   homebrewCaskToken: z.string().nullable().optional(),
   releasedAt: z.string().nullable(),
+  staleSince: z.string().nullable(),
   iconUrl: z.string().nullable(),
   artifact: appArtifactSchema.nullable(),
-  install: appInstallMetadataSchema,
+  installStrategy: installStrategySchema.nullable(),
 });
 
 export type AppDecision = z.infer<typeof appDecisionSchema>;

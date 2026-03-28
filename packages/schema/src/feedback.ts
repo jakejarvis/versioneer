@@ -23,7 +23,6 @@ export const clientFeedback = sqliteTable(
     })
       .notNull()
       .default("new"),
-    reviewQueueItemId: text("review_queue_item_id"),
     resolvedAt: text("resolved_at"),
     createdAt: text("created_at").notNull(),
   },

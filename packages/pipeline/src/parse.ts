@@ -1,20 +1,19 @@
 import { createDb } from "@versioneer/db";
 import { getParser } from "@versioneer/parsers";
 import {
+  apps,
   sourceFetches,
   sources,
   parserRuns,
   releaseObservations,
   releases,
   artifacts,
-  onboardingChecklists,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
 import { normalizeVersion, inferChannel } from "@versioneer/versioning";
 import { eq } from "drizzle-orm";
 
-import { incrementHealthMetric } from "./health";
 import { normalizeReleaseNotes } from "./release-notes";
 import type { Env, SourceParseJob } from "./types";
 
@@ -188,51 +187,23 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
       }
     }
 
-    // Track health metric: parse success
-    await incrementHealthMetric(db, source.id, "parseAttempts");
-    await incrementHealthMetric(
-      db,
-      source.id,
-      output.errors.length > 0 && output.releases.length > 0 ? "parseSuccesses" : "parseSuccesses",
-    );
-
     // Enqueue recompute-latest
     await env.RECOMPUTE_LATEST_QUEUE.send({
       appId: source.appId,
     });
 
-    // Auto-update onboarding checklist if it exists
-    const checklist = await db
-      .select()
-      .from(onboardingChecklists)
-      .where(eq(onboardingChecklists.appId, source.appId))
-      .get();
-    if (checklist && !checklist.isComplete) {
-      const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
-      if (!checklist.parserOutputVerified && output.confidence >= 80) {
-        updates.parserOutputVerified = true;
-      }
-      if (!checklist.latestReleasePublished && output.releases.length > 0) {
-        updates.latestReleasePublished = true;
-      }
-      if (Object.keys(updates).length > 1) {
-        const merged = { ...checklist, ...updates };
-        const allComplete =
-          merged.hasCanonicalRecord &&
-          merged.hasAliases &&
-          merged.hasSource &&
-          merged.parserOutputVerified &&
-          merged.latestReleasePublished &&
-          merged.reviewQueueClear &&
-          merged.qualityScoreAcceptable;
-        if (allComplete) {
-          updates.isComplete = true;
-          updates.completedAt = new Date().toISOString();
-        }
+    // Auto-verify: on first successful parse, mark the app as verified
+    if (output.releases.length > 0) {
+      const app = await db.select().from(apps).where(eq(apps.id, source.appId)).get();
+      if (app && !app.isVerified) {
         await db
-          .update(onboardingChecklists)
-          .set(updates)
-          .where(eq(onboardingChecklists.id, checklist.id));
+          .update(apps)
+          .set({
+            isVerified: true,
+            verifiedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(apps.id, source.appId));
       }
     }
   } catch (error) {
@@ -249,10 +220,6 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
       startedAt: now,
       finishedAt: new Date().toISOString(),
     });
-
-    // Track health metric: parse failure
-    await incrementHealthMetric(db, source.id, "parseAttempts");
-    await incrementHealthMetric(db, source.id, "parseFailures");
 
     throw error;
   }

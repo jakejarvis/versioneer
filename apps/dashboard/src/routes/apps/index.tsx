@@ -10,10 +10,8 @@ import type { AppListItem } from "@/api/types";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { AppEntityLink } from "@/components/shared/entity-link";
-import { QualityBadge } from "@/components/shared/quality-badge";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
-import { VerificationBadge } from "@/components/shared/verification-badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -101,27 +99,6 @@ function AppsPage() {
         meta: { label: "Status" },
         header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
         cell: ({ row }) => <StatusBadge status={row.original.status} />,
-      },
-      {
-        accessorKey: "qualityScore",
-        meta: { label: "Quality" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Quality" />,
-        cell: ({ row }) => (
-          <div className="flex min-w-0 flex-col gap-1">
-            <QualityBadge state={row.original.qualityState} />
-            <span className="text-xs text-muted-foreground">
-              {row.original.qualityScore != null
-                ? `Score ${row.original.qualityScore}`
-                : "No score"}
-            </span>
-          </div>
-        ),
-      },
-      {
-        accessorKey: "verificationTier",
-        meta: { label: "Verification" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Verification" />,
-        cell: ({ row }) => <VerificationBadge tier={row.original.verificationTier} />,
       },
       {
         accessorKey: "updatedAt",

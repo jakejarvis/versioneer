@@ -51,10 +51,6 @@
         "queue": "versioneer-source-parse-dev"
       },
       {
-        "binding": "ARTIFACT_VERIFY_QUEUE",
-        "queue": "versioneer-artifact-verify-dev"
-      },
-      {
         "binding": "RECOMPUTE_LATEST_QUEUE",
         "queue": "versioneer-recompute-latest-dev"
       },
@@ -72,12 +68,6 @@
       },
       {
         "queue": "versioneer-source-parse-dev",
-        "max_batch_size": 5,
-        "max_retries": 3,
-        "dead_letter_queue": "versioneer-dlq-dev"
-      },
-      {
-        "queue": "versioneer-artifact-verify-dev",
         "max_batch_size": 5,
         "max_retries": 3,
         "dead_letter_queue": "versioneer-dlq-dev"
@@ -138,10 +128,6 @@
             "queue": "versioneer-source-parse-production"
           },
           {
-            "binding": "ARTIFACT_VERIFY_QUEUE",
-            "queue": "versioneer-artifact-verify-production"
-          },
-          {
             "binding": "RECOMPUTE_LATEST_QUEUE",
             "queue": "versioneer-recompute-latest-production"
           },
@@ -159,12 +145,6 @@
           },
           {
             "queue": "versioneer-source-parse-production",
-            "max_batch_size": 5,
-            "max_retries": 3,
-            "dead_letter_queue": "versioneer-dlq-production"
-          },
-          {
-            "queue": "versioneer-artifact-verify-production",
             "max_batch_size": 5,
             "max_retries": 3,
             "dead_letter_queue": "versioneer-dlq-production"

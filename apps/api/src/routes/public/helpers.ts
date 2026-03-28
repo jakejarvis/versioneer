@@ -1,5 +1,3 @@
-import type { AppDecision } from "@versioneer/validation";
-
 /** Returns true if `current` >= `minimum` using numeric version comparison. */
 export function isOsVersionCompatible(
   current: string | null | undefined,
@@ -29,42 +27,14 @@ export function isArchCompatible(
   return artifactArch === clientArch;
 }
 
-export function deriveInstallabilityClass(params: {
-  verificationTier: string | null;
-  installRule: { strategy: string; enabled: boolean } | null;
-  hasArtifact: boolean;
-}): NonNullable<AppDecision["install"]["installabilityClass"]> {
-  const { verificationTier, installRule, hasArtifact } = params;
+const STALENESS_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-  if (
-    !installRule ||
-    !installRule.enabled ||
-    verificationTier === "unverified" ||
-    !verificationTier
-  ) {
-    return "notify_only";
+/** Returns ISO date string if the source is stale (>30 days since last success), null otherwise. */
+export function computeStaleSince(lastSuccessAt: string | null): string | null {
+  if (!lastSuccessAt) return null;
+  const elapsed = Date.now() - new Date(lastSuccessAt).getTime();
+  if (elapsed >= STALENESS_THRESHOLD_MS) {
+    return lastSuccessAt;
   }
-
-  if (installRule.strategy === "manual_only" || installRule.strategy === "pkg_manual") {
-    return "notify_only";
-  }
-
-  const strategyAvailable = installRule.strategy === "sparkle" || hasArtifact;
-  if (!strategyAvailable) {
-    return "notify_only";
-  }
-
-  if (verificationTier === "verified" && installRule.strategy === "sparkle") {
-    return "automation_candidate";
-  }
-
-  if (verificationTier === "verified") {
-    return "assisted_replace";
-  }
-
-  if (verificationTier === "provisional") {
-    return "assisted_download";
-  }
-
-  return "notify_only";
+  return null;
 }

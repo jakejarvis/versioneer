@@ -87,13 +87,13 @@ function ExecutionsPage() {
         cell: ({ row }) => <StatusBadge status={row.original.actionStatus} />,
       },
       {
-        accessorKey: "installabilityClass",
-        meta: { label: "Class" },
+        accessorKey: "installStrategy",
+        meta: { label: "Strategy" },
         enableSorting: false,
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Class" />,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Strategy" />,
         cell: ({ row }) =>
-          row.original.installabilityClass ? (
-            <StatusBadge status={row.original.installabilityClass} />
+          row.original.installStrategy ? (
+            <StatusBadge status={row.original.installStrategy} />
           ) : (
             "--"
           ),

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, ExternalLink, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 
@@ -11,7 +11,6 @@ import {
   useReleaseObservations,
   useUnpinRelease,
   useUpdateRelease,
-  useVerifyArtifact,
 } from "@/api/hooks/use-releases";
 import type { Artifact, ReleaseObservation } from "@/api/types";
 import { DataTable } from "@/components/shared/data-table";
@@ -41,7 +40,6 @@ function ReleaseDetailPage() {
   const { data: artifactsData, isLoading: artifactsLoading } = useReleaseArtifacts(releaseId);
   const { data: observationsData, isLoading: observationsLoading } =
     useReleaseObservations(releaseId);
-  const verifyArtifact = useVerifyArtifact();
   const pinRelease = usePinRelease();
   const unpinRelease = useUnpinRelease();
 
@@ -83,64 +81,20 @@ function ReleaseDetailPage() {
         ),
       },
       {
-        accessorKey: "signatureStatus",
-        meta: { label: "Signature" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Signature" />,
-        cell: ({ row }) =>
-          row.original.signatureStatus ? (
-            <StatusBadge status={row.original.signatureStatus} />
-          ) : (
-            "--"
-          ),
-      },
-      {
-        accessorKey: "notarizationStatus",
-        meta: { label: "Notarization" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Notarization" />,
-        cell: ({ row }) =>
-          row.original.notarizationStatus ? (
-            <StatusBadge status={row.original.notarizationStatus} />
-          ) : (
-            "--"
-          ),
-      },
-      {
-        accessorKey: "trustLevel",
-        meta: { label: "Trust" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Trust" />,
-        cell: ({ row }) =>
-          row.original.trustLevel ? <StatusBadge status={row.original.trustLevel} /> : "--",
-      },
-      {
         id: "actions",
         meta: { label: "Actions" },
         enableSorting: false,
         enableHiding: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm">
-              <a href={row.original.url} target="_blank" rel="noopener noreferrer">
-                Open
-              </a>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                verifyArtifact.mutate(row.original.id, {
-                  onSuccess: () => toast.success("Artifact verification queued"),
-                  onError: (error) => toast.error(error.message),
-                })
-              }
-            >
-              <ShieldCheck />
-              Verify
-            </Button>
-          </div>
+          <Button asChild variant="ghost" size="sm">
+            <a href={row.original.url} target="_blank" rel="noopener noreferrer">
+              Open
+            </a>
+          </Button>
         ),
       },
     ],
-    [verifyArtifact],
+    [],
   );
 
   const observationColumns = useMemo<ColumnDef<ReleaseObservation>[]>(

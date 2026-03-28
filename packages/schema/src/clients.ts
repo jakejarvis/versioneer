@@ -47,7 +47,15 @@ export const clientInventoryApps = sqliteTable(
     matchMethod: text("match_method"),
     matchConfidence: integer("match_confidence"),
     decisionStatus: text("decision_status", {
-      enum: ["unknown", "up_to_date", "update_available", "ambiguous", "unsupported", "ignored"],
+      enum: [
+        "unknown",
+        "up_to_date",
+        "update_available",
+        "ambiguous",
+        "unsupported",
+        "not_tracked",
+        "ignored",
+      ],
     })
       .notNull()
       .default("unknown"),

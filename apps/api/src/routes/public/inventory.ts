@@ -8,11 +8,11 @@ import {
   appLatestReleases,
   artifacts,
   releases,
+  sources,
   clients,
   clientInventorySnapshots,
   clientInventoryApps,
   discoveredApps,
-  installRules,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
@@ -27,7 +27,7 @@ import { HTTPException } from "hono/http-exception";
 import type { z } from "zod";
 
 import type { Env } from "../../env";
-import { isArchCompatible, isOsVersionCompatible, deriveInstallabilityClass } from "./helpers";
+import { isArchCompatible, isOsVersionCompatible, computeStaleSince } from "./helpers";
 
 function computeLookupKey(appName: string, bundleId?: string | null): string {
   if (bundleId) return `bid:${bundleId.toLowerCase()}`;
@@ -89,97 +89,6 @@ async function storeDiscoveredIcon(
     .join("")
     .slice(0, 16);
   return storeIconToR2(bucket, `discovered-icons/${lookupKeyHash}`, iconBase64);
-}
-
-function defaultInstallMetadata(
-  eligibility: AppDecision["install"]["eligibility"] = "not_supported",
-): AppDecision["install"] {
-  return {
-    canInstall: false,
-    installabilityClass: null,
-    strategy: null,
-    requiresQuit: false,
-    requiresAdmin: false,
-    supportsSilent: false,
-    eligibility,
-  };
-}
-
-function buildInstallMetadata(params: {
-  decision: AppDecision["decision"];
-  installRule: {
-    strategy: string;
-    enabled: boolean;
-    requiresQuit: boolean;
-    requiresAdmin: boolean;
-    supportsSilent: boolean;
-  } | null;
-  installabilityClass: AppDecision["install"]["installabilityClass"];
-  verificationTier: string | null;
-  isMasApp: boolean | null | undefined;
-  hasSparkleFeed: boolean;
-  hasArtifact: boolean;
-}): AppDecision["install"] {
-  const {
-    decision,
-    installRule,
-    installabilityClass,
-    verificationTier,
-    isMasApp,
-    hasSparkleFeed,
-    hasArtifact,
-  } = params;
-
-  if (isMasApp) {
-    return defaultInstallMetadata("mas_app");
-  }
-
-  if (!installRule) {
-    return defaultInstallMetadata("not_supported");
-  }
-
-  const base: AppDecision["install"] = {
-    canInstall: false,
-    installabilityClass,
-    strategy: installRule.strategy as AppDecision["install"]["strategy"],
-    requiresQuit: installRule.requiresQuit,
-    requiresAdmin: installRule.requiresAdmin,
-    supportsSilent: installRule.supportsSilent,
-    eligibility: "not_supported",
-  };
-
-  if (installRule.strategy === "manual_only" || installRule.strategy === "pkg_manual") {
-    return { ...base, eligibility: "manual_only" };
-  }
-
-  if (
-    decision !== "update_available" ||
-    installabilityClass === null ||
-    installabilityClass === "notify_only"
-  ) {
-    return base;
-  }
-
-  if (
-    !verificationTier ||
-    (verificationTier !== "verified" && verificationTier !== "provisional")
-  ) {
-    return base;
-  }
-
-  if (installRule.strategy === "sparkle" && !hasSparkleFeed) {
-    return base;
-  }
-
-  if (installRule.strategy !== "sparkle" && !hasArtifact) {
-    return base;
-  }
-
-  if (verificationTier === "provisional") {
-    return { ...base, canInstall: true, eligibility: "requires_warning" };
-  }
-
-  return { ...base, canInstall: true, eligibility: "eligible" };
 }
 
 function pickPreferredAliasMap(
@@ -302,14 +211,26 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       .where(eq(appAliases.isActive, true))
       .all();
 
-    // Load app names for alias records
-    const appMap = new Map<string, { canonicalName: string; iconR2Key: string | null }>();
+    // Load app details
+    const appMap = new Map<
+      string,
+      { canonicalName: string; iconR2Key: string | null; isVerified: boolean }
+    >();
     const allApps = await db
-      .select({ id: apps.id, canonicalName: apps.canonicalName, iconR2Key: apps.iconR2Key })
+      .select({
+        id: apps.id,
+        canonicalName: apps.canonicalName,
+        iconR2Key: apps.iconR2Key,
+        isVerified: apps.isVerified,
+      })
       .from(apps)
       .all();
     for (const a of allApps) {
-      appMap.set(a.id, { canonicalName: a.canonicalName, iconR2Key: a.iconR2Key });
+      appMap.set(a.id, {
+        canonicalName: a.canonicalName,
+        iconR2Key: a.iconR2Key,
+        isVerified: a.isVerified,
+      });
     }
 
     const aliasRecords: AliasRecord[] = allAliases.map((a) => ({
@@ -321,42 +242,30 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       isExact: a.isExact,
       confidenceWeight: a.confidenceWeight,
     }));
-    const expectedBundleIdByApp = pickPreferredAliasMap(allAliases, "bundle_id");
-    const expectedTeamIdByApp = pickPreferredAliasMap(allAliases, "team_id");
     const caskTokenByApp = pickPreferredAliasMap(allAliases, "homebrew_cask");
-
-    // Load all apps for verification tier lookup
-    const allAppDetails = await db
-      .select({ id: apps.id, verificationTier: apps.verificationTier })
-      .from(apps)
-      .all();
-    const appVerificationMap = new Map<string, string>();
-    for (const a of allAppDetails) {
-      appVerificationMap.set(a.id, a.verificationTier);
-    }
-
-    // Load install rules, preferring enabled + most recently updated rule per app
-    const allInstallRules = await db.select().from(installRules).all();
-    allInstallRules.sort((a, b) => {
-      if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
-      return b.updatedAt.localeCompare(a.updatedAt);
-    });
-    const installRuleByApp = new Map<string, (typeof allInstallRules)[number]>();
-    for (const rule of allInstallRules) {
-      if (!installRuleByApp.has(rule.appId)) {
-        installRuleByApp.set(rule.appId, rule);
-      }
-    }
 
     // Load all latest releases
     const latestReleases = await db.select().from(appLatestReleases).all();
     const latestByApp = new Map<string, (typeof latestReleases)[number]>();
     for (const lr of latestReleases) {
-      // Prefer stable channel
       const key = lr.appId;
       const existing = latestByApp.get(key);
       if (!existing || lr.channel === "stable") {
         latestByApp.set(key, lr);
+      }
+    }
+
+    // Load source lastSuccessAt for staleness computation
+    const allSources = await db
+      .select({ appId: sources.appId, lastSuccessAt: sources.lastSuccessAt })
+      .from(sources)
+      .where(eq(sources.status, "active"))
+      .all();
+    const latestSourceSuccessByApp = new Map<string, string | null>();
+    for (const s of allSources) {
+      const existing = latestSourceSuccessByApp.get(s.appId);
+      if (!existing || (s.lastSuccessAt && (!existing || s.lastSuccessAt > existing))) {
+        latestSourceSuccessByApp.set(s.appId, s.lastSuccessAt);
       }
     }
 
@@ -374,187 +283,139 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         aliasRecords,
       );
 
-      let decision: AppDecision["decision"] = "unknown";
+      let decision: AppDecision["decision"] = "not_tracked";
       let latestVersion: string | null = null;
       let latestVersionRaw: string | null = null;
       let releasedAt: string | null = null;
       let latestReleaseId: string | null = null;
       let matchedArtifact: AppDecision["artifact"] = null;
-      let selectedVerificationTier: string | null = null;
-      let selectedInstallRule: {
-        strategy: string;
-        enabled: boolean;
-        requiresQuit: boolean;
-        requiresAdmin: boolean;
-        supportsSilent: boolean;
-      } | null = null;
-      let selectedInstallabilityClass: AppDecision["install"]["installabilityClass"] = null;
-      let installMetadata: AppDecision["install"] = defaultInstallMetadata(
-        installedApp.isMasApp ? "mas_app" : "not_supported",
-      );
+      let installStrategy: AppDecision["installStrategy"] = null;
+      let staleSince: string | null = null;
+
+      const appInfo = matchResult.appId ? appMap.get(matchResult.appId) : undefined;
+      const isVerified = appInfo?.isVerified ?? false;
 
       if (matchResult.matched && matchResult.appId) {
-        // Publication gating: unverified apps return unsupported
-        const tier = appVerificationMap.get(matchResult.appId);
-        selectedVerificationTier = tier ?? null;
-        if (tier === "unverified") {
-          decision = "unsupported";
-        }
+        if (!isVerified) {
+          // Unverified apps are not tracked — no update info returned
+          decision = "not_tracked";
+        } else {
+          const latest = latestByApp.get(matchResult.appId);
+          if (latest) {
+            // Compute staleness
+            const lastSuccess = latestSourceSuccessByApp.get(matchResult.appId) ?? null;
+            staleSince = computeStaleSince(lastSuccess);
 
-        const latest =
-          !tier || tier === "unverified" ? undefined : latestByApp.get(matchResult.appId);
-        if (latest) {
-          // Find a compatible artifact for this client's arch + OS
-          const releaseArtifacts = await db
-            .select()
-            .from(artifacts)
-            .where(eq(artifacts.releaseId, latest.releaseId))
-            .all();
-
-          const clientArch = request.client.systemArchitecture;
-          const clientOs = request.client.osVersion;
-
-          const compatibleArtifact = releaseArtifacts.find(
-            (a) =>
-              isArchCompatible(a.architecture, clientArch) &&
-              isOsVersionCompatible(clientOs, a.minOsVersion),
-          );
-
-          if (compatibleArtifact || releaseArtifacts.length === 0) {
-            // Latest release is compatible (or has no artifacts to filter on)
-            latestVersion = latest.versionNormalized;
-            latestVersionRaw = latest.versionRaw;
-            releasedAt = latest.releasedAt;
-            latestReleaseId = latest.releaseId;
-
-            if (compatibleArtifact) {
-              matchedArtifact = {
-                id: compatibleArtifact.id,
-                downloadUrl: compatibleArtifact.url,
-                architecture: compatibleArtifact.architecture,
-                minOsVersion: compatibleArtifact.minOsVersion,
-                artifactType: compatibleArtifact.artifactType,
-                sizeBytes: compatibleArtifact.sizeBytes,
-                sha256: compatibleArtifact.sha256,
-                expectedTeamId:
-                  compatibleArtifact.expectedTeamId ??
-                  expectedTeamIdByApp.get(matchResult.appId) ??
-                  null,
-                expectedBundleId: expectedBundleIdByApp.get(matchResult.appId) ?? null,
-                expectedVersionRaw: latest.versionRaw,
-              };
-            }
-          } else {
-            // Latest release has no compatible artifact — walk back through older releases
-            const olderCompatible = await db
-              .select({
-                releaseId: releases.id,
-                versionNormalized: releases.versionNormalized,
-                versionRaw: releases.versionRaw,
-                releasedAt: releases.releasedAt,
-                artifactId: artifacts.id,
-                artifactUrl: artifacts.url,
-                artifactArch: artifacts.architecture,
-                artifactMinOs: artifacts.minOsVersion,
-                artifactType: artifacts.artifactType,
-                artifactSize: artifacts.sizeBytes,
-                artifactSha256: artifacts.sha256,
-                artifactExpectedTeamId: artifacts.expectedTeamId,
-              })
-              .from(releases)
-              .innerJoin(artifacts, eq(artifacts.releaseId, releases.id))
-              .where(
-                and(
-                  eq(releases.appId, matchResult.appId!),
-                  eq(releases.status, "active"),
-                  eq(releases.channel, latest.channel),
-                ),
-              )
-              .orderBy(desc(releases.versionNormalized))
+            // Find a compatible artifact for this client's arch + OS
+            const releaseArtifacts = await db
+              .select()
+              .from(artifacts)
+              .where(eq(artifacts.releaseId, latest.releaseId))
               .all();
 
-            const found = olderCompatible.find(
-              (r) =>
-                isArchCompatible(r.artifactArch, clientArch) &&
-                isOsVersionCompatible(clientOs, r.artifactMinOs),
+            const clientArch = request.client.systemArchitecture;
+            const clientOs = request.client.osVersion;
+
+            const compatibleArtifact = releaseArtifacts.find(
+              (a) =>
+                isArchCompatible(a.architecture, clientArch) &&
+                isOsVersionCompatible(clientOs, a.minOsVersion),
             );
 
-            if (found) {
-              latestVersion = found.versionNormalized;
-              latestVersionRaw = found.versionRaw;
-              releasedAt = found.releasedAt;
-              latestReleaseId = found.releaseId;
-              matchedArtifact = {
-                id: found.artifactId,
-                downloadUrl: found.artifactUrl,
-                architecture: found.artifactArch,
-                minOsVersion: found.artifactMinOs,
-                artifactType: found.artifactType,
-                sizeBytes: found.artifactSize,
-                sha256: found.artifactSha256,
-                expectedTeamId:
-                  found.artifactExpectedTeamId ??
-                  expectedTeamIdByApp.get(matchResult.appId) ??
-                  null,
-                expectedBundleId: expectedBundleIdByApp.get(matchResult.appId) ?? null,
-                expectedVersionRaw: found.versionRaw,
-              };
-            }
-          }
+            if (compatibleArtifact || releaseArtifacts.length === 0) {
+              latestVersion = latest.versionNormalized;
+              latestVersionRaw = latest.versionRaw;
+              releasedAt = latest.releasedAt;
+              latestReleaseId = latest.releaseId;
+              installStrategy = latest.installStrategy;
 
-          const rawInstallRule = installRuleByApp.get(matchResult.appId) ?? null;
-          selectedInstallRule = rawInstallRule
-            ? {
-                strategy: rawInstallRule.strategy,
-                enabled: rawInstallRule.enabled,
-                requiresQuit: rawInstallRule.requiresQuit,
-                requiresAdmin: rawInstallRule.requiresAdmin,
-                supportsSilent: rawInstallRule.supportsSilent,
-              }
-            : null;
-          selectedInstallabilityClass =
-            latest.installabilityClass ??
-            deriveInstallabilityClass({
-              verificationTier: tier ?? null,
-              installRule: rawInstallRule
-                ? { strategy: rawInstallRule.strategy, enabled: rawInstallRule.enabled }
-                : null,
-              hasArtifact: matchedArtifact?.downloadUrl != null,
-            });
-
-          if (latestVersion) {
-            if (installedApp.version) {
-              const installedNormalized = normalizeVersion(installedApp.version);
-              const cmp = compareVersionStrings(installedNormalized, latestVersion);
-              if (cmp >= 0) {
-                decision = "up_to_date";
-              } else {
-                decision = "update_available";
+              if (compatibleArtifact) {
+                matchedArtifact = {
+                  id: compatibleArtifact.id,
+                  downloadUrl: compatibleArtifact.url,
+                  architecture: compatibleArtifact.architecture,
+                  minOsVersion: compatibleArtifact.minOsVersion,
+                  artifactType: compatibleArtifact.artifactType,
+                  sizeBytes: compatibleArtifact.sizeBytes,
+                  sha256: compatibleArtifact.sha256,
+                };
               }
             } else {
-              decision = "ambiguous";
+              // Latest release has no compatible artifact — walk back through older releases
+              const olderCompatible = await db
+                .select({
+                  releaseId: releases.id,
+                  versionNormalized: releases.versionNormalized,
+                  versionRaw: releases.versionRaw,
+                  releasedAt: releases.releasedAt,
+                  artifactId: artifacts.id,
+                  artifactUrl: artifacts.url,
+                  artifactArch: artifacts.architecture,
+                  artifactMinOs: artifacts.minOsVersion,
+                  artifactType: artifacts.artifactType,
+                  artifactSize: artifacts.sizeBytes,
+                  artifactSha256: artifacts.sha256,
+                })
+                .from(releases)
+                .innerJoin(artifacts, eq(artifacts.releaseId, releases.id))
+                .where(
+                  and(
+                    eq(releases.appId, matchResult.appId!),
+                    eq(releases.status, "active"),
+                    eq(releases.channel, latest.channel),
+                  ),
+                )
+                .orderBy(desc(releases.versionNormalized))
+                .all();
+
+              const found = olderCompatible.find(
+                (r) =>
+                  isArchCompatible(r.artifactArch, clientArch) &&
+                  isOsVersionCompatible(clientOs, r.artifactMinOs),
+              );
+
+              if (found) {
+                latestVersion = found.versionNormalized;
+                latestVersionRaw = found.versionRaw;
+                releasedAt = found.releasedAt;
+                latestReleaseId = found.releaseId;
+                installStrategy = latest.installStrategy;
+                matchedArtifact = {
+                  id: found.artifactId,
+                  downloadUrl: found.artifactUrl,
+                  architecture: found.artifactArch,
+                  minOsVersion: found.artifactMinOs,
+                  artifactType: found.artifactType,
+                  sizeBytes: found.artifactSize,
+                  sha256: found.artifactSha256,
+                };
+              }
+            }
+
+            if (latestVersion) {
+              if (installedApp.version) {
+                const installedNormalized = normalizeVersion(installedApp.version);
+                const cmp = compareVersionStrings(installedNormalized, latestVersion);
+                if (cmp >= 0) {
+                  decision = "up_to_date";
+                } else {
+                  decision = "update_available";
+                }
+              } else {
+                decision = "ambiguous";
+              }
+            } else {
+              decision = "not_tracked";
             }
           } else {
-            decision = "unsupported";
+            decision = "not_tracked";
           }
-        } else {
-          decision = "unsupported";
         }
       }
 
       if (matchResult.ambiguous) {
         decision = "ambiguous";
       }
-
-      installMetadata = buildInstallMetadata({
-        decision,
-        installRule: selectedInstallRule,
-        installabilityClass: selectedInstallabilityClass,
-        verificationTier: selectedVerificationTier,
-        isMasApp: installedApp.isMasApp,
-        hasSparkleFeed: Boolean(installedApp.sparkleFeedUrl),
-        hasArtifact: matchedArtifact?.downloadUrl != null,
-      });
 
       // Generate match explanation
       const matchExplanation = generateMatchExplanation(
@@ -598,10 +459,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         createdAt: now,
       });
 
-      const matchedAppInfo = matchResult.appId ? appMap.get(matchResult.appId) : undefined;
-      const iconUrl = matchedAppInfo?.iconR2Key
-        ? `${c.env.ASSETS_BASE_URL}/${matchedAppInfo.iconR2Key}`
-        : null;
+      const iconUrl = appInfo?.iconR2Key ? `${c.env.ASSETS_BASE_URL}/${appInfo.iconR2Key}` : null;
 
       results.push({
         appName: installedApp.appName,
@@ -611,6 +469,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         matchedAppName: matchResult.appName,
         matchConfidence: matchResult.confidence,
         decision,
+        isVerified,
         latestVersion,
         latestVersionRaw,
         homebrewCaskToken: matchResult.appId
@@ -618,9 +477,10 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           : null,
         latestReleaseId,
         releasedAt,
+        staleSince,
         iconUrl,
         artifact: matchedArtifact,
-        install: installMetadata,
+        installStrategy,
       });
     }
 

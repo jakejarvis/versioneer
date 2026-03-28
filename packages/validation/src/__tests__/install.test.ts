@@ -46,10 +46,12 @@ describe("appDecisionSchema install payload", () => {
       matchedAppName: "Foo",
       matchConfidence: 99,
       decision: "update_available",
+      isVerified: true,
       latestVersion: "2.0.0",
       latestVersionRaw: "2.0.0",
       latestReleaseId: "rel_123",
       releasedAt: "2026-03-26T12:00:00Z",
+      staleSince: null,
       iconUrl: null,
       artifact: {
         id: "art_123",
@@ -59,22 +61,11 @@ describe("appDecisionSchema install payload", () => {
         artifactType: "zip",
         sizeBytes: 123,
         sha256: "deadbeef",
-        expectedTeamId: "TEAM123456",
-        expectedBundleId: "com.example.foo",
-        expectedVersionRaw: "2.0.0",
       },
-      install: {
-        canInstall: true,
-        installabilityClass: "assisted_replace",
-        strategy: "zip_replace",
-        requiresQuit: true,
-        requiresAdmin: false,
-        supportsSilent: false,
-        eligibility: "eligible",
-      },
+      installStrategy: "zip_replace",
     });
 
     expect(parsed.artifact?.id).toBe("art_123");
-    expect(parsed.install.strategy).toBe("zip_replace");
+    expect(parsed.installStrategy).toBe("zip_replace");
   });
 });

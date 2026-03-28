@@ -2,13 +2,12 @@ import { zValidator } from "@hono/zod-validator";
 import { createDb } from "@versioneer/db";
 import {
   apps,
-  appAliases,
   artifacts,
   releases,
+  appLatestReleases,
   clients,
   clientInventorySnapshots,
   clientInventoryApps,
-  installRules,
   updateExecutions,
   generateId,
   idPrefixes,
@@ -17,13 +16,12 @@ import {
   installPrepareRequestSchema,
   installExecutionStatusUpdateSchema,
 } from "@versioneer/validation";
-import type { AppDecision } from "@versioneer/validation";
 import { eq, and } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 
 import type { Env } from "../../env";
-import { isArchCompatible, isOsVersionCompatible, deriveInstallabilityClass } from "./helpers";
+import { isArchCompatible, isOsVersionCompatible } from "./helpers";
 
 async function hashPath(path: string): Promise<string> {
   const bytes = new TextEncoder().encode(path);
@@ -132,9 +130,9 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         throw new HTTPException(404, { message: "App not found" });
       }
 
-      if (app.verificationTier !== "verified" && app.verificationTier !== "provisional") {
+      if (!app.isVerified) {
         throw new HTTPException(400, {
-          message: "App verification tier does not permit installation",
+          message: "App is not verified and cannot be installed",
         });
       }
 
@@ -147,56 +145,29 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         throw new HTTPException(404, { message: "Release not found or inactive" });
       }
 
-      const appInstallRules = await db
+      // Get the latest release record for install strategy
+      const latestRelease = await db
         .select()
-        .from(installRules)
-        .where(eq(installRules.appId, data.matchedAppId))
-        .all();
-      appInstallRules.sort((a, b) => {
-        if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
-        return b.updatedAt.localeCompare(a.updatedAt);
-      });
-      const selectedRule = appInstallRules[0] ?? null;
-      if (!selectedRule || !selectedRule.enabled) {
-        throw new HTTPException(400, { message: "No enabled install rule found for app" });
+        .from(appLatestReleases)
+        .where(eq(appLatestReleases.appId, data.matchedAppId))
+        .get();
+      const strategy = data.strategyCandidate;
+
+      if (strategy === "manual_only") {
+        throw new HTTPException(400, { message: "Manual-only strategy cannot be installed" });
       }
 
-      if (selectedRule.strategy !== data.strategyCandidate) {
-        throw new HTTPException(400, {
-          message: "Requested strategy does not match the active install rule",
-        });
-      }
+      let artifactPlan: {
+        id: string;
+        downloadUrl: string;
+        architecture: string | null;
+        minOsVersion: string | null;
+        artifactType: string;
+        sizeBytes: number | null;
+        sha256: string | null;
+      } | null = null;
 
-      if (selectedRule.strategy === "manual_only" || selectedRule.strategy === "pkg_manual") {
-        throw new HTTPException(400, { message: "Selected install rule is manual-only" });
-      }
-
-      const exactAliases = await db
-        .select({
-          aliasType: appAliases.aliasType,
-          value: appAliases.value,
-          confidenceWeight: appAliases.confidenceWeight,
-        })
-        .from(appAliases)
-        .where(
-          and(
-            eq(appAliases.appId, data.matchedAppId),
-            eq(appAliases.isActive, true),
-            eq(appAliases.isExact, true),
-          ),
-        )
-        .all();
-      const expectedBundleId =
-        exactAliases
-          .filter((alias) => alias.aliasType === "bundle_id")
-          .sort((a, b) => b.confidenceWeight - a.confidenceWeight)[0]?.value ?? null;
-      const expectedTeamId =
-        exactAliases
-          .filter((alias) => alias.aliasType === "team_id")
-          .sort((a, b) => b.confidenceWeight - a.confidenceWeight)[0]?.value ?? null;
-
-      let artifactPlan: AppDecision["artifact"] = null;
-      if (selectedRule.strategy === "sparkle") {
+      if (strategy === "sparkle") {
         if (!inventoryApp.sparkleFeedUrl) {
           throw new HTTPException(400, {
             message: "Latest inventory snapshot does not include Sparkle metadata",
@@ -212,12 +183,12 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
           (artifact) =>
             isArchCompatible(artifact.architecture, inventoryApp.architecture) &&
             isOsVersionCompatible(snapshot.osVersion, artifact.minOsVersion) &&
-            artifactMatchesStrategy(selectedRule.strategy, artifact.artifactType, artifact.url),
+            artifactMatchesStrategy(strategy, artifact.artifactType, artifact.url),
         );
 
         if (!compatibleArtifact) {
           throw new HTTPException(400, {
-            message: "No compatible artifact is available for this install rule",
+            message: "No compatible artifact is available for this strategy",
           });
         }
 
@@ -229,21 +200,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
           artifactType: compatibleArtifact.artifactType,
           sizeBytes: compatibleArtifact.sizeBytes,
           sha256: compatibleArtifact.sha256,
-          expectedTeamId: compatibleArtifact.expectedTeamId ?? expectedTeamId,
-          expectedBundleId,
-          expectedVersionRaw: release.versionRaw,
         };
-      }
-
-      const installabilityClass = deriveInstallabilityClass({
-        verificationTier: app.verificationTier,
-        installRule: { strategy: selectedRule.strategy, enabled: selectedRule.enabled },
-        hasArtifact: artifactPlan?.downloadUrl != null,
-      });
-      if (installabilityClass === "notify_only") {
-        throw new HTTPException(400, {
-          message: "Installability class does not permit installation",
-        });
       }
 
       const executionId = generateId(idPrefixes.updateExecution);
@@ -253,16 +210,15 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         appId: data.matchedAppId,
         releaseId: data.releaseId,
         artifactId: artifactPlan?.id ?? null,
-        actionType: actionTypeForStrategy(selectedRule.strategy),
+        actionType: actionTypeForStrategy(strategy),
         actionStatus: "initiated",
         clientVersionBefore: data.installedVersion ?? inventoryApp.installedVersionRaw ?? null,
         clientVersionAfter: null,
-        installabilityClass,
+        installStrategy: latestRelease?.installStrategy ?? strategy,
         errorMessage: null,
         detailsJson: JSON.stringify({
           snapshotId: data.snapshotId,
-          strategy: selectedRule.strategy,
-          warningLevel: app.verificationTier === "provisional" ? "provisional" : "none",
+          strategy,
           localAppPath: data.localAppPath,
         }),
         durationMs: null,
@@ -272,29 +228,10 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
 
       return c.json({
         executionId,
-        plan: {
-          executionId,
-          appId: data.matchedAppId,
-          releaseId: data.releaseId,
-          strategy: selectedRule.strategy,
-          installabilityClass,
-          warningLevel: app.verificationTier === "provisional" ? "provisional" : "none",
-          requiresQuit: selectedRule.requiresQuit,
-          requiresAdmin: selectedRule.requiresAdmin,
-          supportsSilent: selectedRule.supportsSilent,
-          relaunchAfterInstall: selectedRule.strategy !== "pkg_install",
-          artifact: artifactPlan,
-          localVerification: {
-            requireHash: artifactPlan?.sha256 != null,
-            requireSignature: selectedRule.strategy !== "sparkle",
-            requireNotarization: selectedRule.strategy !== "sparkle",
-            requireBundleIdMatch:
-              selectedRule.strategy !== "pkg_install" && artifactPlan?.expectedBundleId != null,
-            requireTeamIdMatch: artifactPlan?.expectedTeamId != null,
-            requireVersionMatch:
-              selectedRule.strategy !== "pkg_install" && artifactPlan?.expectedVersionRaw != null,
-          },
-        },
+        strategy,
+        appId: data.matchedAppId,
+        releaseId: data.releaseId,
+        artifact: artifactPlan,
       });
     },
   )

@@ -9,7 +9,6 @@ import {
   useReparse,
   useSource,
   useSourceFetches,
-  useSourceHealth,
   useTriggerSourceFetch,
   useUpdateSource,
 } from "@/api/hooks/use-sources";
@@ -17,7 +16,6 @@ import type { ParserRun, SourceFetch } from "@/api/types";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { AppEntityLink } from "@/components/shared/entity-link";
-import { HealthChart } from "@/components/shared/health-chart";
 import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
@@ -52,7 +50,6 @@ function SourceDetailPage() {
     sortBy: fetchSorting[0]?.id,
     sortDir: fetchSorting[0] ? (fetchSorting[0].desc ? "desc" : "asc") : undefined,
   });
-  const { data: healthData } = useSourceHealth(sourceId);
   const toggleFetch = useCallback((id: string) => {
     setExpandedFetch((current) => (current === id ? null : id));
   }, []);
@@ -164,12 +161,6 @@ function SourceDetailPage() {
           </div>
         </dl>
       </div>
-
-      {healthData ? (
-        <div className="mt-4">
-          <HealthChart metrics={healthData.items} />
-        </div>
-      ) : null}
 
       <div className="mt-6">
         <div className="mb-3">

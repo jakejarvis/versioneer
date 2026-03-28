@@ -1,15 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  Box,
-  Radio,
-  Radar,
-  AlertTriangle,
-  ClipboardList,
-  Package,
-  Activity,
-  ShieldCheck,
-  CircleDot,
-} from "lucide-react";
+import { Box, Radio, Radar, AlertTriangle, Package, Activity, ShieldCheck } from "lucide-react";
 
 import { useAuditLog } from "@/api/hooks/use-audit-log";
 import { useStats } from "@/api/hooks/use-stats";
@@ -55,14 +45,6 @@ function DashboardPage() {
           accent={stats?.errorSources ? "red" : undefined}
         />
         <StatCard
-          title="Pending Reviews"
-          value={stats?.pendingReviews}
-          icon={ClipboardList}
-          href="/review-queue"
-          isLoading={isLoading}
-          accent={stats?.pendingReviews ? "amber" : undefined}
-        />
-        <StatCard
           title="Open Failures"
           value={stats?.openFailures}
           icon={Package}
@@ -80,7 +62,7 @@ function DashboardPage() {
         />
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           title="Verified Apps"
           value={stats?.verifiedApps}
@@ -88,30 +70,6 @@ function DashboardPage() {
           href="/apps"
           isLoading={isLoading}
           accent="emerald"
-        />
-        <StatCard
-          title="Green Quality"
-          value={stats?.greenApps}
-          icon={CircleDot}
-          href="/apps"
-          isLoading={isLoading}
-          accent="emerald"
-        />
-        <StatCard
-          title="Yellow Quality"
-          value={stats?.yellowApps}
-          icon={CircleDot}
-          href="/apps"
-          isLoading={isLoading}
-          accent="amber"
-        />
-        <StatCard
-          title="Red Quality"
-          value={stats?.redApps}
-          icon={CircleDot}
-          href="/apps"
-          isLoading={isLoading}
-          accent={stats?.redApps ? "red" : undefined}
         />
       </div>
 

@@ -11,10 +11,6 @@ import {
   getAppSources,
   getAppReleases,
   getAppLatest,
-  getAppInstallRules,
-  createInstallRule,
-  updateInstallRule,
-  deleteInstallRule,
   recomputeLatest,
 } from "@/server/apps";
 import { uploadAppIcon, deleteAppIcon } from "@/server/icons";
@@ -155,71 +151,6 @@ export function useAppLatest(appId: string) {
     queryKey: ["apps", appId, "latest"],
     queryFn: () => getAppLatest({ data: { appId } }),
     enabled: !!appId,
-  });
-}
-
-export function useAppInstallRules(appId: string) {
-  return useQuery({
-    queryKey: ["apps", appId, "install-rules"],
-    queryFn: () => getAppInstallRules({ data: { appId } }),
-    enabled: !!appId,
-  });
-}
-
-export function useCreateInstallRule(appId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: {
-      strategy:
-        | "sparkle"
-        | "zip_replace"
-        | "dmg_copy_replace"
-        | "pkg_install"
-        | "pkg_manual"
-        | "manual_only";
-      requiresQuit?: boolean;
-      requiresAdmin?: boolean;
-      supportsSilent?: boolean;
-      rollbackSupported?: boolean;
-      ruleConfidence?: number;
-      notes?: string;
-    }) => createInstallRule({ data: { appId, ...input } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["apps", appId, "install-rules"] }),
-  });
-}
-
-export function useUpdateInstallRule(appId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      id,
-      ...input
-    }: {
-      id: string;
-      strategy?:
-        | "sparkle"
-        | "zip_replace"
-        | "dmg_copy_replace"
-        | "pkg_install"
-        | "pkg_manual"
-        | "manual_only";
-      requiresQuit?: boolean;
-      requiresAdmin?: boolean;
-      supportsSilent?: boolean;
-      rollbackSupported?: boolean;
-      ruleConfidence?: number | null;
-      enabled?: boolean;
-      notes?: string | null;
-    }) => updateInstallRule({ data: { id, ...input } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["apps", appId, "install-rules"] }),
-  });
-}
-
-export function useDeleteInstallRule(appId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => deleteInstallRule({ data: { id } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["apps", appId, "install-rules"] }),
   });
 }
 

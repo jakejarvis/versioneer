@@ -8,7 +8,6 @@ import {
   getReleaseObservations,
   pinRelease,
   unpinRelease,
-  verifyArtifact,
 } from "@/server/releases";
 
 interface UseReleasesParams {
@@ -84,16 +83,6 @@ export function useUnpinRelease() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["releases"] });
       void qc.invalidateQueries({ queryKey: ["apps"] });
-    },
-  });
-}
-
-export function useVerifyArtifact() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (artifactId: string) => verifyArtifact({ data: { artifactId } }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["releases"] });
     },
   });
 }

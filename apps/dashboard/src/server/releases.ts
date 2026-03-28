@@ -4,7 +4,6 @@ import {
   releases,
   artifacts,
   releaseObservations,
-  adminOverrides,
   appLatestReleases,
   auditLog,
   generateId,
@@ -91,32 +90,8 @@ export const listReleases = createServerFn({ method: "GET" })
             .all()
         : [];
     const latestReleaseIds = new Set(latestRows.map((row) => row.releaseId));
-    const overrideTargetIds = [...new Set(items.map((item) => `${item.appId}:${item.channel}`))];
-    const pinOverrides =
-      overrideTargetIds.length > 0
-        ? await db
-            .select()
-            .from(adminOverrides)
-            .where(
-              and(
-                inArray(adminOverrides.targetId, overrideTargetIds),
-                eq(adminOverrides.targetType, "app_latest"),
-                eq(adminOverrides.isActive, true),
-              ),
-            )
-            .all()
-        : [];
     const pinnedReleaseIds = new Set(
-      pinOverrides
-        .map((override) => {
-          try {
-            const payload = override.payloadJson ? JSON.parse(override.payloadJson) : {};
-            return typeof payload.releaseId === "string" ? payload.releaseId : null;
-          } catch {
-            return null;
-          }
-        })
-        .filter((value): value is string => Boolean(value)),
+      latestRows.filter((row) => row.pinnedReleaseId).map((row) => row.pinnedReleaseId as string),
     );
 
     return {
@@ -146,25 +121,7 @@ export const getRelease = createServerFn({ method: "GET" })
       .from(appLatestReleases)
       .where(eq(appLatestReleases.releaseId, release.id))
       .get();
-    const pinOverrides = await db
-      .select()
-      .from(adminOverrides)
-      .where(
-        and(
-          eq(adminOverrides.targetId, `${release.appId}:${release.channel}`),
-          eq(adminOverrides.targetType, "app_latest"),
-          eq(adminOverrides.isActive, true),
-        ),
-      )
-      .all();
-    const isPinnedLatest = pinOverrides.some((override) => {
-      try {
-        const payload = override.payloadJson ? JSON.parse(override.payloadJson) : {};
-        return payload.releaseId === release.id;
-      } catch {
-        return false;
-      }
-    });
+    const isPinnedLatest = latestRow?.pinnedReleaseId === release.id;
 
     return {
       ...release,
@@ -215,16 +172,7 @@ export const getReleaseArtifacts = createServerFn({ method: "GET" })
     return { items };
   });
 
-// POST /artifacts/:id/verify - send to verify queue
-export const verifyArtifact = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .inputValidator(z.object({ artifactId: z.string().min(1) }))
-  .handler(async ({ data: { artifactId } }) => {
-    await env.ARTIFACT_VERIFY_QUEUE.send({ artifactId });
-    return { status: "queued", artifactId };
-  });
-
-// POST /releases/:id/pin - create admin override to pin release
+// POST /releases/:id/pin - pin release as latest
 export const pinRelease = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
@@ -234,42 +182,28 @@ export const pinRelease = createServerFn({ method: "POST" })
     if (!release) throw new Error("Not found");
 
     const now = new Date().toISOString();
-    const targetId = `${release.appId}:${release.channel}`;
 
-    // Deactivate existing pin overrides for this app+channel
-    const existing = await db
-      .select()
-      .from(adminOverrides)
+    // Update the latest release row to pin this release
+    await db
+      .update(appLatestReleases)
+      .set({
+        pinnedReleaseId: id,
+        pinnedAt: now,
+        pinnedBy: context.user.email,
+      })
       .where(
         and(
-          eq(adminOverrides.targetType, "app_latest"),
-          eq(adminOverrides.targetId, targetId),
-          eq(adminOverrides.isActive, true),
+          eq(appLatestReleases.appId, release.appId),
+          eq(appLatestReleases.channel, release.channel),
         ),
-      )
-      .all();
-    for (const ovr of existing) {
-      await db.update(adminOverrides).set({ isActive: false }).where(eq(adminOverrides.id, ovr.id));
-    }
-
-    await db.insert(adminOverrides).values({
-      id: generateId(idPrefixes.adminOverride),
-      overrideType: "pin_latest_release",
-      targetType: "app_latest",
-      targetId,
-      payloadJson: JSON.stringify({ releaseId: id }),
-      reason: "Pinned via admin UI",
-      createdBy: context.user.email,
-      isActive: true,
-      createdAt: now,
-    });
+      );
 
     await env.RECOMPUTE_LATEST_QUEUE.send({ appId: release.appId, channel: release.channel });
 
     return { status: "pinned" };
   });
 
-// POST /releases/:id/unpin - deactivate pin overrides
+// POST /releases/:id/unpin - remove pin
 export const unpinRelease = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
@@ -278,22 +212,19 @@ export const unpinRelease = createServerFn({ method: "POST" })
     const release = await db.select().from(releases).where(eq(releases.id, id)).get();
     if (!release) throw new Error("Not found");
 
-    const targetId = `${release.appId}:${release.channel}`;
-    const overrides = await db
-      .select()
-      .from(adminOverrides)
+    await db
+      .update(appLatestReleases)
+      .set({
+        pinnedReleaseId: null,
+        pinnedAt: null,
+        pinnedBy: null,
+      })
       .where(
         and(
-          eq(adminOverrides.targetType, "app_latest"),
-          eq(adminOverrides.targetId, targetId),
-          eq(adminOverrides.isActive, true),
+          eq(appLatestReleases.appId, release.appId),
+          eq(appLatestReleases.channel, release.channel),
         ),
-      )
-      .all();
-
-    for (const ovr of overrides) {
-      await db.update(adminOverrides).set({ isActive: false }).where(eq(adminOverrides.id, ovr.id));
-    }
+      );
 
     await env.RECOMPUTE_LATEST_QUEUE.send({ appId: release.appId, channel: release.channel });
 

@@ -1,13 +1,5 @@
 import { createDb } from "@versioneer/db";
-import {
-  apps,
-  releases,
-  sources,
-  adminOverrides,
-  reviewQueue,
-  jobFailures,
-  clientFeedback,
-} from "@versioneer/schema";
+import { apps, releases, sources, jobFailures, clientFeedback } from "@versioneer/schema";
 import { inArray } from "drizzle-orm";
 
 import type { AppSummary, LinkedEntityRef, ReleaseSummary, SourceSummary } from "@/api/types";
@@ -95,8 +87,6 @@ export async function loadEntityRefsByIds(
   const appIds = unique(ids.filter((id) => id?.startsWith("app_")));
   const sourceIds = unique(ids.filter((id) => id?.startsWith("src_")));
   const releaseIds = unique(ids.filter((id) => id?.startsWith("rel_")));
-  const overrideIds = unique(ids.filter((id) => id?.startsWith("ovr_")));
-  const reviewIds = unique(ids.filter((id) => id?.startsWith("rq_")));
   const failureIds = unique(ids.filter((id) => id?.startsWith("jf_")));
   const feedbackIds = unique(ids.filter((id) => id?.startsWith("fb_")));
 
@@ -113,13 +103,7 @@ export async function loadEntityRefsByIds(
     db,
     [...releaseMap.values()].map((release) => release.appId),
   );
-  const [overrideRows, reviewRows, failureRows, feedbackRows] = await Promise.all([
-    overrideIds.length > 0
-      ? db.select().from(adminOverrides).where(inArray(adminOverrides.id, overrideIds)).all()
-      : Promise.resolve([]),
-    reviewIds.length > 0
-      ? db.select().from(reviewQueue).where(inArray(reviewQueue.id, reviewIds)).all()
-      : Promise.resolve([]),
+  const [failureRows, feedbackRows] = await Promise.all([
     failureIds.length > 0
       ? db.select().from(jobFailures).where(inArray(jobFailures.id, failureIds)).all()
       : Promise.resolve([]),
@@ -162,26 +146,6 @@ export async function loadEntityRefsByIds(
     });
   }
 
-  for (const override of overrideRows) {
-    map.set(override.id, {
-      kind: "override",
-      id: override.id,
-      label: override.overrideType,
-      description: override.reason ?? override.targetType,
-      iconR2Key: null,
-    });
-  }
-
-  for (const item of reviewRows) {
-    map.set(item.id, {
-      kind: "review_queue",
-      id: item.id,
-      label: item.reviewType,
-      description: item.status,
-      iconR2Key: null,
-    });
-  }
-
   for (const failure of failureRows) {
     map.set(failure.id, {
       kind: "job_failure",
@@ -219,7 +183,7 @@ export async function resolveTargetRefs(
         return targetId;
       }
 
-      if (targetType === "override" || targetType === "review_queue" || targetType === "feedback") {
+      if (targetType === "feedback") {
         return targetId;
       }
 

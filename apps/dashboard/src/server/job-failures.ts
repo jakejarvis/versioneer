@@ -131,11 +131,6 @@ export const retryJobFailure = createServerFn({ method: "POST" })
           await env.SOURCE_PARSE_QUEUE.send({ sourceFetchId: failure.relatedId });
         }
         break;
-      case "artifact-verify":
-        if (failure.relatedId) {
-          await env.ARTIFACT_VERIFY_QUEUE.send({ artifactId: failure.relatedId });
-        }
-        break;
       case "recompute-latest":
         if (failure.relatedId) {
           await env.RECOMPUTE_LATEST_QUEUE.send({ appId: failure.relatedId });
@@ -184,12 +179,6 @@ export const retryAllJobFailures = createServerFn({ method: "POST" })
         case "source-parse":
           if (failure.relatedId) {
             await env.SOURCE_PARSE_QUEUE.send({ sourceFetchId: failure.relatedId });
-            retried++;
-          }
-          break;
-        case "artifact-verify":
-          if (failure.relatedId) {
-            await env.ARTIFACT_VERIFY_QUEUE.send({ artifactId: failure.relatedId });
             retried++;
           }
           break;

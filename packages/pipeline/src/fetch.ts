@@ -2,7 +2,6 @@ import { createDb } from "@versioneer/db";
 import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/schema";
 import { eq } from "drizzle-orm";
 
-import { incrementHealthMetric } from "./health";
 import { githubApiHeaders } from "./types";
 import type { Env, SourceFetchJob } from "./types";
 
@@ -145,10 +144,6 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
       })
       .where(eq(sources.id, source.id));
 
-    // Track health metric: success
-    await incrementHealthMetric(db, source.id, "fetchAttempts");
-    await incrementHealthMetric(db, source.id, "fetchSuccesses");
-
     // Enqueue parse job
     await env.SOURCE_PARSE_QUEUE.send({ sourceFetchId: fetchId });
   } catch (error) {
@@ -166,10 +161,6 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
       .update(sources)
       .set({ lastFetchedAt: now, lastFailureAt: now, updatedAt: now })
       .where(eq(sources.id, source.id));
-
-    // Track health metric: failure
-    await incrementHealthMetric(db, source.id, "fetchAttempts");
-    await incrementHealthMetric(db, source.id, "fetchFailures");
 
     throw error;
   }

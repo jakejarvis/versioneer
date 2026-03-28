@@ -1,16 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
-import { Loader2, Radio, RefreshCw, Package } from "lucide-react";
+import { Loader2, Radio, Package } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import {
-  useCronJobRuns,
-  useTriggerCaskSync,
-  useTriggerPollSources,
-  useTriggerRecomputeScorecards,
-} from "@/api/hooks/use-jobs";
+import { useCronJobRuns, useTriggerCaskSync, useTriggerPollSources } from "@/api/hooks/use-jobs";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -35,7 +30,7 @@ import {
 
 const jobsSearchSchema = z.object({
   ...paginatedSearchShape,
-  jobType: z.enum(["all", "poll_sources", "recompute_scorecards", "cask_index_sync"]).catch("all"),
+  jobType: z.enum(["all", "poll_sources", "cask_index_sync"]).catch("all"),
 });
 
 export const Route = createFileRoute("/jobs/")({
@@ -45,7 +40,7 @@ export const Route = createFileRoute("/jobs/")({
 
 interface CronJobRun {
   id: string;
-  jobType: "poll_sources" | "recompute_scorecards" | "cask_index_sync";
+  jobType: "poll_sources" | "cask_index_sync";
   trigger: "manual" | "scheduled";
   status: "running" | "completed" | "failed";
   actorId: string | null;
@@ -59,7 +54,6 @@ interface CronJobRun {
 
 const jobTypeLabels: Record<string, string> = {
   poll_sources: "Poll Sources",
-  recompute_scorecards: "Recompute Scorecards",
   cask_index_sync: "Cask Index Sync",
 };
 
@@ -79,7 +73,6 @@ function JobsPage() {
   const [forcePolling, setForcePolling] = useState(false);
 
   const pollSources = useTriggerPollSources();
-  const recomputeScorecards = useTriggerRecomputeScorecards();
   const caskSync = useTriggerCaskSync();
 
   const { data, isLoading } = useCronJobRuns({
@@ -102,14 +95,6 @@ function JobsPage() {
       },
     );
   }, [pollSources, forcePolling]);
-
-  const handleRecomputeScorecards = useCallback(() => {
-    recomputeScorecards.mutate(undefined, {
-      onSuccess: (result) =>
-        toast.success(`Queued ${result.itemsQueued} apps for scorecard recomputation`),
-      onError: (err) => toast.error(err.message),
-    });
-  }, [recomputeScorecards]);
 
   const handleCaskSync = useCallback(() => {
     caskSync.mutate(undefined, {
@@ -205,15 +190,6 @@ function JobsPage() {
           </div>
         </div>
 
-        <Button
-          size="sm"
-          onClick={handleRecomputeScorecards}
-          disabled={recomputeScorecards.isPending}
-        >
-          {recomputeScorecards.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-          Recompute Scorecards
-        </Button>
-
         <Button size="sm" onClick={handleCaskSync} disabled={caskSync.isPending}>
           {caskSync.isPending ? <Loader2 className="animate-spin" /> : <Package />}
           Cask Index Sync
@@ -240,7 +216,6 @@ function JobsPage() {
           <SelectContent>
             <SelectItem value="all">All Job Types</SelectItem>
             <SelectItem value="poll_sources">Poll Sources</SelectItem>
-            <SelectItem value="recompute_scorecards">Recompute Scorecards</SelectItem>
             <SelectItem value="cask_index_sync">Cask Index Sync</SelectItem>
           </SelectContent>
         </Select>

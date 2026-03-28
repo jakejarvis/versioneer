@@ -21,10 +21,9 @@ export const appUpdateSchema = z.object({
   status: z.enum(["active", "deprecated", "merged", "unlisted"]).optional(),
   mergedIntoAppId: z.string().nullable().optional(),
   notes: z.string().max(5000).nullable().optional(),
-  verificationTier: z.enum(["unverified", "provisional", "verified"]).optional(),
-  qualityState: z.enum(["green", "yellow", "red", "unknown"]).optional(),
+  isVerified: z.boolean().optional(),
+  installStrategyOverride: installStrategySchema.nullable().optional(),
   iconR2Key: z.string().max(500).nullable().optional(),
-  lastReviewedAt: z.string().nullable().optional(),
 });
 
 export const aliasCreateSchema = z.object({
@@ -77,47 +76,15 @@ export const releaseUpdateSchema = z.object({
   channel: z.enum(["stable", "beta", "nightly"]).optional(),
 });
 
-export const installRuleCreateSchema = z.object({
-  strategy: installStrategySchema,
-  requiresQuit: z.boolean().default(true),
-  requiresAdmin: z.boolean().default(false),
-  supportsSilent: z.boolean().default(false),
-  rollbackSupported: z.boolean().default(false),
-  ruleConfidence: z.number().int().min(0).max(100).optional(),
-  notes: z.string().max(5000).optional(),
+export const releasePinSchema = z.object({
+  releaseId: z.string().min(1),
+  channel: z.enum(["stable", "beta", "nightly"]).default("stable"),
 });
 
-export const installRuleUpdateSchema = z.object({
-  strategy: installStrategySchema.optional(),
-  requiresQuit: z.boolean().optional(),
-  requiresAdmin: z.boolean().optional(),
-  supportsSilent: z.boolean().optional(),
-  rollbackSupported: z.boolean().optional(),
-  ruleConfidence: z.number().int().min(0).max(100).nullable().optional(),
-  enabled: z.boolean().optional(),
-  notes: z.string().max(5000).nullable().optional(),
+export const releaseUnpinSchema = z.object({
+  channel: z.enum(["stable", "beta", "nightly"]).default("stable"),
 });
 
-export const overrideCreateSchema = z.object({
-  overrideType: z.string().min(1).max(200),
-  targetType: z.string().min(1).max(200),
-  targetId: z.string().min(1).max(200),
-  payloadJson: z.string().min(1).max(50000),
-  reason: z.string().max(5000).optional(),
-  createdBy: z.string().max(200).optional(),
-});
-
-export const onboardingChecklistUpdateSchema = z.object({
-  hasCanonicalRecord: z.boolean().optional(),
-  hasAliases: z.boolean().optional(),
-  hasSource: z.boolean().optional(),
-  parserOutputVerified: z.boolean().optional(),
-  latestReleasePublished: z.boolean().optional(),
-  reviewQueueClear: z.boolean().optional(),
-  qualityScoreAcceptable: z.boolean().optional(),
-});
-
-export type OnboardingChecklistUpdateInput = z.infer<typeof onboardingChecklistUpdateSchema>;
 export type AppCreateInput = z.infer<typeof appCreateSchema>;
 export type AppUpdateInput = z.infer<typeof appUpdateSchema>;
 export type AliasCreateInput = z.infer<typeof aliasCreateSchema>;
@@ -125,6 +92,5 @@ export type AliasUpdateInput = z.infer<typeof aliasUpdateSchema>;
 export type SourceCreateInput = z.infer<typeof sourceCreateSchema>;
 export type SourceUpdateInput = z.infer<typeof sourceUpdateSchema>;
 export type ReleaseUpdateInput = z.infer<typeof releaseUpdateSchema>;
-export type InstallRuleCreateInput = z.infer<typeof installRuleCreateSchema>;
-export type InstallRuleUpdateInput = z.infer<typeof installRuleUpdateSchema>;
-export type OverrideCreateInput = z.infer<typeof overrideCreateSchema>;
+export type ReleasePinInput = z.infer<typeof releasePinSchema>;
+export type ReleaseUnpinInput = z.infer<typeof releaseUnpinSchema>;

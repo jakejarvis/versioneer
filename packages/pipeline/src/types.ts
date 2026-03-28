@@ -5,7 +5,6 @@ export interface Env {
   CONFIG_KV: KVNamespace;
   SOURCE_FETCH_QUEUE: Queue;
   SOURCE_PARSE_QUEUE: Queue;
-  ARTIFACT_VERIFY_QUEUE: Queue;
   RECOMPUTE_LATEST_QUEUE: Queue;
   CASK_INDEX_SYNC_QUEUE: Queue;
   ENVIRONMENT: string;
@@ -36,10 +35,6 @@ export interface SourceFetchJob {
 
 export interface SourceParseJob {
   sourceFetchId: string;
-}
-
-export interface ArtifactVerifyJob {
-  artifactId: string;
 }
 
 export interface RecomputeLatestJob {

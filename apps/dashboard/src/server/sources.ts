@@ -3,7 +3,6 @@ import { createDb } from "@versioneer/db";
 import {
   sources,
   sourceFetches,
-  sourceHealthMetrics,
   parserRuns,
   auditLog,
   generateId,
@@ -276,21 +275,6 @@ export const getParserRuns = createServerFn({ method: "GET" })
       .from(parserRuns)
       .where(eq(parserRuns.sourceFetchId, fetchId))
       .orderBy(desc(parserRuns.startedAt))
-      .all();
-    return { items };
-  });
-
-// GET /sources/:id/health - last 30 days of health metrics
-export const getSourceHealth = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ sourceId: z.string().min(1) }))
-  .handler(async ({ data: { sourceId } }) => {
-    const db = createDb(env.DB);
-    const items = await db
-      .select()
-      .from(sourceHealthMetrics)
-      .where(eq(sourceHealthMetrics.sourceId, sourceId))
-      .orderBy(desc(sourceHealthMetrics.periodStart))
-      .limit(30)
       .all();
     return { items };
   });

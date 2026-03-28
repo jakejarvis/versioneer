@@ -3,7 +3,6 @@ import { createDb } from "@versioneer/db";
 import {
   apps,
   sources,
-  reviewQueue,
   jobFailures,
   releases,
   clientFeedback,
@@ -24,10 +23,6 @@ export const getStats = createServerFn({ method: "GET" }).handler(async () => {
     .select({ count: sql<number>`count(*)` })
     .from(sources)
     .where(sql`${sources.status} = 'error'`);
-  const [pendingReviewCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(reviewQueue)
-    .where(sql`${reviewQueue.status} = 'pending'`);
   const [openFailureCount] = await db
     .select({ count: sql<number>`count(*)` })
     .from(jobFailures)
@@ -40,19 +35,7 @@ export const getStats = createServerFn({ method: "GET" }).handler(async () => {
   const [verifiedCount] = await db
     .select({ count: sql<number>`count(*)` })
     .from(apps)
-    .where(sql`${apps.verificationTier} = 'verified'`);
-  const [greenCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(apps)
-    .where(sql`${apps.qualityState} = 'green'`);
-  const [yellowCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(apps)
-    .where(sql`${apps.qualityState} = 'yellow'`);
-  const [redCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(apps)
-    .where(sql`${apps.qualityState} = 'red'`);
+    .where(sql`${apps.isVerified} = 1`);
 
   const [pendingFeedbackCount] = await db
     .select({ count: sql<number>`count(*)` })
@@ -68,13 +51,9 @@ export const getStats = createServerFn({ method: "GET" }).handler(async () => {
     totalApps: appCount?.count ?? 0,
     activeSources: activeSourceCount?.count ?? 0,
     errorSources: errorSourceCount?.count ?? 0,
-    pendingReviews: pendingReviewCount?.count ?? 0,
     openFailures: openFailureCount?.count ?? 0,
     recentReleases: recentReleaseCount?.count ?? 0,
     verifiedApps: verifiedCount?.count ?? 0,
-    greenApps: greenCount?.count ?? 0,
-    yellowApps: yellowCount?.count ?? 0,
-    redApps: redCount?.count ?? 0,
     pendingFeedback: pendingFeedbackCount?.count ?? 0,
     pendingDiscoveredApps: pendingDiscoveredCount?.count ?? 0,
   };

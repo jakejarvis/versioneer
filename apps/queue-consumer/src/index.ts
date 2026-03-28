@@ -3,21 +3,16 @@ import {
   handleSourceFetch,
   handleSourceParse,
   handleRecomputeLatest,
-  handleArtifactVerify,
-  handleComputeScorecard,
   handleCaskIndexSync,
   isCaskSyncDue,
 } from "@versioneer/pipeline";
 import type {
   SourceFetchJob,
   SourceParseJob,
-  ArtifactVerifyJob,
   RecomputeLatestJob,
   CaskIndexSyncJob,
 } from "@versioneer/pipeline";
-import { apps, cronJobRuns, jobFailures, generateId, idPrefixes } from "@versioneer/schema";
-
-import type { Env } from "./env";
+import { cronJobRuns, jobFailures, generateId, idPrefixes } from "@versioneer/schema";
 // Import parsers to trigger auto-registration
 import "@versioneer/parsers";
 
@@ -83,13 +78,6 @@ export default {
           handleSourceParse,
           env,
           "source-parse",
-        );
-      } else if (queueName.includes("artifact-verify")) {
-        await handleMessage(
-          message as QueueMessage<ArtifactVerifyJob>,
-          handleArtifactVerify,
-          env,
-          "artifact-verify",
         );
       } else if (queueName.includes("recompute-latest")) {
         await handleMessage(
@@ -161,52 +149,6 @@ export default {
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "poll_sources",
-          trigger: "scheduled",
-          status: "failed",
-          errorMessage: error instanceof Error ? error.message : String(error),
-          startedAt,
-          completedAt: new Date().toISOString(),
-        });
-      }
-    }
-
-    // --- Recompute Scorecards ---
-    {
-      const runId = generateId(idPrefixes.cronJobRun);
-      const startedAt = new Date().toISOString();
-      try {
-        const allApps = await db
-          .select({ id: apps.id })
-          .from(apps)
-          .where(eq(apps.status, "active"))
-          .all();
-        let computed = 0;
-        for (const app of allApps) {
-          try {
-            await handleComputeScorecard(
-              app.id,
-              env as unknown as Parameters<typeof handleComputeScorecard>[1],
-            );
-            computed++;
-          } catch (error) {
-            console.error(`Failed to compute scorecard for ${app.id}:`, error);
-          }
-        }
-        await db.insert(cronJobRuns).values({
-          id: runId,
-          jobType: "recompute_scorecards",
-          trigger: "scheduled",
-          status: "completed",
-          itemsQueued: computed,
-          itemsTotal: allApps.length,
-          startedAt,
-          completedAt: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("Recompute scorecards scheduled job failed:", error);
-        await db.insert(cronJobRuns).values({
-          id: runId,
-          jobType: "recompute_scorecards",
           trigger: "scheduled",
           status: "failed",
           errorMessage: error instanceof Error ? error.message : String(error),
