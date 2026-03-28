@@ -9,6 +9,8 @@ export { githubApiHeaders } from "./types";
 export { handleSourceFetch } from "./fetch";
 export { handleSourceParse } from "./parse";
 export { handleRecomputeLatest } from "./recompute";
+export { handleArtifactVerify, computeTrustLevel } from "./artifact-verify";
+export type { VerificationResults } from "./artifact-verify";
 export { generatePublicationExplanation, generateArtifactSelectionExplanation } from "./explain";
 export {
   computeScorecard,

@@ -3,6 +3,7 @@ import {
   handleSourceFetch,
   handleSourceParse,
   handleRecomputeLatest,
+  handleArtifactVerify,
   handleComputeScorecard,
   handleCaskIndexSync,
   isCaskSyncDue,
@@ -10,6 +11,7 @@ import {
 import type {
   SourceFetchJob,
   SourceParseJob,
+  ArtifactVerifyJob,
   RecomputeLatestJob,
   CaskIndexSyncJob,
 } from "@versioneer/pipeline";
@@ -83,9 +85,12 @@ export default {
           "source-parse",
         );
       } else if (queueName.includes("artifact-verify")) {
-        // Minimal v1: just ack the message
-        console.log("Artifact verify not yet implemented:", message.body);
-        message.ack();
+        await handleMessage(
+          message as QueueMessage<ArtifactVerifyJob>,
+          handleArtifactVerify,
+          env,
+          "artifact-verify",
+        );
       } else if (queueName.includes("recompute-latest")) {
         await handleMessage(
           message as QueueMessage<RecomputeLatestJob>,

@@ -68,23 +68,6 @@ export const appAliases = sqliteTable(
   ],
 );
 
-export const appMatchRules = sqliteTable(
-  "app_match_rules",
-  {
-    id: text("id").primaryKey(),
-    appId: text("app_id")
-      .notNull()
-      .references(() => apps.id),
-    ruleType: text("rule_type").notNull(),
-    ruleJson: text("rule_json").notNull(),
-    priority: integer("priority").notNull().default(0),
-    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull(),
-  },
-  (table) => [index("idx_match_rules_app_id").on(table.appId)],
-);
-
 export const appScorecards = sqliteTable(
   "app_scorecards",
   {

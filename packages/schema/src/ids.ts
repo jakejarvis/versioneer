@@ -11,7 +11,7 @@ export function generateId(prefix: string): string {
 export const idPrefixes = {
   app: "app",
   alias: "alias",
-  matchRule: "mr",
+
   source: "src",
   sourceFetch: "fetch",
   parserRun: "parse",
