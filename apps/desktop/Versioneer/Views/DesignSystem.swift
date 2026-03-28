@@ -77,7 +77,7 @@ struct StatusChip: View {
     .foregroundStyle(tint)
     .padding(.horizontal, 10)
     .padding(.vertical, 6)
-    .glassEffect(.regular, in: .capsule)
+    .background(tint.opacity(0.12), in: .capsule)
   }
 }
 

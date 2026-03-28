@@ -2,17 +2,14 @@ import SwiftUI
 
 struct FilterChipBar: View {
   @Environment(AppState.self) private var appState
-  @Namespace private var chipNamespace
 
   var body: some View {
     @Bindable var appState = appState
 
     HStack(spacing: 0) {
-      GlassEffectContainer(spacing: 6) {
-        HStack(spacing: 6) {
-          ForEach(AppState.FilterSection.allCases) { section in
-            filterChip(for: section)
-          }
+      HStack(spacing: 4) {
+        ForEach(AppState.FilterSection.allCases) { section in
+          filterChip(for: section)
         }
       }
 
@@ -28,7 +25,7 @@ struct FilterChipBar: View {
           )
           .font(.caption.weight(.semibold))
         }
-        .buttonStyle(.glassProminent)
+        .buttonStyle(.borderedProminent)
         .controlSize(.small)
         .transition(.opacity.combined(with: .scale(scale: 0.9)))
       }
@@ -59,18 +56,19 @@ struct FilterChipBar: View {
           .font(.caption.weight(.semibold))
         Text("\(count)")
           .font(.caption2.monospacedDigit().weight(.medium))
-          .foregroundStyle(.secondary)
+          .foregroundStyle(isSelected ? Color.accentColor.opacity(0.6) : Color.secondary.opacity(0.6))
       }
       .padding(.horizontal, 10)
       .padding(.vertical, 6)
+      .background(
+        isSelected
+          ? Color.accentColor.opacity(0.12)
+          : Color.clear,
+        in: .capsule
+      )
     }
     .buttonStyle(.plain)
     .focusEffectDisabled()
     .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-    .glassEffect(
-      isSelected ? .regular.interactive() : .regular,
-      in: .capsule
-    )
-    .glassEffectID(section, in: chipNamespace)
   }
 }
