@@ -10,8 +10,7 @@
     "fmt": "oxfmt --config ../../.oxfmtrc.json",
     "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
     "check-types": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "wrangler d1 migrations apply versioneer-db-dev --local"
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@versioneer/schema": "workspace:*",

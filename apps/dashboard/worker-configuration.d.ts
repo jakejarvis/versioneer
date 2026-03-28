@@ -9,6 +9,10 @@ declare namespace Cloudflare {
     ARTIFACT_VERIFY_QUEUE: Queue;
     RECOMPUTE_LATEST_QUEUE: Queue;
     GITHUB_TOKEN?: string;
+    GITHUB_OAUTH_CLIENT_ID: string;
+    GITHUB_OAUTH_CLIENT_SECRET: string;
+    BETTER_AUTH_SECRET: string;
+    ALLOWED_ADMIN_EMAILS: string;
   }
 }
 

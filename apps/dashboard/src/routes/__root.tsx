@@ -1,12 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import {
+  HeadContent,
+  Outlet,
+  Scripts,
+  createRootRoute,
+  redirect,
+  useRouterState,
+} from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { Toaster } from "sonner";
 
 import { Sidebar } from "@/components/layout/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider, themeInitScript, useTheme } from "@/lib/theme";
+import { getSession } from "@/server/auth";
 
 import appCss from "@/app.css?url";
 
@@ -20,6 +28,15 @@ const queryClient = new QueryClient({
 });
 
 export const Route = createRootRoute({
+  beforeLoad: async ({ location }) => {
+    if (location.pathname === "/login" || location.pathname.startsWith("/api/auth")) {
+      return;
+    }
+    const session = await getSession();
+    if (!session) {
+      throw redirect({ to: "/login" });
+    }
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -50,6 +67,9 @@ function AppShell() {
 }
 
 function RootComponent() {
+  const { pathname } = useRouterState({ select: (s) => s.location });
+  const isLoginPage = pathname === "/login";
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -58,9 +78,7 @@ function RootComponent() {
       </head>
       <body className="antialiased">
         <QueryClientProvider client={queryClient}>
-          <ThemeProvider>
-            <AppShell />
-          </ThemeProvider>
+          <ThemeProvider>{isLoginPage ? <Outlet /> : <AppShell />}</ThemeProvider>
           <ReactQueryDevtools />
         </QueryClientProvider>
         <TanStackRouterDevtools />

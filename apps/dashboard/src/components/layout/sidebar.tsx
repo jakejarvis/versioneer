@@ -1,14 +1,20 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { LogOut } from "lucide-react";
 
 import { useAuth } from "@/api/hooks/use-auth";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { authClient } from "@/lib/auth-client";
 import { navItems } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 export function Sidebar() {
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
+  const navigate = useNavigate();
   const { data: user } = useAuth();
+
+  const displayName = user?.name || user?.email;
+  const avatarLetter = (user?.name?.[0] || user?.email?.[0])?.toUpperCase() ?? "?";
 
   return (
     <aside className="flex h-screen w-56 flex-col border-r border-border bg-sidebar">
@@ -47,13 +53,26 @@ export function Sidebar() {
             {user && (
               <>
                 <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-[11px] font-medium text-sidebar-accent-foreground">
-                  {user.email[0]?.toUpperCase() ?? "?"}
+                  {avatarLetter}
                 </div>
-                <span className="truncate">{user.email}</span>
+                <span className="truncate">{displayName}</span>
               </>
             )}
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={async () => {
+                await authClient.signOut();
+                navigate({ to: "/login" });
+              }}
+              className="rounded-md p-1.5 text-sidebar-foreground/40 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/60"
+              title="Sign out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </aside>
