@@ -344,7 +344,11 @@
   #Preview("Main Window: Ignored") {
     PreviewHost(
       appState: VersioneerPreviewFixtures.rootState(
-        ignoredRules: [IgnoredAppRule.make(from: VersioneerPreviewFixtures.makeInstalledApp(from: VersioneerPreviewFixtures.firefox))]
+        ignoredRules: [
+          IgnoredAppRule.make(
+            from: VersioneerPreviewFixtures.makeInstalledApp(
+              from: VersioneerPreviewFixtures.firefox))
+        ]
       )
     ) {
       RootView()
@@ -355,7 +359,9 @@
     SettingsPreviewHost(
       appState: VersioneerPreviewFixtures.rootState(
         ignoredRules: [
-          IgnoredAppRule.make(from: VersioneerPreviewFixtures.makeInstalledApp(from: VersioneerPreviewFixtures.firefox)),
+          IgnoredAppRule.make(
+            from: VersioneerPreviewFixtures.makeInstalledApp(
+              from: VersioneerPreviewFixtures.firefox)),
           IgnoredAppRule.make(
             displayName: "Path Only",
             matchType: .path,

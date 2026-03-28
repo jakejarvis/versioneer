@@ -2,9 +2,12 @@ import SwiftUI
 
 @main
 struct VersioneerApp: App {
-  @NSApplicationDelegateAdaptor(FirebaseAppDelegate.self) private var firebaseAppDelegate
   @State private var appState = AppState()
   @State private var selfUpdateService = SelfUpdateService()
+
+  init() {
+    FirebaseBootstrapper.configureIfNeeded()
+  }
 
   var body: some Scene {
     Window("Versioneer", id: "main") {
@@ -24,10 +27,13 @@ struct VersioneerApp: App {
         .disabled(!selfUpdateService.canCheckForUpdates)
       }
       CommandGroup(after: .toolbar) {
-        Picker("Sort By", selection: Binding(
-          get: { appState.resultsSort },
-          set: { appState.setResultsSort($0) }
-        )) {
+        Picker(
+          "Sort By",
+          selection: Binding(
+            get: { appState.resultsSort },
+            set: { appState.setResultsSort($0) }
+          )
+        ) {
           ForEach(ResultsBrowserSort.allCases) { sort in
             Text(sort.title).tag(sort)
           }

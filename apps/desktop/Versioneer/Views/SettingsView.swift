@@ -165,7 +165,8 @@ private struct IgnoredAppsSettingsTab: View {
       Section {
         HStack(alignment: .top, spacing: 12) {
           StatusChip(
-            title: appState.ignoredAppRules.isEmpty ? "No Ignored Apps" : "\(appState.ignoredAppRules.count) Ignored",
+            title: appState.ignoredAppRules.isEmpty
+              ? "No Ignored Apps" : "\(appState.ignoredAppRules.count) Ignored",
             tint: appState.ignoredAppRules.isEmpty ? .secondary : .orange,
             systemImage: "minus.circle"
           )
@@ -188,9 +189,11 @@ private struct IgnoredAppsSettingsTab: View {
           Spacer()
 
           if !appState.ignoredAppRules.isEmpty {
-            Text("\(appState.ignoredAppRules.count) rule\(appState.ignoredAppRules.count == 1 ? "" : "s")")
-              .font(.caption)
-              .foregroundStyle(.secondary)
+            Text(
+              "\(appState.ignoredAppRules.count) rule\(appState.ignoredAppRules.count == 1 ? "" : "s")"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
           }
         }
 
@@ -416,7 +419,8 @@ private struct AddIgnoredAppSheet: View {
     } header: {
       Text("Scanned Apps")
     } footer: {
-      Text("Selecting an installed app creates a bundle ID rule when possible, otherwise a path rule.")
+      Text(
+        "Selecting an installed app creates a bundle ID rule when possible, otherwise a path rule.")
     }
   }
 

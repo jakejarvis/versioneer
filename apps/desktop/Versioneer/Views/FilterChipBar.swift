@@ -71,7 +71,8 @@ struct FilterChipBar: View {
           .lineLimit(1)
         Text("\(count)")
           .font(.caption2.monospacedDigit().weight(.medium))
-          .foregroundStyle(isSelected ? Color.accentColor.opacity(0.6) : Color.secondary.opacity(0.6))
+          .foregroundStyle(
+            isSelected ? Color.accentColor.opacity(0.6) : Color.secondary.opacity(0.6))
       }
       .fixedSize(horizontal: true, vertical: false)
       .padding(.horizontal, 10)

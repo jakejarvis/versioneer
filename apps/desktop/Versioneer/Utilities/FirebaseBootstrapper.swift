@@ -1,16 +1,8 @@
-import AppKit
 import FirebaseAnalytics
 import FirebaseCore
 import FirebaseCrashlytics
 import Foundation
 import Logging
-
-@MainActor
-final class FirebaseAppDelegate: NSObject, NSApplicationDelegate {
-  func applicationDidFinishLaunching(_ notification: Notification) {
-    FirebaseBootstrapper.configureIfNeeded()
-  }
-}
 
 @MainActor
 enum FirebaseBootstrapper {

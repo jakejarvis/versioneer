@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - Glass Card Modifier
@@ -262,8 +263,6 @@ extension ResultsBrowserRowPresentation.Tone {
 }
 
 // MARK: - Translucent Window Background
-
-import AppKit
 
 struct TranslucentWindowBackground: NSViewRepresentable {
   func makeNSView(context: Context) -> NSVisualEffectView {
