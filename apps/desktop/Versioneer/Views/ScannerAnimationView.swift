@@ -67,6 +67,8 @@ struct ScannerAnimationView: View {
       latestVersion: nil,
       latestVersionRaw: nil,
       latestReleaseId: nil,
+      channel: nil,
+      availableChannels: nil,
       homebrewCaskToken: nil,
       releasedAt: nil,
       staleSince: nil,

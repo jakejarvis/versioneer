@@ -12,6 +12,12 @@ nonisolated struct InventoryCheckRequest: Codable, Sendable {
     let appVersion: String?
     let osVersion: String?
     let systemArchitecture: String?
+    let channelPreferences: ChannelPreferences?
+  }
+
+  struct ChannelPreferences: Codable, Sendable {
+    let defaultChannel: String
+    let perApp: [String: String]
   }
 
   /// The per-app payload shape expected by the backend.

@@ -34,6 +34,8 @@ enum DesktopUITestFixtures {
       latestVersion: latestVersion,
       latestVersionRaw: latestVersion,
       latestReleaseId: nil,
+      channel: nil,
+      availableChannels: nil,
       homebrewCaskToken: nil,
       releasedAt: releasedAt,
       staleSince: nil,

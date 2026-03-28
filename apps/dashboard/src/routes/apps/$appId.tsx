@@ -506,6 +506,7 @@ function SourcesTab({ appId }: { appId: string }) {
               label: row.original.label,
               sourceType: row.original.sourceType,
               parserKey: row.original.parserKey,
+              channel: row.original.channel,
               status: row.original.status,
               app: null,
             }}
@@ -520,6 +521,16 @@ function SourcesTab({ appId }: { appId: string }) {
         cell: ({ row }) => (
           <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
             {row.original.sourceType}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "channel",
+        meta: { label: "Channel" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Channel" />,
+        cell: ({ row }) => (
+          <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+            {row.original.channel ?? "auto"}
           </span>
         ),
       },

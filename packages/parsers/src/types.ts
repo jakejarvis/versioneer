@@ -1,7 +1,7 @@
 export interface ParsedRelease {
   versionRaw: string;
   buildNumber?: string;
-  channel: "stable" | "beta" | "nightly";
+  channel: string;
   isPrerelease: boolean;
   publishedAt?: string;
   releaseNotesUrl?: string;

@@ -182,6 +182,8 @@
         latestVersion: latestVersion,
         latestVersionRaw: latestVersionRaw,
         latestReleaseId: nil,
+        channel: nil,
+        availableChannels: nil,
         homebrewCaskToken: nil,
         releasedAt: releasedAt,
         staleSince: nil,

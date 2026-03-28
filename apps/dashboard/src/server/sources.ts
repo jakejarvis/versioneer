@@ -140,6 +140,7 @@ export const createSource = createServerFn({ method: "POST" })
       baseUrl: data.baseUrl ?? null,
       configJson: data.configJson ?? null,
       parserKey: data.parserKey,
+      channel: data.channel ?? null,
       pollIntervalMinutes: data.pollIntervalMinutes,
       status: "active",
       createdAt: now,
@@ -179,6 +180,7 @@ export const updateSource = createServerFn({ method: "POST" })
     if (fields.parserKey !== undefined) updates.parserKey = fields.parserKey;
     if (fields.pollIntervalMinutes !== undefined)
       updates.pollIntervalMinutes = fields.pollIntervalMinutes;
+    if (fields.channel !== undefined) updates.channel = fields.channel;
     if (fields.status !== undefined) updates.status = fields.status;
 
     await db.update(sources).set(updates).where(eq(sources.id, id));

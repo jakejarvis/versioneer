@@ -11,6 +11,8 @@ final class SettingsStore {
     static let baseURL = "versioneer_base_url"
     static let scanOnLaunch = "versioneer_scan_on_launch"
     static let ignoredAppRules = "versioneer_ignored_app_rules"
+    static let defaultChannel = "versioneer_default_channel"
+    static let perAppChannels = "versioneer_per_app_channels"
   }
 
   static let defaultBaseURL = URL(string: "https://api.versioneer.app")!
@@ -81,6 +83,41 @@ final class SettingsStore {
 
   func isIgnored(_ app: InstalledApp) -> Bool {
     ignoredAppRules.contains { $0.matches(app) }
+  }
+
+  var defaultChannel: String {
+    get { defaults.string(forKey: Keys.defaultChannel) ?? "stable" }
+    set { defaults.set(newValue, forKey: Keys.defaultChannel) }
+  }
+
+  var perAppChannels: [String: String] {
+    get {
+      guard let data = defaults.data(forKey: Keys.perAppChannels) else { return [:] }
+      return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
+    }
+    set {
+      if newValue.isEmpty {
+        defaults.removeObject(forKey: Keys.perAppChannels)
+      } else if let data = try? JSONEncoder().encode(newValue) {
+        defaults.set(data, forKey: Keys.perAppChannels)
+      }
+    }
+  }
+
+  func setChannel(_ channel: String, forAppId appId: String) {
+    var current = perAppChannels
+    current[appId] = channel
+    perAppChannels = current
+  }
+
+  func removeChannelOverride(forAppId appId: String) {
+    var current = perAppChannels
+    current.removeValue(forKey: appId)
+    perAppChannels = current
+  }
+
+  func channel(forAppId appId: String) -> String {
+    perAppChannels[appId] ?? defaultChannel
   }
 
   /// Resets the base URL to the default value.

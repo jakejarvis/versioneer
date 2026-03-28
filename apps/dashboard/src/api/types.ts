@@ -46,6 +46,7 @@ export interface SourceSummary {
   sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
   label: string | null;
   parserKey: string;
+  channel: string | null;
   status: "active" | "paused" | "disabled" | "error";
   app: AppSummary | null;
 }
@@ -53,7 +54,7 @@ export interface SourceSummary {
 export interface ReleaseSummary {
   id: string;
   versionRaw: string;
-  channel: "stable" | "beta" | "nightly";
+  channel: string;
   status: "active" | "retracted" | "superseded" | "draft";
   isPrerelease: boolean;
   releasedAt: string | null;
@@ -103,6 +104,7 @@ export interface Source {
   baseUrl: string | null;
   configJson: string | null;
   parserKey: string;
+  channel: string | null;
   pollIntervalMinutes: number;
   status: "active" | "paused" | "disabled" | "error";
   lastSuccessAt: string | null;
@@ -154,7 +156,7 @@ export interface Release {
   versionRaw: string;
   versionNormalized: string;
   buildNumber: string | null;
-  channel: "stable" | "beta" | "nightly";
+  channel: string;
   releasedAt: string | null;
   isPrerelease: boolean;
   sourceConfidence: number | null;
@@ -210,7 +212,7 @@ export interface ReleaseObservation {
 export interface AppLatestRelease {
   id: string;
   appId: string;
-  channel: "stable" | "beta" | "nightly";
+  channel: string;
   releaseId: string;
   artifactId: string | null;
   versionNormalized: string;

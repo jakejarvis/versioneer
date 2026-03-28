@@ -120,7 +120,11 @@ nonisolated struct InventoryAPIClient: Sendable {
   }
 
   /// Submits inventory and returns the decoded response.
-  func checkInventory(apps: [InstalledApp], scanDurationMs: Int?) async throws
+  func checkInventory(
+    apps: [InstalledApp],
+    scanDurationMs: Int?,
+    channelPreferences: InventoryCheckRequest.ChannelPreferences?
+  ) async throws
     -> InventoryCheckResponse
   {
     let endpoint = baseURL.appendingPathComponent("v1/inventory/check")
@@ -128,7 +132,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-    let payload = buildRequest(from: apps, scanDurationMs: scanDurationMs)
+    let payload = buildRequest(from: apps, scanDurationMs: scanDurationMs, channelPreferences: channelPreferences)
 
     let encoder = JSONEncoder()
     let jsonData = try encoder.encode(payload)
@@ -165,9 +169,11 @@ nonisolated struct InventoryAPIClient: Sendable {
     }
   }
 
-  private func buildRequest(from apps: [InstalledApp], scanDurationMs: Int?)
-    -> InventoryCheckRequest
-  {
+  private func buildRequest(
+    from apps: [InstalledApp],
+    scanDurationMs: Int?,
+    channelPreferences: InventoryCheckRequest.ChannelPreferences?
+  ) -> InventoryCheckRequest {
     let installId = installIdentifier()
     let osVer = ProcessInfo.processInfo.operatingSystemVersion
     let osVersion = "\(osVer.majorVersion).\(osVer.minorVersion).\(osVer.patchVersion)"
@@ -199,7 +205,8 @@ nonisolated struct InventoryAPIClient: Sendable {
         platform: "macos",
         appVersion: appVersion,
         osVersion: osVersion,
-        systemArchitecture: Self.systemArchitecture()
+        systemArchitecture: Self.systemArchitecture(),
+        channelPreferences: channelPreferences
       ),
       apps: inventoryApps,
       scanDurationMs: scanDurationMs

@@ -15,8 +15,6 @@ import { eq, and } from "drizzle-orm";
 
 import type { Env, RecomputeLatestJob } from "./types";
 
-const CHANNELS = ["stable", "beta", "nightly"] as const;
-
 /**
  * Infer install strategy from source type and artifact type.
  * Admin override on the app record takes precedence.
@@ -40,7 +38,18 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
   const db = createDb(env.DB);
   const now = new Date().toISOString();
 
-  const channels = job.channel ? [job.channel] : CHANNELS;
+  let channels: string[];
+  if (job.channel) {
+    channels = [job.channel];
+  } else {
+    const rows = await db
+      .selectDistinct({ channel: releases.channel })
+      .from(releases)
+      .where(and(eq(releases.appId, job.appId), eq(releases.status, "active")))
+      .all();
+    channels = rows.map((r) => r.channel);
+    if (channels.length === 0) channels = ["stable"];
+  }
 
   // Load app and its primary source type for strategy inference
   const app = await db.select().from(apps).where(eq(apps.id, job.appId)).get();

@@ -244,16 +244,22 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
     }));
     const caskTokenByApp = pickPreferredAliasMap(allAliases, "homebrew_cask");
 
-    // Load all latest releases
+    // Load all latest releases, indexed by appId → channel → release
     const latestReleases = await db.select().from(appLatestReleases).all();
-    const latestByApp = new Map<string, (typeof latestReleases)[number]>();
+    const latestByAppChannel = new Map<string, Map<string, (typeof latestReleases)[number]>>();
     for (const lr of latestReleases) {
-      const key = lr.appId;
-      const existing = latestByApp.get(key);
-      if (!existing || lr.channel === "stable") {
-        latestByApp.set(key, lr);
+      let channelMap = latestByAppChannel.get(lr.appId);
+      if (!channelMap) {
+        channelMap = new Map();
+        latestByAppChannel.set(lr.appId, channelMap);
       }
+      channelMap.set(lr.channel, lr);
     }
+
+    // Extract channel preferences from client request
+    const channelPrefs = request.client.channelPreferences;
+    const defaultChannel = channelPrefs?.defaultChannel ?? "stable";
+    const perAppChannels = channelPrefs?.perApp ?? {};
 
     // Load source lastSuccessAt for staleness computation
     const allSources = await db
@@ -290,6 +296,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       let latestReleaseId: string | null = null;
       let matchedArtifact: AppDecision["artifact"] = null;
       let installStrategy: AppDecision["installStrategy"] = null;
+      let resolvedChannel: string | null = null;
       let staleSince: string | null = null;
 
       const appInfo = matchResult.appId ? appMap.get(matchResult.appId) : undefined;
@@ -300,7 +307,11 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           // Unverified apps are not tracked — no update info returned
           decision = "not_tracked";
         } else {
-          const latest = latestByApp.get(matchResult.appId);
+          const requestedChannel = perAppChannels[matchResult.appId] ?? defaultChannel;
+          const channelMap = latestByAppChannel.get(matchResult.appId);
+          const latest = channelMap
+            ? (channelMap.get(requestedChannel) ?? channelMap.get("stable"))
+            : undefined;
           if (latest) {
             // Compute staleness
             const lastSuccess = latestSourceSuccessByApp.get(matchResult.appId) ?? null;
@@ -328,6 +339,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
               releasedAt = latest.releasedAt;
               latestReleaseId = latest.releaseId;
               installStrategy = latest.installStrategy;
+              resolvedChannel = latest.channel;
 
               if (compatibleArtifact) {
                 matchedArtifact = {
@@ -380,6 +392,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 releasedAt = found.releasedAt;
                 latestReleaseId = found.releaseId;
                 installStrategy = latest.installStrategy;
+                resolvedChannel = latest.channel;
                 matchedArtifact = {
                   id: found.artifactId,
                   downloadUrl: found.artifactUrl,
@@ -476,6 +489,10 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           ? (caskTokenByApp.get(matchResult.appId) ?? null)
           : null,
         latestReleaseId,
+        channel: resolvedChannel,
+        availableChannels: matchResult.appId
+          ? [...(latestByAppChannel.get(matchResult.appId)?.keys() ?? [])]
+          : undefined,
         releasedAt,
         staleSince,
         iconUrl,

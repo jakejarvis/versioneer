@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { channelSchema } from "./common";
 import { appArtifactSchema, installStrategySchema } from "./install";
 
 export const installedAppSchema = z.object({
@@ -29,6 +30,12 @@ export const inventoryCheckRequestSchema = z.object({
     appVersion: z.string().max(50).optional(),
     osVersion: z.string().max(50).optional(),
     systemArchitecture: z.string().max(50).optional(),
+    channelPreferences: z
+      .object({
+        defaultChannel: channelSchema.default("stable"),
+        perApp: z.record(z.string(), channelSchema).default({}),
+      })
+      .optional(),
   }),
   apps: z.array(installedAppSchema).max(5000),
   scanDurationMs: z.number().int().optional(),
@@ -48,6 +55,8 @@ export const appDecisionSchema = z.object({
   latestVersion: z.string().nullable(),
   latestVersionRaw: z.string().nullable(),
   latestReleaseId: z.string().nullable(),
+  channel: z.string().nullable().optional(),
+  availableChannels: z.array(z.string()).optional(),
   homebrewCaskToken: z.string().nullable().optional(),
   releasedAt: z.string().nullable(),
   staleSince: z.string().nullable(),

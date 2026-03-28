@@ -29,7 +29,7 @@ export function isPreRelease(raw: string): boolean {
 /**
  * Infer channel from version string.
  */
-export function inferChannel(raw: string): "stable" | "beta" | "nightly" {
+export function inferChannel(raw: string): string {
   const parsed = parseVersion(raw);
   if (!parsed.preReleaseTag) return "stable";
   const tag = parsed.preReleaseTag;

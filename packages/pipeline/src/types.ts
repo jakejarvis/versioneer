@@ -39,5 +39,5 @@ export interface SourceParseJob {
 
 export interface RecomputeLatestJob {
   appId: string;
-  channel?: "stable" | "beta" | "nightly";
+  channel?: string;
 }

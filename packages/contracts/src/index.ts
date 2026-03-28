@@ -21,12 +21,12 @@ export interface SourceParseRequest {
 
 export interface RecomputeLatestRequest {
   appId: string;
-  channel?: "stable" | "beta" | "nightly";
+  channel?: string;
 }
 
 export interface ReleasePinRequest {
   releaseId: string;
-  channel?: "stable" | "beta" | "nightly";
+  channel?: string;
 }
 
 export interface AppInfo {

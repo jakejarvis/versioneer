@@ -1,0 +1,1 @@
+ALTER TABLE `sources` ADD `channel` text;

@@ -42,6 +42,7 @@ describe("entity summary shaping", () => {
       baseUrl: "https://example.com/appcast.xml",
       configJson: null,
       parserKey: "sparkle",
+      channel: null,
       pollIntervalMinutes: 60,
       status: "active",
       lastSuccessAt: null,
@@ -80,6 +81,7 @@ describe("entity summary shaping", () => {
       sourceType: "sparkle",
       label: "Stable appcast",
       parserKey: "sparkle",
+      channel: null,
       status: "active",
       app: {
         id: "app_test",

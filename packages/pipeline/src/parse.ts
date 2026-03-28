@@ -85,7 +85,8 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
     for (const parsedRelease of output.releases) {
       const observationId = generateId(idPrefixes.releaseObservation);
       const versionNormalized = normalizeVersion(parsedRelease.versionRaw);
-      const channel = parsedRelease.channel || inferChannel(parsedRelease.versionRaw);
+      const channel =
+        source.channel ?? parsedRelease.channel ?? inferChannel(parsedRelease.versionRaw);
 
       // Upsert release: check if version already exists for this app
       let releaseId: string | undefined;

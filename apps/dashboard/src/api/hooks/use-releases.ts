@@ -12,7 +12,7 @@ import {
 
 interface UseReleasesParams {
   appId?: string;
-  channel?: "stable" | "beta" | "nightly";
+  channel?: string;
   status?: "active" | "retracted" | "superseded" | "draft";
   limit?: number;
   offset?: number;
@@ -40,7 +40,7 @@ export function useUpdateRelease(id: string) {
   return useMutation({
     mutationFn: (input: {
       status?: "active" | "retracted" | "superseded" | "draft";
-      channel?: "stable" | "beta" | "nightly";
+      channel?: string;
     }) => updateRelease({ data: { id, ...input } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["releases"] });

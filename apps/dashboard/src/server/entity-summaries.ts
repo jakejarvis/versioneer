@@ -26,6 +26,7 @@ export function toSourceSummary(source: SourceRow, app: AppRow | null): SourceSu
     sourceType: source.sourceType,
     label: source.label,
     parserKey: source.parserKey,
+    channel: source.channel,
     status: source.status,
     app: app ? toAppSummary(app) : null,
   };

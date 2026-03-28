@@ -13,9 +13,7 @@ export const releases = sqliteTable(
     versionRaw: text("version_raw").notNull(),
     versionNormalized: text("version_normalized").notNull(),
     buildNumber: text("build_number"),
-    channel: text("channel", { enum: ["stable", "beta", "nightly"] })
-      .notNull()
-      .default("stable"),
+    channel: text("channel").notNull().default("stable"),
     releasedAt: text("released_at"),
     isPrerelease: integer("is_prerelease", { mode: "boolean" }).notNull().default(false),
     sourceConfidence: integer("source_confidence"),
@@ -92,9 +90,7 @@ export const appLatestReleases = sqliteTable(
     appId: text("app_id")
       .notNull()
       .references(() => apps.id),
-    channel: text("channel", { enum: ["stable", "beta", "nightly"] })
-      .notNull()
-      .default("stable"),
+    channel: text("channel").notNull().default("stable"),
     releaseId: text("release_id")
       .notNull()
       .references(() => releases.id),

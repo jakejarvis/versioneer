@@ -16,6 +16,7 @@ export const sources = sqliteTable(
     baseUrl: text("base_url"),
     configJson: text("config_json"),
     parserKey: text("parser_key").notNull(),
+    channel: text("channel"),
     pollIntervalMinutes: integer("poll_interval_minutes").notNull().default(60),
     status: text("status", { enum: ["active", "paused", "disabled", "error"] })
       .notNull()

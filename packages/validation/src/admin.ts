@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { channelSchema } from "./common";
 import { installStrategySchema } from "./install";
 
 export const appCreateSchema = z.object({
@@ -59,6 +60,7 @@ export const sourceCreateSchema = z.object({
   baseUrl: z.string().url().max(2000).optional(),
   configJson: z.string().max(10000).optional(),
   parserKey: z.string().min(1).max(200),
+  channel: channelSchema.nullable().optional(),
   pollIntervalMinutes: z.number().int().min(5).max(10080).default(60),
 });
 
@@ -67,22 +69,23 @@ export const sourceUpdateSchema = z.object({
   baseUrl: z.string().url().max(2000).nullable().optional(),
   configJson: z.string().max(10000).nullable().optional(),
   parserKey: z.string().min(1).max(200).optional(),
+  channel: channelSchema.nullable().optional(),
   pollIntervalMinutes: z.number().int().min(5).max(10080).optional(),
   status: z.enum(["active", "paused", "disabled", "error"]).optional(),
 });
 
 export const releaseUpdateSchema = z.object({
   status: z.enum(["active", "retracted", "superseded", "draft"]).optional(),
-  channel: z.enum(["stable", "beta", "nightly"]).optional(),
+  channel: channelSchema.optional(),
 });
 
 export const releasePinSchema = z.object({
   releaseId: z.string().min(1),
-  channel: z.enum(["stable", "beta", "nightly"]).default("stable"),
+  channel: channelSchema.default("stable"),
 });
 
 export const releaseUnpinSchema = z.object({
-  channel: z.enum(["stable", "beta", "nightly"]).default("stable"),
+  channel: channelSchema.default("stable"),
 });
 
 export type AppCreateInput = z.infer<typeof appCreateSchema>;

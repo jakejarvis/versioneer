@@ -394,7 +394,18 @@ final class AppState {
     loadState = .submitting
 
     // Run backend + local checks in parallel
-    async let backendTask = apiClient.checkInventory(apps: apps, scanDurationMs: scanMs)
+    let perApp = settings.perAppChannels
+    let channelPrefs = perApp.isEmpty && settings.defaultChannel == "stable"
+      ? nil
+      : InventoryCheckRequest.ChannelPreferences(
+          defaultChannel: settings.defaultChannel,
+          perApp: perApp
+        )
+    async let backendTask = apiClient.checkInventory(
+      apps: apps,
+      scanDurationMs: scanMs,
+      channelPreferences: channelPrefs
+    )
     async let sparkleTask = sparkleChecker.checkAll(apps: apps)
     async let electronTask = electronChecker.checkAll(apps: apps)
 
@@ -496,6 +507,8 @@ final class AppState {
         latestVersion: localInfo.latestVersion ?? decision.latestVersion,
         latestVersionRaw: localInfo.latestVersion ?? decision.latestVersionRaw,
         latestReleaseId: decision.latestReleaseId,
+        channel: decision.channel,
+        availableChannels: decision.availableChannels,
         homebrewCaskToken: decision.homebrewCaskToken,
         releasedAt: localInfo.publishedAt ?? decision.releasedAt,
         staleSince: decision.staleSince,
@@ -540,6 +553,8 @@ final class AppState {
         latestVersion: latestVersion,
         latestVersionRaw: latestVersion,
         latestReleaseId: nil,
+        channel: nil,
+        availableChannels: nil,
         homebrewCaskToken: nil,
         releasedAt: releasedAt,
         staleSince: nil,

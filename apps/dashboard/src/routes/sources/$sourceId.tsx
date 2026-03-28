@@ -90,6 +90,9 @@ function SourceDetailPage() {
             <IdDisplay id={source.id} />
             <span>{source.sourceType}</span>
             <span className="font-mono">{source.parserKey}</span>
+            <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
+              {source.channel ?? "auto-detect"}
+            </span>
           </div>
           {source.app ? (
             <div className="mt-3">
@@ -98,6 +101,28 @@ function SourceDetailPage() {
           ) : null}
         </div>
         <div className="flex items-center gap-2">
+          <Select
+            value={source.channel ?? "auto"}
+            onValueChange={(value) =>
+              updateSource.mutate(
+                { channel: value === "auto" ? null : value },
+                {
+                  onSuccess: () => toast.success("Channel updated"),
+                  onError: (error) => toast.error(error.message),
+                },
+              )
+            }
+          >
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Auto-detect</SelectItem>
+              <SelectItem value="stable">Stable</SelectItem>
+              <SelectItem value="beta">Beta</SelectItem>
+              <SelectItem value="nightly">Nightly</SelectItem>
+            </SelectContent>
+          </Select>
           <Select
             value={source.status}
             onValueChange={(value) =>

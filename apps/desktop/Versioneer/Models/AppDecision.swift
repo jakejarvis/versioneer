@@ -14,6 +14,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
   let latestVersion: String?
   let latestVersionRaw: String?
   let latestReleaseId: String?
+  let channel: String?
+  let availableChannels: [String]?
   let homebrewCaskToken: String?
   let releasedAt: String?
   let staleSince: String?
@@ -33,6 +35,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     latestVersion: String?,
     latestVersionRaw: String?,
     latestReleaseId: String?,
+    channel: String?,
+    availableChannels: [String]?,
     homebrewCaskToken: String?,
     releasedAt: String?,
     staleSince: String?,
@@ -52,6 +56,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     self.latestVersion = latestVersion
     self.latestVersionRaw = latestVersionRaw
     self.latestReleaseId = latestReleaseId
+    self.channel = channel
+    self.availableChannels = availableChannels
     self.homebrewCaskToken = homebrewCaskToken
     self.releasedAt = releasedAt
     self.staleSince = staleSince
@@ -63,7 +69,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
   private enum CodingKeys: String, CodingKey {
     case appName, bundleId, installedVersion, matchedAppId, matchedAppName,
       matchConfidence, decision, isVerified, latestVersion, latestVersionRaw,
-      latestReleaseId, homebrewCaskToken, releasedAt, staleSince, iconUrl,
+      latestReleaseId, channel, availableChannels, homebrewCaskToken, releasedAt, staleSince, iconUrl,
       artifact, installStrategy
   }
 
@@ -81,6 +87,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     latestVersion = try container.decodeIfPresent(String.self, forKey: .latestVersion)
     latestVersionRaw = try container.decodeIfPresent(String.self, forKey: .latestVersionRaw)
     latestReleaseId = try container.decodeIfPresent(String.self, forKey: .latestReleaseId)
+    channel = try container.decodeIfPresent(String.self, forKey: .channel)
+    availableChannels = try container.decodeIfPresent([String].self, forKey: .availableChannels)
     homebrewCaskToken = try container.decodeIfPresent(String.self, forKey: .homebrewCaskToken)
     releasedAt = try container.decodeIfPresent(String.self, forKey: .releasedAt)
     staleSince = try container.decodeIfPresent(String.self, forKey: .staleSince)
@@ -125,6 +133,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       latestVersion: latestVersion,
       latestVersionRaw: latestVersionRaw,
       latestReleaseId: latestReleaseId,
+      channel: channel,
+      availableChannels: availableChannels,
       homebrewCaskToken: homebrewCaskToken,
       releasedAt: releasedAt,
       staleSince: staleSince,

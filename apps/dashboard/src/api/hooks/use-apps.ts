@@ -130,7 +130,7 @@ export function useAppSources(appId: string) {
 }
 
 interface UseAppReleasesParams {
-  channel?: "stable" | "beta" | "nightly";
+  channel?: string;
   status?: "active" | "retracted" | "superseded" | "draft";
   limit?: number;
   offset?: number;
@@ -164,7 +164,7 @@ export function useTriggerFetch() {
 export function useRecomputeLatest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ appId, channel }: { appId: string; channel?: "stable" | "beta" | "nightly" }) =>
+    mutationFn: ({ appId, channel }: { appId: string; channel?: string }) =>
       recomputeLatest({ data: { appId, channel } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["apps"] }),
   });
