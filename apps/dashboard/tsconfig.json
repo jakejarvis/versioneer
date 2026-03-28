@@ -1,11 +1,11 @@
 {
   "extends": "@versioneer/typescript-config/react-vite.json",
   "compilerOptions": {
-    "types": ["@cloudflare/workers-types"],
+    "types": ["./worker-configuration.d.ts", "vite/client"],
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "*.ts", "worker-configuration.d.ts"],
+  "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "dist"]
 }

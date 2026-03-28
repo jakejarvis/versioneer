@@ -29,7 +29,7 @@
     "marked": "^17.0.5"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "catalog:",
+    "@cloudflare/workers-types": "^4.20260317.1",
     "@versioneer/typescript-config": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -1,8 +1,8 @@
 {
   "extends": "@versioneer/typescript-config/library.json",
   "compilerOptions": {
-    "noEmit": true,
-    "types": ["@cloudflare/workers-types"]
+    "types": ["@cloudflare/workers-types"],
+    "noEmit": true
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

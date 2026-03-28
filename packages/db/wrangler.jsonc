@@ -3,6 +3,7 @@
   // This is NOT a deployable worker — it just provides the D1 binding
   // so that `wrangler d1 migrations apply` works from this package.
   "$schema": "node_modules/wrangler/config-schema.json",
+  "compatibility_date": "2026-02-24",
   "d1_databases": [
     {
       "binding": "DB",

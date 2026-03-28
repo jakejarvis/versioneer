@@ -37,6 +37,7 @@
     ".turbo",
     ".wrangler",
     "**/routeTree.gen.ts",
+    "**/worker-configuration.d.ts",
     "packages/db/migrations"
   ]
 }

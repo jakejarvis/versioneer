@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --persist-to ../../.wrangler/state",
     "deploy": "wrangler deploy",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
@@ -26,7 +26,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "catalog:",
     "@versioneer/typescript-config": "workspace:*",
     "typescript": "catalog:",
     "wrangler": "catalog:"

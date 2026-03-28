@@ -13,7 +13,7 @@ import { Toaster } from "sonner";
 
 import { Sidebar } from "@/components/layout/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ThemeProvider, themeInitScript, useTheme } from "@/lib/theme";
+import { ThemeProvider, themeInitScript } from "@/lib/theme";
 import { getSession } from "@/server/auth";
 
 import appCss from "@/app.css?url";
@@ -42,6 +42,7 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1.0" },
       { title: "Versioneer Admin" },
+      { name: "robots", content: "noindex, nofollow" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),
@@ -49,20 +50,15 @@ export const Route = createRootRoute({
 });
 
 function AppShell() {
-  const { resolvedTheme } = useTheme();
-
   return (
-    <TooltipProvider>
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-6xl px-6 py-5">
-            <Outlet />
-          </div>
-        </main>
-      </div>
-      <Toaster position="bottom-right" richColors theme={resolvedTheme} />
-    </TooltipProvider>
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-6xl px-6 py-5">
+          <Outlet />
+        </div>
+      </main>
+    </div>
   );
 }
 
@@ -78,7 +74,12 @@ function RootComponent() {
       </head>
       <body className="antialiased">
         <QueryClientProvider client={queryClient}>
-          <ThemeProvider>{isLoginPage ? <Outlet /> : <AppShell />}</ThemeProvider>
+          <ThemeProvider>
+            <TooltipProvider>
+              {isLoginPage ? <Outlet /> : <AppShell />}
+              <Toaster position="bottom-right" richColors />
+            </TooltipProvider>
+          </ThemeProvider>
           <ReactQueryDevtools />
         </QueryClientProvider>
         <TanStackRouterDevtools />

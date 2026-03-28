@@ -5,6 +5,11 @@
 
   "compatibility_date": "2026-02-24",
 
+  "dev": {
+    "port": 8788,
+    "inspector_port": 9230
+  },
+
   "vars": {
     "ENVIRONMENT": "dev"
   },

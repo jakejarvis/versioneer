@@ -7,7 +7,6 @@ allowBuilds:
   sharp: true
   workerd: true
 catalog:
-  "@cloudflare/workers-types": ^4.20260317.1
   drizzle-orm: ^0.45.2
   typescript: ^6.0.2
   vitest: ^4.1.2

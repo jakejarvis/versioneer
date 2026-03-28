@@ -1,10 +1,11 @@
 {
   "extends": "@versioneer/typescript-config/worker.json",
   "compilerOptions": {
+    "types": ["./worker-configuration.d.ts"],
     "paths": {
-      "@versioneer/*": ["../../packages/*/src"]
+      "@/*": ["./src/*"]
     }
   },
-  "include": ["src"],
+  "include": ["**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
