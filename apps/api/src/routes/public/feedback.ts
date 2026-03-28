@@ -4,6 +4,7 @@ import { clients, clientFeedback, reviewQueue, generateId, idPrefixes } from "@v
 import { clientFeedbackSubmitSchema } from "@versioneer/validation";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 
 import type { Env } from "../../env";
 
@@ -11,9 +12,14 @@ export const feedbackRoutes = new Hono<{ Bindings: Env }>()
   // POST /v1/feedback
   .post(
     "/feedback",
-    zValidator("json", clientFeedbackSubmitSchema, (result, c) => {
+    zValidator("json", clientFeedbackSubmitSchema, (result) => {
       if (!result.success) {
-        return c.json({ error: "Invalid request", details: result.error.issues }, 400);
+        throw new HTTPException(400, {
+          res: Response.json(
+            { error: "Invalid request", details: result.error.issues },
+            { status: 400 },
+          ),
+        });
       }
     }),
     async (c) => {
@@ -29,7 +35,7 @@ export const feedbackRoutes = new Hono<{ Bindings: Env }>()
         .get();
 
       if (!client) {
-        return c.json({ error: "Unknown client. Submit inventory first." }, 400);
+        throw new HTTPException(400, { message: "Unknown client. Submit inventory first." });
       }
 
       const feedbackId = generateId(idPrefixes.feedback);

@@ -2,6 +2,7 @@ import { createDb } from "@versioneer/db";
 import { apps, releases } from "@versioneer/schema";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 
 import type { Env } from "../../env";
 
@@ -13,7 +14,7 @@ export const appsRoutes = new Hono<{ Bindings: Env }>()
 
     const app = await db.select().from(apps).where(eq(apps.id, appId)).get();
     if (!app) {
-      return c.json({ error: "App not found" }, 404);
+      throw new HTTPException(404, { message: "App not found" });
     }
 
     const iconUrl = app.iconR2Key ? `${c.env.ASSETS_BASE_URL}/${app.iconR2Key}` : null;
@@ -45,7 +46,7 @@ export const appsRoutes = new Hono<{ Bindings: Env }>()
       .get();
 
     if (!release) {
-      return c.json({ error: "Release not found" }, 404);
+      throw new HTTPException(404, { message: "Release not found" });
     }
 
     return c.json({

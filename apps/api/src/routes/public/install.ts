@@ -20,6 +20,7 @@ import {
 import type { AppDecision } from "@versioneer/validation";
 import { eq, and } from "drizzle-orm";
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 
 import type { Env } from "../../env";
 import { isArchCompatible, isOsVersionCompatible, deriveInstallabilityClass } from "./helpers";
@@ -59,9 +60,14 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
   // POST /v1/install/prepare
   .post(
     "/install/prepare",
-    zValidator("json", installPrepareRequestSchema, (result, c) => {
+    zValidator("json", installPrepareRequestSchema, (result) => {
       if (!result.success) {
-        return c.json({ error: "Invalid request", details: result.error.issues }, 400);
+        throw new HTTPException(400, {
+          res: Response.json(
+            { error: "Invalid request", details: result.error.issues },
+            { status: 400 },
+          ),
+        });
       }
     }),
     async (c) => {
@@ -76,7 +82,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         .where(eq(clients.anonymousInstallId, data.installId))
         .get();
       if (!client) {
-        return c.json({ error: "Unknown client. Submit inventory first." }, 400);
+        throw new HTTPException(400, { message: "Unknown client. Submit inventory first." });
       }
 
       const snapshot = await db
@@ -90,7 +96,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         )
         .get();
       if (!snapshot) {
-        return c.json({ error: "Snapshot not found for client" }, 404);
+        throw new HTTPException(404, { message: "Snapshot not found for client" });
       }
 
       const inventoryApp = await db
@@ -106,24 +112,30 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         )
         .get();
       if (!inventoryApp) {
-        return c.json({ error: "No matching inventory record for requested install" }, 404);
+        throw new HTTPException(404, {
+          message: "No matching inventory record for requested install",
+        });
       }
 
       if (inventoryApp.isMasApp) {
-        return c.json({ error: "Mac App Store apps cannot be installed by Versioneer" }, 400);
+        throw new HTTPException(400, {
+          message: "Mac App Store apps cannot be installed by Versioneer",
+        });
       }
 
       if (inventoryApp.decisionStatus !== "update_available") {
-        return c.json({ error: "App is not currently eligible for install" }, 400);
+        throw new HTTPException(400, { message: "App is not currently eligible for install" });
       }
 
       const app = await db.select().from(apps).where(eq(apps.id, data.matchedAppId)).get();
       if (!app) {
-        return c.json({ error: "App not found" }, 404);
+        throw new HTTPException(404, { message: "App not found" });
       }
 
       if (app.verificationTier !== "verified" && app.verificationTier !== "provisional") {
-        return c.json({ error: "App verification tier does not permit installation" }, 400);
+        throw new HTTPException(400, {
+          message: "App verification tier does not permit installation",
+        });
       }
 
       const release = await db
@@ -132,7 +144,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         .where(and(eq(releases.id, data.releaseId), eq(releases.appId, data.matchedAppId)))
         .get();
       if (!release || release.status !== "active") {
-        return c.json({ error: "Release not found or inactive" }, 404);
+        throw new HTTPException(404, { message: "Release not found or inactive" });
       }
 
       const appInstallRules = await db
@@ -146,15 +158,17 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
       });
       const selectedRule = appInstallRules[0] ?? null;
       if (!selectedRule || !selectedRule.enabled) {
-        return c.json({ error: "No enabled install rule found for app" }, 400);
+        throw new HTTPException(400, { message: "No enabled install rule found for app" });
       }
 
       if (selectedRule.strategy !== data.strategyCandidate) {
-        return c.json({ error: "Requested strategy does not match the active install rule" }, 400);
+        throw new HTTPException(400, {
+          message: "Requested strategy does not match the active install rule",
+        });
       }
 
       if (selectedRule.strategy === "manual_only" || selectedRule.strategy === "pkg_manual") {
-        return c.json({ error: "Selected install rule is manual-only" }, 400);
+        throw new HTTPException(400, { message: "Selected install rule is manual-only" });
       }
 
       const exactAliases = await db
@@ -184,10 +198,9 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
       let artifactPlan: AppDecision["artifact"] = null;
       if (selectedRule.strategy === "sparkle") {
         if (!inventoryApp.sparkleFeedUrl) {
-          return c.json(
-            { error: "Latest inventory snapshot does not include Sparkle metadata" },
-            400,
-          );
+          throw new HTTPException(400, {
+            message: "Latest inventory snapshot does not include Sparkle metadata",
+          });
         }
       } else {
         const releaseArtifacts = await db
@@ -203,10 +216,9 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         );
 
         if (!compatibleArtifact) {
-          return c.json(
-            { error: "No compatible artifact is available for this install rule" },
-            400,
-          );
+          throw new HTTPException(400, {
+            message: "No compatible artifact is available for this install rule",
+          });
         }
 
         artifactPlan = {
@@ -229,7 +241,9 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         hasArtifact: artifactPlan?.downloadUrl != null,
       });
       if (installabilityClass === "notify_only") {
-        return c.json({ error: "Installability class does not permit installation" }, 400);
+        throw new HTTPException(400, {
+          message: "Installability class does not permit installation",
+        });
       }
 
       const executionId = generateId(idPrefixes.updateExecution);
@@ -287,9 +301,14 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
   // POST /v1/install/executions/:executionId/status
   .post(
     "/install/executions/:executionId/status",
-    zValidator("json", installExecutionStatusUpdateSchema, (result, c) => {
+    zValidator("json", installExecutionStatusUpdateSchema, (result) => {
       if (!result.success) {
-        return c.json({ error: "Invalid request", details: result.error.issues }, 400);
+        throw new HTTPException(400, {
+          res: Response.json(
+            { error: "Invalid request", details: result.error.issues },
+            { status: 400 },
+          ),
+        });
       }
     }),
     async (c) => {
@@ -303,7 +322,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         .where(eq(clients.anonymousInstallId, data.installId))
         .get();
       if (!client) {
-        return c.json({ error: "Unknown client" }, 400);
+        throw new HTTPException(400, { message: "Unknown client" });
       }
 
       const execution = await db
@@ -312,7 +331,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         .where(and(eq(updateExecutions.id, executionId), eq(updateExecutions.clientId, client.id)))
         .get();
       if (!execution) {
-        return c.json({ error: "Execution not found for client" }, 404);
+        throw new HTTPException(404, { message: "Execution not found for client" });
       }
 
       const terminal =

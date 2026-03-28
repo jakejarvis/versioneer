@@ -22,7 +22,9 @@ import { normalizeVersion } from "@versioneer/versioning";
 import { compareVersionStrings } from "@versioneer/versioning";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { Hono } from "hono";
-import { validator } from "hono/validator";
+import { createMiddleware } from "hono/factory";
+import { HTTPException } from "hono/http-exception";
+import type { z } from "zod";
 
 import type { Env } from "../../env";
 import { isArchCompatible, isOsVersionCompatible, deriveInstallabilityClass } from "./helpers";
@@ -192,7 +194,12 @@ function pickPreferredAliasMap(
   return new Map(Array.from(map.entries(), ([appId, entry]) => [appId, entry.value]));
 }
 
-const gzipJsonValidator = validator("json", async (_, c) => {
+type InventoryEnv = {
+  Bindings: Env;
+  Variables: { inventoryRequest: z.infer<typeof inventoryCheckRequestSchema> };
+};
+
+const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next) => {
   let body: unknown;
   try {
     if (c.req.header("content-encoding") === "gzip") {
@@ -205,19 +212,25 @@ const gzipJsonValidator = validator("json", async (_, c) => {
       body = await c.req.json();
     }
   } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
+    throw new HTTPException(400, { message: "Invalid JSON body" });
   }
   const parsed = inventoryCheckRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: "Invalid request", details: parsed.error.issues }, 400);
+    throw new HTTPException(400, {
+      res: Response.json(
+        { error: "Invalid request", details: parsed.error.issues },
+        { status: 400 },
+      ),
+    });
   }
-  return parsed.data;
+  c.set("inventoryRequest", parsed.data);
+  await next();
 });
 
-export const inventoryRoutes = new Hono<{ Bindings: Env }>()
+export const inventoryRoutes = new Hono<InventoryEnv>()
   // POST /v1/inventory/check
-  .post("/inventory/check", gzipJsonValidator, async (c) => {
-    const request = c.req.valid("json");
+  .post("/inventory/check", gzipJsonMiddleware, async (c) => {
+    const request = c.get("inventoryRequest");
     const db = createDb(c.env.DB);
     const now = new Date().toISOString();
 
