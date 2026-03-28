@@ -11,12 +11,13 @@ struct FilterPresentationTests {
       updatesAvailableCount: 3,
       unknownCount: 2,
       unsupportedCount: 1,
+      ignoredCount: 4,
       lastCompletedAt: Date()
     )
 
     let presentation = FilterPresentation.make(summary: summary, selectedSection: .all)
 
-    #expect(presentation.chips.count == 4)
+    #expect(presentation.chips.count == 5)
     #expect(presentation.chips[0].title == "All")
     #expect(presentation.chips[0].count == 50)
     #expect(presentation.chips[1].title == "Updates")
@@ -25,6 +26,8 @@ struct FilterPresentationTests {
     #expect(presentation.chips[2].count == 2)
     #expect(presentation.chips[3].title == "Unsupported")
     #expect(presentation.chips[3].count == 1)
+    #expect(presentation.chips[4].title == "Ignored")
+    #expect(presentation.chips[4].count == 4)
   }
 
   @Test func updateAllVisibleWhenAllSectionSelectedWithUpdates() {
@@ -33,6 +36,7 @@ struct FilterPresentationTests {
       updatesAvailableCount: 3,
       unknownCount: 0,
       unsupportedCount: 0,
+      ignoredCount: 2,
       lastCompletedAt: Date()
     )
 
@@ -51,6 +55,7 @@ struct FilterPresentationTests {
       updatesAvailableCount: 0,
       unknownCount: 0,
       unsupportedCount: 0,
+      ignoredCount: 0,
       lastCompletedAt: Date()
     )
 
@@ -66,6 +71,7 @@ struct FilterPresentationTests {
       updatesAvailableCount: 5,
       unknownCount: 2,
       unsupportedCount: 0,
+      ignoredCount: 1,
       lastCompletedAt: Date()
     )
 

@@ -11,6 +11,7 @@ struct StatusBarPresentationTests {
       updatesAvailableCount: 3,
       unknownCount: 1,
       unsupportedCount: 0,
+      ignoredCount: 2,
       lastCompletedAt: Date()
     )
 
@@ -28,6 +29,7 @@ struct StatusBarPresentationTests {
       updatesAvailableCount: 0,
       unknownCount: 0,
       unsupportedCount: 0,
+      ignoredCount: 0,
       lastCompletedAt: nil
     )
 
@@ -44,6 +46,7 @@ struct StatusBarPresentationTests {
       updatesAvailableCount: 0,
       unknownCount: 0,
       unsupportedCount: 0,
+      ignoredCount: 1,
       lastCompletedAt: nil
     )
 
@@ -62,6 +65,7 @@ struct StatusBarPresentationTests {
       updatesAvailableCount: 0,
       unknownCount: 0,
       unsupportedCount: 0,
+      ignoredCount: 0,
       lastCompletedAt: Date()
     )
 

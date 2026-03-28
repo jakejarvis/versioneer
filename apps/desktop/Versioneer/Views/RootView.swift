@@ -12,6 +12,8 @@ struct RootView: View {
       VStack(spacing: 0) {
         FilterChipBar()
         listContent
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .background(resultsPaneBackground)
         StatusBarView()
       }
 
@@ -102,5 +104,12 @@ struct RootView: View {
       }
       return .ignored
     }
+  }
+
+  private var resultsPaneBackground: some View {
+    Color(nsColor: .windowBackgroundColor)
+      .overlay {
+        Color.black.opacity(0.06)
+      }
   }
 }

@@ -3,6 +3,7 @@ import Logging
 
 /// Persists the most recent scan results to disk for instant display on launch.
 nonisolated struct ScanCacheStore: Sendable {
+  private let fileURLOverride: URL?
 
   /// The data that gets serialized to/from the cache file.
   struct CachedScanData: Codable, Sendable {
@@ -13,9 +14,13 @@ nonisolated struct ScanCacheStore: Sendable {
 
   private static let fileName = "ScanCache.json"
 
+  init(fileURLOverride: URL? = nil) {
+    self.fileURLOverride = fileURLOverride
+  }
+
   /// Returns the cache file URL inside Application Support.
   /// Creates the parent directory if it does not exist.
-  private static var fileURL: URL? {
+  private static var defaultFileURL: URL? {
     guard
       let appSupport = FileManager.default.urls(
         for: .applicationSupportDirectory,
@@ -34,9 +39,13 @@ nonisolated struct ScanCacheStore: Sendable {
     return directory.appendingPathComponent(fileName)
   }
 
+  private var fileURL: URL? {
+    fileURLOverride ?? Self.defaultFileURL
+  }
+
   /// Saves scan data to disk. Failures are logged but never thrown.
   func save(_ data: CachedScanData) {
-    guard let url = Self.fileURL else {
+    guard let url = fileURL else {
       Logger.cache.warning("Could not determine cache file URL")
       return
     }
@@ -52,7 +61,7 @@ nonisolated struct ScanCacheStore: Sendable {
 
   /// Loads cached scan data from disk. Returns nil if no cache exists or decoding fails.
   func load() -> CachedScanData? {
-    guard let url = Self.fileURL else { return nil }
+    guard let url = fileURL else { return nil }
 
     do {
       let data = try Data(contentsOf: url)

@@ -1,0 +1,98 @@
+import Foundation
+import Testing
+
+@testable import Versioneer
+
+@MainActor
+struct SettingsStoreTests {
+  @Test func bundleIdRulesNormalizeAndDeduplicate() throws {
+    let (settings, suiteName) = try makeSettings()
+    defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+
+    let firstRule = try #require(
+      IgnoredAppRule.make(
+        displayName: "Arc",
+        matchType: .bundleId,
+        rawValue: " COMPANY.TheBrowser.Browser "
+      ))
+    let duplicateRule = try #require(
+      IgnoredAppRule.make(
+        displayName: "Arc Browser",
+        matchType: .bundleId,
+        rawValue: "company.thebrowser.browser"
+      ))
+
+    settings.addIgnoredAppRule(firstRule)
+    settings.addIgnoredAppRule(duplicateRule)
+
+    #expect(settings.ignoredAppRules.count == 1)
+    #expect(settings.ignoredAppRules[0].matchValue == "company.thebrowser.browser")
+  }
+
+  @Test func pathRulesNormalizeAndPersist() throws {
+    let (settings, suiteName) = try makeSettings()
+    defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+
+    let rule = try #require(
+      IgnoredAppRule.make(
+        displayName: "Test App",
+        matchType: .path,
+        rawValue: "/Applications/../Applications/Test App.app"
+      ))
+
+    settings.addIgnoredAppRule(rule)
+
+    let reloadedDefaults = try #require(UserDefaults(suiteName: suiteName))
+    let reloaded = SettingsStore(defaults: reloadedDefaults)
+    let persistedRule = try #require(reloaded.ignoredAppRules.first)
+
+    #expect(persistedRule.matchValue == "/Applications/Test App.app")
+    #expect(persistedRule.displayName == "Test App")
+  }
+
+  @Test func ignoresMatchBundleIdAndFallbackPathRules() throws {
+    let (settings, suiteName) = try makeSettings()
+    defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+
+    let firefox = DesktopUITestFixtures.makeInstalledApp(
+      from: DesktopUITestFixtures.makeDecision(
+        appName: "Firefox",
+        bundleId: "org.mozilla.firefox",
+        decision: .updateAvailable
+      ))
+    let pathOnlyApp = InstalledApp(
+      name: "Path Only",
+      bundleId: nil,
+      version: "1.0",
+      buildNumber: nil,
+      teamId: nil,
+      path: "/Applications/Path Only.app",
+      architecture: nil,
+      sparkleFeedUrl: nil,
+      sparklePublicKey: nil,
+      isSparkleApp: false,
+      isMasApp: false,
+      isElectronApp: false,
+      electronUpdateProvider: nil,
+      electronUpdateUrl: nil,
+      codeSigningAuthority: nil,
+      appCategory: nil,
+      minMacOSVersion: nil,
+      isHomebrewInstalled: false,
+      homebrewCaskToken: nil
+    )
+
+    settings.addIgnoredAppRule(IgnoredAppRule.make(from: firefox))
+    settings.addIgnoredAppRule(IgnoredAppRule.make(from: pathOnlyApp))
+
+    #expect(settings.isIgnored(firefox))
+    #expect(settings.isIgnored(pathOnlyApp))
+  }
+
+  private func makeSettings() throws -> (SettingsStore, String) {
+    let suiteName = "com.jakejarvis.versioneer.tests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    return (SettingsStore(defaults: defaults), suiteName)
+  }
+}

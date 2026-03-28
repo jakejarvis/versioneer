@@ -5,14 +5,19 @@ import Observation
 @Observable
 @MainActor
 final class SettingsStore {
-  private let defaults = UserDefaults.standard
+  private let defaults: UserDefaults
 
   private enum Keys {
     static let baseURL = "versioneer_base_url"
     static let scanOnLaunch = "versioneer_scan_on_launch"
+    static let ignoredAppRules = "versioneer_ignored_app_rules"
   }
 
   static let defaultBaseURL = URL(string: "https://api.versioneer.app")!
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+  }
 
   var baseURL: URL {
     get {
@@ -38,8 +43,62 @@ final class SettingsStore {
     }
   }
 
+  var ignoredAppRules: [IgnoredAppRule] {
+    get {
+      guard let data = defaults.data(forKey: Keys.ignoredAppRules) else { return [] }
+
+      do {
+        let decoded = try JSONDecoder().decode([IgnoredAppRule].self, from: data)
+        return sortAndDeduplicate(decoded)
+      } catch {
+        return []
+      }
+    }
+    set {
+      let sanitized = sortAndDeduplicate(newValue)
+
+      if sanitized.isEmpty {
+        defaults.removeObject(forKey: Keys.ignoredAppRules)
+        return
+      }
+
+      do {
+        let data = try JSONEncoder().encode(sanitized)
+        defaults.set(data, forKey: Keys.ignoredAppRules)
+      } catch {
+        defaults.removeObject(forKey: Keys.ignoredAppRules)
+      }
+    }
+  }
+
+  func addIgnoredAppRule(_ rule: IgnoredAppRule) {
+    ignoredAppRules = ignoredAppRules + [rule]
+  }
+
+  func removeIgnoredAppRule(_ rule: IgnoredAppRule) {
+    ignoredAppRules = ignoredAppRules.filter { $0.id != rule.id }
+  }
+
+  func isIgnored(_ app: InstalledApp) -> Bool {
+    ignoredAppRules.contains { $0.matches(app) }
+  }
+
   /// Resets the base URL to the default value.
   func resetBaseURL() {
     defaults.removeObject(forKey: Keys.baseURL)
+  }
+
+  private func sortAndDeduplicate(_ rules: [IgnoredAppRule]) -> [IgnoredAppRule] {
+    var uniqueRules: [String: IgnoredAppRule] = [:]
+    for rule in rules where uniqueRules[rule.id] == nil {
+      uniqueRules[rule.id] = rule
+    }
+
+    return uniqueRules.values.sorted { lhs, rhs in
+      if lhs.displayName != rhs.displayName {
+        return lhs.displayName.localizedStandardCompare(rhs.displayName) == .orderedAscending
+      }
+      return lhs.id < rhs.id
+    }
   }
 }

@@ -125,11 +125,25 @@
       results: [AppDecision] = allResults,
       detailResultID: String? = nil,
       loadState: AppState.LoadState = .done,
-      installStates: [(AppDecision, InstallCoordinator.OperationState)] = []
+      installStates: [(AppDecision, InstallCoordinator.OperationState)] = [],
+      ignoredRules: [IgnoredAppRule] = []
     ) -> AppState {
-      let state = AppState()
+      let suiteName = "com.jakejarvis.versioneer.preview.\(UUID().uuidString)"
+      let defaults = UserDefaults(suiteName: suiteName)!
+      defaults.removePersistentDomain(forName: suiteName)
+      let settings = SettingsStore(defaults: defaults)
+      settings.ignoredAppRules = ignoredRules
+      let cacheURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        .appendingPathComponent("ScanCache.json")
+      let state = AppState(
+        settings: settings,
+        cacheStore: ScanCacheStore(fileURLOverride: cacheURL)
+      )
       state.installedApps = results.map(makeInstalledApp)
+      state.rawInventoryResults = results
       state.inventoryResults = results
+      state.refreshDisplayedResults()
       state.snapshotId = "preview_snapshot"
       state.loadState = loadState
       state.lastScanCompletedAt = Date().addingTimeInterval(-900)
@@ -203,7 +217,7 @@
       )
     }
 
-    private static func makeInstalledApp(from result: AppDecision) -> InstalledApp {
+    static func makeInstalledApp(from result: AppDecision) -> InstalledApp {
       InstalledApp(
         name: result.matchedAppName ?? result.appName,
         bundleId: result.bundleId,
@@ -248,6 +262,18 @@
       content
         .environment(appState)
         .environment(appState.installCoordinator)
+    }
+  }
+
+  private struct SettingsPreviewHost: View {
+    let appState: AppState
+    @State private var selfUpdateService = SelfUpdateService()
+
+    var body: some View {
+      SettingsView()
+        .environment(appState)
+        .environment(appState.installCoordinator)
+        .environment(selfUpdateService)
     }
   }
 
@@ -313,5 +339,30 @@
     ) {
       RootView()
     }
+  }
+
+  #Preview("Main Window: Ignored") {
+    PreviewHost(
+      appState: VersioneerPreviewFixtures.rootState(
+        ignoredRules: [IgnoredAppRule.make(from: VersioneerPreviewFixtures.makeInstalledApp(from: VersioneerPreviewFixtures.firefox))]
+      )
+    ) {
+      RootView()
+    }
+  }
+
+  #Preview("Settings: Ignored Apps") {
+    SettingsPreviewHost(
+      appState: VersioneerPreviewFixtures.rootState(
+        ignoredRules: [
+          IgnoredAppRule.make(from: VersioneerPreviewFixtures.makeInstalledApp(from: VersioneerPreviewFixtures.firefox)),
+          IgnoredAppRule.make(
+            displayName: "Path Only",
+            matchType: .path,
+            rawValue: "/Applications/Path Only.app"
+          )!,
+        ]
+      )
+    )
   }
 #endif

@@ -10,12 +10,12 @@ import UniformTypeIdentifiers
 final class AppState {
   // MARK: - Services
 
-  let settings = SettingsStore()
+  let settings: SettingsStore
   let scanner = AppScanner()
   let sparkleChecker = SparkleChecker()
   let electronChecker = ElectronChecker()
   let installCoordinator = InstallCoordinator()
-  private let cacheStore = ScanCacheStore()
+  private let cacheStore: ScanCacheStore
 
   var apiClient: InventoryAPIClient {
     InventoryAPIClient(baseURL: settings.baseURL)
@@ -32,6 +32,7 @@ final class AppState {
     case updatesAvailable = "Updates Available"
     case unknown = "Unknown"
     case unsupported = "Unsupported"
+    case ignored = "Ignored"
 
     var id: String { rawValue }
 
@@ -41,6 +42,7 @@ final class AppState {
       case .updatesAvailable: "Updates"
       case .unsupported: "Unsupported"
       case .unknown: "Unknown"
+      case .ignored: "Ignored"
       }
     }
 
@@ -50,6 +52,7 @@ final class AppState {
       case .updatesAvailable: "arrow.up.circle"
       case .unsupported: "xmark.circle"
       case .unknown: "questionmark.circle"
+      case .ignored: "minus.circle"
       }
     }
   }
@@ -63,7 +66,9 @@ final class AppState {
   // MARK: - Data
 
   var installedApps: [InstalledApp] = []
+  var rawInventoryResults: [AppDecision] = []
   var inventoryResults: [AppDecision] = []
+  var userIgnoredResultIDs: Set<String> = []
   var snapshotId: String?
   var searchText: String = ""
   var lastScanCompletedAt: Date?
@@ -92,13 +97,20 @@ final class AppState {
 
   // MARK: - Init
 
-  init() {
+  init(
+    settings: SettingsStore = SettingsStore(),
+    cacheStore: ScanCacheStore = ScanCacheStore()
+  ) {
+    self.settings = settings
+    self.cacheStore = cacheStore
+
     if let cached = cacheStore.load() {
       installedApps = cached.installedApps
-      inventoryResults = cached.inventoryResults
+      rawInventoryResults = cached.inventoryResults
       snapshotId = cached.snapshotId
       loadState = .done
       rebuildLookupTables()
+      refreshDisplayedResults()
     }
   }
 
@@ -112,18 +124,22 @@ final class AppState {
     let updatesAvailableCount: Int
     let unknownCount: Int
     let unsupportedCount: Int
+    let ignoredCount: Int
     let lastCompletedAt: Date?
   }
 
   var scanSummary: ScanSummary {
-    ScanSummary(
-      totalApps: max(inventoryResults.count, installedApps.count),
+    let visibleResults = inventoryResults.filter { !isUserIgnored($0) }
+
+    return ScanSummary(
+      totalApps: visibleResults.count,
       updatesAvailableCount: inventoryResults.filter { $0.decision == .updateAvailable }.count,
       unknownCount: inventoryResults.filter { $0.decision == .unknown || $0.decision == .ambiguous }
         .count,
       unsupportedCount: inventoryResults.filter {
-        $0.decision == .unsupported || $0.decision == .ignored
+        ($0.decision == .unsupported || $0.decision == .ignored) && !isUserIgnored($0)
       }.count,
+      ignoredCount: userIgnoredResultIDs.count,
       lastCompletedAt: lastScanCompletedAt
     )
   }
@@ -155,23 +171,29 @@ final class AppState {
     FilterPresentation.make(summary: scanSummary, selectedSection: selectedSection)
   }
 
+  var ignoredAppRules: [IgnoredAppRule] {
+    settings.ignoredAppRules
+  }
+
   // MARK: - Computed filtered results
 
   var filteredResults: [AppDecision] {
     let sectionFiltered: [AppDecision]
     switch selectedSection {
     case .all:
-      sectionFiltered = inventoryResults
+      sectionFiltered = inventoryResults.filter { !isUserIgnored($0) }
     case .updatesAvailable:
       sectionFiltered = inventoryResults.filter { $0.decision == .updateAvailable }
     case .unsupported:
       sectionFiltered = inventoryResults.filter {
-        $0.decision == .unsupported || $0.decision == .ignored
+        ($0.decision == .unsupported || $0.decision == .ignored) && !isUserIgnored($0)
       }
     case .unknown:
       sectionFiltered = inventoryResults.filter {
         $0.decision == .unknown || $0.decision == .ambiguous
       }
+    case .ignored:
+      sectionFiltered = inventoryResults.filter { isUserIgnored($0) }
     }
 
     guard !searchText.isEmpty else { return sectionFiltered }
@@ -192,6 +214,9 @@ final class AppState {
     case .unknown:
       let count = inventoryResults.filter { $0.decision == .unknown || $0.decision == .ambiguous }
         .count
+      return count > 0 ? count : nil
+    case .ignored:
+      let count = userIgnoredResultIDs.count
       return count > 0 ? count : nil
     default:
       return nil
@@ -239,6 +264,79 @@ final class AppState {
     findInstalledApp(for: result, in: installedApps)
   }
 
+  func bundleIdText(for result: AppDecision) -> String? {
+    installedApp(for: result)?.bundleId ?? result.bundleId
+  }
+
+  func appPathText(for result: AppDecision) -> String? {
+    installedApp(for: result)?.path
+  }
+
+  func installedApp(matching rule: IgnoredAppRule) -> InstalledApp? {
+    installedApps.first(where: rule.matches)
+  }
+
+  func ignoredAppRules(matching result: AppDecision) -> [IgnoredAppRule] {
+    guard let installedApp = installedApp(for: result) else { return [] }
+    return settings.ignoredAppRules.filter { $0.matches(installedApp) }
+  }
+
+  func isUserIgnored(_ result: AppDecision) -> Bool {
+    userIgnoredResultIDs.contains(result.id)
+  }
+
+  func ignore(_ result: AppDecision) {
+    guard let installedApp = installedApp(for: result) else { return }
+    settings.addIgnoredAppRule(IgnoredAppRule.make(from: installedApp))
+    refreshDisplayedResults()
+  }
+
+  func unignore(_ result: AppDecision) {
+    let ruleIDs = Set(ignoredAppRules(matching: result).map(\.id))
+    guard !ruleIDs.isEmpty else { return }
+    settings.ignoredAppRules = settings.ignoredAppRules.filter { !ruleIDs.contains($0.id) }
+    refreshDisplayedResults()
+  }
+
+  func addIgnoredAppRule(_ rule: IgnoredAppRule) {
+    settings.addIgnoredAppRule(rule)
+    refreshDisplayedResults()
+  }
+
+  func removeIgnoredAppRule(_ rule: IgnoredAppRule) {
+    settings.removeIgnoredAppRule(rule)
+    refreshDisplayedResults()
+  }
+
+  func openApp(_ result: AppDecision) {
+    guard let installedApp = installedApp(for: result) else { return }
+
+    let configuration = NSWorkspace.OpenConfiguration()
+    NSWorkspace.shared.openApplication(
+      at: URL(fileURLWithPath: installedApp.path),
+      configuration: configuration
+    ) { _, error in
+      if let error {
+        Logger.app.error("Failed to open app \(installedApp.name): \(error.localizedDescription)")
+      }
+    }
+  }
+
+  func revealAppInFinder(_ result: AppDecision) {
+    guard let path = appPathText(for: result) else { return }
+    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+  }
+
+  func copyBundleId(_ result: AppDecision) {
+    guard let bundleId = bundleIdText(for: result) else { return }
+    copyToPasteboard(bundleId)
+  }
+
+  func copyAppPath(_ result: AppDecision) {
+    guard let path = appPathText(for: result) else { return }
+    copyToPasteboard(path)
+  }
+
   func selectResult(id: String?) {
     guard let id else {
       selectedResult = nil
@@ -274,7 +372,7 @@ final class AppState {
 
     do {
       let response = try await backendTask
-      inventoryResults = mergeResults(
+      rawInventoryResults = mergeResults(
         backend: response.results,
         local: localResults,
         apps: apps
@@ -282,25 +380,25 @@ final class AppState {
       snapshotId = response.snapshotId
       loadState = .done
       lastScanCompletedAt = Date()
-      restoreSelection(with: previousSelectionID)
+      refreshDisplayedResults(preservingSelectionID: previousSelectionID)
       cacheStore.save(
         ScanCacheStore.CachedScanData(
           installedApps: installedApps,
-          inventoryResults: inventoryResults,
+          inventoryResults: rawInventoryResults,
           snapshotId: response.snapshotId
         ))
     } catch {
       // Backend failed — fall back to local results if we have any
       if !localResults.isEmpty {
-        inventoryResults = buildLocalOnlyResults(local: localResults, apps: apps)
+        rawInventoryResults = buildLocalOnlyResults(local: localResults, apps: apps)
         snapshotId = nil
         loadState = .done
         lastScanCompletedAt = Date()
-        restoreSelection(with: previousSelectionID)
+        refreshDisplayedResults(preservingSelectionID: previousSelectionID)
         cacheStore.save(
           ScanCacheStore.CachedScanData(
             installedApps: installedApps,
-            inventoryResults: inventoryResults,
+            inventoryResults: rawInventoryResults,
             snapshotId: nil
           ))
       } else {
@@ -578,6 +676,41 @@ final class AppState {
     installedApp(for: result)?.homebrewCaskToken ?? result.homebrewCaskToken
   }
 
+  func refreshDisplayedResults(preservingSelectionID selectionID: String? = nil) {
+    let preferredSelectionID = selectionID ?? selectedAppID ?? selectedResult?.id
+    userIgnoredResultIDs = Set(
+      rawInventoryResults.compactMap { decision in
+        guard let installedApp = findInstalledApp(for: decision, in: installedApps),
+          settings.isIgnored(installedApp)
+        else { return nil }
+        return decision.id
+      })
+
+    inventoryResults = rawInventoryResults.map { decision in
+      guard userIgnoredResultIDs.contains(decision.id) else { return decision }
+      return decision.replacing(decision: .ignored)
+    }
+
+    guard let preferredSelectionID else { return }
+
+    let movedIntoHiddenIgnoredSection =
+      userIgnoredResultIDs.contains(preferredSelectionID) && selectedSection != .ignored
+    let movedOutOfIgnoredSection =
+      !userIgnoredResultIDs.contains(preferredSelectionID) && selectedSection == .ignored
+
+    if movedIntoHiddenIgnoredSection || movedOutOfIgnoredSection {
+      if selectedAppID == preferredSelectionID || detailResult?.id == preferredSelectionID {
+        closeDetail()
+      }
+      if selectedResult?.id == preferredSelectionID {
+        selectedResult = nil
+      }
+      return
+    }
+
+    restoreSelection(with: preferredSelectionID)
+  }
+
   private func sort(
     rows: [ResultsBrowserRowPresentation],
     by sort: ResultsBrowserSort
@@ -622,5 +755,11 @@ final class AppState {
     if detailResult != nil {
       detailResult = inventoryResults.first { $0.id == id }
     }
+  }
+
+  private func copyToPasteboard(_ value: String) {
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(value, forType: .string)
   }
 }

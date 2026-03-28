@@ -24,6 +24,7 @@ nonisolated struct FilterPresentation: Equatable, Sendable {
         case .updatesAvailable: summary.updatesAvailableCount
         case .unknown: summary.unknownCount
         case .unsupported: summary.unsupportedCount
+        case .ignored: summary.ignoredCount
         }
       return Chip(
         id: section.rawValue,

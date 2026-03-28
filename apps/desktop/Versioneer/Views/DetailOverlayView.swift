@@ -58,6 +58,10 @@ private struct DetailCardView: View {
     InstallPresentation.make(result: result, state: installState)
   }
 
+  private var isUserIgnored: Bool {
+    appState.isUserIgnored(result)
+  }
+
   var body: some View {
     VStack(spacing: 0) {
       // Close button row
@@ -204,7 +208,9 @@ private struct DetailCardView: View {
 
   @ViewBuilder
   private var actionSection: some View {
-    if isBrewApp && result.decision == .updateAvailable {
+    if isUserIgnored {
+      ignoredActionSection
+    } else if isBrewApp && result.decision == .updateAvailable {
       brewUpgradeActionSection
     } else if result.install.canInstall {
       standardInstallActionSection
@@ -219,6 +225,37 @@ private struct DetailCardView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .glassCard(cornerRadius: 18, padding: 16)
     }
+  }
+
+  private var ignoredActionSection: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      SectionHeader(
+        title: "Ignored",
+        subtitle:
+          "Versioneer will keep this app out of the normal result sections until you remove its ignore rule."
+      )
+
+      Button("Stop Ignoring") {
+        appState.unignore(result)
+      }
+      .buttonStyle(.glassProminent)
+      .controlSize(.large)
+
+      HStack(spacing: 10) {
+        Button("Open App") {
+          appState.openApp(result)
+        }
+        .disabled(appState.appPathText(for: result) == nil)
+
+        Button("Show in Finder") {
+          appState.revealAppInFinder(result)
+        }
+        .disabled(appState.appPathText(for: result) == nil)
+      }
+      .buttonStyle(.glass)
+      .controlSize(.regular)
+    }
+    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
   }
 
   // MARK: - Homebrew Upgrade Action

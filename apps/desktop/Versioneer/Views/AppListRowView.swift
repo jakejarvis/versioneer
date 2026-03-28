@@ -15,6 +15,11 @@ struct AppListRowView: View {
     return installCoordinator.state(for: result)
   }
 
+  private var isUserIgnored: Bool {
+    guard let result else { return false }
+    return appState.isUserIgnored(result)
+  }
+
   var body: some View {
     HStack(spacing: 12) {
       appIcon
@@ -47,6 +52,11 @@ struct AppListRowView: View {
     .padding(.horizontal, 4)
     .contentShape(Rectangle())
     .animation(.spring(duration: 0.25), value: installState.phase)
+    .contextMenu {
+      if let result {
+        rowContextMenu(for: result)
+      }
+    }
   }
 
   private var appIcon: some View {
@@ -135,5 +145,63 @@ struct AppListRowView: View {
         systemImage: row.statusSystemImage
       )
     }
+  }
+
+  @ViewBuilder
+  private func rowContextMenu(for result: AppDecision) -> some View {
+    let hasPath = appState.appPathText(for: result) != nil
+    let hasBundleId = appState.bundleIdText(for: result) != nil
+
+    Button("Open App") {
+      appState.openApp(result)
+    }
+    .disabled(!hasPath)
+
+    Button("Show in Finder") {
+      appState.revealAppInFinder(result)
+    }
+    .disabled(!hasPath)
+
+    Button("Open Details") {
+      withAnimation(.spring(duration: 0.3)) {
+        appState.openDetail(id: result.id)
+      }
+    }
+
+    Divider()
+
+    if !isUserIgnored && row.isUpdateAvailable && row.canInstall {
+      Button(appState.isHomebrewInstalled(for: result) ? "Update via Homebrew" : "Update") {
+        if appState.isHomebrewInstalled(for: result) {
+          Task { await appState.brewUpgrade(result) }
+        } else {
+          Task { await appState.install(result) }
+        }
+      }
+
+      Divider()
+    }
+
+    if isUserIgnored {
+      Button("Unignore") {
+        appState.unignore(result)
+      }
+    } else {
+      Button("Ignore") {
+        appState.ignore(result)
+      }
+    }
+
+    Divider()
+
+    Button("Copy Bundle ID") {
+      appState.copyBundleId(result)
+    }
+    .disabled(!hasBundleId)
+
+    Button("Copy Path") {
+      appState.copyAppPath(result)
+    }
+    .disabled(!hasPath)
   }
 }
