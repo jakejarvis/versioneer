@@ -3,6 +3,7 @@ import SwiftUI
 struct AppListRowView: View {
   @Environment(AppState.self) private var appState
   @Environment(InstallCoordinator.self) private var installCoordinator
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   let row: ResultsBrowserRowPresentation
 
@@ -36,11 +37,12 @@ struct AppListRowView: View {
               .font(.caption2)
               .foregroundStyle(.secondary)
               .help("Installed via Homebrew")
+              .accessibilityLabel("Installed via Homebrew")
           }
         }
 
         subtitleText
-          .animation(.spring(duration: 0.25), value: installState.phase)
+          .motionAwareAnimation(.spring(duration: 0.25), value: installState.phase)
       }
       .layoutPriority(1)
 
@@ -48,11 +50,13 @@ struct AppListRowView: View {
 
       trailingContent
         .fixedSize()
-        .animation(.spring(duration: 0.25), value: installState.phase)
+        .motionAwareAnimation(.spring(duration: 0.25), value: installState.phase)
     }
     .padding(.vertical, 5)
     .padding(.horizontal, 4)
     .contentShape(Rectangle())
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(row.appName), \(row.statusText)")
     .contextMenu {
       if let result {
         rowContextMenu(for: result)
@@ -111,14 +115,14 @@ struct AppListRowView: View {
         tint: .accentColor,
         showsProgress: true
       )
-      .transition(.opacity.combined(with: .scale))
+      .transition(.motionAware(.opacity.combined(with: .scale), reduceMotion: reduceMotion))
     } else if installState.phase == .completed {
       StatusChip(
         title: "Updated",
         tint: .green,
         systemImage: "checkmark.circle.fill"
       )
-      .transition(.scale.combined(with: .opacity))
+      .transition(.motionAware(.scale.combined(with: .opacity), reduceMotion: reduceMotion))
     } else if installState.phase == .failed {
       StatusChip(
         title: "Failed",
@@ -139,6 +143,7 @@ struct AppListRowView: View {
       }
       .buttonStyle(.glass)
       .controlSize(.small)
+      .accessibilityLabel("Update \(row.appName)")
     } else {
       StatusChip(
         title: row.statusText,
@@ -164,7 +169,7 @@ struct AppListRowView: View {
     .disabled(!hasPath)
 
     Button("Open Details") {
-      withAnimation(.spring(duration: 0.3)) {
+      withMotionAwareAnimation(reduceMotion: reduceMotion) {
         appState.openDetail(id: result.id)
       }
     }

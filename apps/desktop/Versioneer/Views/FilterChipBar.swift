@@ -2,6 +2,9 @@ import SwiftUI
 
 struct FilterChipBar: View {
   @Environment(AppState.self) private var appState
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  @State private var hoveredSection: AppState.FilterSection?
 
   var body: some View {
     @Bindable var appState = appState
@@ -41,16 +44,21 @@ struct FilterChipBar: View {
         .buttonStyle(.borderedProminent)
         .controlSize(.small)
         .help("Update all \(appState.filterPresentation.updateAllCount) app(s)")
-        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+        .accessibilityLabel("Update all \(appState.filterPresentation.updateAllCount) apps")
+        .transition(
+          .motionAware(
+            .opacity.combined(with: .scale(scale: 0.9)),
+            reduceMotion: reduceMotion
+          ))
       }
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 10)
-    .background(.ultraThinMaterial)
+    .adaptiveMaterial()
     .overlay(alignment: .bottom) {
       Divider()
     }
-    .animation(.spring(duration: 0.25), value: appState.filterPresentation.showUpdateAll)
+    .motionAwareAnimation(.spring(duration: 0.25), value: appState.filterPresentation.showUpdateAll)
   }
 
   private func filterChip(for section: AppState.FilterSection) -> some View {
@@ -59,7 +67,7 @@ struct FilterChipBar: View {
     let count = chip?.count ?? 0
 
     return Button {
-      withAnimation(.spring(duration: 0.2)) {
+      withMotionAwareAnimation(reduceMotion: reduceMotion, full: .spring(duration: 0.2)) {
         appState.setSelectedSection(section)
       }
     } label: {
@@ -80,13 +88,15 @@ struct FilterChipBar: View {
       .background(
         isSelected
           ? Color.accentColor.opacity(0.12)
-          : Color.clear,
+          : (hoveredSection == section ? Color.primary.opacity(0.04) : Color.clear),
         in: .capsule
       )
     }
     .buttonStyle(.plain)
-    .focusEffectDisabled()
+    .onHover { isHovered in hoveredSection = isHovered ? section : nil }
     .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+    .accessibilityLabel("\(section.shortTitle), \(count) apps")
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
   private var chipRailMask: some View {

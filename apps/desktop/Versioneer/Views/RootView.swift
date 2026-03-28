@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
   @Environment(AppState.self) private var appState
   @Environment(InstallCoordinator.self) private var installCoordinator
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   @State private var searchInput: String = ""
   @State private var searchDebounceTask: Task<Void, Never>?
@@ -21,7 +22,29 @@ struct RootView: View {
       // Full-window overlay
       if appState.detailResult != nil {
         DetailOverlayView()
-          .animation(.spring(duration: 0.3), value: appState.detailResult?.id)
+          .motionAwareAnimation(.spring(duration: 0.3), value: appState.detailResult?.id)
+      }
+    }
+    .toolbar {
+      ToolbarItemGroup(placement: .primaryAction) {
+        Button {
+          Task { await appState.scanAndSubmit() }
+        } label: {
+          Label("Refresh", systemImage: "arrow.clockwise")
+        }
+        .disabled(appState.loadState == .scanning || appState.loadState == .submitting)
+        .help("Refresh (⌘R)")
+        .accessibilityLabel("Refresh")
+
+        if !appState.updatableResults.isEmpty {
+          Button {
+            Task { await appState.installAll() }
+          } label: {
+            Label("Update All", systemImage: "arrow.down.circle")
+          }
+          .help("Update All (⌘⇧U)")
+          .accessibilityLabel("Update all \(appState.updatableResults.count) apps")
+        }
       }
     }
     .searchable(text: $searchInput, placement: .toolbar, prompt: "Filter apps")
@@ -39,7 +62,7 @@ struct RootView: View {
     .versioneerAnalyticsScreen(name: "main_window", class: "RootView")
     .onKeyPress(.escape) {
       if appState.detailResult != nil {
-        withAnimation(.spring(duration: 0.3)) {
+        withMotionAwareAnimation(reduceMotion: reduceMotion) {
           appState.closeDetail()
         }
         return .handled
@@ -95,18 +118,18 @@ struct RootView: View {
     .scrollContentBackground(.hidden)
     .onChange(of: appState.selectedAppID) { _, newValue in
       guard let newValue else {
-        withAnimation(.spring(duration: 0.3)) {
+        withMotionAwareAnimation(reduceMotion: reduceMotion) {
           appState.detailResult = nil
         }
         return
       }
-      withAnimation(.spring(duration: 0.3)) {
+      withMotionAwareAnimation(reduceMotion: reduceMotion) {
         appState.openDetail(id: newValue)
       }
     }
     .onKeyPress(.return) {
       if let selectedID = appState.selectedAppID, appState.detailResult == nil {
-        withAnimation(.spring(duration: 0.3)) {
+        withMotionAwareAnimation(reduceMotion: reduceMotion) {
           appState.openDetail(id: selectedID)
         }
         return .handled
@@ -118,7 +141,7 @@ struct RootView: View {
   private var resultsPaneBackground: some View {
     Color(nsColor: .windowBackgroundColor)
       .overlay {
-        Color.black.opacity(0.06)
+        Color.primary.opacity(0.03)
       }
   }
 }

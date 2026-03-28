@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ScannerAnimationView: View {
   @Environment(AppState.self) private var appState
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   @State private var revealedCount = 0
   @State private var animationTimer: Timer?
@@ -16,7 +17,7 @@ struct ScannerAnimationView: View {
         Image(systemName: "magnifyingglass")
           .font(.system(size: 36, weight: .light))
           .foregroundStyle(.secondary)
-          .symbolEffect(.pulse, options: .repeating)
+          .if(!reduceMotion) { $0.symbolEffect(.pulse, options: .repeating) }
 
         Text("Discovering your apps…")
           .font(.title3.weight(.medium))
@@ -37,6 +38,8 @@ struct ScannerAnimationView: View {
       Spacer()
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Scanning for installed applications")
     .onAppear { startRevealAnimation() }
     .onDisappear { stopRevealAnimation() }
   }
@@ -49,9 +52,13 @@ struct ScannerAnimationView: View {
       .aspectRatio(contentMode: .fit)
       .frame(width: 40, height: 40)
       .opacity(isRevealed ? 1 : 0)
-      .scaleEffect(isRevealed ? 1 : 0.6)
+      .scaleEffect(reduceMotion ? 1 : (isRevealed ? 1 : 0.6))
       .animation(
-        .spring(duration: 0.35, bounce: 0.3).delay(Double(index) * 0.02), value: isRevealed)
+        reduceMotion
+          ? .easeInOut(duration: 0.15)
+          : .spring(duration: 0.35, bounce: 0.3).delay(Double(index) * 0.02),
+        value: isRevealed
+      )
   }
 
   private func appDecisionStub(_ app: InstalledApp) -> AppDecision {

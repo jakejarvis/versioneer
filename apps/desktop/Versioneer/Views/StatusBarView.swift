@@ -35,16 +35,17 @@ struct StatusBarView: View {
       .foregroundStyle(.secondary)
       .disabled(isLoading)
       .help("Refresh (⌘R)")
-      .keyboardShortcut("r", modifiers: .command)
+      .accessibilityLabel("Refresh")
+      .accessibilityHint("Scans for installed apps and checks for updates")
     }
     .font(.caption)
     .foregroundStyle(.secondary)
     .padding(.horizontal, 14)
     .padding(.vertical, 8)
-    .background(.ultraThinMaterial)
+    .adaptiveMaterial()
     .overlay(alignment: .top) {
       Divider()
     }
-    .animation(.easeInOut(duration: 0.2), value: presentation.isScanning)
+    .motionAwareAnimation(.easeInOut(duration: 0.2), value: presentation.isScanning)
   }
 }

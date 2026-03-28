@@ -4,6 +4,8 @@ import SwiftUI
 // MARK: - Glass Card Modifier
 
 struct GlassCardModifier: ViewModifier {
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
   var interactive: Bool = false
   var cornerRadius: CGFloat = 22
   var padding: CGFloat = 18
@@ -11,10 +13,18 @@ struct GlassCardModifier: ViewModifier {
   func body(content: Content) -> some View {
     content
       .padding(padding)
-      .glassEffect(
-        interactive ? .regular.interactive() : .regular,
-        in: .rect(cornerRadius: cornerRadius)
-      )
+      .if(reduceTransparency) {
+        $0.background(
+          Color(nsColor: .controlBackgroundColor),
+          in: .rect(cornerRadius: cornerRadius)
+        )
+      }
+      .if(!reduceTransparency) {
+        $0.glassEffect(
+          interactive ? .regular.interactive() : .regular,
+          in: .rect(cornerRadius: cornerRadius)
+        )
+      }
   }
 }
 
@@ -79,6 +89,7 @@ struct StatusChip: View {
     .padding(.horizontal, 10)
     .padding(.vertical, 6)
     .background(tint.opacity(0.12), in: .capsule)
+    .accessibilityElement(children: .combine)
   }
 }
 
@@ -108,6 +119,7 @@ struct GlassBanner: View {
       Spacer(minLength: 0)
     }
     .glassCard(cornerRadius: 18, padding: 14)
+    .accessibilityElement(children: .combine)
   }
 }
 
@@ -147,6 +159,8 @@ struct VersionDiffLabel: View {
         .foregroundStyle(.orange)
     }
     .font(.callout.monospacedDigit())
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("Version \(installed) to \(latest)")
   }
 }
 
@@ -156,6 +170,7 @@ struct MetadataPopoverButton: View {
   let result: AppDecision
 
   @State private var showPopover = false
+  @State private var isHovered = false
 
   var body: some View {
     Button {
@@ -163,9 +178,12 @@ struct MetadataPopoverButton: View {
     } label: {
       Image(systemName: "info.circle")
         .font(.body)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(isHovered ? .primary : .secondary)
     }
     .buttonStyle(.plain)
+    .onHover { isHovered = $0 }
+    .accessibilityLabel("App metadata")
+    .accessibilityHint("Shows bundle ID, canonical name, and other technical details")
     .popover(isPresented: $showPopover, arrowEdge: .trailing) {
       VStack(alignment: .leading, spacing: 10) {
         metadataRow("Bundle ID", value: result.bundleId ?? "—")
@@ -215,7 +233,7 @@ struct InstallProgressView: View {
         HStack(spacing: 4) {
           ForEach(1...progress.totalSteps, id: \.self) { step in
             Capsule(style: .continuous)
-              .fill(step <= progress.currentStep ? Color.accentColor : Color.white.opacity(0.08))
+              .fill(step <= progress.currentStep ? Color.accentColor : Color.primary.opacity(0.08))
               .frame(height: 6)
               .glassEffect(
                 step <= progress.currentStep ? .regular : .regular,
@@ -226,6 +244,8 @@ struct InstallProgressView: View {
       }
     }
     .glassCard(cornerRadius: 18, padding: 14)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(progress.title), step \(progress.currentStep) of \(progress.totalSteps)")
   }
 }
 
@@ -259,9 +279,33 @@ extension ResultsBrowserRowPresentation.Tone {
   }
 }
 
+// MARK: - Adaptive Material Modifier
+
+/// Replaces `.ultraThinMaterial` with a solid background when the user
+/// has enabled Reduce Transparency in System Settings.
+struct AdaptiveMaterialModifier: ViewModifier {
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+  func body(content: Content) -> some View {
+    if reduceTransparency {
+      content.background(Color(nsColor: .windowBackgroundColor))
+    } else {
+      content.background(.ultraThinMaterial)
+    }
+  }
+}
+
+extension View {
+  func adaptiveMaterial() -> some View {
+    modifier(AdaptiveMaterialModifier())
+  }
+}
+
 // MARK: - Translucent Window Background
 
 struct TranslucentWindowBackground: NSViewRepresentable {
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
   func makeNSView(context: Context) -> NSVisualEffectView {
     let view = NSVisualEffectView()
     view.material = .underWindowBackground
@@ -276,7 +320,9 @@ struct TranslucentWindowBackground: NSViewRepresentable {
     return view
   }
 
-  func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+  func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+    nsView.state = reduceTransparency ? .inactive : .active
+  }
 }
 
 // MARK: - Conditional Modifier

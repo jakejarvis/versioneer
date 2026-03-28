@@ -3,6 +3,7 @@ import SwiftUI
 struct DetailOverlayView: View {
   @Environment(AppState.self) private var appState
   @Environment(InstallCoordinator.self) private var installCoordinator
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     if let result = appState.detailResult {
@@ -12,7 +13,7 @@ struct DetailOverlayView: View {
           .ignoresSafeArea()
           .transition(.opacity)
           .onTapGesture {
-            withAnimation(.spring(duration: 0.3)) {
+            withMotionAwareAnimation(reduceMotion: reduceMotion) {
               appState.closeDetail()
             }
           }
@@ -23,7 +24,11 @@ struct DetailOverlayView: View {
           .frame(maxHeight: .infinity)
           .padding(.vertical, 24)
           .padding(.horizontal, 20)
-          .transition(.opacity.combined(with: .scale(scale: 0.95)))
+          .transition(
+            .motionAware(
+              .opacity.combined(with: .scale(scale: 0.95)),
+              reduceMotion: reduceMotion
+            ))
       }
     }
   }
@@ -34,9 +39,12 @@ struct DetailOverlayView: View {
 private struct DetailCardView: View {
   @Environment(AppState.self) private var appState
   @Environment(InstallCoordinator.self) private var installCoordinator
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
   let result: AppDecision
 
+  @State private var closeButtonHovered = false
   @State private var showFeedbackSheet = false
   @State private var showInstallWarning = false
   @State private var showBrewBypassWarning = false
@@ -68,16 +76,18 @@ private struct DetailCardView: View {
       HStack {
         Spacer()
         Button {
-          withAnimation(.spring(duration: 0.3)) {
+          withMotionAwareAnimation(reduceMotion: reduceMotion) {
             appState.closeDetail()
           }
         } label: {
           Image(systemName: "xmark.circle.fill")
             .font(.title2)
             .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(closeButtonHovered ? .primary : .secondary)
         }
         .buttonStyle(.plain)
+        .onHover { closeButtonHovered = $0 }
+        .accessibilityLabel("Close detail")
       }
       .padding(.horizontal, 16)
       .padding(.top, 12)
@@ -95,7 +105,15 @@ private struct DetailCardView: View {
         .padding(.bottom, 20)
       }
     }
-    .glassEffect(.regular, in: .rect(cornerRadius: 22))
+    .if(reduceTransparency) {
+      $0.background(
+        Color(nsColor: .controlBackgroundColor),
+        in: .rect(cornerRadius: 22)
+      )
+    }
+    .if(!reduceTransparency) {
+      $0.glassEffect(.regular, in: .rect(cornerRadius: 22))
+    }
     .task(id: result.latestReleaseId) {
       await loadReleaseNotes()
     }
