@@ -7,7 +7,7 @@ struct AppListRowView: View {
   let row: ResultsBrowserRowPresentation
 
   private var result: AppDecision? {
-    appState.inventoryResults.first { $0.id == row.id }
+    appState.inventoryResultsByID[row.id]
   }
 
   private var installState: InstallCoordinator.OperationState {
@@ -40,6 +40,7 @@ struct AppListRowView: View {
         }
 
         subtitleText
+          .animation(.spring(duration: 0.25), value: installState.phase)
       }
       .layoutPriority(1)
 
@@ -47,11 +48,11 @@ struct AppListRowView: View {
 
       trailingContent
         .fixedSize()
+        .animation(.spring(duration: 0.25), value: installState.phase)
     }
     .padding(.vertical, 5)
     .padding(.horizontal, 4)
     .contentShape(Rectangle())
-    .animation(.spring(duration: 0.25), value: installState.phase)
     .contextMenu {
       if let result {
         rowContextMenu(for: result)

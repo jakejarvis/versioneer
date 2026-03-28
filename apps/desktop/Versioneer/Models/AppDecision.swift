@@ -2,8 +2,7 @@ import Foundation
 
 /// A single backend decision about an installed app.
 nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
-  var id: String { appName + (bundleId ?? "") }
-
+  let id: String
   let appName: String
   let bundleId: String?
   let installedVersion: String?
@@ -19,6 +18,67 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
   let iconUrl: String?
   let artifact: Artifact?
   let install: Install
+
+  init(
+    appName: String,
+    bundleId: String?,
+    installedVersion: String?,
+    matchedAppId: String?,
+    matchedAppName: String?,
+    matchConfidence: Double?,
+    decision: Decision,
+    latestVersion: String?,
+    latestVersionRaw: String?,
+    latestReleaseId: String?,
+    homebrewCaskToken: String?,
+    releasedAt: String?,
+    iconUrl: String?,
+    artifact: Artifact?,
+    install: Install
+  ) {
+    self.id = appName + (bundleId ?? "")
+    self.appName = appName
+    self.bundleId = bundleId
+    self.installedVersion = installedVersion
+    self.matchedAppId = matchedAppId
+    self.matchedAppName = matchedAppName
+    self.matchConfidence = matchConfidence
+    self.decision = decision
+    self.latestVersion = latestVersion
+    self.latestVersionRaw = latestVersionRaw
+    self.latestReleaseId = latestReleaseId
+    self.homebrewCaskToken = homebrewCaskToken
+    self.releasedAt = releasedAt
+    self.iconUrl = iconUrl
+    self.artifact = artifact
+    self.install = install
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case appName, bundleId, installedVersion, matchedAppId, matchedAppName,
+      matchConfidence, decision, latestVersion, latestVersionRaw, latestReleaseId,
+      homebrewCaskToken, releasedAt, iconUrl, artifact, install
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    appName = try container.decode(String.self, forKey: .appName)
+    bundleId = try container.decodeIfPresent(String.self, forKey: .bundleId)
+    id = appName + (bundleId ?? "")
+    installedVersion = try container.decodeIfPresent(String.self, forKey: .installedVersion)
+    matchedAppId = try container.decodeIfPresent(String.self, forKey: .matchedAppId)
+    matchedAppName = try container.decodeIfPresent(String.self, forKey: .matchedAppName)
+    matchConfidence = try container.decodeIfPresent(Double.self, forKey: .matchConfidence)
+    decision = try container.decode(Decision.self, forKey: .decision)
+    latestVersion = try container.decodeIfPresent(String.self, forKey: .latestVersion)
+    latestVersionRaw = try container.decodeIfPresent(String.self, forKey: .latestVersionRaw)
+    latestReleaseId = try container.decodeIfPresent(String.self, forKey: .latestReleaseId)
+    homebrewCaskToken = try container.decodeIfPresent(String.self, forKey: .homebrewCaskToken)
+    releasedAt = try container.decodeIfPresent(String.self, forKey: .releasedAt)
+    iconUrl = try container.decodeIfPresent(String.self, forKey: .iconUrl)
+    artifact = try container.decodeIfPresent(Artifact.self, forKey: .artifact)
+    install = try container.decode(Install.self, forKey: .install)
+  }
 
   enum Decision: String, Codable, Sendable, CaseIterable {
     case unknown

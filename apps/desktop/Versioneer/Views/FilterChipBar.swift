@@ -60,7 +60,7 @@ struct FilterChipBar: View {
 
     return Button {
       withAnimation(.spring(duration: 0.2)) {
-        appState.selectedSection = section
+        appState.setSelectedSection(section)
       }
     } label: {
       HStack(spacing: 5) {

@@ -22,8 +22,8 @@ nonisolated enum ResultsBrowserSort: String, CaseIterable, Identifiable, Sendabl
   }
 }
 
-nonisolated struct ResultsBrowserRowPresentation: Identifiable, Sendable {
-  enum Tone: String, Sendable {
+nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Sendable {
+  enum Tone: String, Equatable, Sendable {
     case accent
     case positive
     case attention

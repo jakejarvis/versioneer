@@ -87,6 +87,9 @@ final class InstallCoordinator {
   private var operations: [String: OperationState] = [:]
   private let privilegedHelperClient: any PrivilegedHelperClientProtocol
 
+  /// Called when any operation state changes, allowing observers to rebuild derived state.
+  var onStateChange: (() -> Void)?
+
   init(privilegedHelperClient: any PrivilegedHelperClientProtocol = PrivilegedHelperClient()) {
     self.privilegedHelperClient = privilegedHelperClient
   }
@@ -384,6 +387,7 @@ final class InstallCoordinator {
       recoveryAction: recoveryAction,
       helperStatus: helperStatus ?? existingState?.helperStatus
     )
+    onStateChange?()
   }
 
   func performRecoveryAction(_ action: RecoveryAction) {
@@ -1186,6 +1190,7 @@ extension Dictionary where Key == String, Value == String {
   extension InstallCoordinator {
     func previewSetState(_ state: OperationState, for result: AppDecision) {
       operations[result.id] = state
+      onStateChange?()
     }
   }
 #endif

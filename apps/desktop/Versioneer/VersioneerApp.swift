@@ -24,8 +24,10 @@ struct VersioneerApp: App {
         .disabled(!selfUpdateService.canCheckForUpdates)
       }
       CommandGroup(after: .toolbar) {
-        @Bindable var appState = appState
-        Picker("Sort By", selection: $appState.resultsSort) {
+        Picker("Sort By", selection: Binding(
+          get: { appState.resultsSort },
+          set: { appState.setResultsSort($0) }
+        )) {
           ForEach(ResultsBrowserSort.allCases) { sort in
             Text(sort.title).tag(sort)
           }

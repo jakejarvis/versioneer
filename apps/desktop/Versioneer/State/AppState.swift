@@ -77,6 +77,13 @@ final class AppState {
   private var appPathsByBundleId: [String: String] = [:]
   private var appPathsByName: [String: String] = [:]
 
+  /// Installed app lookup tables for O(1) access.
+  private var installedAppsByBundleId: [String: InstalledApp] = [:]
+  private var installedAppsByName: [String: InstalledApp] = [:]
+
+  /// Inventory results indexed by ID for O(1) lookups.
+  private(set) var inventoryResultsByID: [String: AppDecision] = [:]
+
   /// Icon cache to avoid re-loading from disk on every view redraw.
   private var iconCache: [String: NSImage] = [:]
 
@@ -104,6 +111,10 @@ final class AppState {
     self.settings = settings
     self.cacheStore = cacheStore
 
+    installCoordinator.onStateChange = { [weak self] in
+      self?.rebuildResultsBrowserRows()
+    }
+
     if let cached = cacheStore.load() {
       installedApps = cached.installedApps
       rawInventoryResults = cached.inventoryResults
@@ -128,10 +139,19 @@ final class AppState {
     let lastCompletedAt: Date?
   }
 
-  var scanSummary: ScanSummary {
+  private(set) var scanSummary = ScanSummary(
+    totalApps: 0,
+    updatesAvailableCount: 0,
+    unknownCount: 0,
+    unsupportedCount: 0,
+    ignoredCount: 0,
+    lastCompletedAt: nil
+  )
+
+  private func rebuildScanSummary() {
     let visibleResults = inventoryResults.filter { !isUserIgnored($0) }
 
-    return ScanSummary(
+    scanSummary = ScanSummary(
       totalApps: visibleResults.count,
       updatesAvailableCount: inventoryResults.filter { $0.decision == .updateAvailable }.count,
       unknownCount: inventoryResults.filter { $0.decision == .unknown || $0.decision == .ambiguous }
@@ -149,14 +169,16 @@ final class AppState {
     set { selectResult(id: newValue) }
   }
 
-  var resultsBrowserRows: [ResultsBrowserRowPresentation] {
+  private(set) var resultsBrowserRows: [ResultsBrowserRowPresentation] = []
+
+  private func rebuildResultsBrowserRows() {
     let rows = filteredResults.map { result in
       ResultsBrowserRowPresentation.make(
         result: result,
         installState: installCoordinator.state(for: result)
       )
     }
-    return sort(rows: rows, by: resultsSort)
+    resultsBrowserRows = sort(rows: rows, by: resultsSort)
   }
 
   var updatableResults: [AppDecision] {
@@ -225,22 +247,40 @@ final class AppState {
 
   // MARK: - Actions
 
-  /// Rebuilds path lookup tables from the current `installedApps` array.
+  func setSelectedSection(_ section: FilterSection) {
+    selectedSection = section
+    rebuildResultsBrowserRows()
+  }
+
+  func setResultsSort(_ sort: ResultsBrowserSort) {
+    resultsSort = sort
+    rebuildResultsBrowserRows()
+  }
+
+  func setSearchText(_ text: String) {
+    searchText = text
+    rebuildResultsBrowserRows()
+  }
+
+  /// Rebuilds path and installed-app lookup tables from the current `installedApps` array.
   private func rebuildLookupTables() {
     appPathsByBundleId = [:]
     appPathsByName = [:]
+    installedAppsByBundleId = [:]
+    installedAppsByName = [:]
     for app in installedApps {
       if let bundleId = app.bundleId {
         appPathsByBundleId[bundleId] = app.path
+        installedAppsByBundleId[bundleId] = app
       }
       appPathsByName[app.name] = app.path
+      installedAppsByName[app.name] = app
     }
   }
 
   /// Returns the locally extracted icon for an app decision, or a generic app icon.
   func appIcon(for result: AppDecision) -> NSImage {
-    let cacheKey = result.appName + (result.bundleId ?? "")
-    if let cached = iconCache[cacheKey] { return cached }
+    if let cached = iconCache[result.id] { return cached }
 
     let path: String? =
       if let bundleId = result.bundleId {
@@ -256,12 +296,15 @@ final class AppState {
         NSWorkspace.shared.icon(for: .applicationBundle)
       }
 
-    iconCache[cacheKey] = icon
+    iconCache[result.id] = icon
     return icon
   }
 
   func installedApp(for result: AppDecision) -> InstalledApp? {
-    findInstalledApp(for: result, in: installedApps)
+    if let bundleId = result.bundleId {
+      return installedAppsByBundleId[bundleId]
+    }
+    return installedAppsByName[result.appName]
   }
 
   func bundleIdText(for result: AppDecision) -> String? {
@@ -342,7 +385,7 @@ final class AppState {
       selectedResult = nil
       return
     }
-    selectedResult = inventoryResults.first { $0.id == id }
+    selectedResult = inventoryResultsByID[id]
   }
 
   func scanAndSubmit() async {
@@ -357,7 +400,6 @@ final class AppState {
     let scanMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
 
     installedApps = apps
-    iconCache = [:]
     rebuildLookupTables()
     loadState = .submitting
 
@@ -616,7 +658,7 @@ final class AppState {
   }
 
   func openDetail(id: String) {
-    detailResult = inventoryResults.first { $0.id == id }
+    detailResult = inventoryResultsByID[id]
     selectedResult = detailResult
     selectedAppID = id
   }
@@ -680,7 +722,7 @@ final class AppState {
     let preferredSelectionID = selectionID ?? selectedAppID ?? selectedResult?.id
     userIgnoredResultIDs = Set(
       rawInventoryResults.compactMap { decision in
-        guard let installedApp = findInstalledApp(for: decision, in: installedApps),
+        guard let installedApp = self.installedApp(for: decision),
           settings.isIgnored(installedApp)
         else { return nil }
         return decision.id
@@ -690,6 +732,9 @@ final class AppState {
       guard userIgnoredResultIDs.contains(decision.id) else { return decision }
       return decision.replacing(decision: .ignored)
     }
+    inventoryResultsByID = Dictionary(uniqueKeysWithValues: inventoryResults.map { ($0.id, $0) })
+    rebuildScanSummary()
+    rebuildResultsBrowserRows()
 
     guard let preferredSelectionID else { return }
 
@@ -753,7 +798,7 @@ final class AppState {
     selectResult(id: id)
     // Refresh the detail panel with updated data from the new inventory results
     if detailResult != nil {
-      detailResult = inventoryResults.first { $0.id == id }
+      detailResult = inventoryResultsByID[id]
     }
   }
 

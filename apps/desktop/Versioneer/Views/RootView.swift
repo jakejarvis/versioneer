@@ -4,9 +4,10 @@ struct RootView: View {
   @Environment(AppState.self) private var appState
   @Environment(InstallCoordinator.self) private var installCoordinator
 
-  var body: some View {
-    @Bindable var appState = appState
+  @State private var searchInput: String = ""
+  @State private var searchDebounceTask: Task<Void, Never>?
 
+  var body: some View {
     ZStack {
       // Main content
       VStack(spacing: 0) {
@@ -23,7 +24,15 @@ struct RootView: View {
           .animation(.spring(duration: 0.3), value: appState.detailResult?.id)
       }
     }
-    .searchable(text: $appState.searchText, placement: .toolbar, prompt: "Filter apps")
+    .searchable(text: $searchInput, placement: .toolbar, prompt: "Filter apps")
+    .onChange(of: searchInput) { _, newValue in
+      searchDebounceTask?.cancel()
+      searchDebounceTask = Task {
+        try? await Task.sleep(for: .milliseconds(200))
+        guard !Task.isCancelled else { return }
+        appState.setSearchText(newValue)
+      }
+    }
     .toolbarRole(.editor)
     .frame(minWidth: 500, minHeight: 400)
     .background(TranslucentWindowBackground())
