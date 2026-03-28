@@ -26,7 +26,7 @@ export function App() {
             href="https://github.com/jakejarvis/versioneer"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-fg/80 hover:text-fg"
+            className="text-foreground/80 hover:text-foreground"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="size-6">
               <path
@@ -40,32 +40,31 @@ export function App() {
 
       <main className="space-y-8">
         <p className="leading-relaxed">
-          Placeholder text placeholder text placeholder asdf asdf asdf text... Placeholder text
-          placeholder xvcboixvcbio text placeholder text... Placeholder text asdf placeholder text
-          placeholder text... placeholder text placeholder text.
+          A modern replacement for MacUpdater <span className="text-muted-foreground">(RIP)</span>{" "}
+          focused on widespread app compatibility, privacy-friendly data crowdsourcing, and safe
+          one-click installs, all behind a beautiful, fast, and native UI.
         </p>
 
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-1">
           <a
             href="https://dl.versioneer.app/latest/Versioneer.zip"
-            className="text-fg hover:text-fg/80 flex items-center gap-2 underline-offset-4 underline"
+            className="text-foreground hover:text-foreground/80 inline-flex items-center gap-2 underline-offset-4 underline text-sm"
           >
-            <HardDriveDownloadIcon className="size-3 text-fg" />
+            <HardDriveDownloadIcon className="size-3 text-foreground" />
             Download
           </a>
-          <span className="text-fg-muted text-xs">x.x MB</span>
         </div>
       </main>
 
-      <footer className="mt-12 text-sm text-fg-muted border-t border-fg/10 pt-6">
+      <footer className="mt-12 text-sm text-muted-foreground border-t border-foreground/10 pt-6">
         <p>
-          <span className="text-fg-muted">
+          <span className="text-muted-foreground">
             Created by{" "}
             <a
               href="https://jarv.is"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline-offset-4 underline hover:text-fg"
+              className="underline-offset-4 underline hover:text-foreground"
             >
               @jakejarvis
               <ArrowUpRightIcon className="size-3.5 inline-block translate-y-[-1px] ml-0.5" />
