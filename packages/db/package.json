@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@versioneer/typescript-config": "workspace:*",
-    "drizzle-kit": "1.0.0-beta.20",
+    "drizzle-kit": "^0.31.10",
     "typescript": "catalog:",
     "wrangler": "catalog:"
   }
