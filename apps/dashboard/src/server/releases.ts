@@ -9,7 +9,8 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
-import { releaseUpdateSchema } from "@versioneer/validation";
+import { releaseCreateSchema, releaseUpdateSchema } from "@versioneer/validation";
+import { normalizeVersion, isPreRelease, inferChannel } from "@versioneer/versioning";
 import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -45,7 +46,7 @@ export const listReleases = createServerFn({ method: "GET" })
       offset: z.number().int().min(0).default(0),
       appId: z.string().optional(),
       channel: z.string().optional(),
-      status: z.enum(["active", "retracted", "superseded", "draft"]).optional(),
+      status: z.enum(["active", "superseded", "draft"]).optional(),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,
     }),
@@ -131,7 +132,51 @@ export const getRelease = createServerFn({ method: "GET" })
     };
   });
 
-// PATCH /releases/:id - update status/channel
+// POST /releases - create manual release
+export const createRelease = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(releaseCreateSchema)
+  .handler(async ({ data, context }) => {
+    const db = createDb(env.DB);
+    const now = new Date().toISOString();
+    const id = generateId(idPrefixes.release);
+
+    const versionNormalized = normalizeVersion(data.versionRaw);
+    const channel = data.channel || inferChannel(data.versionRaw);
+
+    await db.insert(releases).values({
+      id,
+      appId: data.appId,
+      versionRaw: data.versionRaw,
+      versionNormalized,
+      buildNumber: data.buildNumber ?? null,
+      channel,
+      releasedAt: data.releasedAt ?? now,
+      isPrerelease: isPreRelease(data.versionRaw),
+      status: "active",
+      releaseNotesHtml: data.releaseNotesHtml ?? null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(auditLog).values({
+      id: generateId(idPrefixes.auditLog),
+      eventType: "release_created",
+      actorType: "admin",
+      actorId: context.user.email,
+      targetType: "release",
+      targetId: id,
+      payloadJson: JSON.stringify({ appId: data.appId, versionRaw: data.versionRaw, channel }),
+      createdAt: now,
+    });
+
+    // Trigger recompute latest for this app/channel
+    await env.RECOMPUTE_LATEST_QUEUE.send({ appId: data.appId, channel });
+
+    return { id, status: "created" };
+  });
+
+// PATCH /releases/:id - update status/channel/notes
 export const updateRelease = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(releaseUpdateSchema.extend({ id: z.string().min(1) }))
@@ -146,6 +191,7 @@ export const updateRelease = createServerFn({ method: "POST" })
     const updates: Record<string, unknown> = { updatedAt: now };
     if (fields.status !== undefined) updates.status = fields.status;
     if (fields.channel !== undefined) updates.channel = fields.channel;
+    if (fields.releaseNotesHtml !== undefined) updates.releaseNotesHtml = fields.releaseNotesHtml;
 
     await db.update(releases).set(updates).where(eq(releases.id, id));
 

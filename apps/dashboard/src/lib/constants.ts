@@ -61,7 +61,6 @@ export const statusColors: Record<string, string> = {
 
   error: DANGER,
   open: DANGER,
-  retracted: DANGER,
   red: DANGER,
   failed: DANGER,
 
@@ -111,7 +110,6 @@ export const statusLabels: Record<string, string> = {
   stable: "Stable",
   beta: "Beta",
   nightly: "Nightly",
-  retracted: "Retracted",
   superseded: "Superseded",
   draft: "Draft",
   unknown: "Unknown",

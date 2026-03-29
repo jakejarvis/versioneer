@@ -63,7 +63,7 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
   const primarySourceType = appSources[0]?.sourceType ?? null;
 
   for (const channel of channels) {
-    // Get all active, non-retracted releases for this app and channel
+    // Get all active releases for this app and channel
     const candidateReleases = await db
       .select()
       .from(releases)

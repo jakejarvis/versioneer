@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listReleases,
   getRelease,
+  createRelease,
   updateRelease,
   getReleaseArtifacts,
   getReleaseObservations,
@@ -13,7 +14,7 @@ import {
 interface UseReleasesParams {
   appId?: string;
   channel?: string;
-  status?: "active" | "retracted" | "superseded" | "draft";
+  status?: "active" | "superseded" | "draft";
   limit?: number;
   offset?: number;
   sortBy?: string;
@@ -35,12 +36,31 @@ export function useRelease(id: string) {
   });
 }
 
+export function useCreateRelease() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      appId: string;
+      versionRaw: string;
+      buildNumber?: string;
+      channel?: string;
+      releasedAt?: string;
+      releaseNotesHtml?: string;
+    }) => createRelease({ data: input }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["releases"] });
+      void qc.invalidateQueries({ queryKey: ["apps"] });
+    },
+  });
+}
+
 export function useUpdateRelease(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: {
-      status?: "active" | "retracted" | "superseded" | "draft";
+      status?: "active" | "superseded" | "draft";
       channel?: string;
+      releaseNotesHtml?: string | null;
     }) => updateRelease({ data: { id, ...input } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["releases"] });

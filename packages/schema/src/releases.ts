@@ -17,7 +17,7 @@ export const releases = sqliteTable(
     releasedAt: text("released_at"),
     isPrerelease: integer("is_prerelease", { mode: "boolean" }).notNull().default(false),
     sourceConfidence: integer("source_confidence"),
-    status: text("status", { enum: ["active", "retracted", "superseded", "draft"] })
+    status: text("status", { enum: ["active", "superseded", "draft"] })
       .notNull()
       .default("active"),
     releaseNotesHtml: text("release_notes_html"),

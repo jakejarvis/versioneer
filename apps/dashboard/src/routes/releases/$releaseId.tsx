@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, ExternalLink } from "lucide-react";
-import { useMemo } from "react";
+import { ArrowLeft, ExternalLink, Pencil, Save, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/releases/$releaseId")({
   component: ReleaseDetailPage,
@@ -259,7 +260,7 @@ function ReleaseDetailPage() {
             value={release.status}
             onValueChange={(value) =>
               updateRelease.mutate(
-                { status: value as "active" | "retracted" | "superseded" | "draft" },
+                { status: value as "active" | "superseded" | "draft" },
                 {
                   onSuccess: () => toast.success("Status updated"),
                   onError: (error) => toast.error(error.message),
@@ -272,7 +273,6 @@ function ReleaseDetailPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="retracted">Retracted</SelectItem>
               <SelectItem value="superseded">Superseded</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
             </SelectContent>
@@ -307,15 +307,7 @@ function ReleaseDetailPage() {
         </dl>
       </div>
 
-      {release.releaseNotesHtml ? (
-        <div className="mt-6">
-          <h3 className="text-lg font-medium">Release Notes</h3>
-          <div
-            className="mt-3 rounded-lg border p-4 text-sm leading-relaxed [&_a]:text-blue-600 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_h1]:mb-2 [&_h1]:mt-4 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mb-1.5 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-2 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-0.5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 dark:[&_a]:text-blue-400"
-            dangerouslySetInnerHTML={{ __html: release.releaseNotesHtml }}
-          />
-        </div>
-      ) : null}
+      <ReleaseNotesSection releaseId={releaseId} releaseNotesHtml={release.releaseNotesHtml} />
 
       <div className="mt-6">
         <div className="mb-3">
@@ -348,6 +340,82 @@ function ReleaseDetailPage() {
           enableColumnVisibility
         />
       </div>
+    </div>
+  );
+}
+
+const NOTES_PROSE_CLASSES =
+  "rounded-lg border p-4 text-sm leading-relaxed [&_a]:text-blue-600 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_h1]:mb-2 [&_h1]:mt-4 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mb-1.5 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-2 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-0.5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 dark:[&_a]:text-blue-400";
+
+function ReleaseNotesSection({
+  releaseId,
+  releaseNotesHtml,
+}: {
+  releaseId: string;
+  releaseNotesHtml: string | null;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(releaseNotesHtml ?? "");
+  const updateRelease = useUpdateRelease(releaseId);
+
+  const handleSave = () => {
+    updateRelease.mutate(
+      { releaseNotesHtml: draft || null },
+      {
+        onSuccess: () => {
+          toast.success("Release notes updated");
+          setEditing(false);
+        },
+        onError: (err) => toast.error(err.message),
+      },
+    );
+  };
+
+  return (
+    <div className="mt-6">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-lg font-medium">Release Notes</h3>
+        {editing ? (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDraft(releaseNotesHtml ?? "");
+                setEditing(false);
+              }}
+            >
+              <X className="h-4 w-4" />
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={updateRelease.isPending}>
+              <Save className="h-4 w-4" />
+              {updateRelease.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        ) : (
+          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+            <Pencil className="h-4 w-4" />
+            Edit
+          </Button>
+        )}
+      </div>
+      {editing ? (
+        <Textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={12}
+          className="font-mono text-xs"
+          placeholder="<p>Release notes HTML...</p>"
+        />
+      ) : releaseNotesHtml ? (
+        <div
+          className={NOTES_PROSE_CLASSES}
+          dangerouslySetInnerHTML={{ __html: releaseNotesHtml }}
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground">No release notes.</p>
+      )}
     </div>
   );
 }

@@ -55,7 +55,7 @@ export interface ReleaseSummary {
   id: string;
   versionRaw: string;
   channel: string;
-  status: "active" | "retracted" | "superseded" | "draft";
+  status: "active" | "superseded" | "draft";
   isPrerelease: boolean;
   releasedAt: string | null;
   app: AppSummary | null;
@@ -160,7 +160,7 @@ export interface Release {
   releasedAt: string | null;
   isPrerelease: boolean;
   sourceConfidence: number | null;
-  status: "active" | "retracted" | "superseded" | "draft";
+  status: "active" | "superseded" | "draft";
   releaseNotesHtml: string | null;
   createdAt: string;
   updatedAt: string;

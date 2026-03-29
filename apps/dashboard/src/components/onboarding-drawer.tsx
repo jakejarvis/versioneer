@@ -1,3 +1,4 @@
+import { useForm } from "@tanstack/react-form";
 import { toGitHubApiReleasesUrl } from "@versioneer/validation";
 import {
   Check,
@@ -10,7 +11,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useDiscoveredApp } from "@/api/hooks/use-discovered-apps";
 import {
@@ -125,6 +126,32 @@ function formatDate(iso: string | null): string | null {
 }
 
 // ──────────────────────────────────────────────────────────
+// Form data shape
+// ──────────────────────────────────────────────────────────
+
+interface OnboardingFormData {
+  canonicalName: string;
+  slug: string;
+  vendorName: string;
+  homepageUrl: string;
+  notes: string;
+  aliases: AliasEntry[];
+  sources: SourceEntry[];
+  sourceValidated: boolean;
+}
+
+const EMPTY_FORM: OnboardingFormData = {
+  canonicalName: "",
+  slug: "",
+  vendorName: "",
+  homepageUrl: "",
+  notes: "",
+  aliases: [],
+  sources: [],
+  sourceValidated: false,
+};
+
+// ──────────────────────────────────────────────────────────
 // Component
 // ──────────────────────────────────────────────────────────
 
@@ -139,15 +166,40 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
   const { data: discoveredApp, isLoading } = useDiscoveredApp(open ? discoveredAppId : null);
   const onboard = useOnboardDiscoveredApp();
 
-  const [canonicalName, setCanonicalName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [vendorName, setVendorName] = useState("");
-  const [homepageUrl, setHomepageUrl] = useState("");
-  const [notes, setNotes] = useState("");
-  const [aliases, setAliases] = useState<AliasEntry[]>([]);
-  const [sources, setSources] = useState<SourceEntry[]>([]);
-  const [sourceValidated, setSourceValidated] = useState(false);
+  const form = useForm({
+    defaultValues: EMPTY_FORM,
+    onSubmit: async ({ value }) => {
+      if (!discoveredAppId) return;
+      onboard.mutate(
+        {
+          discoveredAppId,
+          app: {
+            slug: value.slug,
+            canonicalName: value.canonicalName,
+            vendorName: value.vendorName || undefined,
+            homepageUrl: value.homepageUrl || undefined,
+            notes: value.notes || undefined,
+          },
+          aliases: value.aliases
+            .filter((a) => a.value.trim())
+            .map((a) => ({ aliasType: a.aliasType, value: a.value })),
+          sources: value.sources
+            .filter((s) => s.baseUrl.trim())
+            .map(({ key: _key, ...rest }) => rest),
+          sourceValidated: value.sourceValidated,
+          enrichmentHasReleases,
+        },
+        {
+          onSuccess: (data) => {
+            onOpenChange(false);
+            onSuccess?.(data.id);
+          },
+        },
+      );
+    },
+  });
 
+  const [slug, setSlug] = useState("");
   const slugCheck = useCheckSlugAvailable(slug);
 
   // On-demand cask token lookup when discovered app has bundleId but no cask token
@@ -157,16 +209,9 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
   // Resolved cask token: from discovered app or on-demand lookup
   const resolvedCaskToken = discoveredApp?.homebrewCaskToken ?? caskLookup.data?.caskToken ?? null;
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- reset runs only when the underlying data changes
+  // Reset form when discovered app data loads
   useEffect(() => {
     if (!discoveredApp) return;
-
-    setCanonicalName(discoveredApp.appName);
-    setSlug(slugify(discoveredApp.appName));
-    setVendorName(discoveredApp.enrichedVendorName ?? "");
-    setHomepageUrl(discoveredApp.enrichedHomepageUrl ?? "");
-    setNotes("");
-    setSourceValidated(discoveredApp.sourceValidationStatus === "valid");
 
     // Build identity aliases
     const newAliases: AliasEntry[] = [];
@@ -189,9 +234,8 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
         value: discoveredApp.teamId,
       });
     }
-    setAliases(newAliases);
 
-    // Build sources additively (not if/else cascade)
+    // Build sources additively
     const newSources: SourceEntry[] = [];
     if (discoveredApp.sparkleFeedUrl) {
       newSources.push({
@@ -216,141 +260,75 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
         });
       }
     }
-    setSources(newSources);
+
+    const newSlug = slugify(discoveredApp.appName);
+    setSlug(newSlug);
+    form.reset({
+      canonicalName: discoveredApp.appName,
+      slug: newSlug,
+      vendorName: discoveredApp.enrichedVendorName ?? "",
+      homepageUrl: discoveredApp.enrichedHomepageUrl ?? "",
+      notes: "",
+      aliases: newAliases,
+      sources: newSources,
+      sourceValidated: discoveredApp.sourceValidationStatus === "valid",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset runs only when the underlying data changes
   }, [discoveredApp]);
 
-  // Add cask alias and source once resolved (after lookup or from discovered app data)
+  // Add cask alias and source once resolved
   useEffect(() => {
     if (!resolvedCaskToken || !discoveredApp) return;
 
-    // Add homebrew_cask alias if not already present
-    setAliases((prev) => {
-      if (prev.some((a) => a.aliasType === "homebrew_cask")) return prev;
-      return [
-        ...prev,
-        {
-          key: crypto.randomUUID(),
-          aliasType: "homebrew_cask" as AliasType,
-          value: resolvedCaskToken,
-        },
-      ];
-    });
+    const currentAliases = form.getFieldValue("aliases");
+    if (!currentAliases.some((a) => a.aliasType === "homebrew_cask")) {
+      form.pushFieldValue("aliases", {
+        key: crypto.randomUUID(),
+        aliasType: "homebrew_cask" as AliasType,
+        value: resolvedCaskToken,
+      });
+    }
 
-    // Add homebrew_cask source only if no other sources exist
-    setSources((prev) => {
-      if (prev.length > 0) return prev;
-      return [
-        {
-          key: crypto.randomUUID(),
-          sourceType: "homebrew_cask",
-          baseUrl: `https://formulae.brew.sh/api/cask/${resolvedCaskToken}.json`,
-          parserKey: "homebrew_cask",
-          pollIntervalMinutes: 360,
-          status: "active",
-        },
-      ];
-    });
+    const currentSources = form.getFieldValue("sources");
+    if (currentSources.length === 0) {
+      form.pushFieldValue("sources", {
+        key: crypto.randomUUID(),
+        sourceType: "homebrew_cask",
+        baseUrl: `https://formulae.brew.sh/api/cask/${resolvedCaskToken}.json`,
+        parserKey: "homebrew_cask",
+        pollIntervalMinutes: 360,
+        status: "active",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedCaskToken, discoveredApp]);
 
   const confidenceScore = discoveredApp?.confidenceScore ?? 0;
   const enrichmentHasReleases = (discoveredApp?.enrichedReleaseCount ?? 0) > 0;
 
-  const canSubmit = slug.length > 0 && canonicalName.length > 0 && slugCheck.data?.available;
-
-  const handleSubmit = () => {
-    if (!discoveredAppId || !canSubmit) return;
-    onboard.mutate(
-      {
-        discoveredAppId,
-        app: {
-          slug,
-          canonicalName,
-          vendorName: vendorName || undefined,
-          homepageUrl: homepageUrl || undefined,
-          notes: notes || undefined,
-        },
-        aliases: aliases
-          .filter((a) => a.value.trim())
-          .map((a) => ({ aliasType: a.aliasType, value: a.value })),
-        sources: sources.filter((s) => s.baseUrl.trim()).map(({ key: _key, ...rest }) => rest),
-        sourceValidated,
-        enrichmentHasReleases,
-      },
-      {
-        onSuccess: (data) => {
-          onOpenChange(false);
-          onSuccess?.(data.id);
-        },
-      },
-    );
-  };
-
-  const addAlias = () =>
-    setAliases([...aliases, { key: crypto.randomUUID(), aliasType: "bundle_id", value: "" }]);
-  const removeAlias = (key: string) => setAliases(aliases.filter((a) => a.key !== key));
-  const updateAlias = (key: string, field: "aliasType" | "value", val: string) =>
-    setAliases(
-      aliases.map((a) =>
-        a.key === key ? { ...a, [field]: field === "aliasType" ? (val as AliasType) : val } : a,
-      ),
-    );
-
-  const addSource = useCallback(() => {
-    setSources((prev) => [
-      ...prev,
-      {
-        key: crypto.randomUUID(),
-        sourceType: "sparkle",
-        baseUrl: "",
-        parserKey: "sparkle",
-        pollIntervalMinutes: 60,
-        status: "active",
-      },
-    ]);
-  }, []);
-
-  const removeSource = useCallback((key: string) => {
-    setSources((prev) => prev.filter((s) => s.key !== key));
-  }, []);
-
-  const updateSource = useCallback((key: string, updates: Partial<SourceEntry>) => {
-    setSources((prev) =>
-      prev.map((s) => {
-        if (s.key !== key) return s;
-        const merged = { ...s, ...updates };
-        // Auto-fill parserKey and poll interval when sourceType changes
-        if (updates.sourceType && updates.sourceType !== s.sourceType) {
-          merged.parserKey = updates.sourceType;
-          merged.pollIntervalMinutes = DEFAULT_POLL_INTERVALS[updates.sourceType];
-        }
-        return merged;
-      }),
-    );
-  }, []);
-
-  const validAliasCount = useMemo(() => aliases.filter((a) => a.value.trim()).length, [aliases]);
-  const validSourceCount = useMemo(() => sources.filter((s) => s.baseUrl.trim()).length, [sources]);
+  const canSubmit =
+    slug.length > 0 && form.getFieldValue("canonicalName").length > 0 && slugCheck.data?.available;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="w-full sm:max-w-lg p-0 flex flex-col gap-0 overflow-hidden"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
       >
         {/* Header */}
-        <SheetHeader className="px-5 pt-5 pb-4 shrink-0">
+        <SheetHeader className="shrink-0 px-5 pb-4 pt-5">
           <div className="flex items-start justify-between">
             <div>
               <SheetTitle className="text-base">Onboard New App</SheetTitle>
-              <SheetDescription className="text-xs mt-0.5">
+              <SheetDescription className="mt-0.5 text-xs">
                 Review pre-populated data, then add to the catalog.
               </SheetDescription>
             </div>
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0 -mr-1 -mt-1"
+              className="-mr-1 -mt-1 h-7 w-7 p-0"
               onClick={() => onOpenChange(false)}
             >
               <X />
@@ -359,18 +337,25 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
         </SheetHeader>
 
         {isLoading ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-1 items-center justify-center">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : !discoveredApp ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
             App not found.
           </div>
         ) : (
           <>
             {/* Scrollable body */}
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="px-5 pb-5 space-y-5">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void form.handleSubmit();
+                }}
+                id="onboarding-form"
+                className="space-y-5 px-5 pb-5"
+              >
                 {/* Confidence + enrichment summary */}
                 <div className="rounded-lg border border-border/60 bg-muted/30 p-3.5">
                   <div className="flex items-center gap-3">
@@ -380,19 +365,19 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                       appName={discoveredApp.appName}
                       size={40}
                     />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{discoveredApp.appName}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{discoveredApp.appName}</div>
                       {discoveredApp.bundleId && (
-                        <div className="text-[11px] font-mono text-muted-foreground truncate">
+                        <div className="truncate font-mono text-[11px] text-muted-foreground">
                           {discoveredApp.bundleId}
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex shrink-0 items-center gap-1.5">
                       {discoveredApp.sourceValidationStatus === "valid" ? (
                         <Badge
                           variant="outline"
-                          className="text-[10px] border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                          className="border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-400"
                         >
                           <Check className="mr-0.5 h-2.5 w-2.5" />
                           Feed valid
@@ -400,7 +385,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                       ) : discoveredApp.sourceValidationStatus === "invalid" ? (
                         <Badge
                           variant="outline"
-                          className="text-[10px] border-red-500/30 bg-red-500/10 text-red-400"
+                          className="border-red-500/30 bg-red-500/10 text-[10px] text-red-400"
                         >
                           <CircleAlert className="mr-0.5 h-2.5 w-2.5" />
                           Feed invalid
@@ -409,7 +394,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                     </div>
                   </div>
                   {discoveredApp.enrichedLatestVersion && (
-                    <div className="mt-2.5 pt-2.5 border-t border-border/40 flex items-center gap-3 text-[11px] text-muted-foreground">
+                    <div className="mt-2.5 flex items-center gap-3 border-t border-border/40 pt-2.5 text-[11px] text-muted-foreground">
                       <span>
                         Latest{" "}
                         <span className="font-mono font-medium text-foreground">
@@ -437,74 +422,99 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                   <SectionHeader label="App Identity" />
                   <div className="mt-2.5 space-y-2.5">
                     <div className="grid grid-cols-2 gap-2.5">
-                      <FieldGroup label="Canonical Name">
-                        <Input
-                          value={canonicalName}
-                          onChange={(e) => {
-                            setCanonicalName(e.target.value);
-                            setSlug(slugify(e.target.value));
-                          }}
-                          className="h-8 text-sm"
-                        />
-                      </FieldGroup>
-                      <FieldGroup
-                        label="Slug"
-                        trailing={
-                          slugCheck.data ? (
-                            <span
-                              className={`text-[10px] font-medium ${slugCheck.data.available ? "text-emerald-400" : "text-red-400"}`}
-                            >
-                              {slugCheck.data.available ? "available" : "taken"}
-                            </span>
-                          ) : null
-                        }
-                      >
-                        <Input
-                          value={slug}
-                          onChange={(e) => setSlug(e.target.value)}
-                          className="h-8 text-sm font-mono"
-                        />
-                      </FieldGroup>
+                      <form.Field name="canonicalName">
+                        {(field) => (
+                          <FieldGroup label="Canonical Name">
+                            <Input
+                              value={field.state.value}
+                              onChange={(e) => {
+                                field.handleChange(e.target.value);
+                                const newSlug = slugify(e.target.value);
+                                form.setFieldValue("slug", newSlug);
+                                setSlug(newSlug);
+                              }}
+                              className="h-8 text-sm"
+                            />
+                          </FieldGroup>
+                        )}
+                      </form.Field>
+                      <form.Field name="slug">
+                        {(field) => (
+                          <FieldGroup
+                            label="Slug"
+                            trailing={
+                              slugCheck.data ? (
+                                <span
+                                  className={`text-[10px] font-medium ${slugCheck.data.available ? "text-emerald-400" : "text-red-400"}`}
+                                >
+                                  {slugCheck.data.available ? "available" : "taken"}
+                                </span>
+                              ) : null
+                            }
+                          >
+                            <Input
+                              value={field.state.value}
+                              onChange={(e) => {
+                                field.handleChange(e.target.value);
+                                setSlug(e.target.value);
+                              }}
+                              className="h-8 font-mono text-sm"
+                            />
+                          </FieldGroup>
+                        )}
+                      </form.Field>
                     </div>
                     <div className="grid grid-cols-2 gap-2.5">
-                      <FieldGroup label="Vendor">
-                        <Input
-                          value={vendorName}
-                          onChange={(e) => setVendorName(e.target.value)}
-                          placeholder="Auto-detected or manual"
-                          className="h-8 text-sm"
-                        />
-                      </FieldGroup>
-                      <FieldGroup label="Homepage">
-                        <div className="relative">
-                          <Input
-                            value={homepageUrl}
-                            onChange={(e) => setHomepageUrl(e.target.value)}
-                            placeholder="https://..."
-                            className="h-8 text-sm pr-7"
-                          />
-                          {homepageUrl && (
-                            <a
-                              href={homepageUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          )}
-                        </div>
-                      </FieldGroup>
+                      <form.Field name="vendorName">
+                        {(field) => (
+                          <FieldGroup label="Vendor">
+                            <Input
+                              value={field.state.value}
+                              onChange={(e) => field.handleChange(e.target.value)}
+                              placeholder="Auto-detected or manual"
+                              className="h-8 text-sm"
+                            />
+                          </FieldGroup>
+                        )}
+                      </form.Field>
+                      <form.Field name="homepageUrl">
+                        {(field) => (
+                          <FieldGroup label="Homepage">
+                            <div className="relative">
+                              <Input
+                                value={field.state.value}
+                                onChange={(e) => field.handleChange(e.target.value)}
+                                placeholder="https://..."
+                                className="h-8 pr-7 text-sm"
+                              />
+                              {field.state.value && (
+                                <a
+                                  href={field.state.value}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                            </div>
+                          </FieldGroup>
+                        )}
+                      </form.Field>
                     </div>
-                    <FieldGroup label="Notes">
-                      <Textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        placeholder="Optional notes..."
-                        rows={2}
-                        className="text-sm resize-none"
-                      />
-                    </FieldGroup>
+                    <form.Field name="notes">
+                      {(field) => (
+                        <FieldGroup label="Notes">
+                          <Textarea
+                            value={field.state.value}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            placeholder="Optional notes..."
+                            rows={2}
+                            className="resize-none text-sm"
+                          />
+                        </FieldGroup>
+                      )}
+                    </form.Field>
                   </div>
                 </section>
 
@@ -513,51 +523,77 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                 {/* Aliases (identity matchers only) */}
                 <section>
                   <div className="flex items-center justify-between">
-                    <SectionHeader label={`Aliases (${validAliasCount})`} />
+                    <form.Subscribe
+                      selector={(s) =>
+                        s.values.aliases.filter((a: AliasEntry) => a.value.trim()).length
+                      }
+                    >
+                      {(count) => <SectionHeader label={`Aliases (${count})`} />}
+                    </form.Subscribe>
                     <Button
+                      type="button"
                       variant="ghost"
                       size="sm"
                       className="h-6 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={addAlias}
+                      onClick={() =>
+                        form.pushFieldValue("aliases", {
+                          key: crypto.randomUUID(),
+                          aliasType: "bundle_id",
+                          value: "",
+                        })
+                      }
                     >
                       <Plus />
                       Add
                     </Button>
                   </div>
-                  <div className="mt-2.5 space-y-1.5">
-                    {aliases.map((alias) => (
-                      <div
-                        key={alias.key}
-                        className="group flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/20 p-1 pl-1.5"
-                      >
-                        <select
-                          value={alias.aliasType}
-                          onChange={(e) => updateAlias(alias.key, "aliasType", e.target.value)}
-                          className={`h-6 rounded border px-1.5 text-[10px] font-medium shrink-0 appearance-none cursor-pointer ${ALIAS_COLORS[alias.aliasType]}`}
-                        >
-                          {Object.entries(ALIAS_LABELS).map(([val, label]) => (
-                            <option key={val} value={val}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          value={alias.value}
-                          onChange={(e) => updateAlias(alias.key, "value", e.target.value)}
-                          className="flex-1 min-w-0 bg-transparent text-xs font-mono text-foreground outline-none placeholder:text-muted-foreground/50"
-                          placeholder="value..."
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => removeAlias(alias.key)}
-                        >
-                          <Trash2 className="h-3 w-3 text-muted-foreground" />
-                        </Button>
+                  <form.Field name="aliases" mode="array">
+                    {(aliasesField) => (
+                      <div className="mt-2.5 space-y-1.5">
+                        {aliasesField.state.value.map((alias, i) => (
+                          <div
+                            key={alias.key}
+                            className="group flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/20 p-1 pl-1.5"
+                          >
+                            <form.Field name={`aliases[${i}].aliasType`}>
+                              {(field) => (
+                                <select
+                                  value={field.state.value}
+                                  onChange={(e) => field.handleChange(e.target.value as AliasType)}
+                                  className={`h-6 shrink-0 cursor-pointer appearance-none rounded border px-1.5 text-[10px] font-medium ${ALIAS_COLORS[field.state.value as AliasType]}`}
+                                >
+                                  {Object.entries(ALIAS_LABELS).map(([val, label]) => (
+                                    <option key={val} value={val}>
+                                      {label}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </form.Field>
+                            <form.Field name={`aliases[${i}].value`}>
+                              {(field) => (
+                                <input
+                                  value={field.state.value}
+                                  onChange={(e) => field.handleChange(e.target.value)}
+                                  className="min-w-0 flex-1 bg-transparent font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
+                                  placeholder="value..."
+                                />
+                              )}
+                            </form.Field>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                              onClick={() => aliasesField.removeValue(i)}
+                            >
+                              <Trash2 className="h-3 w-3 text-muted-foreground" />
+                            </Button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </form.Field>
                 </section>
 
                 <Separator className="opacity-40" />
@@ -565,46 +601,68 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                 {/* Sources (update feeds) */}
                 <section>
                   <div className="flex items-center justify-between">
-                    <SectionHeader label={`Sources (${validSourceCount})`} />
+                    <form.Subscribe
+                      selector={(s) =>
+                        s.values.sources.filter((src: SourceEntry) => src.baseUrl.trim()).length
+                      }
+                    >
+                      {(count) => <SectionHeader label={`Sources (${count})`} />}
+                    </form.Subscribe>
                     <Button
+                      type="button"
                       variant="ghost"
                       size="sm"
                       className="h-6 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={addSource}
+                      onClick={() =>
+                        form.pushFieldValue("sources", {
+                          key: crypto.randomUUID(),
+                          sourceType: "sparkle",
+                          baseUrl: "",
+                          parserKey: "sparkle",
+                          pollIntervalMinutes: 60,
+                          status: "active",
+                        })
+                      }
                     >
                       <Plus />
                       Add
                     </Button>
                   </div>
-                  {sources.length > 0 ? (
-                    <div className="mt-2.5 space-y-2.5">
-                      {sources.map((source) => (
-                        <SourceCard
-                          key={source.key}
-                          source={source}
-                          onUpdate={(updates) => updateSource(source.key, updates)}
-                          onRemove={() => removeSource(source.key)}
-                          onValidated={() => setSourceValidated(true)}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-xs text-muted-foreground/70">
-                      No update sources. The app can be onboarded without one.
-                    </p>
-                  )}
+                  <form.Field name="sources" mode="array">
+                    {(sourcesField) =>
+                      sourcesField.state.value.length > 0 ? (
+                        <div className="mt-2.5 space-y-2.5">
+                          {sourcesField.state.value.map((source, i) => (
+                            <SourceCard
+                              key={source.key}
+                              form={form}
+                              index={i}
+                              source={source}
+                              onRemove={() => sourcesField.removeValue(i)}
+                              onValidated={() => form.setFieldValue("sourceValidated", true)}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-muted-foreground/70">
+                          No update sources. The app can be onboarded without one.
+                        </p>
+                      )
+                    }
+                  </form.Field>
                 </section>
-              </div>
+              </form>
             </div>
 
             {/* Sticky footer */}
-            <SheetFooter className="border-t border-border/60 bg-background/80 backdrop-blur-sm px-5 py-3.5">
-              <div className="flex items-center gap-2.5 w-full">
+            <SheetFooter className="border-t border-border/60 bg-background/80 px-5 py-3.5 backdrop-blur-sm">
+              <div className="flex w-full items-center gap-2.5">
                 <Button
-                  onClick={handleSubmit}
+                  type="submit"
+                  form="onboarding-form"
                   disabled={!canSubmit || onboard.isPending}
                   size="sm"
-                  className="flex-1 h-8"
+                  className="h-8 flex-1"
                 >
                   {onboard.isPending ? <Loader2 className="animate-spin" /> : <Zap />}
                   {onboard.isPending ? "Onboarding..." : "Onboard App"}
@@ -631,13 +689,16 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
 // ──────────────────────────────────────────────────────────
 
 function SourceCard({
+  form,
+  index,
   source,
-  onUpdate,
   onRemove,
   onValidated,
 }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  form: any;
+  index: number;
   source: SourceEntry;
-  onUpdate: (updates: Partial<SourceEntry>) => void;
   onRemove: () => void;
   onValidated: () => void;
 }) {
@@ -659,29 +720,46 @@ function SourceCard({
   };
 
   return (
-    <div className="rounded-md border border-border/40 bg-muted/20 p-2.5 space-y-2">
+    <div className="space-y-2 rounded-md border border-border/40 bg-muted/20 p-2.5">
       <div className="flex items-center gap-2">
-        <select
-          value={source.sourceType}
-          onChange={(e) => onUpdate({ sourceType: e.target.value as SourceType })}
-          className={`h-6 rounded border px-1.5 text-[10px] font-medium shrink-0 appearance-none cursor-pointer ${SOURCE_COLORS[source.sourceType]}`}
-        >
-          {Object.entries(SOURCE_LABELS).map(([val, label]) => (
-            <option key={val} value={val}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <input
-          value={source.baseUrl}
-          onChange={(e) => onUpdate({ baseUrl: e.target.value })}
-          className="flex-1 min-w-0 bg-transparent text-[11px] font-mono text-muted-foreground outline-none placeholder:text-muted-foreground/40"
-          placeholder="https://..."
-        />
+        <form.Field name={`sources[${index}].sourceType`}>
+          {(field: { state: { value: string }; handleChange: (v: string) => void }) => (
+            <select
+              value={field.state.value}
+              onChange={(e) => {
+                const newType = e.target.value as SourceType;
+                field.handleChange(newType);
+                form.setFieldValue(`sources[${index}].parserKey`, newType);
+                form.setFieldValue(
+                  `sources[${index}].pollIntervalMinutes`,
+                  DEFAULT_POLL_INTERVALS[newType],
+                );
+              }}
+              className={`h-6 shrink-0 cursor-pointer appearance-none rounded border px-1.5 text-[10px] font-medium ${SOURCE_COLORS[field.state.value as SourceType]}`}
+            >
+              {Object.entries(SOURCE_LABELS).map(([val, label]) => (
+                <option key={val} value={val}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          )}
+        </form.Field>
+        <form.Field name={`sources[${index}].baseUrl`}>
+          {(field: { state: { value: string }; handleChange: (v: string) => void }) => (
+            <input
+              value={field.state.value}
+              onChange={(e) => field.handleChange(e.target.value)}
+              className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-muted-foreground outline-none placeholder:text-muted-foreground/40"
+              placeholder="https://..."
+            />
+          )}
+        </form.Field>
         <Button
+          type="button"
           variant="ghost"
           size="sm"
-          className="h-5 w-5 p-0 shrink-0 text-muted-foreground hover:text-foreground"
+          className="h-5 w-5 shrink-0 p-0 text-muted-foreground hover:text-foreground"
           onClick={onRemove}
         >
           <X className="h-3 w-3" />
@@ -691,6 +769,7 @@ function SourceCard({
       {source.sourceType !== "manual" && source.baseUrl && (
         <div className="flex items-center gap-2">
           <Button
+            type="button"
             variant="outline"
             size="sm"
             className="h-6 text-[10px]"
@@ -723,20 +802,20 @@ function SourceCard({
       )}
 
       {validateMutation.data?.releases && validateMutation.data.releases.length > 0 && (
-        <div className="rounded-md border border-border/40 bg-muted/20 overflow-hidden">
-          <div className="px-2.5 py-1.5 border-b border-border/30 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="overflow-hidden rounded-md border border-border/40 bg-muted/20">
+          <div className="border-b border-border/30 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
             Release Preview
           </div>
           <div className="divide-y divide-border/20">
             {validateMutation.data.releases.map((r) => (
               <div key={r.version} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
                 <span className="font-mono font-medium text-foreground">{r.version}</span>
-                <Badge variant="outline" className="text-[9px] px-1 py-0 border-border/40">
+                <Badge variant="outline" className="border-border/40 px-1 py-0 text-[9px]">
                   {r.channel}
                 </Badge>
                 <span className="flex-1" />
                 {r.publishedAt && (
-                  <span className="text-[11px] text-muted-foreground tabular-nums">
+                  <span className="tabular-nums text-[11px] text-muted-foreground">
                     {formatDate(r.publishedAt)}
                   </span>
                 )}

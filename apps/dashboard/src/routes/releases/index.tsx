@@ -1,12 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
-import { useCallback, useMemo } from "react";
+import { Plus } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { useReleases } from "@/api/hooks/use-releases";
 import { usePinRelease, useUnpinRelease } from "@/api/hooks/use-releases";
 import type { ReleaseListItem } from "@/api/types";
+import { CreateReleaseDialog } from "@/components/shared/create-release-dialog";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { AppEntityLink, ReleaseEntityLink } from "@/components/shared/entity-link";
@@ -31,7 +33,7 @@ import {
 const releasesSearchSchema = z.object({
   ...paginatedSearchShape,
   channel: z.enum(["all", "stable", "beta", "nightly"]).catch("all"),
-  status: z.enum(["all", "active", "retracted", "superseded", "draft"]).catch("all"),
+  status: z.enum(["all", "active", "superseded", "draft"]).catch("all"),
 });
 
 export const Route = createFileRoute("/releases/")({
@@ -46,6 +48,7 @@ function ReleasesPage() {
   const sorting = sortingFromSearch(searchState);
   const pinRelease = usePinRelease();
   const unpinRelease = useUnpinRelease();
+  const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useReleases({
     channel: searchState.channel !== "all" ? searchState.channel : undefined,
@@ -158,8 +161,16 @@ function ReleasesPage() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold tracking-tight">Releases</h2>
-      <p className="mt-1 text-muted-foreground">Browse release records across all apps.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Releases</h2>
+          <p className="mt-1 text-muted-foreground">Browse release records across all apps.</p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus />
+          Create Release
+        </Button>
+      </div>
 
       <div className="mt-4">
         <DataTable
@@ -217,7 +228,6 @@ function ReleasesPage() {
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="retracted">Retracted</SelectItem>
                   <SelectItem value="superseded">Superseded</SelectItem>
                   <SelectItem value="draft">Draft</SelectItem>
                 </SelectContent>
@@ -241,6 +251,8 @@ function ReleasesPage() {
           }
         />
       </div>
+
+      <CreateReleaseDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

@@ -74,9 +74,19 @@ export const sourceUpdateSchema = z.object({
   status: z.enum(["active", "paused", "disabled", "error"]).optional(),
 });
 
+export const releaseCreateSchema = z.object({
+  appId: z.string().min(1),
+  versionRaw: z.string().min(1).max(200),
+  buildNumber: z.string().max(200).optional(),
+  channel: channelSchema.default("stable"),
+  releasedAt: z.string().max(50).optional(),
+  releaseNotesHtml: z.string().max(500000).optional(),
+});
+
 export const releaseUpdateSchema = z.object({
-  status: z.enum(["active", "retracted", "superseded", "draft"]).optional(),
+  status: z.enum(["active", "superseded", "draft"]).optional(),
   channel: channelSchema.optional(),
+  releaseNotesHtml: z.string().max(500000).nullable().optional(),
 });
 
 export const releasePinSchema = z.object({
@@ -94,6 +104,7 @@ export type AliasCreateInput = z.infer<typeof aliasCreateSchema>;
 export type AliasUpdateInput = z.infer<typeof aliasUpdateSchema>;
 export type SourceCreateInput = z.infer<typeof sourceCreateSchema>;
 export type SourceUpdateInput = z.infer<typeof sourceUpdateSchema>;
+export type ReleaseCreateInput = z.infer<typeof releaseCreateSchema>;
 export type ReleaseUpdateInput = z.infer<typeof releaseUpdateSchema>;
 export type ReleasePinInput = z.infer<typeof releasePinSchema>;
 export type ReleaseUnpinInput = z.infer<typeof releaseUnpinSchema>;

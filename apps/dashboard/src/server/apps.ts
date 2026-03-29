@@ -282,7 +282,7 @@ export const getAppReleases = createServerFn({ method: "GET" })
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
       channel: z.string().optional(),
-      status: z.enum(["active", "retracted", "superseded", "draft"]).optional(),
+      status: z.enum(["active", "superseded", "draft"]).optional(),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,
     }),
