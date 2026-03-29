@@ -5,10 +5,11 @@ struct FilterChipBar: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   @State private var hoveredSection: AppState.FilterSection?
+  @State private var chipRailMaskState = FilterChipRailMaskState()
+
+  private let chipRailFadeWidth: CGFloat = 18
 
   var body: some View {
-    @Bindable var appState = appState
-
     HStack(spacing: 12) {
       ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: 4) {
@@ -18,38 +19,19 @@ struct FilterChipBar: View {
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .layoutPriority(1)
       .mask(chipRailMask)
+      .onScrollGeometryChange(
+        for: FilterChipRailMaskState.self,
+        of: { geometry in
+          FilterChipRailMaskState(geometry: geometry)
+        },
+        action: { _, newState in
+          chipRailMaskState = newState
+        }
+      )
 
       if appState.filterPresentation.showUpdateAll {
-        Button {
-          Task { await appState.installAll() }
-        } label: {
-          ViewThatFits(in: .horizontal) {
-            Label(
-              "Update All (\(appState.filterPresentation.updateAllCount))",
-              systemImage: "arrow.down.circle"
-            )
-
-            Label(
-              "\(appState.filterPresentation.updateAllCount)",
-              systemImage: "arrow.down.circle"
-            )
-
-            Image(systemName: "arrow.down.circle")
-          }
-          .font(.caption.weight(.semibold))
-          .lineLimit(1)
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.small)
-        .help("Update all \(appState.filterPresentation.updateAllCount) app(s)")
-        .accessibilityLabel("Update all \(appState.filterPresentation.updateAllCount) apps")
-        .transition(
-          .motionAware(
-            .opacity.combined(with: .scale(scale: 0.9)),
-            reduceMotion: reduceMotion
-          ))
+        updateAllButton
       }
     }
     .padding(.horizontal, 16)
@@ -99,24 +81,79 @@ struct FilterChipBar: View {
     .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
+  private var updateAllButton: some View {
+    Button {
+      Task { await appState.installAll() }
+    } label: {
+      ViewThatFits(in: .horizontal) {
+        Label("Update All", systemImage: "arrow.down.circle")
+        Text("Update All")
+        Image(systemName: "arrow.down.circle")
+      }
+      .font(.caption.weight(.semibold))
+      .lineLimit(1)
+    }
+    .buttonStyle(.borderedProminent)
+    .controlSize(.small)
+    .fixedSize(horizontal: true, vertical: false)
+    .layoutPriority(1)
+    .help("Update all \(appState.filterPresentation.updateAllCount) apps")
+    .accessibilityLabel("Update all \(appState.filterPresentation.updateAllCount) apps")
+    .transition(
+      .motionAware(
+        .opacity.combined(with: .scale(scale: 0.9)),
+        reduceMotion: reduceMotion
+      ))
+  }
+
   private var chipRailMask: some View {
     HStack(spacing: 0) {
-      LinearGradient(
-        colors: [.clear, .black],
-        startPoint: .leading,
-        endPoint: .trailing
+      chipRailMaskEdge(
+        showsFade: chipRailMaskState.showsLeadingFade,
+        colors: [.clear, .black]
       )
-      .frame(width: 20)
 
       Rectangle()
         .fill(.black)
 
+      chipRailMaskEdge(
+        showsFade: chipRailMaskState.showsTrailingFade,
+        colors: [.black, .clear]
+      )
+    }
+  }
+
+  @ViewBuilder
+  private func chipRailMaskEdge(showsFade: Bool, colors: [Color]) -> some View {
+    if showsFade {
       LinearGradient(
-        colors: [.black, .clear],
+        colors: colors,
         startPoint: .leading,
         endPoint: .trailing
       )
-      .frame(width: 20)
+      .frame(width: chipRailFadeWidth)
+    } else {
+      Rectangle()
+        .fill(.black)
+        .frame(width: chipRailFadeWidth)
     }
+  }
+}
+
+struct FilterChipRailMaskState: Equatable {
+  var showsLeadingFade = false
+  var showsTrailingFade = false
+
+  init(showsLeadingFade: Bool = false, showsTrailingFade: Bool = false) {
+    self.showsLeadingFade = showsLeadingFade
+    self.showsTrailingFade = showsTrailingFade
+  }
+
+  init(geometry: ScrollGeometry, fadeThreshold: CGFloat = 6) {
+    let visibleRect = geometry.visibleRect
+    let contentWidth = geometry.contentSize.width
+
+    showsLeadingFade = visibleRect.minX > fadeThreshold
+    showsTrailingFade = visibleRect.maxX < contentWidth - fadeThreshold
   }
 }

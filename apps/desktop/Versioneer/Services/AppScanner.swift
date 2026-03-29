@@ -41,7 +41,8 @@ actor AppScanner {
         continue
       }
 
-      for case let item as URL in enumerator {
+      while let obj = enumerator.nextObject() {
+        guard let item = obj as? URL else { continue }
         guard item.pathExtension == "app" else { continue }
 
         // Resolve symlinks and deduplicate

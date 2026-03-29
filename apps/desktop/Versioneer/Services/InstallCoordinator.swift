@@ -831,8 +831,10 @@ final class InstallCoordinator {
 
   func executionRoute(
     for plan: InstallPlan,
-    destinationAppURL: URL? = nil
+    destinationAppURL: URL? = nil,
+    isDirectoryWritable: ((String) -> Bool)? = nil
   ) -> ExecutionRoute {
+    let checkWritable = isDirectoryWritable ?? { FileManager.default.isWritableFile(atPath: $0) }
     switch plan.strategy {
     case .sparkle:
       return .sparkle
@@ -840,8 +842,7 @@ final class InstallCoordinator {
       guard let destinationAppURL else { return .localReplace }
       let needsPrivilege =
         plan.strategy.requiresAdmin
-        || !FileManager.default.isWritableFile(
-          atPath: destinationAppURL.deletingLastPathComponent().path)
+        || !checkWritable(destinationAppURL.deletingLastPathComponent().path)
       return needsPrivilege ? .privilegedReplace : .localReplace
     case .pkgInstall:
       return .privilegedPackage

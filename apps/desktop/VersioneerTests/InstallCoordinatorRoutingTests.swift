@@ -5,25 +5,27 @@ import Testing
 
 struct InstallCoordinatorRoutingTests {
   @MainActor
-  @Test func nonAdminReplaceStaysLocal() throws {
+  @Test func nonAdminReplaceStaysLocal() {
     let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
     let plan = makePlan(strategy: .zipReplace)
-    let destination = try makeWritableDestination(named: "Local.app")
+    let destination = URL(fileURLWithPath: "/Applications/Local.app", isDirectory: true)
 
     #expect(
-      coordinator.executionRoute(for: plan, destinationAppURL: destination) == .localReplace)
+      coordinator.executionRoute(
+        for: plan, destinationAppURL: destination, isDirectoryWritable: { _ in true }
+      ) == .localReplace)
   }
 
   @MainActor
-  @Test func adminReplaceUsesPrivilegedHelper() throws {
+  @Test func adminReplaceUsesPrivilegedHelper() {
     let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
-    // pkgInstall requires admin by default; for dmgCopyReplace, admin is determined by
-    // file system writability. Use an unwritable destination to trigger privileged path.
     let plan = makePlan(strategy: .dmgCopyReplace)
-    let destination = try makeUnwritableDestination(named: "Admin.app")
+    let destination = URL(fileURLWithPath: "/Applications/Admin.app", isDirectory: true)
 
     #expect(
-      coordinator.executionRoute(for: plan, destinationAppURL: destination) == .privilegedReplace
+      coordinator.executionRoute(
+        for: plan, destinationAppURL: destination, isDirectoryWritable: { _ in false }
+      ) == .privilegedReplace
     )
   }
 
@@ -55,22 +57,6 @@ struct InstallCoordinatorRoutingTests {
     )
   }
 
-  private func makeWritableDestination(named name: String) throws -> URL {
-    let root = FileManager.default.temporaryDirectory
-      .appendingPathComponent(UUID().uuidString, isDirectory: true)
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    return root.appendingPathComponent(name, isDirectory: true)
-  }
-
-  private func makeUnwritableDestination(named name: String) throws -> URL {
-    let root = FileManager.default.temporaryDirectory
-      .appendingPathComponent(UUID().uuidString, isDirectory: true)
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    // Remove write permission so isWritableFile returns false
-    try FileManager.default.setAttributes(
-      [.posixPermissions: 0o555], ofItemAtPath: root.path)
-    return root.appendingPathComponent(name, isDirectory: true)
-  }
 }
 
 private struct NoopPrivilegedHelperClient: PrivilegedHelperClientProtocol {

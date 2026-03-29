@@ -16,10 +16,6 @@ struct RootView: View {
     }
     .navigationSplitViewStyle(.balanced)
     .toolbar {
-      ToolbarItem(placement: .principal) {
-        toolbarStatusLabel
-      }
-
       ToolbarItemGroup(placement: .primaryAction) {
         Button {
           Task { await appState.scanAndSubmit() }
@@ -29,19 +25,9 @@ struct RootView: View {
         .disabled(appState.loadState == .scanning || appState.loadState == .submitting)
         .help("Refresh (⌘R)")
         .accessibilityLabel("Refresh")
-
-        if !appState.updatableResults.isEmpty {
-          Button {
-            Task { await appState.installAll() }
-          } label: {
-            Label("Update All", systemImage: "arrow.down.circle")
-          }
-          .help("Update All (⌘⇧U)")
-          .accessibilityLabel("Update all \(appState.updatableResults.count) apps")
-        }
       }
     }
-    .searchable(text: $searchInput, placement: .toolbar, prompt: "Filter apps")
+    .searchable(text: $searchInput, placement: .sidebar, prompt: "Filter apps")
     .onChange(of: searchInput) { _, newValue in
       searchDebounceTask?.cancel()
       searchDebounceTask = Task {
@@ -50,7 +36,6 @@ struct RootView: View {
         appState.setSearchText(newValue)
       }
     }
-    .toolbarRole(.editor)
     .frame(minWidth: 680, minHeight: 500)
     .background(TranslucentWindowBackground())
     .versioneerAnalyticsScreen(name: "main_window", class: "RootView")
@@ -139,35 +124,6 @@ struct RootView: View {
     }
     .listStyle(.inset)
     .scrollContentBackground(.hidden)
-  }
-
-  private var toolbarStatusLabel: some View {
-    Label(toolbarStatusText, systemImage: toolbarStatusSystemImage)
-      .font(.caption.weight(.semibold))
-      .foregroundStyle(toolbarStatusTint)
-      .lineLimit(1)
-      .help(toolbarStatusText)
-      .accessibilityElement(children: .combine)
-      .accessibilityLabel(toolbarStatusText)
-  }
-
-  private var toolbarStatusText: String {
-    switch appState.visibleUpdateCount {
-    case 0:
-      "All Apps Up to Date"
-    case 1:
-      "1 Update Available"
-    default:
-      "\(appState.visibleUpdateCount) Updates Available"
-    }
-  }
-
-  private var toolbarStatusSystemImage: String {
-    appState.visibleUpdateCount > 0 ? "arrow.up.circle.fill" : "checkmark.circle"
-  }
-
-  private var toolbarStatusTint: Color {
-    appState.visibleUpdateCount > 0 ? .accentColor : .secondary
   }
 
   private var resultsPaneBackground: some View {
