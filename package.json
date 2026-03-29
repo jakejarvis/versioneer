@@ -3,8 +3,8 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "deploy": "turbo run deploy",
-    "dev": "turbo run dev",
+    "deploy": "turbo run deploy --concurrency=1",
+    "dev": "turbo run dev --filter=@versioneer/api --filter=@versioneer/dashboard",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "fmt": "turbo run fmt",

@@ -25,7 +25,6 @@ import type {
   ReleaseListItem,
 } from "@/api/types";
 import { AppIcon } from "@/components/shared/app-icon";
-import { EmptyState } from "@/components/shared/empty-state";
 import { ReleaseEntityLink } from "@/components/shared/entity-link";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
@@ -125,19 +124,22 @@ function DashboardPage() {
     homepage.overview.sourceHealth.errorSources + homepage.overview.sourceHealth.staleSources;
 
   return (
-    <div>
-      <div className="max-w-3xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-          Operator Inbox
-        </p>
-        <h2 className="mt-2 text-2xl font-semibold tracking-tight">Dashboard</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The homepage answers two questions quickly: what needs attention now, and whether the
-          ingestion pipeline is drifting out of bounds.
-        </p>
+    <div className="relative">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top_left,_color-mix(in_oklab,var(--color-chart-2)_16%,transparent),transparent_55%),radial-gradient(circle_at_top_right,_color-mix(in_oklab,var(--color-chart-1)_14%,transparent),transparent_45%)] opacity-80" />
+      <div className="relative max-w-3xl">
+        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h2>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <HeroPill label="Attention items" value={attentionTotal} tone="amber" />
+          <HeroPill label="Source follow-up" value={sourceAttentionTotal} tone="red" />
+          <HeroPill
+            label="Releases this week"
+            value={homepage.overview.catalogContext.recentReleases}
+            tone="blue"
+          />
+        </div>
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+      <div className="relative mt-6 grid gap-4 lg:grid-cols-3">
         <OverviewCard
           title="Needs Attention"
           description="Open queues across review, discovery, feedback, and failures."
@@ -252,7 +254,7 @@ function DashboardPage() {
         </OverviewCard>
       </div>
 
-      <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+      <div className="mt-7 grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
         <div className="space-y-4">
           <SectionCard
             title="Catalog Review"
@@ -267,9 +269,9 @@ function DashboardPage() {
             {isLoading ? (
               <ListSkeleton rows={3} />
             ) : homepage.pendingSuggestions.length === 0 ? (
-              <EmptyState message="No pending suggestions." className="border-0 py-8" />
+              <CompactEmptyState message="No pending suggestions." />
             ) : (
-              <div className="divide-y">
+              <div className="space-y-2 p-2">
                 {homepage.pendingSuggestions.map((item) => (
                   <CatalogSuggestionRow key={item.id} item={item} />
                 ))}
@@ -290,9 +292,9 @@ function DashboardPage() {
             {isLoading ? (
               <ListSkeleton rows={3} />
             ) : homepage.pendingDiscoveries.length === 0 ? (
-              <EmptyState message="No pending discoveries." className="border-0 py-8" />
+              <CompactEmptyState message="No pending discoveries." />
             ) : (
-              <div className="divide-y">
+              <div className="space-y-2 p-2">
                 {homepage.pendingDiscoveries.map((item) => (
                   <DiscoveryRow key={item.id} item={item} />
                 ))}
@@ -313,9 +315,9 @@ function DashboardPage() {
             {isLoading ? (
               <ListSkeleton rows={3} />
             ) : homepage.newFeedback.length === 0 ? (
-              <EmptyState message="No new feedback." className="border-0 py-8" />
+              <CompactEmptyState message="No new feedback." />
             ) : (
-              <div className="divide-y">
+              <div className="space-y-2 p-2">
                 {homepage.newFeedback.map((item) => (
                   <FeedbackRow key={item.id} item={item} />
                 ))}
@@ -338,9 +340,9 @@ function DashboardPage() {
             {isLoading ? (
               <ListSkeleton rows={4} />
             ) : homepage.atRiskSources.length === 0 ? (
-              <EmptyState message="No at-risk sources." className="border-0 py-8" />
+              <CompactEmptyState message="No at-risk sources." />
             ) : (
-              <div className="divide-y">
+              <div className="space-y-2 p-2">
                 {homepage.atRiskSources.map((item) => (
                   <AtRiskSourceRow key={item.id} item={item} />
                 ))}
@@ -361,9 +363,9 @@ function DashboardPage() {
             {isLoading ? (
               <ListSkeleton rows={3} />
             ) : homepage.openFailures.length === 0 ? (
-              <EmptyState message="No open job failures." className="border-0 py-8" />
+              <CompactEmptyState message="No open job failures." />
             ) : (
-              <div className="divide-y">
+              <div className="space-y-2 p-2">
                 {homepage.openFailures.map((item) => (
                   <JobFailureRow key={item.id} item={item} />
                 ))}
@@ -384,9 +386,9 @@ function DashboardPage() {
             {isLoading ? (
               <ListSkeleton rows={3} />
             ) : homepage.recentRuns.length === 0 ? (
-              <EmptyState message="No recent runs." className="border-0 py-8" />
+              <CompactEmptyState message="No recent runs." />
             ) : (
-              <div className="divide-y">
+              <div className="space-y-2 p-2">
                 {homepage.recentRuns.map((item) => (
                   <RunRow key={item.id} item={item} />
                 ))}
@@ -410,9 +412,9 @@ function DashboardPage() {
           {isLoading ? (
             <ListSkeleton rows={4} />
           ) : homepage.recentReleases.length === 0 ? (
-            <EmptyState message="No active releases yet." className="border-0 py-8" />
+            <CompactEmptyState message="No active releases yet." />
           ) : (
-            <div className="divide-y">
+            <div className="space-y-2 p-2">
               {homepage.recentReleases.map((item) => (
                 <ReleaseRow key={item.id} item={item} />
               ))}
@@ -446,18 +448,19 @@ function OverviewCard({
   return (
     <Card
       className={cn(
-        "gap-0 overflow-hidden border shadow-sm",
-        tone === "amber" && "border-amber-500/30 bg-linear-to-br from-amber-500/8 via-card to-card",
-        tone === "blue" && "border-sky-500/30 bg-linear-to-br from-sky-500/8 via-card to-card",
+        "gap-0 overflow-hidden rounded-2xl border shadow-[0_1px_0_rgba(255,255,255,0.03),0_18px_40px_-28px_rgba(0,0,0,0.7)] backdrop-blur-sm",
+        tone === "amber" &&
+          "border-amber-500/25 bg-linear-to-br from-amber-500/9 via-card to-card before:absolute",
+        tone === "blue" && "border-sky-500/25 bg-linear-to-br from-sky-500/9 via-card to-card",
         tone === "emerald" &&
-          "border-emerald-500/30 bg-linear-to-br from-emerald-500/8 via-card to-card",
-        tone === "red" && "border-red-500/30 bg-linear-to-br from-red-500/8 via-card to-card",
+          "border-emerald-500/25 bg-linear-to-br from-emerald-500/9 via-card to-card",
+        tone === "red" && "border-red-500/25 bg-linear-to-br from-red-500/9 via-card to-card",
       )}
     >
-      <CardHeader className="border-b pb-4">
+      <CardHeader className="border-b border-border/60 pb-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
               {title}
             </p>
             <CardDescription className="mt-2 max-w-xs text-sm leading-6">
@@ -466,11 +469,11 @@ function OverviewCard({
           </div>
           <div
             className={cn(
-              "rounded-full border p-2.5",
-              tone === "amber" && "border-amber-500/30 bg-amber-500/10 text-amber-700",
-              tone === "blue" && "border-sky-500/30 bg-sky-500/10 text-sky-700",
-              tone === "emerald" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
-              tone === "red" && "border-red-500/30 bg-red-500/10 text-red-700",
+              "rounded-2xl border p-3 shadow-inner",
+              tone === "amber" && "border-amber-500/25 bg-amber-500/8 text-amber-700",
+              tone === "blue" && "border-sky-500/25 bg-sky-500/8 text-sky-700",
+              tone === "emerald" && "border-emerald-500/25 bg-emerald-500/8 text-emerald-700",
+              tone === "red" && "border-red-500/25 bg-red-500/8 text-red-700",
             )}
           >
             <Icon className="h-4 w-4" />
@@ -489,9 +492,11 @@ function OverviewCard({
           </>
         ) : (
           <>
-            <div className="flex items-baseline gap-3">
-              <div className="text-3xl font-semibold tabular-nums">{value}</div>
-              <div className="text-sm text-muted-foreground">{valueLabel}</div>
+            <div className="rounded-2xl border border-border/60 bg-background/55 px-4 py-4 shadow-inner">
+              <div className="flex items-baseline gap-3">
+                <div className="text-3xl font-semibold tabular-nums">{value}</div>
+                <div className="text-sm text-muted-foreground">{valueLabel}</div>
+              </div>
             </div>
             <div className="space-y-1.5">{children}</div>
           </>
@@ -515,19 +520,20 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <Card className="gap-0 overflow-hidden border-border/80 shadow-sm">
-      <CardHeader className="border-b bg-muted/20 pb-4">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-            <Icon className="h-3.5 w-3.5" />
-            <span>{title}</span>
+    <Card className="gap-0 overflow-hidden rounded-2xl border-border/75 bg-linear-to-b from-muted/16 via-card to-card shadow-[0_1px_0_rgba(255,255,255,0.03),0_20px_38px_-30px_rgba(0,0,0,0.9)]">
+      <CardHeader className="border-b border-border/60 bg-linear-to-r from-muted/28 to-transparent pb-4">
+        <div className="flex items-start gap-3">
+          <div className="rounded-2xl border border-border/70 bg-background/55 p-2.5 text-muted-foreground shadow-inner">
+            <Icon className="h-4 w-4" />
           </div>
-          <CardTitle className="text-lg font-semibold tracking-tight">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
+          <div className="space-y-1">
+            <CardTitle className="text-lg font-semibold tracking-tight">{title}</CardTitle>
+            <CardDescription className="max-w-xl leading-6">{description}</CardDescription>
+          </div>
         </div>
         {action ? <CardAction>{action}</CardAction> : null}
       </CardHeader>
-      <CardContent className="px-0">{children}</CardContent>
+      <CardContent className="px-0 pb-1">{children}</CardContent>
     </Card>
   );
 }
@@ -539,7 +545,7 @@ function CatalogSuggestionRow({ item }: { item: CatalogSuggestion }) {
     <Link
       to="/review"
       search={reviewSearch}
-      className="flex items-start justify-between gap-4 px-6 py-4 transition-colors hover:bg-accent/30"
+      className="group flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60"
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -561,7 +567,7 @@ function CatalogSuggestionRow({ item }: { item: CatalogSuggestion }) {
           ) : null}
         </div>
       </div>
-      <div className="shrink-0 text-right text-xs text-muted-foreground">
+      <div className="shrink-0 text-right text-xs text-muted-foreground transition-transform group-hover:-translate-y-0.5">
         <div>
           first seen <TimeAgo date={item.firstSeenAt} />
         </div>
@@ -580,7 +586,7 @@ function DiscoveryRow({ item }: { item: HomepageDiscoveryItem }) {
     <Link
       to="/discovered-apps"
       search={discoveredSearch}
-      className="flex items-start justify-between gap-4 px-6 py-4 transition-colors hover:bg-accent/30"
+      className="group flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60"
     >
       <div className="min-w-0 flex items-start gap-3">
         <AppIcon iconR2Key={item.iconR2Key} appName={item.appName} size={28} />
@@ -609,7 +615,7 @@ function DiscoveryRow({ item }: { item: HomepageDiscoveryItem }) {
           </div>
         </div>
       </div>
-      <div className="shrink-0 text-right text-xs text-muted-foreground">
+      <div className="shrink-0 text-right text-xs text-muted-foreground transition-transform group-hover:-translate-y-0.5">
         <div>
           last seen <TimeAgo date={item.lastSeenAt} />
         </div>
@@ -623,7 +629,7 @@ function FeedbackRow({ item }: { item: FeedbackListItem }) {
     <Link
       to="/feedback"
       search={feedbackSearch}
-      className="flex items-start justify-between gap-4 px-6 py-4 transition-colors hover:bg-accent/30"
+      className="group flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60"
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -657,7 +663,7 @@ function FeedbackRow({ item }: { item: FeedbackListItem }) {
           )}
         </div>
       </div>
-      <div className="shrink-0 text-right text-xs text-muted-foreground">
+      <div className="shrink-0 text-right text-xs text-muted-foreground transition-transform group-hover:-translate-y-0.5">
         <TimeAgo date={item.createdAt} />
       </div>
     </Link>
@@ -669,7 +675,7 @@ function AtRiskSourceRow({ item }: { item: AtRiskSourceItem }) {
     <Link
       to="/sources/$sourceId"
       params={{ sourceId: item.id }}
-      className="flex items-start justify-between gap-4 px-6 py-4 transition-colors hover:bg-accent/30"
+      className="group flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60"
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -710,7 +716,7 @@ function AtRiskSourceRow({ item }: { item: AtRiskSourceItem }) {
           ) : null}
         </div>
       </div>
-      <div className="shrink-0 text-right text-xs text-muted-foreground">
+      <div className="shrink-0 text-right text-xs text-muted-foreground transition-transform group-hover:-translate-y-0.5">
         {item.risk === "error" ? (
           <div>
             failed {item.lastFailureAt ? <TimeAgo date={item.lastFailureAt} /> : "recently"}
@@ -728,7 +734,7 @@ function JobFailureRow({ item }: { item: JobFailureListItem }) {
     <Link
       to="/jobs"
       search={failureSearch}
-      className="flex items-start justify-between gap-4 px-6 py-4 transition-colors hover:bg-accent/30"
+      className="group flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60"
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -751,7 +757,7 @@ function JobFailureRow({ item }: { item: JobFailureListItem }) {
           </div>
         ) : null}
       </div>
-      <div className="shrink-0 text-right text-xs text-muted-foreground">
+      <div className="shrink-0 text-right text-xs text-muted-foreground transition-transform group-hover:-translate-y-0.5">
         <TimeAgo date={item.createdAt} />
       </div>
     </Link>
@@ -763,7 +769,7 @@ function RunRow({ item }: { item: HomepageRunItem }) {
     <Link
       to="/jobs"
       search={jobsSearch}
-      className="flex items-start justify-between gap-4 px-6 py-4 transition-colors hover:bg-accent/30"
+      className="group flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60"
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -797,7 +803,7 @@ function RunRow({ item }: { item: HomepageRunItem }) {
           </div>
         ) : null}
       </div>
-      <div className="shrink-0 text-right text-xs text-muted-foreground">
+      <div className="shrink-0 text-right text-xs text-muted-foreground transition-transform group-hover:-translate-y-0.5">
         <TimeAgo date={item.startedAt} />
       </div>
     </Link>
@@ -806,7 +812,7 @@ function RunRow({ item }: { item: HomepageRunItem }) {
 
 function ReleaseRow({ item }: { item: ReleaseListItem }) {
   return (
-    <div className="flex items-start justify-between gap-4 px-6 py-4">
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60">
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-3">
           <AppIcon
@@ -860,7 +866,7 @@ function MetricLabel({
   tone: "amber" | "blue" | "emerald" | "red" | "slate";
 }) {
   return (
-    <div className="flex items-center gap-2 text-sm text-foreground">
+    <div className="flex items-center gap-2 text-sm text-foreground/95">
       <span
         className={cn(
           "h-2 w-2 rounded-full",
@@ -903,8 +909,46 @@ function ListSkeleton({ rows }: { rows: number }) {
   return (
     <div className="space-y-3 px-6 py-4">
       {Array.from({ length: rows }, (_, index) => (
-        <Skeleton key={index} className="h-[4.5rem] w-full" />
+        <Skeleton key={index} className="h-[4.5rem] w-full rounded-xl" />
       ))}
+    </div>
+  );
+}
+
+function CompactEmptyState({ message }: { message: string }) {
+  return (
+    <div className="px-4 py-10">
+      <div className="rounded-2xl border border-dashed border-border/70 bg-background/25 px-4 py-8 text-center">
+        <div className="text-sm font-medium text-foreground/90">{message}</div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          This panel will repopulate automatically as new activity arrives.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HeroPill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "amber" | "blue" | "red";
+}) {
+  return (
+    <div className="inline-flex items-center gap-3 rounded-full border border-border/70 bg-card/70 px-3.5 py-2 text-sm shadow-sm backdrop-blur-sm">
+      <span
+        className={cn(
+          "h-2.5 w-2.5 rounded-full",
+          tone === "amber" && "bg-amber-500",
+          tone === "blue" && "bg-sky-500",
+          tone === "red" && "bg-red-500",
+        )}
+      />
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold tabular-nums">{value}</span>
     </div>
   );
 }
@@ -938,4 +982,4 @@ function formatRunDuration(startedAt: string, completedAt: string | null) {
 }
 
 const viewAllClassName =
-  "inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground";
+  "inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/45 px-3 py-1.5 text-sm text-muted-foreground transition-all hover:border-border hover:bg-background/75 hover:text-foreground";

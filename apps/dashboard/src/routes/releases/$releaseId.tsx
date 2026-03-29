@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, ExternalLink, Pencil, Save, X } from "lucide-react";
+import { ArrowLeft, ExternalLink, Inbox, Pencil, Save, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,7 +15,7 @@ import {
 import type { Artifact, ReleaseObservation } from "@/api/types";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
-import { EmptyState } from "@/components/shared/empty-state";
+import { Empty, EmptyHeader, EmptyMedia, EmptyDescription } from "@/components/ui/empty";
 import { AppEntityLink } from "@/components/shared/entity-link";
 import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -198,7 +198,16 @@ function ReleaseDetailPage() {
   }
 
   if (!release) {
-    return <EmptyState message="Release not found." />;
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Inbox />
+          </EmptyMedia>
+          <EmptyDescription>Release not found.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   return (

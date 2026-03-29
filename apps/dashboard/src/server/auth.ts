@@ -16,6 +16,7 @@ export const getMe = createServerFn({ method: "GET" })
       id: context.user.id,
       email: context.user.email,
       name: context.user.name,
+      image: context.user.image,
     };
   });
 
@@ -31,5 +32,6 @@ export const getSession = createServerFn({ method: "GET" })
       id: session.user.id,
       email: session.user.email,
       name: session.user.name,
+      image: session.user.image,
     };
   });

@@ -7,10 +7,12 @@ import {
   ArrowLeft,
   ExternalLink,
   GripVertical,
+  Inbox,
   Pencil,
   Plus,
   RefreshCw,
   Trash2,
+  Unplug,
   Upload,
   Zap,
 } from "lucide-react";
@@ -37,7 +39,7 @@ import { CreateSourceDialog } from "@/components/shared/create-source-dialog";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { EditAppDialog } from "@/components/shared/edit-app-dialog";
-import { EmptyState } from "@/components/shared/empty-state";
+import { Empty, EmptyHeader, EmptyMedia, EmptyDescription } from "@/components/ui/empty";
 import { SourceEntityLink } from "@/components/shared/entity-link";
 import { FormField } from "@/components/shared/form-field";
 import { IdDisplay } from "@/components/shared/id-display";
@@ -87,7 +89,16 @@ function AppDetailPage() {
   }
 
   if (!app) {
-    return <EmptyState message="App not found." />;
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Inbox />
+          </EmptyMedia>
+          <EmptyDescription>App not found.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   return (
@@ -245,7 +256,14 @@ function OverviewTab({
           </Button>
         </div>
         {app.latestReleases.length === 0 ? (
-          <EmptyState message="No published releases." className="mt-3" />
+          <Empty className="mt-3">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Upload />
+              </EmptyMedia>
+              <EmptyDescription>No published releases.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
           <div className="mt-3 flex flex-col gap-2">
             {app.latestReleases.map((latestRelease) => (
@@ -653,7 +671,14 @@ function SourcesTab({ appId }: { appId: string }) {
           <Skeleton className="h-16 w-full" />
         </div>
       ) : sortedSources.length === 0 ? (
-        <EmptyState message="No sources configured." />
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Unplug />
+            </EmptyMedia>
+            <EmptyDescription>No sources configured.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <DragDropProvider onDragEnd={handleDragEnd}>
           <div className="space-y-2">

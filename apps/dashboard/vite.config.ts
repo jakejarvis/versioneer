@@ -8,6 +8,8 @@ export default defineConfig({
     tailwindcss(),
     cloudflare({
       viteEnvironment: { name: "ssr" },
+      auxiliaryWorkers: [{ configPath: "../worker/wrangler.jsonc" }],
+      inspectorPort: 9231,
       persistState: { path: "../../.wrangler/state" },
     }),
     tanstackStart(),

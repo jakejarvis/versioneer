@@ -13,7 +13,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Settings2 } from "lucide-react";
+import { Inbox, Settings2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-import { EmptyState } from "./empty-state";
+import { Empty, EmptyHeader, EmptyMedia, EmptyDescription } from "@/components/ui/empty";
 import { PaginationControls } from "./pagination-controls";
 
 export interface Column<T> {
@@ -372,7 +372,14 @@ export function DataTable<T>({
       {table.getRowModel().rows.length > 0 ? (
         renderTable(table)
       ) : (
-        <EmptyState message={noResultsMessage ?? emptyMessage} />
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Inbox />
+            </EmptyMedia>
+            <EmptyDescription>{noResultsMessage ?? emptyMessage}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
 
       {resolvedPagination && (

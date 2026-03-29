@@ -1,7 +1,7 @@
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
-import { ArrowLeft, Ban, RefreshCw, RotateCcw, Save, Zap } from "lucide-react";
+import { ArrowLeft, Ban, Inbox, RefreshCw, RotateCcw, Save, Zap } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -17,7 +17,7 @@ import type { ParserRun, SourceFetch } from "@/api/types";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
-import { EmptyState } from "@/components/shared/empty-state";
+import { Empty, EmptyHeader, EmptyMedia, EmptyDescription } from "@/components/ui/empty";
 import { AppEntityLink } from "@/components/shared/entity-link";
 import { FormField } from "@/components/shared/form-field";
 import { IdDisplay } from "@/components/shared/id-display";
@@ -71,7 +71,16 @@ function SourceDetailPage() {
   }
 
   if (!source) {
-    return <EmptyState message="Source not found." />;
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Inbox />
+          </EmptyMedia>
+          <EmptyDescription>Source not found.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   return (

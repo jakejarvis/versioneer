@@ -13,7 +13,7 @@
     "typegen:workers": "wrangler types",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply versioneer-db-dev --local --persist-to ../../.wrangler/state",
-    "db:migrate:remote": "wrangler d1 migrations apply versioneer-db-dev --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply versioneer-db-production --remote --env=production"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",

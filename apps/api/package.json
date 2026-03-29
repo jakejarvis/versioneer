@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev --persist-to ../../.wrangler/state",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --env=production",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt --config ../../.oxfmtrc.json",
