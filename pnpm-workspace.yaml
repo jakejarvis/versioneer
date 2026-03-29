@@ -7,7 +7,7 @@ allowBuilds:
   sharp: true
   workerd: true
 catalog:
-  drizzle-orm: ^0.45.2
+  drizzle-orm: 1.0.0-beta.20
   typescript: ^6.0.2
   vitest: ^4.1.2
   wrangler: ^4.78.0
