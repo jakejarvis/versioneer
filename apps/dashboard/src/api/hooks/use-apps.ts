@@ -93,11 +93,14 @@ export function useCreateAlias(appId: string) {
       confidenceWeight?: number;
       source?: string;
     }) => createAlias({ data: { appId, ...input } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["apps", appId, "aliases"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["apps", appId, "aliases"] });
+      void qc.invalidateQueries({ queryKey: ["apps", appId] });
+    },
   });
 }
 
-export function useUpdateAlias() {
+export function useUpdateAlias(appId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -109,15 +112,21 @@ export function useUpdateAlias() {
       priority?: number;
       confidenceWeight?: number;
     }) => updateAlias({ data: { id, ...input } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["apps"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["apps", appId, "aliases"] });
+      void qc.invalidateQueries({ queryKey: ["apps", appId] });
+    },
   });
 }
 
-export function useDeleteAlias() {
+export function useDeleteAlias(appId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteAlias({ data: { id } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["apps"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["apps", appId, "aliases"] });
+      void qc.invalidateQueries({ queryKey: ["apps", appId] });
+    },
   });
 }
 

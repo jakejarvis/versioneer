@@ -49,7 +49,11 @@ export function useCreateSource() {
       parserKey: string;
       pollIntervalMinutes?: number;
     }) => createSource({ data: input }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }),
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({ queryKey: ["sources"] });
+      void qc.invalidateQueries({ queryKey: ["apps", variables.appId, "sources"] });
+      void qc.invalidateQueries({ queryKey: ["apps", variables.appId] });
+    },
   });
 }
 
@@ -60,6 +64,7 @@ export function useUpdateSource(id: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["sources"] });
       void qc.invalidateQueries({ queryKey: ["sources", id] });
+      void qc.invalidateQueries({ queryKey: ["apps"] });
     },
   });
 }
@@ -100,8 +105,13 @@ export function useTriggerSourceFetch() {
   });
 }
 
-export function useReparse() {
+export function useReparse(sourceId: string) {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (fetchId: string) => reparse({ data: { sourceFetchId: fetchId } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["sources", sourceId, "fetches"] });
+      void qc.invalidateQueries({ queryKey: ["source-fetches"] });
+    },
   });
 }

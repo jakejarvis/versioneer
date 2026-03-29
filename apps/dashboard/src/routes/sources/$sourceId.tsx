@@ -151,6 +151,7 @@ function SourceDetailPage() {
             </SelectContent>
           </Select>
           <Button
+            size="sm"
             onClick={() =>
               triggerFetch.mutate(
                 { sourceId },
@@ -449,7 +450,7 @@ function FetchHistoryTable({
     ) => void;
   };
 }) {
-  const reparse = useReparse();
+  const reparse = useReparse(sourceId);
 
   const queueReparse = useCallback(
     (fetchId: string) => {

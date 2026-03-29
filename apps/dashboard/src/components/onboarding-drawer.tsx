@@ -694,9 +694,9 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                   {onboard.isPending ? "Onboarding..." : "Onboard App"}
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="h-8 text-muted-foreground"
+                  className="h-8"
                   onClick={() => onOpenChange(false)}
                 >
                   Cancel

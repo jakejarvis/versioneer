@@ -297,8 +297,8 @@ function OverviewTab({
 function AliasesTab({ appId }: { appId: string }) {
   const { data, isLoading } = useAppAliases(appId);
   const [createOpen, setCreateOpen] = useState(false);
-  const updateAlias = useUpdateAlias();
-  const deleteAlias = useDeleteAlias();
+  const updateAlias = useUpdateAlias(appId);
+  const deleteAlias = useDeleteAlias(appId);
 
   const columns = useMemo<ColumnDef<AppAlias>[]>(
     () => [

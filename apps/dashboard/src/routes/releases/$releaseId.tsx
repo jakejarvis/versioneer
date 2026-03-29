@@ -234,6 +234,7 @@ function ReleaseDetailPage() {
           {release.isPinnedLatest ? (
             <Button
               variant="outline"
+              size="sm"
               onClick={() =>
                 unpinRelease.mutate(release.id, {
                   onSuccess: () => toast.success("Release unpinned"),
@@ -246,6 +247,7 @@ function ReleaseDetailPage() {
           ) : (
             <Button
               variant="outline"
+              size="sm"
               onClick={() =>
                 pinRelease.mutate(release.id, {
                   onSuccess: () => toast.success("Release pinned"),

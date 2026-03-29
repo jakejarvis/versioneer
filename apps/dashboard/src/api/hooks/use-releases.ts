@@ -89,8 +89,9 @@ export function usePinRelease() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (releaseId: string) => pinRelease({ data: { id: releaseId } }),
-    onSuccess: () => {
+    onSuccess: (_data, releaseId) => {
       void qc.invalidateQueries({ queryKey: ["releases"] });
+      void qc.invalidateQueries({ queryKey: ["releases", releaseId] });
       void qc.invalidateQueries({ queryKey: ["apps"] });
     },
   });
@@ -100,8 +101,9 @@ export function useUnpinRelease() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (releaseId: string) => unpinRelease({ data: { id: releaseId } }),
-    onSuccess: () => {
+    onSuccess: (_data, releaseId) => {
       void qc.invalidateQueries({ queryKey: ["releases"] });
+      void qc.invalidateQueries({ queryKey: ["releases", releaseId] });
       void qc.invalidateQueries({ queryKey: ["apps"] });
     },
   });
