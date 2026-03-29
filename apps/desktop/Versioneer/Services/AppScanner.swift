@@ -50,6 +50,7 @@ actor AppScanner {
         guard seenPaths.insert(resolved).inserted else { continue }
 
         if let app = BundleMetadataReader.readApp(at: item) {
+          guard !GloballyIgnoredApps.shouldIgnore(bundleId: app.bundleId) else { continue }
           results.append(app)
         } else {
           Logger.appScanner.debug("Could not read bundle: \(item.lastPathComponent)")
