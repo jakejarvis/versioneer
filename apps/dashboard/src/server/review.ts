@@ -36,11 +36,15 @@ const suggestionQueueTypeSchema = z.enum([
   "release_discrepancy",
 ]);
 
+const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
+
 const listSuggestionsSchema = z.object({
   limit: z.number().int().min(1).max(100).default(25),
   offset: z.number().int().min(0).default(0),
   status: suggestionStatusSchema.default("pending"),
   queueType: suggestionQueueTypeSchema.optional(),
+  sortBy: z.string().optional(),
+  sortDir: sortDirectionSchema,
 });
 
 function parseJson<T>(value: string | null | undefined): T | null {
@@ -710,11 +714,23 @@ export const listCatalogSuggestions = createServerFn({ method: "GET" })
       .select({ count: sql<number>`count(*)` })
       .from(catalogSuggestions)
       .where(where);
+    const sortColumns = {
+      firstSeenAt: catalogSuggestions.firstSeenAt,
+      lastSeenAt: catalogSuggestions.lastSeenAt,
+      evidenceCount: catalogSuggestions.evidenceCount,
+      createdAt: catalogSuggestions.createdAt,
+    } as const;
+    const direction = data.sortDir === "desc" ? desc : asc;
+    const sortCol = data.sortBy ? sortColumns[data.sortBy as keyof typeof sortColumns] : null;
+    const orderBy = sortCol
+      ? [direction(sortCol), asc(catalogSuggestions.createdAt)]
+      : [asc(catalogSuggestions.firstSeenAt), asc(catalogSuggestions.createdAt)];
+
     const items = await db
       .select()
       .from(catalogSuggestions)
       .where(where)
-      .orderBy(asc(catalogSuggestions.firstSeenAt), asc(catalogSuggestions.createdAt))
+      .orderBy(...orderBy)
       .limit(data.limit)
       .offset(data.offset);
 

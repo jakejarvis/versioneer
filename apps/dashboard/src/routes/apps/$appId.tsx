@@ -1,9 +1,12 @@
+import { DragDropProvider } from "@dnd-kit/react";
+import { useSortable } from "@dnd-kit/react/sortable";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
 import {
   ArrowLeft,
   ExternalLink,
+  GripVertical,
   Pencil,
   Plus,
   RefreshCw,
@@ -27,12 +30,14 @@ import {
   useUpdateAlias,
   useUploadAppIcon,
 } from "@/api/hooks/use-apps";
+import { useReorderSources } from "@/api/hooks/use-sources";
 import type { AppAlias, AppLatestRelease, Release, Source } from "@/api/types";
 import { AppIcon } from "@/components/shared/app-icon";
 import { CreateSourceDialog } from "@/components/shared/create-source-dialog";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { EditAppDialog } from "@/components/shared/edit-app-dialog";
+import { EmptyState } from "@/components/shared/empty-state";
 import { SourceEntityLink } from "@/components/shared/entity-link";
 import { FormField } from "@/components/shared/form-field";
 import { IdDisplay } from "@/components/shared/id-display";
@@ -82,7 +87,7 @@ function AppDetailPage() {
   }
 
   if (!app) {
-    return <p className="text-muted-foreground">App not found.</p>;
+    return <EmptyState message="App not found." />;
   }
 
   return (
@@ -240,7 +245,7 @@ function OverviewTab({
           </Button>
         </div>
         {app.latestReleases.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">No published releases yet.</p>
+          <EmptyState message="No published releases." className="mt-3" />
         ) : (
           <div className="mt-3 flex flex-col gap-2">
             {app.latestReleases.map((latestRelease) => (
@@ -526,10 +531,67 @@ function CreateAliasDialog({
   );
 }
 
+function SortableSourceRow({
+  source,
+  index,
+  onFetch,
+}: {
+  source: Source;
+  index: number;
+  onFetch: (id: string) => void;
+}) {
+  const { ref } = useSortable({ id: source.id, index });
+
+  return (
+    <div ref={ref} className="flex items-center gap-3 rounded-lg border bg-card p-3 shadow-sm">
+      <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <SourceEntityLink
+          source={{
+            id: source.id,
+            label: source.label,
+            sourceType: source.sourceType,
+            parserKey: source.parserKey,
+            channel: source.channel,
+            reviewStatus: source.reviewStatus,
+            role: source.role,
+            status: source.status,
+            app: null,
+          }}
+          showId
+        />
+      </div>
+      <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{source.sourceType}</span>
+      <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+        {source.channel ?? "auto"}
+      </span>
+      <StatusBadge status={source.status} />
+      <TimeAgo date={source.lastSuccessAt} />
+      <div className="flex shrink-0 items-center gap-2">
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/sources/$sourceId" params={{ sourceId: source.id }}>
+            Open
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => onFetch(source.id)}>
+          <Zap />
+          Fetch
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function SourcesTab({ appId }: { appId: string }) {
   const { data, isLoading } = useAppSources(appId);
   const triggerFetch = useTriggerFetch();
+  const reorderMutation = useReorderSources();
   const [createSourceOpen, setCreateSourceOpen] = useState(false);
+
+  const sortedSources = useMemo(() => {
+    const items = data?.items ?? [];
+    return [...items].sort((a, b) => (a.ordinal ?? 0) - (b.ordinal ?? 0));
+  }, [data?.items]);
 
   const queueFetch = useCallback(
     (sourceId: string) => {
@@ -544,88 +606,30 @@ function SourcesTab({ appId }: { appId: string }) {
     [triggerFetch],
   );
 
-  const columns = useMemo<ColumnDef<Source>[]>(
-    () => [
-      {
-        accessorKey: "label",
-        meta: { label: "Source" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Source" />,
-        cell: ({ row }) => (
-          <SourceEntityLink
-            source={{
-              id: row.original.id,
-              label: row.original.label,
-              sourceType: row.original.sourceType,
-              parserKey: row.original.parserKey,
-              channel: row.original.channel,
-              reviewStatus: row.original.reviewStatus,
-              role: row.original.role,
-              status: row.original.status,
-              app: null,
-            }}
-            showId
-          />
-        ),
-      },
-      {
-        accessorKey: "sourceType",
-        meta: { label: "Type" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
-        cell: ({ row }) => (
-          <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-            {row.original.sourceType}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "channel",
-        meta: { label: "Channel" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Channel" />,
-        cell: ({ row }) => (
-          <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-            {row.original.channel ?? "auto"}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "status",
-        meta: { label: "Status" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-        cell: ({ row }) => <StatusBadge status={row.original.status} />,
-      },
-      {
-        accessorKey: "lastFetchedAt",
-        meta: { label: "Last Fetch" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Last Fetch" />,
-        cell: ({ row }) => <TimeAgo date={row.original.lastFetchedAt} />,
-      },
-      {
-        accessorKey: "lastSuccessAt",
-        meta: { label: "Last Success" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Last Success" />,
-        cell: ({ row }) => <TimeAgo date={row.original.lastSuccessAt} />,
-      },
-      {
-        id: "actions",
-        meta: { label: "Actions" },
-        enableSorting: false,
-        enableHiding: false,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/sources/$sourceId" params={{ sourceId: row.original.id }}>
-                Open
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => queueFetch(row.original.id)}>
-              <Zap />
-              Fetch
-            </Button>
-          </div>
-        ),
-      },
-    ],
-    [queueFetch],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleDragEnd = useCallback(
+    (event: any) => {
+      const source = event.operation.source;
+      const target = event.operation.target;
+      if (!source || !target || source.id === target.id) return;
+
+      const oldIndex = sortedSources.findIndex((s) => s.id === source.id);
+      const newIndex = sortedSources.findIndex((s) => s.id === target.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const reordered = [...sortedSources];
+      const [moved] = reordered.splice(oldIndex, 1);
+      reordered.splice(newIndex, 0, moved!);
+
+      reorderMutation.mutate(
+        { appId, sourceIds: reordered.map((s) => s.id) },
+        {
+          onSuccess: () => toast.success("Sources reordered"),
+          onError: (err: Error) => toast.error(err.message),
+        },
+      );
+    },
+    [sortedSources, appId, reorderMutation],
   );
 
   return (
@@ -634,7 +638,8 @@ function SourcesTab({ appId }: { appId: string }) {
         <div>
           <h3 className="font-medium">Sources</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Update feeds that provide release information for this app.
+            Update feeds that provide release information for this app. Drag to reorder; the first
+            source is primary.
           </p>
         </div>
         <Button size="sm" onClick={() => setCreateSourceOpen(true)}>
@@ -642,13 +647,27 @@ function SourcesTab({ appId }: { appId: string }) {
           Add Source
         </Button>
       </div>
-      <DataTable
-        columns={columns}
-        data={data?.items ?? []}
-        isLoading={isLoading}
-        emptyMessage="No sources configured."
-        enableColumnVisibility
-      />
+      {isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      ) : sortedSources.length === 0 ? (
+        <EmptyState message="No sources configured." />
+      ) : (
+        <DragDropProvider onDragEnd={handleDragEnd}>
+          <div className="space-y-2">
+            {sortedSources.map((source, index) => (
+              <SortableSourceRow
+                key={source.id}
+                source={source}
+                index={index}
+                onFetch={queueFetch}
+              />
+            ))}
+          </div>
+        </DragDropProvider>
+      )}
       <CreateSourceDialog
         appId={appId}
         open={createSourceOpen}
@@ -742,7 +761,7 @@ function ReleasesTab({ appId }: { appId: string }) {
       columns={columns}
       data={data?.items ?? []}
       isLoading={isLoading}
-      emptyMessage="No releases found."
+      emptyMessage="No releases."
       sorting={sorting}
       onSortingChange={setSorting}
       manualSorting

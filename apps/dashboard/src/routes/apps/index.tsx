@@ -151,7 +151,7 @@ function AppsPage() {
           columns={columns}
           data={data?.items ?? []}
           isLoading={isLoading}
-          emptyMessage="No apps found."
+          emptyMessage="No apps."
           sorting={sorting}
           onSortingChange={handleSortingChange}
           manualSorting

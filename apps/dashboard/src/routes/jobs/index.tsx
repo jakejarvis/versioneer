@@ -226,7 +226,7 @@ function JobsPage() {
           columns={columns}
           data={data?.items ?? []}
           isLoading={isLoading}
-          emptyMessage="No job runs recorded yet."
+          emptyMessage="No job runs."
           sorting={sorting}
           onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
             void navigate({

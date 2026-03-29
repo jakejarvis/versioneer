@@ -1,4 +1,4 @@
-import { setCachedLatest } from "@versioneer/cache";
+import { setCachedLatest, recentReleasesKey } from "@versioneer/cache";
 import type { CacheKV } from "@versioneer/cache";
 import { createDb } from "@versioneer/db";
 import {
@@ -185,4 +185,8 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
       updatedAt: now,
     });
   }
+
+  // Bust the recent-releases cache so the marketing page updates promptly
+  const cacheKV = env.CACHE_KV as unknown as CacheKV;
+  await cacheKV.delete(recentReleasesKey());
 }

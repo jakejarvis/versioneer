@@ -1,5 +1,7 @@
 import { ArrowUpRightIcon, HardDriveDownloadIcon } from "lucide-react";
 
+import { RecentReleases } from "./components/recent-releases";
+
 export function App() {
   return (
     <div className="mx-auto max-w-xl px-6 py-20 md:py-32 space-y-10">
@@ -54,6 +56,8 @@ export function App() {
             Download
           </a>
         </div>
+
+        <RecentReleases />
       </main>
 
       <footer className="mt-12 text-sm text-muted-foreground border-t border-foreground/10 pt-6">

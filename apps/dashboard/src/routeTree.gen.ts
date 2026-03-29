@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SourcesIndexRouteImport } from './routes/sources/index'
+import { Route as ReviewIndexRouteImport } from './routes/review/index'
 import { Route as ReleasesIndexRouteImport } from './routes/releases/index'
 import { Route as JobsIndexRouteImport } from './routes/jobs/index'
 import { Route as JobFailuresIndexRouteImport } from './routes/job-failures/index'
@@ -38,6 +39,11 @@ const IndexRoute = IndexRouteImport.update({
 const SourcesIndexRoute = SourcesIndexRouteImport.update({
   id: '/sources/',
   path: '/sources/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReviewIndexRoute = ReviewIndexRouteImport.update({
+  id: '/review/',
+  path: '/review/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReleasesIndexRoute = ReleasesIndexRouteImport.update({
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/job-failures/': typeof JobFailuresIndexRoute
   '/jobs/': typeof JobsIndexRoute
   '/releases/': typeof ReleasesIndexRoute
+  '/review/': typeof ReviewIndexRoute
   '/sources/': typeof SourcesIndexRoute
   '/api/assets/$': typeof ApiAssetsSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/job-failures': typeof JobFailuresIndexRoute
   '/jobs': typeof JobsIndexRoute
   '/releases': typeof ReleasesIndexRoute
+  '/review': typeof ReviewIndexRoute
   '/sources': typeof SourcesIndexRoute
   '/api/assets/$': typeof ApiAssetsSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -149,6 +157,7 @@ export interface FileRoutesById {
   '/job-failures/': typeof JobFailuresIndexRoute
   '/jobs/': typeof JobsIndexRoute
   '/releases/': typeof ReleasesIndexRoute
+  '/review/': typeof ReviewIndexRoute
   '/sources/': typeof SourcesIndexRoute
   '/api/assets/$': typeof ApiAssetsSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -168,6 +177,7 @@ export interface FileRouteTypes {
     | '/job-failures/'
     | '/jobs/'
     | '/releases/'
+    | '/review/'
     | '/sources/'
     | '/api/assets/$'
     | '/api/auth/$'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/job-failures'
     | '/jobs'
     | '/releases'
+    | '/review'
     | '/sources'
     | '/api/assets/$'
     | '/api/auth/$'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/job-failures/'
     | '/jobs/'
     | '/releases/'
+    | '/review/'
     | '/sources/'
     | '/api/assets/$'
     | '/api/auth/$'
@@ -220,6 +232,7 @@ export interface RootRouteChildren {
   JobFailuresIndexRoute: typeof JobFailuresIndexRoute
   JobsIndexRoute: typeof JobsIndexRoute
   ReleasesIndexRoute: typeof ReleasesIndexRoute
+  ReviewIndexRoute: typeof ReviewIndexRoute
   SourcesIndexRoute: typeof SourcesIndexRoute
   ApiAssetsSplatRoute: typeof ApiAssetsSplatRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -246,6 +259,13 @@ declare module '@tanstack/react-router' {
       path: '/sources'
       fullPath: '/sources/'
       preLoaderRoute: typeof SourcesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/review/': {
+      id: '/review/'
+      path: '/review'
+      fullPath: '/review/'
+      preLoaderRoute: typeof ReviewIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/releases/': {
@@ -348,6 +368,7 @@ const rootRouteChildren: RootRouteChildren = {
   JobFailuresIndexRoute: JobFailuresIndexRoute,
   JobsIndexRoute: JobsIndexRoute,
   ReleasesIndexRoute: ReleasesIndexRoute,
+  ReviewIndexRoute: ReviewIndexRoute,
   SourcesIndexRoute: SourcesIndexRoute,
   ApiAssetsSplatRoute: ApiAssetsSplatRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

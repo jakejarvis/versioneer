@@ -1,9 +1,12 @@
+import { DragDropProvider } from "@dnd-kit/react";
+import { useSortable } from "@dnd-kit/react/sortable";
 import { useForm } from "@tanstack/react-form";
 import { parseGitHubRepoUrl, resolveSourceUrl } from "@versioneer/validation";
 import {
   Check,
   CircleAlert,
   ExternalLink,
+  GripVertical,
   Loader2,
   Plus,
   RefreshCw,
@@ -658,18 +661,35 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                   <form.Field name="sources" mode="array">
                     {(sourcesField) =>
                       sourcesField.state.value.length > 0 ? (
-                        <div className="mt-2.5 space-y-2.5">
-                          {sourcesField.state.value.map((source, i) => (
-                            <SourceCard
-                              key={source.key}
-                              form={form}
-                              index={i}
-                              source={source}
-                              onRemove={() => sourcesField.removeValue(i)}
-                              onValidated={() => form.setFieldValue("sourceValidated", true)}
-                            />
-                          ))}
-                        </div>
+                        <DragDropProvider
+                          onDragEnd={(event: any) => {
+                            const src = event.operation.source;
+                            const tgt = event.operation.target;
+                            if (!src || !tgt || src.id === tgt.id) return;
+                            const items = sourcesField.state.value;
+                            const oldIdx = items.findIndex((s: SourceEntry) => s.key === src.id);
+                            const newIdx = items.findIndex((s: SourceEntry) => s.key === tgt.id);
+                            if (oldIdx === -1 || newIdx === -1) return;
+                            const reordered = [...items];
+                            const [moved] = reordered.splice(oldIdx, 1);
+                            reordered.splice(newIdx, 0, moved!);
+                            form.setFieldValue("sources", reordered);
+                          }}
+                        >
+                          <div className="mt-2.5 space-y-2.5">
+                            {sourcesField.state.value.map((source: SourceEntry, i: number) => (
+                              <SortableSourceWrapper key={source.key} id={source.key} index={i}>
+                                <SourceCard
+                                  form={form}
+                                  index={i}
+                                  source={source}
+                                  onRemove={() => sourcesField.removeValue(i)}
+                                  onValidated={() => form.setFieldValue("sourceValidated", true)}
+                                />
+                              </SortableSourceWrapper>
+                            ))}
+                          </div>
+                        </DragDropProvider>
                       ) : (
                         <p className="mt-2 text-xs text-muted-foreground/70">
                           No update sources. The app can be onboarded without one.
@@ -708,6 +728,29 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ──────────────────────────────────────────────────────────
+// Sortable wrapper for source cards during onboarding
+// ──────────────────────────────────────────────────────────
+
+function SortableSourceWrapper({
+  id,
+  index,
+  children,
+}: {
+  id: string;
+  index: number;
+  children: React.ReactNode;
+}) {
+  const { ref } = useSortable({ id, index });
+
+  return (
+    <div ref={ref} className="flex items-start gap-1.5">
+      <GripVertical className="mt-3 h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
   );
 }
 

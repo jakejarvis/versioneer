@@ -172,6 +172,7 @@ export interface Source {
   pollIntervalMinutes: number;
   reviewStatus: "pending" | "approved" | "rejected" | "disabled";
   role: "authority" | "corroborating" | "reference" | null;
+  ordinal: number;
   status: "active" | "paused" | "disabled" | "error";
   lastSuccessAt: string | null;
   lastFailureAt: string | null;

@@ -417,7 +417,7 @@ final class AppState {
     }
 
     let startTime = CFAbsoluteTimeGetCurrent()
-    let apps = await scanner.scan()
+    let apps = await scanner.scan(roots: settings.allScanRootURLs)
     let scanMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
 
     installedApps = apps

@@ -96,6 +96,10 @@ function entityHref(ref: LinkedEntityRef) {
       return `/sources/${ref.id}`;
     case "release":
       return `/releases/${ref.id}`;
+    case "job_failure":
+      return `/job-failures`;
+    case "feedback":
+      return `/feedback`;
     default:
       return null;
   }

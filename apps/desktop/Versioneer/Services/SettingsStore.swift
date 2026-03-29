@@ -13,6 +13,7 @@ final class SettingsStore {
     static let ignoredAppRules = "versioneer_ignored_app_rules"
     static let defaultChannel = "versioneer_default_channel"
     static let perAppChannels = "versioneer_per_app_channels"
+    static let extraScanRoots = "versioneer_extra_scan_roots"
   }
 
   static let defaultBaseURL = URL(string: "https://api.versioneer.app")!
@@ -118,6 +119,52 @@ final class SettingsStore {
 
   func channel(forAppId appId: String) -> String {
     perAppChannels[appId] ?? defaultChannel
+  }
+
+  /// Extra scan roots beyond the default `/Applications` and `~/Applications`.
+  var extraScanRoots: [String] {
+    get {
+      defaults.stringArray(forKey: Keys.extraScanRoots) ?? []
+    }
+    set {
+      var seen = Set<String>()
+      let deduplicated = newValue.filter { seen.insert($0).inserted }
+      if deduplicated.isEmpty {
+        defaults.removeObject(forKey: Keys.extraScanRoots)
+      } else {
+        defaults.set(deduplicated, forKey: Keys.extraScanRoots)
+      }
+    }
+  }
+
+  func addExtraScanRoot(_ path: String) {
+    let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty, trimmed.hasPrefix("/") else { return }
+    var current = extraScanRoots
+    guard !current.contains(trimmed) else { return }
+    current.append(trimmed)
+    extraScanRoots = current
+  }
+
+  func removeExtraScanRoot(_ path: String) {
+    extraScanRoots = extraScanRoots.filter { $0 != path }
+  }
+
+  /// All scan root URLs: default roots plus user-configured extras.
+  var allScanRootURLs: [URL] {
+    var urls: [URL] = [
+      URL(fileURLWithPath: "/Applications"),
+    ]
+    if let home = FileManager.default.homeDirectoryForCurrentUser as URL? {
+      urls.append(home.appendingPathComponent("Applications"))
+    }
+    for extra in extraScanRoots {
+      let url = URL(fileURLWithPath: extra)
+      if !urls.contains(url) {
+        urls.append(url)
+      }
+    }
+    return urls
   }
 
   /// Resets the base URL to the default value.

@@ -5,9 +5,11 @@ import { appsRoutes } from "./apps";
 import { feedbackRoutes } from "./feedback";
 import { installRoutes } from "./install";
 import { inventoryRoutes } from "./inventory";
+import { recentReleasesRoutes } from "./recent-releases";
 
 export const publicRoutes = new Hono<{ Bindings: Env }>()
   .route("/", inventoryRoutes)
   .route("/", appsRoutes)
   .route("/", installRoutes)
-  .route("/", feedbackRoutes);
+  .route("/", feedbackRoutes)
+  .route("/", recentReleasesRoutes);

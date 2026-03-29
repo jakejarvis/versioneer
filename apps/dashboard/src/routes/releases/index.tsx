@@ -177,7 +177,7 @@ function ReleasesPage() {
           columns={columns}
           data={data?.items ?? []}
           isLoading={isLoading}
-          emptyMessage="No releases found."
+          emptyMessage="No releases."
           sorting={sorting}
           onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
             void navigate({ to: "/releases", search: applySortingToSearch(searchState, updater) })

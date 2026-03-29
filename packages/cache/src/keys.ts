@@ -17,3 +17,7 @@ export function featureFlagKey(flag: string): string {
 export function blockSourceKey(sourceId: string): string {
   return `block:source:${sourceId}`;
 }
+
+export function recentReleasesKey(): string {
+  return "recent-releases";
+}

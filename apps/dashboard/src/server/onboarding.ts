@@ -5,20 +5,19 @@ import { lookupCaskTokenByBundleId } from "@versioneer/pipeline";
 import {
   apps,
   appAliases,
-  catalogSuggestions,
+  sources,
   discoveredApps,
   auditLog,
   generateId,
   idPrefixes,
-  suggestionEvidence,
 } from "@versioneer/schema";
 import { env } from "cloudflare:workers";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
 import { authMiddleware } from "./middleware";
-import { normalizeSourceBaseUrl } from "./source-derived-aliases";
+import { normalizeSourceBaseUrl, syncSourceDerivedAliases } from "./source-derived-aliases";
 
 // ──────────────────────────────────────────────────────────
 // Slug availability check
@@ -89,10 +88,23 @@ const onboardDiscoveredAppSchema = z.object({
   enrichmentHasReleases: z.boolean().default(false),
 });
 
+function defaultRoleForSourceType(sourceType: z.infer<typeof sourceInputSchema>["sourceType"]) {
+  if (sourceType === "homebrew_cask") return "corroborating" as const;
+  if (sourceType === "rss_feed" || sourceType === "json_feed") return "reference" as const;
+  return "authority" as const;
+}
+
+function defaultRuntimeStatusForSourceType(
+  sourceType: z.infer<typeof sourceInputSchema>["sourceType"],
+) {
+  if (sourceType === "rss_feed" || sourceType === "json_feed") return "disabled" as const;
+  return "active" as const;
+}
+
 /**
- * Atomic onboard: creates app + aliases + source + checklist,
- * approves the discovered app, and enqueues the first source fetch.
- * All in a single call.
+ * Atomic onboard: directly creates app + aliases + approved sources,
+ * transfers icon, links discovery, and queues initial source fetches.
+ * Creates zero review-queue items.
  */
 export const onboardDiscoveredApp = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -146,25 +158,12 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       }
     }
 
-    // 1. Create app (with icon if discovered app has one)
-    let catalogIconR2Key: string | null = null;
-    if (discoveredAppRow.iconR2Key) {
-      try {
-        const bucket = env.ASSETS_BUCKET as unknown as R2Bucket;
-        const existingObject = await bucket.get(discoveredAppRow.iconR2Key);
-        if (existingObject) {
-          const pathParts = discoveredAppRow.iconR2Key.split("/");
-          const filename = pathParts[pathParts.length - 1]!;
-          catalogIconR2Key = `icons/${data.app.slug}/${filename}`;
-          await bucket.put(catalogIconR2Key, existingObject.body, {
-            httpMetadata: existingObject.httpMetadata,
-          });
-          await bucket.delete(discoveredAppRow.iconR2Key);
-        }
-      } catch {
-        // Icon transfer is non-critical — continue with onboarding
-      }
-    }
+    // 1. Create app — public if source validated, draft otherwise
+    // Icons live in a flat `icons/` directory keyed by content hash,
+    // so the catalog app simply reuses the same R2 key.
+    const catalogIconR2Key = discoveredAppRow.iconR2Key;
+
+    const appStatus = data.sourceValidated ? "public" : "draft";
 
     await db.insert(apps).values({
       id: appId,
@@ -174,8 +173,8 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       homepageUrl: data.app.homepageUrl ?? null,
       notes: data.app.notes ?? null,
       iconR2Key: catalogIconR2Key,
-      status: "draft",
-      publicTrackedAt: null,
+      status: appStatus,
+      publicTrackedAt: appStatus === "public" ? now : null,
       createdAt: now,
       updatedAt: now,
     });
@@ -208,86 +207,61 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       });
     }
 
-    const newAppSuggestionId = await upsertSuggestion({
-      db,
-      queueType: "new_app",
-      dedupeKey: `onboarding:new_app:${appId}`,
-      title: `Review new app draft for ${data.app.canonicalName}`,
-      proposedChangeJson: JSON.stringify({
-        canonicalName: data.app.canonicalName,
-        vendorName: data.app.vendorName ?? null,
-        homepageUrl: data.app.homepageUrl ?? null,
-        bundleId: discoveredAppRow.bundleId ?? null,
-        teamId: discoveredAppRow.teamId ?? null,
-      }),
-      canonicalSnapshotJson: JSON.stringify({
-        appId,
-        slug: data.app.slug,
-        canonicalName: data.app.canonicalName,
-      }),
-      appId,
-      sourceId: null,
-      bundleKey: discoveredAppRow.lookupKey,
-      evidenceFingerprint: `manual-onboarding:new_app:${data.discoveredAppId}`,
-      evidencePayloadJson: JSON.stringify({
-        discoveredAppId: data.discoveredAppId,
-        appName: discoveredAppRow.appName,
-        bundleId: discoveredAppRow.bundleId ?? null,
-        teamId: discoveredAppRow.teamId ?? null,
-        sourceValidated: data.sourceValidated,
-        enrichmentHasReleases: data.enrichmentHasReleases,
-      }),
-      now,
-    });
-
-    // 3. Create source suggestions rather than approved live sources
-    let hasSource = false;
-    for (const src of allSources) {
+    // 3. Create approved sources directly — source array order determines primary
+    const sourceIds: string[] = [];
+    for (let i = 0; i < allSources.length; i++) {
+      const src = allSources[i]!;
       const normalizedBaseUrl = normalizeSourceBaseUrl(src.sourceType, src.baseUrl);
-      hasSource = true;
-      await upsertSuggestion({
-        db,
-        queueType: "new_source",
-        dedupeKey: `onboarding:new_source:${appId}:${src.sourceType}:${normalizedBaseUrl}`,
-        title: `Review ${src.sourceType.replaceAll("_", " ")} source for ${data.app.canonicalName}`,
-        proposedChangeJson: JSON.stringify({
-          appId,
-          sourceType: src.sourceType,
-          baseUrl: normalizedBaseUrl,
-          role: defaultRoleForSourceType(src.sourceType),
-          parserKey: src.parserKey,
-          label: src.label ?? null,
-        }),
-        canonicalSnapshotJson: JSON.stringify({
-          appId,
-          sourceType: src.sourceType,
-          baseUrl: normalizedBaseUrl,
-        }),
+      const sourceId = generateId(idPrefixes.source);
+      const isPrimary = i === 0;
+      const defaultRole = defaultRoleForSourceType(src.sourceType);
+      const role = isPrimary
+        ? defaultRole
+        : defaultRole === "authority"
+          ? "corroborating"
+          : defaultRole;
+      const runtimeStatus = defaultRuntimeStatusForSourceType(src.sourceType);
+
+      await db.insert(sources).values({
+        id: sourceId,
         appId,
-        sourceId: null,
-        bundleKey: discoveredAppRow.lookupKey,
-        evidenceFingerprint: `manual-onboarding:new_source:${data.discoveredAppId}:${src.sourceType}:${normalizedBaseUrl}`,
-        evidencePayloadJson: JSON.stringify({
-          discoveredAppId: data.discoveredAppId,
-          sourceType: src.sourceType,
-          baseUrl: normalizedBaseUrl,
-          sourceValidated: data.sourceValidated,
-          enrichmentHasReleases: data.enrichmentHasReleases,
-          sparklePublicKey:
-            src.sourceType === "sparkle" ? (discoveredAppRow.sparklePublicKey ?? null) : null,
-        }),
+        sourceType: src.sourceType,
+        label: src.label ?? null,
+        baseUrl: normalizedBaseUrl,
+        configJson: null,
+        parserKey: src.parserKey,
+        channel: null,
+        pollIntervalMinutes: src.pollIntervalMinutes,
+        reviewStatus: "approved",
+        role,
+        ordinal: i,
+        status: runtimeStatus,
+        approvedAt: now,
+        reviewedAt: now,
+        reviewedBy: context.user.email,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await syncSourceDerivedAliases({
+        db,
+        appId,
+        sourceId,
+        sourceType: src.sourceType,
+        baseUrl: normalizedBaseUrl,
         now,
       });
+
+      sourceIds.push(sourceId);
     }
 
-    // 4. Link discovered app to the internal draft and clear the old icon reference
+    // 4. Link discovered app
     await db
       .update(discoveredApps)
       .set({
         status: "linked",
         linkedAppId: appId,
-        primarySuggestionId: newAppSuggestionId,
-        iconR2Key: null,
+        primarySuggestionId: null,
         updatedAt: now,
       })
       .where(eq(discoveredApps.id, data.discoveredAppId));
@@ -295,7 +269,7 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     // 5. Audit log
     await db.insert(auditLog).values({
       id: generateId(idPrefixes.auditLog),
-      eventType: "app_onboarding_submitted",
+      eventType: "app_onboarded",
       actorType: "admin",
       actorId: context.user.email,
       targetType: "app",
@@ -303,13 +277,23 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       payloadJson: JSON.stringify({
         discoveredAppId: data.discoveredAppId,
         aliases: data.aliases.length,
-        hasSource,
+        sources: sourceIds.length,
         sourceValidated: data.sourceValidated,
+        status: appStatus,
       }),
       createdAt: now,
     });
 
-    return { id: appId, status: "submitted" };
+    // 6. Queue initial source fetches
+    for (const sourceId of sourceIds) {
+      await env.SOURCE_FETCH_QUEUE.send({
+        sourceId,
+        reason: "onboarding",
+        force: true,
+      });
+    }
+
+    return { id: appId, status: appStatus };
   });
 
 // ──────────────────────────────────────────────────────────
@@ -358,102 +342,4 @@ async function ensureOnboardingAlias(params: {
     isActive: true,
     createdAt: params.now,
   });
-}
-
-function defaultRoleForSourceType(sourceType: z.infer<typeof sourceInputSchema>["sourceType"]) {
-  if (sourceType === "homebrew_cask") return "corroborating" as const;
-  if (sourceType === "rss_feed" || sourceType === "json_feed") return "reference" as const;
-  return "authority" as const;
-}
-
-async function upsertSuggestion(params: {
-  db: ReturnType<typeof createDb>;
-  queueType: "new_app" | "new_source" | "metadata_change";
-  dedupeKey: string;
-  title: string;
-  proposedChangeJson: string;
-  canonicalSnapshotJson: string | null;
-  appId: string;
-  sourceId: string | null;
-  bundleKey: string | null;
-  evidenceFingerprint: string;
-  evidencePayloadJson: string;
-  now: string;
-}): Promise<string> {
-  let suggestion = await params.db
-    .select()
-    .from(catalogSuggestions)
-    .where(eq(catalogSuggestions.dedupeKey, params.dedupeKey))
-    .get();
-
-  if (!suggestion) {
-    const suggestionId = generateId(idPrefixes.catalogSuggestion);
-    await params.db.insert(catalogSuggestions).values({
-      id: suggestionId,
-      queueType: params.queueType,
-      status: "pending",
-      appId: params.appId,
-      sourceId: params.sourceId,
-      bundleKey: params.bundleKey,
-      dedupeKey: params.dedupeKey,
-      title: params.title,
-      canonicalSnapshotJson: params.canonicalSnapshotJson,
-      proposedChangeJson: params.proposedChangeJson,
-      evidenceSummaryJson: params.evidencePayloadJson,
-      evidenceCount: 1,
-      firstSeenAt: params.now,
-      lastSeenAt: params.now,
-      createdAt: params.now,
-      updatedAt: params.now,
-    });
-    suggestion = await params.db
-      .select()
-      .from(catalogSuggestions)
-      .where(eq(catalogSuggestions.id, suggestionId))
-      .get();
-  } else {
-    await params.db
-      .update(catalogSuggestions)
-      .set({
-        title: params.title,
-        canonicalSnapshotJson: params.canonicalSnapshotJson ?? suggestion.canonicalSnapshotJson,
-        proposedChangeJson: params.proposedChangeJson,
-        evidenceSummaryJson: params.evidencePayloadJson,
-        evidenceCount: sql`${catalogSuggestions.evidenceCount} + 1`,
-        lastSeenAt: params.now,
-        updatedAt: params.now,
-      })
-      .where(eq(catalogSuggestions.id, suggestion.id));
-  }
-
-  if (!suggestion) {
-    throw new Error("Failed to create onboarding suggestion");
-  }
-
-  const existingEvidence = await params.db
-    .select({ id: suggestionEvidence.id })
-    .from(suggestionEvidence)
-    .where(
-      and(
-        eq(suggestionEvidence.suggestionId, suggestion.id),
-        eq(suggestionEvidence.fingerprint, params.evidenceFingerprint),
-      ),
-    )
-    .get();
-
-  if (!existingEvidence) {
-    await params.db.insert(suggestionEvidence).values({
-      id: generateId(idPrefixes.suggestionEvidence),
-      suggestionId: suggestion.id,
-      appId: params.appId,
-      sourceId: params.sourceId,
-      evidenceType: "manual",
-      fingerprint: params.evidenceFingerprint,
-      payloadJson: params.evidencePayloadJson,
-      observedAt: params.now,
-      createdAt: params.now,
-    });
-  }
-
-  return suggestion.id;
 }

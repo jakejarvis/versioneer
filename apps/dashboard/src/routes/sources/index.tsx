@@ -205,7 +205,7 @@ function SourcesPage() {
           columns={columns}
           data={data?.items ?? []}
           isLoading={isLoading}
-          emptyMessage="No sources found."
+          emptyMessage="No sources."
           sorting={sorting}
           onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
             void navigate({ to: "/sources", search: applySortingToSearch(searchState, updater) })

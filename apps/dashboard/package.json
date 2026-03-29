@@ -17,6 +17,7 @@
     "typegen:workers": "wrangler types"
   },
   "dependencies": {
+    "@dnd-kit/react": "^0.3.2",
     "@fontsource/geist-mono": "^5.2.7",
     "@fontsource/geist-sans": "^5.2.5",
     "@tanstack/react-form": "^1.28.5",

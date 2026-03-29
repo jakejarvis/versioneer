@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createDb } from "@versioneer/db";
 import {
+  apps,
   sources,
   sourceFetches,
   parserRuns,
@@ -247,6 +248,13 @@ export const createSource = createServerFn({ method: "POST" })
       }
     }
 
+    // Assign next ordinal for this app
+    const [maxOrdinalResult] = await db
+      .select({ maxOrd: sql<number>`coalesce(max(${sources.ordinal}), -1)` })
+      .from(sources)
+      .where(eq(sources.appId, data.appId));
+    const nextOrdinal = (maxOrdinalResult?.maxOrd ?? -1) + 1;
+
     await db.insert(sources).values({
       id,
       appId: data.appId,
@@ -259,6 +267,7 @@ export const createSource = createServerFn({ method: "POST" })
       pollIntervalMinutes: data.pollIntervalMinutes,
       reviewStatus: data.reviewStatus,
       role: persistedRole,
+      ordinal: nextOrdinal,
       status: runtimeStatus,
       approvedAt: data.reviewStatus === "approved" ? now : null,
       reviewedAt: data.reviewStatus === "approved" ? now : null,
@@ -279,14 +288,22 @@ export const createSource = createServerFn({ method: "POST" })
     }
 
     if (conflictingAuthority) {
-      await createAuthorityHandoffSuggestion({
-        db,
-        appId: data.appId,
-        channel: data.channel ?? null,
-        fromSourceId: conflictingAuthority.id,
-        toSourceId: id,
-        now,
-      });
+      // Only create review suggestions for public apps
+      const appRow = await db
+        .select({ status: apps.status })
+        .from(apps)
+        .where(eq(apps.id, data.appId))
+        .get();
+      if (appRow?.status === "public") {
+        await createAuthorityHandoffSuggestion({
+          db,
+          appId: data.appId,
+          channel: data.channel ?? null,
+          fromSourceId: conflictingAuthority.id,
+          toSourceId: id,
+          now,
+        });
+      }
     }
 
     if (data.reviewStatus === "approved" && runtimeStatus === "active") {
@@ -414,14 +431,22 @@ export const updateSource = createServerFn({ method: "POST" })
     });
 
     if (conflictingAuthority) {
-      await createAuthorityHandoffSuggestion({
-        db,
-        appId: existing.appId,
-        channel: nextChannel ?? null,
-        fromSourceId: conflictingAuthority.id,
-        toSourceId: existing.id,
-        now,
-      });
+      // Only create review suggestions for public apps
+      const appRow = await db
+        .select({ status: apps.status })
+        .from(apps)
+        .where(eq(apps.id, existing.appId))
+        .get();
+      if (appRow?.status === "public") {
+        await createAuthorityHandoffSuggestion({
+          db,
+          appId: existing.appId,
+          channel: nextChannel ?? null,
+          fromSourceId: conflictingAuthority.id,
+          toSourceId: existing.id,
+          now,
+        });
+      }
     }
 
     const shouldQueueFetch =
@@ -520,6 +545,62 @@ export const reparse = createServerFn({ method: "POST" })
   .handler(async ({ data: { sourceFetchId } }) => {
     await env.SOURCE_PARSE_QUEUE.send({ sourceFetchId });
     return { status: "queued", sourceFetchId };
+  });
+
+// POST /sources/reorder - reorder sources for an app
+export const reorderSources = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(
+    z.object({
+      appId: z.string().min(1),
+      sourceIds: z.array(z.string().min(1)).min(1),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const db = createDb(env.DB);
+    const now = new Date().toISOString();
+
+    // Verify all source IDs belong to the app
+    const appSources = await db
+      .select({ id: sources.id, role: sources.role, sourceType: sources.sourceType })
+      .from(sources)
+      .where(eq(sources.appId, data.appId))
+      .all();
+    const appSourceIds = new Set(appSources.map((s) => s.id));
+    for (const id of data.sourceIds) {
+      if (!appSourceIds.has(id)) throw new Error(`Source ${id} does not belong to app`);
+    }
+
+    // Update ordinals and roles based on position
+    for (let i = 0; i < data.sourceIds.length; i++) {
+      const sourceId = data.sourceIds[i]!;
+      const source = appSources.find((s) => s.id === sourceId)!;
+      const isPrimary = i === 0;
+      const defaultRole = defaultRoleForSourceType(source.sourceType);
+      const role = isPrimary
+        ? defaultRole
+        : defaultRole === "authority"
+          ? "corroborating"
+          : defaultRole;
+
+      await db
+        .update(sources)
+        .set({ ordinal: i, role, updatedAt: now })
+        .where(eq(sources.id, sourceId));
+    }
+
+    await db.insert(auditLog).values({
+      id: generateId(idPrefixes.auditLog),
+      eventType: "sources_reordered",
+      actorType: "admin",
+      actorId: context.user.email,
+      targetType: "app",
+      targetId: data.appId,
+      payloadJson: JSON.stringify({ sourceIds: data.sourceIds }),
+      createdAt: now,
+    });
+
+    return { status: "reordered" };
   });
 
 // GET /source-fetches/:id/parser-runs

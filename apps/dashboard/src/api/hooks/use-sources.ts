@@ -5,6 +5,7 @@ import {
   getSource,
   createSource,
   updateSource,
+  reorderSources,
   getSourceFetches,
   getSourceFetch,
   getParserRuns,
@@ -118,6 +119,19 @@ export function useTriggerSourceFetch() {
     mutationFn: ({ sourceId, force }: { sourceId: string; force?: boolean }) =>
       triggerFetch({ data: { sourceId, reason: "manual", force: force ?? false } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }),
+  });
+}
+
+export function useReorderSources() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ appId, sourceIds }: { appId: string; sourceIds: string[] }) =>
+      reorderSources({ data: { appId, sourceIds } }),
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({ queryKey: ["sources"] });
+      void qc.invalidateQueries({ queryKey: ["apps", variables.appId, "sources"] });
+      void qc.invalidateQueries({ queryKey: ["apps", variables.appId] });
+    },
   });
 }
 

@@ -19,6 +19,8 @@ export function useCatalogSuggestions(
       | "release_discrepancy";
     limit?: number;
     offset?: number;
+    sortBy?: string;
+    sortDir?: "asc" | "desc";
   } = {},
 ) {
   return useQuery({

@@ -17,6 +17,7 @@ import type { ParserRun, SourceFetch } from "@/api/types";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { EmptyState } from "@/components/shared/empty-state";
 import { AppEntityLink } from "@/components/shared/entity-link";
 import { FormField } from "@/components/shared/form-field";
 import { IdDisplay } from "@/components/shared/id-display";
@@ -70,7 +71,7 @@ function SourceDetailPage() {
   }
 
   if (!source) {
-    return <p className="text-muted-foreground">Source not found.</p>;
+    return <EmptyState message="Source not found." />;
   }
 
   return (

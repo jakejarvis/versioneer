@@ -460,6 +460,7 @@ private struct AdvancedSettingsTab: View {
   @Environment(InstallCoordinator.self) private var installCoordinator
 
   @State private var urlString = ""
+  @State private var newScanRoot = ""
 
   private var trimmedURLString: String {
     urlString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -522,6 +523,45 @@ private struct AdvancedSettingsTab: View {
       } footer: {
         Text(
           "Use the production API by default. Switch only when pointing the desktop app at a development or staging environment."
+        )
+      }
+
+      Section {
+        if appState.settings.extraScanRoots.isEmpty {
+          Text("No extra directories configured.")
+            .foregroundStyle(.secondary)
+        } else {
+          ForEach(appState.settings.extraScanRoots, id: \.self) { root in
+            HStack {
+              Text(root)
+                .font(.body.monospaced())
+                .lineLimit(1)
+                .truncationMode(.middle)
+              Spacer()
+              Button("Remove", role: .destructive) {
+                appState.settings.removeExtraScanRoot(root)
+              }
+              .buttonStyle(.link)
+            }
+          }
+        }
+
+        HStack {
+          TextField("/path/to/directory", text: $newScanRoot)
+            .font(.body.monospaced())
+            .textFieldStyle(.roundedBorder)
+          Button("Add") {
+            appState.settings.addExtraScanRoot(newScanRoot)
+            newScanRoot = ""
+          }
+          .disabled(newScanRoot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !newScanRoot.hasPrefix("/"))
+        }
+      } header: {
+        Text("Extra Scan Directories")
+      } footer: {
+        Text(
+          "/Applications and ~/Applications are always scanned. Add extra absolute paths to scan additional locations."
         )
       }
 

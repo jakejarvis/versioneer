@@ -8,6 +8,7 @@ import {
   ScrollText,
   MessageSquare,
   Timer,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export const navItems: NavItem[] = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
   { label: "Apps", path: "/apps", icon: Box },
   { label: "Discovered", path: "/discovered-apps", icon: Radar },
+  { label: "Review", path: "/review", icon: Workflow },
   { label: "Sources", path: "/sources", icon: Radio },
   { label: "Releases", path: "/releases", icon: Package },
   { label: "Job Failures", path: "/job-failures", icon: AlertTriangle },

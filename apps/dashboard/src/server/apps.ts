@@ -289,7 +289,12 @@ export const getAppSources = createServerFn({ method: "GET" })
   .inputValidator(z.object({ appId: z.string().min(1) }))
   .handler(async ({ data: { appId } }) => {
     const db = createDb(env.DB);
-    const items = await db.select().from(sources).where(eq(sources.appId, appId)).all();
+    const items = await db
+      .select()
+      .from(sources)
+      .where(eq(sources.appId, appId))
+      .orderBy(asc(sources.ordinal))
+      .all();
     return { items };
   });
 

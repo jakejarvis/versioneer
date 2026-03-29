@@ -15,6 +15,7 @@ import {
 import type { Artifact, ReleaseObservation } from "@/api/types";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { EmptyState } from "@/components/shared/empty-state";
 import { AppEntityLink } from "@/components/shared/entity-link";
 import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -197,7 +198,7 @@ function ReleaseDetailPage() {
   }
 
   if (!release) {
-    return <p className="text-muted-foreground">Release not found.</p>;
+    return <EmptyState message="Release not found." />;
   }
 
   return (

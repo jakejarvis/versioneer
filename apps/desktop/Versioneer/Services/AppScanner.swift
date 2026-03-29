@@ -1,48 +1,58 @@
 import Foundation
 import Logging
 
-/// Scans standard macOS app directories for installed `.app` bundles.
+/// Scans macOS app directories recursively for installed `.app` bundles.
 actor AppScanner {
-  private static let scanDirectories: [URL] = {
-    var dirs: [URL] = []
-    dirs.append(URL(fileURLWithPath: "/Applications"))
-    if let home = FileManager.default.homeDirectoryForCurrentUser as URL? {
-      dirs.append(home.appendingPathComponent("Applications"))
-    }
-    return dirs
-  }()
+  private static let prefetchKeys: [URLResourceKey] = [
+    .isDirectoryKey,
+    .isPackageKey,
+  ]
 
-  /// Scans `/Applications` and `~/Applications` for `.app` bundles.
-  func scan() async -> [InstalledApp] {
-    Logger.appScanner.info("Starting app scan")
+  /// Recursively scans the given root directories for `.app` bundles.
+  /// Deduplicates by resolved real path so overlapping roots and symlinks
+  /// do not double-count.
+  func scan(roots: [URL]) async -> [InstalledApp] {
+    Logger.appScanner.info("Starting app scan across \(roots.count) root(s)")
     let startTime = CFAbsoluteTimeGetCurrent()
 
-    var results: [InstalledApp] = []
     let fileManager = FileManager.default
+    var seenPaths = Set<String>()
+    var results: [InstalledApp] = []
 
-    for directory in Self.scanDirectories {
-      guard fileManager.fileExists(atPath: directory.path) else {
-        Logger.appScanner.debug("Skipping non-existent directory: \(directory.path)")
+    for root in roots {
+      guard fileManager.fileExists(atPath: root.path) else {
+        Logger.appScanner.debug("Skipping non-existent directory: \(root.path)")
         continue
       }
 
-      do {
-        let contents = try fileManager.contentsOfDirectory(
-          at: directory,
-          includingPropertiesForKeys: [.isDirectoryKey],
-          options: [.skipsHiddenFiles]
-        )
-
-        for item in contents where item.pathExtension == "app" {
-          if let app = BundleMetadataReader.readApp(at: item) {
-            results.append(app)
-          } else {
-            Logger.appScanner.debug("Could not read bundle: \(item.lastPathComponent)")
+      guard
+        let enumerator = fileManager.enumerator(
+          at: root,
+          includingPropertiesForKeys: Self.prefetchKeys,
+          options: [.skipsHiddenFiles, .skipsPackageDescendants],
+          errorHandler: { url, error in
+            Logger.appScanner.debug(
+              "Enumerator error at \(url.path): \(error.localizedDescription)")
+            return true
           }
+        )
+      else {
+        Logger.appScanner.error("Could not create enumerator for \(root.path)")
+        continue
+      }
+
+      for case let item as URL in enumerator {
+        guard item.pathExtension == "app" else { continue }
+
+        // Resolve symlinks and deduplicate
+        let resolved = item.resolvingSymlinksInPath().path
+        guard seenPaths.insert(resolved).inserted else { continue }
+
+        if let app = BundleMetadataReader.readApp(at: item) {
+          results.append(app)
+        } else {
+          Logger.appScanner.debug("Could not read bundle: \(item.lastPathComponent)")
         }
-      } catch {
-        Logger.appScanner.error(
-          "Failed to scan directory \(directory.path): \(error.localizedDescription)")
       }
     }
 

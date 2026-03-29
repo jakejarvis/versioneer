@@ -77,7 +77,7 @@ function RootComponent() {
           <ThemeProvider>
             <TooltipProvider>
               {isLoginPage ? <Outlet /> : <AppShell />}
-              <Toaster position="bottom-right" richColors />
+              <Toaster position="bottom-right" richColors theme="dark" />
             </TooltipProvider>
           </ThemeProvider>
           <ReactQueryDevtools />

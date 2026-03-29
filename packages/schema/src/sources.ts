@@ -35,6 +35,7 @@ export const sources = sqliteTable(
     role: text("role", {
       enum: ["authority", "corroborating", "reference"],
     }),
+    ordinal: integer("ordinal").notNull().default(0),
     discoveredVia: text("discovered_via"),
     approvedAt: text("approved_at"),
     reviewedAt: text("reviewed_at"),

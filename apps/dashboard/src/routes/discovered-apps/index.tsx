@@ -284,7 +284,7 @@ function DiscoveredAppsPage() {
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="icon">
                     <MoreHorizontal />
                   </Button>
                 </DropdownMenuTrigger>
@@ -329,7 +329,7 @@ function DiscoveredAppsPage() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold tracking-tight">Discovered Apps</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Pending Discoveries</h2>
       <p className="mt-1 text-muted-foreground">
         Unmatched apps found during client inventory scans. Review and onboard high-confidence apps.
       </p>
@@ -353,9 +353,9 @@ function DiscoveredAppsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="linked">Linked</SelectItem>
             <SelectItem value="dismissed">Dismissed</SelectItem>
-            <SelectItem value="mas_app">MAS Apps</SelectItem>
+            <SelectItem value="support_only">Support Only</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -365,7 +365,7 @@ function DiscoveredAppsPage() {
           columns={columns}
           data={data?.items ?? []}
           isLoading={isLoading}
-          emptyMessage="No discovered apps."
+          emptyMessage="No discoveries."
           sorting={sorting}
           onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
             void navigate({

@@ -53,7 +53,7 @@ export const uploadAppIcon = createServerFn({ method: "POST" })
 
     const hash = await computeHash(body);
     const ext = CONTENT_TYPE_TO_EXT[data.contentType];
-    const r2Key = `icons/${app.slug}/${hash}.${ext}`;
+    const r2Key = `icons/${hash}.${ext}`;
 
     await (env as unknown as { ASSETS_BUCKET: R2Bucket }).ASSETS_BUCKET.put(r2Key, body, {
       httpMetadata: {

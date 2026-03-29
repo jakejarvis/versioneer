@@ -130,7 +130,7 @@ function FeedbackPage() {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="icon">
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
@@ -246,7 +246,7 @@ function FeedbackPage() {
           columns={columns}
           data={data?.items ?? []}
           isLoading={isLoading}
-          emptyMessage="No feedback items."
+          emptyMessage="No feedback."
           sorting={sorting}
           onSortingChange={(updater: SortingState | ((prev: SortingState) => SortingState)) =>
             void navigate({

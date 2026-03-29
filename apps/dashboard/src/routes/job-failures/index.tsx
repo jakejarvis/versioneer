@@ -151,7 +151,7 @@ function JobFailuresPage() {
           row.original.status === "open" || row.original.status === "retrying" ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="icon">
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>

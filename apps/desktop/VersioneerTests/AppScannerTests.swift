@@ -26,7 +26,7 @@ struct BundleMetadataReaderTests {
 
   @Test func scannerFindsApps() async {
     let scanner = AppScanner()
-    let apps = await scanner.scan()
+    let apps = await scanner.scan(roots: [URL(fileURLWithPath: "/Applications")])
     // Any Mac should have at least a few apps in /Applications
     #expect(apps.count > 0)
   }

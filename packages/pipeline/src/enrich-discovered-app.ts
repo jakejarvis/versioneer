@@ -150,7 +150,7 @@ export async function enrichDiscoveredApp(params: {
     if (params.assetsBucket && !row.iconR2Key) {
       const homepage = result.enrichedHomepageUrl;
       if (homepage) {
-        const iconKey = await scrapeHomepageIcon(homepage, params.assetsBucket, row.lookupKey);
+        const iconKey = await scrapeHomepageIcon(homepage, params.assetsBucket);
         if (iconKey) {
           await db
             .update(discoveredApps)
@@ -437,11 +437,7 @@ export async function lookupCaskTokenByBundleId(
   }
 }
 
-async function scrapeHomepageIcon(
-  homepageUrl: string,
-  bucket: R2Bucket,
-  lookupKey: string,
-): Promise<string | null> {
+async function scrapeHomepageIcon(homepageUrl: string, bucket: R2Bucket): Promise<string | null> {
   try {
     const doc = await fetchAndParse(homepageUrl);
     if (!doc) return null;
@@ -468,20 +464,13 @@ async function scrapeHomepageIcon(
             ? "webp"
             : "png";
 
-    const keyBytes = new TextEncoder().encode(lookupKey);
-    const keyDigest = await crypto.subtle.digest("SHA-256", keyBytes);
-    const lookupKeyHash = Array.from(new Uint8Array(keyDigest))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-      .slice(0, 16);
-
     const contentDigest = await crypto.subtle.digest("SHA-256", body);
     const contentHash = Array.from(new Uint8Array(contentDigest))
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("")
       .slice(0, 12);
 
-    const r2Key = `discovered-icons/${lookupKeyHash}/${contentHash}.${ext}`;
+    const r2Key = `icons/${contentHash}.${ext}`;
 
     await bucket.put(r2Key, body, {
       httpMetadata: {
