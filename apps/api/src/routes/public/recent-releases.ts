@@ -42,7 +42,7 @@ export const recentReleasesRoutes = new Hono<{ Bindings: Env }>()
         ),
       )
       .orderBy(desc(appLatestReleases.releasedAt))
-      .limit(5);
+      .limit(8);
 
     const items: CachedRecentRelease[] = rows.map((row) => ({
       appId: row.appId,

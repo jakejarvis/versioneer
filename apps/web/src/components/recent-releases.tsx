@@ -41,7 +41,7 @@ function formatRelativeTime(dateStr: string): string {
 function SkeletonRows() {
   return (
     <ul className="space-y-3">
-      {Array.from({ length: 5 }, (_, i) => (
+      {Array.from({ length: 8 }, (_, i) => (
         <li key={i} className="flex items-center gap-3 animate-pulse">
           <div className="size-6 rounded bg-foreground/10 shrink-0" />
           <div className="h-4 w-28 rounded bg-foreground/10" />
@@ -102,22 +102,30 @@ export function RecentReleases() {
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-medium text-muted-foreground">Latest Updates</h2>
-      {loading ? (
-        <SkeletonRows />
-      ) : (
-        <ul className="space-y-3">
-          {items.map((item) => (
-            <li key={item.releaseId} className="flex items-center gap-3 text-sm">
-              <AppIcon name={item.appName} iconUrl={item.iconUrl} />
-              <span className="text-foreground truncate">{item.appName}</span>
-              <span className="text-muted-foreground font-mono text-xs">{item.version}</span>
-              <span className="ml-auto text-muted-foreground/60 text-xs whitespace-nowrap">
-                {formatRelativeTime(item.releasedAt)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="relative">
+        {loading ? (
+          <SkeletonRows />
+        ) : (
+          <ul className="space-y-3">
+            {items.map((item) => (
+              <li key={item.releaseId} className="flex items-center gap-3 text-sm">
+                <AppIcon name={item.appName} iconUrl={item.iconUrl} />
+                <span className="text-foreground truncate">{item.appName}</span>
+                <span className="text-muted-foreground font-mono text-xs">{item.version}</span>
+                <span className="ml-auto text-muted-foreground/60 text-xs whitespace-nowrap">
+                  {formatRelativeTime(item.releasedAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-28"
+          style={{
+            background: "linear-gradient(to bottom, transparent, var(--background))",
+          }}
+        />
+      </div>
     </section>
   );
 }

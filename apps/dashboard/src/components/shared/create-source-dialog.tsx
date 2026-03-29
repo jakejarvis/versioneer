@@ -19,27 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-type SourceType =
-  | "sparkle"
-  | "github_releases"
-  | "manual"
-  | "homebrew_cask"
-  | "mac_app_store"
-  | "electron_generic"
-  | "rss_feed"
-  | "json_feed";
-
-const PARSER_KEY_DEFAULTS: Record<SourceType, string> = {
-  sparkle: "sparkle",
-  github_releases: "github_releases",
-  homebrew_cask: "homebrew_cask",
-  mac_app_store: "mac_app_store",
-  electron_generic: "electron_generic",
-  rss_feed: "manual",
-  json_feed: "manual",
-  manual: "manual",
-};
+import { SOURCE_TYPES, type SourceType } from "@/lib/source-types";
 
 interface CreateSourceDialogProps {
   appId?: string;
@@ -124,19 +104,18 @@ export function CreateSourceDialog({ appId, open, onOpenChange }: CreateSourceDi
                   onValueChange={(v) => {
                     const sourceType = v as SourceType;
                     field.handleChange(sourceType);
-                    form.setFieldValue("parserKey", PARSER_KEY_DEFAULTS[sourceType]);
+                    form.setFieldValue("parserKey", SOURCE_TYPES[sourceType].parserKey);
                   }}
                 >
                   <SelectTrigger id={field.name}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="sparkle">Sparkle</SelectItem>
-                    <SelectItem value="electron_generic">Electron Generic</SelectItem>
-                    <SelectItem value="github_releases">GitHub Releases</SelectItem>
-                    <SelectItem value="homebrew_cask">Homebrew Cask</SelectItem>
-                    <SelectItem value="mac_app_store">Mac App Store</SelectItem>
-                    <SelectItem value="manual">Manual</SelectItem>
+                    {Object.entries(SOURCE_TYPES).map(([value, cfg]) => (
+                      <SelectItem key={value} value={value}>
+                        {cfg.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </FormField>

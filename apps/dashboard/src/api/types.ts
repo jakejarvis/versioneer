@@ -1,3 +1,7 @@
+import type { SourceType } from "@/lib/source-types";
+
+export type { SourceType };
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
@@ -157,15 +161,7 @@ export interface AppSummary {
 
 export interface SourceSummary {
   id: string;
-  sourceType:
-    | "sparkle"
-    | "github_releases"
-    | "manual"
-    | "homebrew_cask"
-    | "mac_app_store"
-    | "electron_generic"
-    | "rss_feed"
-    | "json_feed";
+  sourceType: SourceType;
   label: string | null;
   parserKey: string;
   channel: string | null;
@@ -223,15 +219,7 @@ export interface AppAlias {
 export interface Source {
   id: string;
   appId: string;
-  sourceType:
-    | "sparkle"
-    | "github_releases"
-    | "manual"
-    | "homebrew_cask"
-    | "mac_app_store"
-    | "electron_generic"
-    | "rss_feed"
-    | "json_feed";
+  sourceType: SourceType;
   label: string | null;
   baseUrl: string | null;
   configJson: string | null;

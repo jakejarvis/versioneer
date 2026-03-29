@@ -17,6 +17,13 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  defaultLabelForSourceType,
+  defaultParserKeyForSourceType,
+  defaultRoleForSourceType,
+  defaultRuntimeStatusForSourceType,
+} from "@/lib/source-types";
+
 import { assertNoConflictingExactAlias } from "./alias-conflicts";
 import { loadAppsByIds, loadSourcesByIds, toAppSummary, toSourceSummary } from "./entity-summaries";
 import { authMiddleware } from "./middleware";
@@ -54,65 +61,6 @@ function parseJson<T>(value: string | null | undefined): T | null {
   } catch {
     return null;
   }
-}
-
-function defaultRoleForSourceType(
-  sourceType: SourceRow["sourceType"],
-): NonNullable<SourceRow["role"]> {
-  if (sourceType === "homebrew_cask") return "corroborating";
-  if (sourceType === "rss_feed" || sourceType === "json_feed") return "reference";
-  return "authority";
-}
-
-function defaultParserKeyForSourceType(sourceType: SourceRow["sourceType"]): string {
-  switch (sourceType) {
-    case "sparkle":
-      return "sparkle";
-    case "github_releases":
-      return "github-releases";
-    case "homebrew_cask":
-      return "homebrew-cask";
-    case "mac_app_store":
-      return "mac-app-store";
-    case "electron_generic":
-      return "electron-generic";
-    case "rss_feed":
-      return "rss-reference";
-    case "json_feed":
-      return "json-reference";
-    case "manual":
-    default:
-      return "manual";
-  }
-}
-
-function defaultLabelForSourceType(sourceType: SourceRow["sourceType"]): string {
-  switch (sourceType) {
-    case "sparkle":
-      return "Sparkle feed";
-    case "github_releases":
-      return "GitHub releases";
-    case "homebrew_cask":
-      return "Homebrew cask";
-    case "mac_app_store":
-      return "Mac App Store";
-    case "electron_generic":
-      return "Electron feed";
-    case "rss_feed":
-      return "RSS reference";
-    case "json_feed":
-      return "JSON reference";
-    case "manual":
-    default:
-      return "Manual source";
-  }
-}
-
-function defaultRuntimeStatusForSourceType(
-  sourceType: SourceRow["sourceType"],
-): SourceRow["status"] {
-  if (sourceType === "rss_feed" || sourceType === "json_feed") return "disabled";
-  return "active";
 }
 
 async function ensureAlias(params: {

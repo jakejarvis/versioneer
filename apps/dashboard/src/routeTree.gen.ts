@@ -15,7 +15,6 @@ import { Route as SourcesIndexRouteImport } from './routes/sources/index'
 import { Route as ReviewIndexRouteImport } from './routes/review/index'
 import { Route as ReleasesIndexRouteImport } from './routes/releases/index'
 import { Route as JobsIndexRouteImport } from './routes/jobs/index'
-import { Route as JobFailuresIndexRouteImport } from './routes/job-failures/index'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback/index'
 import { Route as DiscoveredAppsIndexRouteImport } from './routes/discovered-apps/index'
 import { Route as AuditLogIndexRouteImport } from './routes/audit-log/index'
@@ -54,11 +53,6 @@ const ReleasesIndexRoute = ReleasesIndexRouteImport.update({
 const JobsIndexRoute = JobsIndexRouteImport.update({
   id: '/jobs/',
   path: '/jobs/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const JobFailuresIndexRoute = JobFailuresIndexRouteImport.update({
-  id: '/job-failures/',
-  path: '/job-failures/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
@@ -117,7 +111,6 @@ export interface FileRoutesByFullPath {
   '/audit-log/': typeof AuditLogIndexRoute
   '/discovered-apps/': typeof DiscoveredAppsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
-  '/job-failures/': typeof JobFailuresIndexRoute
   '/jobs/': typeof JobsIndexRoute
   '/releases/': typeof ReleasesIndexRoute
   '/review/': typeof ReviewIndexRoute
@@ -135,7 +128,6 @@ export interface FileRoutesByTo {
   '/audit-log': typeof AuditLogIndexRoute
   '/discovered-apps': typeof DiscoveredAppsIndexRoute
   '/feedback': typeof FeedbackIndexRoute
-  '/job-failures': typeof JobFailuresIndexRoute
   '/jobs': typeof JobsIndexRoute
   '/releases': typeof ReleasesIndexRoute
   '/review': typeof ReviewIndexRoute
@@ -154,7 +146,6 @@ export interface FileRoutesById {
   '/audit-log/': typeof AuditLogIndexRoute
   '/discovered-apps/': typeof DiscoveredAppsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
-  '/job-failures/': typeof JobFailuresIndexRoute
   '/jobs/': typeof JobsIndexRoute
   '/releases/': typeof ReleasesIndexRoute
   '/review/': typeof ReviewIndexRoute
@@ -174,7 +165,6 @@ export interface FileRouteTypes {
     | '/audit-log/'
     | '/discovered-apps/'
     | '/feedback/'
-    | '/job-failures/'
     | '/jobs/'
     | '/releases/'
     | '/review/'
@@ -192,7 +182,6 @@ export interface FileRouteTypes {
     | '/audit-log'
     | '/discovered-apps'
     | '/feedback'
-    | '/job-failures'
     | '/jobs'
     | '/releases'
     | '/review'
@@ -210,7 +199,6 @@ export interface FileRouteTypes {
     | '/audit-log/'
     | '/discovered-apps/'
     | '/feedback/'
-    | '/job-failures/'
     | '/jobs/'
     | '/releases/'
     | '/review/'
@@ -229,7 +217,6 @@ export interface RootRouteChildren {
   AuditLogIndexRoute: typeof AuditLogIndexRoute
   DiscoveredAppsIndexRoute: typeof DiscoveredAppsIndexRoute
   FeedbackIndexRoute: typeof FeedbackIndexRoute
-  JobFailuresIndexRoute: typeof JobFailuresIndexRoute
   JobsIndexRoute: typeof JobsIndexRoute
   ReleasesIndexRoute: typeof ReleasesIndexRoute
   ReviewIndexRoute: typeof ReviewIndexRoute
@@ -280,13 +267,6 @@ declare module '@tanstack/react-router' {
       path: '/jobs'
       fullPath: '/jobs/'
       preLoaderRoute: typeof JobsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/job-failures/': {
-      id: '/job-failures/'
-      path: '/job-failures'
-      fullPath: '/job-failures/'
-      preLoaderRoute: typeof JobFailuresIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/feedback/': {
@@ -365,7 +345,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuditLogIndexRoute: AuditLogIndexRoute,
   DiscoveredAppsIndexRoute: DiscoveredAppsIndexRoute,
   FeedbackIndexRoute: FeedbackIndexRoute,
-  JobFailuresIndexRoute: JobFailuresIndexRoute,
   JobsIndexRoute: JobsIndexRoute,
   ReleasesIndexRoute: ReleasesIndexRoute,
   ReviewIndexRoute: ReviewIndexRoute,
@@ -376,12 +355,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

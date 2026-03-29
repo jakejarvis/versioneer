@@ -38,6 +38,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { SOURCE_TYPES, type SourceType } from "@/lib/source-types";
 
 // ──────────────────────────────────────────────────────────
 // Alias types — identity matchers only
@@ -71,8 +72,6 @@ const ALIAS_LABELS: Record<AliasType, string> = {
 // Source types — update feeds
 // ──────────────────────────────────────────────────────────
 
-type SourceType = "sparkle" | "github_releases" | "manual" | "homebrew_cask" | "mac_app_store";
-
 interface SourceEntry {
   key: string;
   sourceType: SourceType;
@@ -81,38 +80,6 @@ interface SourceEntry {
   label?: string;
   status?: "active" | "paused";
 }
-
-const SOURCE_LABELS: Record<SourceType, string> = {
-  sparkle: "Sparkle",
-  github_releases: "GitHub Releases",
-  homebrew_cask: "Homebrew Cask",
-  mac_app_store: "Mac App Store",
-  manual: "Manual",
-};
-
-const SOURCE_COLORS: Record<SourceType, string> = {
-  sparkle: "border-orange-500/30 bg-orange-500/10 text-orange-400",
-  github_releases: "border-neutral-500/30 bg-neutral-500/10 text-neutral-300",
-  homebrew_cask: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-  mac_app_store: "border-blue-500/30 bg-blue-500/10 text-blue-400",
-  manual: "border-cyan-500/30 bg-cyan-500/10 text-cyan-400",
-};
-
-const DEFAULT_POLL_INTERVALS: Record<SourceType, number> = {
-  sparkle: 60,
-  github_releases: 60,
-  homebrew_cask: 360,
-  mac_app_store: 1440,
-  manual: 1440,
-};
-
-const SOURCE_INPUT_CONFIG: Record<SourceType, { label: string; placeholder: string }> = {
-  sparkle: { label: "Feed URL", placeholder: "https://example.com/appcast.xml" },
-  github_releases: { label: "Repository", placeholder: "owner/repo" },
-  homebrew_cask: { label: "Cask Token", placeholder: "firefox" },
-  mac_app_store: { label: "Bundle ID", placeholder: "com.example.app" },
-  manual: { label: "", placeholder: "" },
-};
 
 // ──────────────────────────────────────────────────────────
 // Helpers
@@ -277,6 +244,14 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
           key: crypto.randomUUID(),
           sourceType: "github_releases",
           identifier: `${parsed.owner}/${parsed.repo}`,
+          pollIntervalMinutes: 60,
+          status: "active",
+        });
+      } else {
+        newSources.push({
+          key: crypto.randomUUID(),
+          sourceType: "electron_generic",
+          identifier: discoveredApp.electronUpdateUrl,
           pollIntervalMinutes: 60,
           status: "active",
         });
@@ -775,7 +750,7 @@ function SourceCard({
   const validateMutation = useValidateSource();
 
   const handleTestFeed = useCallback(() => {
-    if (source.sourceType === "manual") return;
+    if (!SOURCE_TYPES[source.sourceType].validatable) return;
     const url = resolveSourceUrl(source.sourceType, source.identifier);
     if (!url) return;
     validateMutation.mutate(
@@ -785,7 +760,8 @@ function SourceCard({
           | "sparkle"
           | "github_releases"
           | "homebrew_cask"
-          | "mac_app_store",
+          | "mac_app_store"
+          | "electron_generic",
       },
       {
         onSuccess: (data) => {
@@ -809,14 +785,14 @@ function SourceCard({
                 form.setFieldValue(`sources[${index}].identifier`, "");
                 form.setFieldValue(
                   `sources[${index}].pollIntervalMinutes`,
-                  DEFAULT_POLL_INTERVALS[newType],
+                  SOURCE_TYPES[newType].pollInterval,
                 );
               }}
-              className={`h-6 shrink-0 cursor-pointer appearance-none rounded border px-1.5 text-[10px] font-medium ${SOURCE_COLORS[field.state.value as SourceType]}`}
+              className={`h-6 shrink-0 cursor-pointer appearance-none rounded border px-1.5 text-[10px] font-medium ${SOURCE_TYPES[field.state.value as SourceType].color}`}
             >
-              {Object.entries(SOURCE_LABELS).map(([val, label]) => (
+              {Object.entries(SOURCE_TYPES).map(([val, cfg]) => (
                 <option key={val} value={val}>
-                  {label}
+                  {cfg.label}
                 </option>
               ))}
             </select>
@@ -828,7 +804,7 @@ function SourceCard({
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
               className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-muted-foreground outline-none placeholder:text-muted-foreground/40"
-              placeholder={SOURCE_INPUT_CONFIG[source.sourceType].placeholder}
+              placeholder={SOURCE_TYPES[source.sourceType].input.placeholder}
             />
           )}
         </form.Field>

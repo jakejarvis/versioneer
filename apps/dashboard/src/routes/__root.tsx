@@ -60,7 +60,7 @@ function AppShell() {
           <Separator orientation="vertical" className="mr-2 h-4" />
           <span className="text-sm font-semibold">Versioneer</span>
         </header>
-        <div className="mx-auto max-w-6xl px-6 py-5">
+        <div className="px-6 py-5">
           <Outlet />
         </div>
       </SidebarInset>

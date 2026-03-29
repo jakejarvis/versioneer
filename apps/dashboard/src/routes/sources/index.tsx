@@ -28,6 +28,7 @@ import {
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
+import { SOURCE_TYPES } from "@/lib/source-types";
 
 const sourcesSearchSchema = z.object({
   ...paginatedSearchShape,
@@ -259,11 +260,11 @@ function SourcesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All types</SelectItem>
-                  <SelectItem value="sparkle">Sparkle</SelectItem>
-                  <SelectItem value="github_releases">GitHub Releases</SelectItem>
-                  <SelectItem value="manual">Manual</SelectItem>
-                  <SelectItem value="homebrew_cask">Homebrew Cask</SelectItem>
-                  <SelectItem value="mac_app_store">Mac App Store</SelectItem>
+                  {Object.entries(SOURCE_TYPES).map(([value, cfg]) => (
+                    <SelectItem key={value} value={value}>
+                      {cfg.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </>

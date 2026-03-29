@@ -51,9 +51,21 @@ const discoveredSearch = {
   sortDir: "desc",
 } as const;
 const feedbackSearch = { page: 1, pageSize: 25, status: "new", type: "all" } as const;
-const failureSearch = { page: 1, pageSize: 25, status: "open" } as const;
+const failureSearch = {
+  page: 1,
+  pageSize: 25,
+  tab: "failures",
+  failureStatus: "open",
+  jobType: "all",
+} as const;
 const atRiskSourceSearch = { page: 1, pageSize: 25, status: "at_risk", type: "all" } as const;
-const jobsSearch = { page: 1, pageSize: 25, jobType: "all" } as const;
+const jobsSearch = {
+  page: 1,
+  pageSize: 25,
+  tab: "runs",
+  jobType: "all",
+  failureStatus: "open",
+} as const;
 const releasesSearch = {
   page: 1,
   pageSize: 25,
@@ -160,7 +172,7 @@ function DashboardPage() {
             <MetricValue value={homepage.overview.needsAttention.pendingFeedback} />
           </Link>
           <Link
-            to="/job-failures"
+            to="/jobs"
             search={failureSearch}
             className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-border hover:bg-background/80"
           >
@@ -341,7 +353,7 @@ function DashboardPage() {
             description="Newest unresolved job failures with related entities."
             icon={Package}
             action={
-              <Link to="/job-failures" search={failureSearch} className={viewAllClassName}>
+              <Link to="/jobs" search={failureSearch} className={viewAllClassName}>
                 View all <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             }
@@ -714,7 +726,7 @@ function AtRiskSourceRow({ item }: { item: AtRiskSourceItem }) {
 function JobFailureRow({ item }: { item: JobFailureListItem }) {
   return (
     <Link
-      to="/job-failures"
+      to="/jobs"
       search={failureSearch}
       className="flex items-start justify-between gap-4 px-6 py-4 transition-colors hover:bg-accent/30"
     >

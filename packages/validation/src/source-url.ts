@@ -17,6 +17,9 @@ export function resolveSourceUrl(sourceType: string, identifier: string): string
 
   switch (sourceType) {
     case "sparkle":
+    case "electron_generic":
+    case "rss_feed":
+    case "json_feed":
       return trimmed;
 
     case "github_releases": {
@@ -75,6 +78,11 @@ export function extractSourceIdentifier(sourceType: string, baseUrl: string | nu
       const match = /[?&]bundleId=([^&]+)/.exec(baseUrl);
       return match?.[1] ? decodeURIComponent(match[1]) : baseUrl;
     }
+
+    case "electron_generic":
+    case "rss_feed":
+    case "json_feed":
+      return baseUrl;
 
     default:
       return baseUrl;

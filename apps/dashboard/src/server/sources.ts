@@ -15,6 +15,8 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { defaultRoleForSourceType, defaultRuntimeStatusForSourceType } from "@/lib/source-types";
+
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { authMiddleware } from "./middleware";
@@ -58,21 +60,6 @@ function sourceFetchOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
     default:
       return [desc(sourceFetches.fetchedAt)];
   }
-}
-
-function defaultRoleForSourceType(
-  sourceType: (typeof sources.$inferSelect)["sourceType"],
-): NonNullable<(typeof sources.$inferSelect)["role"]> {
-  if (sourceType === "homebrew_cask") return "corroborating";
-  if (sourceType === "rss_feed" || sourceType === "json_feed") return "reference";
-  return "authority";
-}
-
-function defaultRuntimeStatusForSourceType(
-  sourceType: (typeof sources.$inferSelect)["sourceType"],
-): (typeof sources.$inferSelect)["status"] {
-  if (sourceType === "rss_feed" || sourceType === "json_feed") return "disabled";
-  return "active";
 }
 
 async function createAuthorityHandoffSuggestion(params: {

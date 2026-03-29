@@ -4,7 +4,6 @@ import {
   Radar,
   Radio,
   Package,
-  AlertTriangle,
   ScrollText,
   MessageSquare,
   Timer,
@@ -25,10 +24,9 @@ export const navItems: NavItem[] = [
   { label: "Review", path: "/review", icon: Workflow },
   { label: "Sources", path: "/sources", icon: Radio },
   { label: "Releases", path: "/releases", icon: Package },
-  { label: "Job Failures", path: "/job-failures", icon: AlertTriangle },
+  { label: "Jobs", path: "/jobs", icon: Timer },
   { label: "Audit Log", path: "/audit-log", icon: ScrollText },
   { label: "Feedback", path: "/feedback", icon: MessageSquare },
-  { label: "Jobs", path: "/jobs", icon: Timer },
 ];
 
 const SUCCESS = "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-400";

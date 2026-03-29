@@ -15,6 +15,8 @@ import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { defaultRoleForSourceType, defaultRuntimeStatusForSourceType } from "@/lib/source-types";
+
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
 import { authMiddleware } from "./middleware";
 import { normalizeSourceBaseUrl, syncSourceDerivedAliases } from "./source-derived-aliases";
@@ -87,19 +89,6 @@ const onboardDiscoveredAppSchema = z.object({
   sourceValidated: z.boolean().default(false),
   enrichmentHasReleases: z.boolean().default(false),
 });
-
-function defaultRoleForSourceType(sourceType: z.infer<typeof sourceInputSchema>["sourceType"]) {
-  if (sourceType === "homebrew_cask") return "corroborating" as const;
-  if (sourceType === "rss_feed" || sourceType === "json_feed") return "reference" as const;
-  return "authority" as const;
-}
-
-function defaultRuntimeStatusForSourceType(
-  sourceType: z.infer<typeof sourceInputSchema>["sourceType"],
-) {
-  if (sourceType === "rss_feed" || sourceType === "json_feed") return "disabled" as const;
-  return "active" as const;
-}
 
 /**
  * Atomic onboard: directly creates app + aliases + approved sources,

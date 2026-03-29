@@ -33,7 +33,7 @@ export function AppSidebar() {
     "/discovered-apps": stats?.pendingDiscoveredApps,
     "/review": stats?.pendingCatalogSuggestions,
     "/sources": stats?.errorSources,
-    "/job-failures": stats?.openFailures,
+    "/jobs": stats?.openFailures,
     "/feedback": stats?.pendingFeedback,
   };
 
