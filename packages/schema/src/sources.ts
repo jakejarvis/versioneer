@@ -10,7 +10,16 @@ export const sources = sqliteTable(
       .notNull()
       .references(() => apps.id),
     sourceType: text("source_type", {
-      enum: ["sparkle", "github_releases", "manual", "homebrew_cask", "mac_app_store"],
+      enum: [
+        "sparkle",
+        "github_releases",
+        "manual",
+        "homebrew_cask",
+        "mac_app_store",
+        "electron_generic",
+        "rss_feed",
+        "json_feed",
+      ],
     }).notNull(),
     label: text("label"),
     baseUrl: text("base_url"),
@@ -18,9 +27,21 @@ export const sources = sqliteTable(
     parserKey: text("parser_key").notNull(),
     channel: text("channel"),
     pollIntervalMinutes: integer("poll_interval_minutes").notNull().default(60),
+    reviewStatus: text("review_status", {
+      enum: ["pending", "approved", "rejected", "disabled"],
+    })
+      .notNull()
+      .default("pending"),
+    role: text("role", {
+      enum: ["authority", "corroborating", "reference"],
+    }),
+    discoveredVia: text("discovered_via"),
+    approvedAt: text("approved_at"),
+    reviewedAt: text("reviewed_at"),
+    reviewedBy: text("reviewed_by"),
     status: text("status", { enum: ["active", "paused", "disabled", "error"] })
       .notNull()
-      .default("active"),
+      .default("disabled"),
     lastSuccessAt: text("last_success_at"),
     lastFailureAt: text("last_failure_at"),
     lastFetchedAt: text("last_fetched_at"),
@@ -31,6 +52,8 @@ export const sources = sqliteTable(
     index("idx_sources_app_id").on(table.appId),
     index("idx_sources_status").on(table.status),
     index("idx_sources_type").on(table.sourceType),
+    index("idx_sources_review_status").on(table.reviewStatus),
+    index("idx_sources_role").on(table.role),
   ],
 );
 

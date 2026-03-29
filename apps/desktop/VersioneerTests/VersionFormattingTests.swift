@@ -7,7 +7,7 @@ struct VersionFormattingTests {
     #expect(VersionFormatting.statusLabel(for: .upToDate) == "Up to Date")
     #expect(VersionFormatting.statusLabel(for: .updateAvailable) == "Update Available")
     #expect(VersionFormatting.statusLabel(for: .ambiguous) == "Ambiguous")
-    #expect(VersionFormatting.statusLabel(for: .notTracked) == "Not Tracked")
+    #expect(VersionFormatting.statusLabel(for: .localOnly) == "Local Only")
   }
 
   @Test func displayVersionShowsDash() {

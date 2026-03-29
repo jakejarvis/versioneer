@@ -13,7 +13,7 @@ export const appsRoutes = new Hono<{ Bindings: Env }>()
     const db = createDb(c.env.DB);
 
     const app = await db.select().from(apps).where(eq(apps.id, appId)).get();
-    if (!app) {
+    if (!app || app.status !== "public") {
       throw new HTTPException(404, { message: "App not found" });
     }
 
@@ -26,6 +26,10 @@ export const appsRoutes = new Hono<{ Bindings: Env }>()
     const db = createDb(c.env.DB);
 
     const appReleases = await db.select().from(releases).where(eq(releases.appId, appId)).all();
+    const app = await db.select().from(apps).where(eq(apps.id, appId)).get();
+    if (!app || app.status !== "public") {
+      throw new HTTPException(404, { message: "App not found" });
+    }
 
     return c.json({ releases: appReleases });
   })

@@ -21,12 +21,12 @@ final class InstallCoordinator {
     case openSystemSettings
   }
 
-  nonisolated enum ExecutionRoute: Equatable, Sendable {
-    case sparkle
-    case localReplace
-    case privilegedReplace
-    case privilegedPackage
-    case brewUpgrade
+  nonisolated enum ExecutionRoute: String, Equatable, Sendable {
+    case sparkle = "sparkle"
+    case localReplace = "local_replace"
+    case privilegedReplace = "privileged_replace"
+    case privilegedPackage = "privileged_package"
+    case brewUpgrade = "brew_upgrade"
   }
 
   nonisolated enum Phase: String, Sendable {
@@ -71,19 +71,6 @@ final class InstallCoordinator {
     )
   }
 
-  nonisolated struct VerificationSummary: Codable, Sendable {
-    let strategy: String
-    var hashVerified: Bool?
-    var signatureVerified: Bool?
-    var notarizationVerified: Bool?
-    var bundleIdMatch: Bool?
-    var teamIdMatch: Bool?
-    var versionMatch: Bool?
-    var observedBundleId: String?
-    var observedTeamId: String?
-    var observedVersion: String?
-  }
-
   private var operations: [String: OperationState] = [:]
   private let privilegedHelperClient: any PrivilegedHelperClientProtocol
 
@@ -123,17 +110,23 @@ final class InstallCoordinator {
   @discardableResult
   func startInstall(
     result: AppDecision,
-    installedApp: InstalledApp
+    installedApp: InstalledApp,
+    apiClient: InventoryAPIClient
   ) async -> Bool {
     guard result.canInstall else { return false }
     if state(for: result).isRunning { return false }
 
     let operationKey = result.id
     let appDisplayName = result.matchedAppName ?? result.appName
-    var verificationSummary = VerificationSummary(
-      strategy: result.installStrategy?.rawValue ?? "unknown")
+    var verificationSummary = InstallVerificationSummary(
+      strategy: result.installStrategy?.rawValue ?? InstallStrategy.manualOnly.rawValue,
+      executionRoute: nil
+    )
     var stagedDirectory: URL?
     var usedPrivilegedHelper = false
+    var plan: InstallPlan?
+    var executionId: String?
+    var executionRouteUsed: ExecutionRoute?
 
     do {
       updateState(
@@ -148,32 +141,69 @@ final class InstallCoordinator {
         helperStatus: .notNeeded
       )
 
-      guard let plan = InstallPlan(result: result) else {
+      guard let installPlan = InstallPlan(result: result) else {
         throw InstallError.unsupportedStrategy
       }
-      stagedDirectory = try makeStagingDirectory(executionId: plan.localId)
+      plan = installPlan
 
-      switch plan.strategy {
+      executionRouteUsed =
+        switch installPlan.strategy {
+        case .sparkle:
+          .sparkle
+        case .zipReplace, .dmgCopyReplace:
+          executionRoute(for: installPlan, destinationAppURL: URL(fileURLWithPath: installedApp.path))
+        case .pkgInstall:
+          .privilegedPackage
+        case .macAppStore, .manualOnly:
+          nil
+        }
+      verificationSummary.executionRoute = executionRouteUsed?.rawValue
+
+      if let route = executionRouteUsed {
+        do {
+          let prepared = try await apiClient.prepareInstallExecution(
+            plan: installPlan,
+            installedApp: installedApp,
+            executionRoute: route
+          )
+          executionId = prepared.executionId
+        } catch {
+          executionId = installPlan.localId
+          Logger.api.error(
+            "Failed to prepare install execution for \(installedApp.name): \(error.localizedDescription)"
+          )
+        }
+      } else {
+        executionId = installPlan.localId
+      }
+
+      let activeExecutionId = executionId ?? installPlan.localId
+      stagedDirectory = try makeStagingDirectory(executionId: activeExecutionId)
+
+      switch installPlan.strategy {
       case .sparkle:
         updateState(
           for: operationKey,
           phase: .installing,
           detail: "Running the app's Sparkle updater…",
-          executionId: plan.localId,
+          executionId: activeExecutionId,
           errorMessage: nil,
           installedVersion: nil,
           recoveryAction: nil,
           helperStatus: .notNeeded
         )
         try await ExternalSparkleInstaller().install(appAt: URL(fileURLWithPath: installedApp.path))
-        verificationSummary = VerificationSummary(strategy: plan.strategy.rawValue)
+        verificationSummary = InstallVerificationSummary(
+          strategy: installPlan.strategy.rawValue,
+          executionRoute: executionRouteUsed?.rawValue
+        )
 
       case .zipReplace, .dmgCopyReplace:
         guard let stagingDir = stagedDirectory else { throw InstallError.missingStagingDirectory }
         let artifactURL = try await downloadArtifact(
-          artifact: plan.artifact, strategy: plan.strategy, to: stagingDir)
+          artifact: installPlan.artifact, strategy: installPlan.strategy, to: stagingDir)
         let preparedBundle = try await prepareAppBundle(
-          strategy: plan.strategy,
+          strategy: installPlan.strategy,
           artifactURL: artifactURL,
           stagingDirectory: stagingDir
         )
@@ -189,7 +219,7 @@ final class InstallCoordinator {
           for: operationKey,
           phase: .verifying,
           detail: "Verifying downloaded app…",
-          executionId: plan.localId,
+          executionId: activeExecutionId,
           errorMessage: nil,
           installedVersion: nil,
           recoveryAction: nil,
@@ -198,21 +228,23 @@ final class InstallCoordinator {
         verificationSummary = try await verifyAppBundle(
           bundleURL: preparedBundle.appBundleURL,
           downloadedArtifactURL: artifactURL,
-          expectedHash: plan.artifact?.sha256,
+          expectedHash: installPlan.artifact?.sha256,
           installedApp: installedApp,
-          strategy: plan.strategy
+          strategy: installPlan.strategy,
+          executionRoute: executionRouteUsed
         )
 
         try await ensureTargetAppIsClosed(installedApp: installedApp)
 
         let destinationAppURL = URL(fileURLWithPath: installedApp.path)
-        switch executionRoute(for: plan, destinationAppURL: destinationAppURL) {
+        guard let route = executionRouteUsed else { throw InstallError.unsupportedStrategy }
+        switch route {
         case .localReplace:
           updateState(
             for: operationKey,
             phase: .installing,
             detail: "Replacing installed app…",
-            executionId: plan.localId,
+            executionId: activeExecutionId,
             errorMessage: nil,
             installedVersion: nil,
             recoveryAction: nil,
@@ -230,14 +262,14 @@ final class InstallCoordinator {
             for: operationKey,
             phase: .installing,
             detail: "Setting up privileged installer…",
-            executionId: plan.localId,
+            executionId: activeExecutionId,
             errorMessage: nil,
             installedVersion: nil,
             recoveryAction: nil,
             helperStatus: .preparing
           )
           try await replaceInstalledAppViaHelper(
-            executionId: plan.localId,
+            executionId: activeExecutionId,
             sourceAppURL: preparedBundle.appBundleURL,
             destinationAppURL: destinationAppURL,
             stagingDirectory: stagingDir
@@ -247,12 +279,12 @@ final class InstallCoordinator {
           throw InstallError.unsupportedStrategy
         }
 
-        if plan.strategy.requiresQuit {
+        if installPlan.strategy.requiresQuit {
           updateState(
             for: operationKey,
             phase: .relaunching,
             detail: "Relaunching app…",
-            executionId: plan.localId,
+            executionId: activeExecutionId,
             errorMessage: nil,
             installedVersion: nil,
             recoveryAction: nil,
@@ -264,13 +296,13 @@ final class InstallCoordinator {
       case .pkgInstall:
         guard let stagingDir = stagedDirectory else { throw InstallError.missingStagingDirectory }
         let artifactURL = try await downloadArtifact(
-          artifact: plan.artifact, strategy: plan.strategy, to: stagingDir)
+          artifact: installPlan.artifact, strategy: installPlan.strategy, to: stagingDir)
 
         updateState(
           for: operationKey,
           phase: .verifying,
           detail: "Verifying package…",
-          executionId: plan.localId,
+          executionId: activeExecutionId,
           errorMessage: nil,
           installedVersion: nil,
           recoveryAction: nil,
@@ -278,9 +310,10 @@ final class InstallCoordinator {
         )
         verificationSummary = try await verifyPackage(
           packageURL: artifactURL,
-          expectedHash: plan.artifact?.sha256,
+          expectedHash: installPlan.artifact?.sha256,
           installedApp: installedApp,
-          strategy: plan.strategy
+          strategy: installPlan.strategy,
+          executionRoute: executionRouteUsed
         )
 
         usedPrivilegedHelper = true
@@ -288,42 +321,61 @@ final class InstallCoordinator {
           for: operationKey,
           phase: .installing,
           detail: "Setting up privileged installer…",
-          executionId: plan.localId,
+          executionId: activeExecutionId,
           errorMessage: nil,
           installedVersion: nil,
           recoveryAction: nil,
           helperStatus: .preparing
         )
         try await installPackageViaHelper(
-          executionId: plan.localId,
+          executionId: activeExecutionId,
           packageURL: artifactURL,
           stagingDirectory: stagingDir
         )
 
       case .macAppStore:
-        if let urlString = plan.artifact?.downloadUrl,
+        if let urlString = installPlan.artifact?.downloadUrl,
           let url = URL(string: urlString)
         {
           await NSWorkspace.shared.open(url)
         }
-        verificationSummary = VerificationSummary(strategy: plan.strategy.rawValue)
+        verificationSummary = InstallVerificationSummary(
+          strategy: installPlan.strategy.rawValue,
+          executionRoute: nil
+        )
 
       case .manualOnly:
         throw InstallError.unsupportedStrategy
       }
 
       let installedVersion = readInstalledVersion(at: URL(fileURLWithPath: installedApp.path))
+      if let installedVersion, let expectedVersion = result.latestVersionRaw ?? result.latestVersion {
+        verificationSummary.versionMatch = installedVersion == expectedVersion
+      }
 
       updateState(
         for: operationKey,
         phase: .completed,
         detail: "Install completed.",
-        executionId: plan.localId,
+        executionId: activeExecutionId,
         errorMessage: nil,
         installedVersion: installedVersion,
         recoveryAction: nil,
         helperStatus: usedPrivilegedHelper ? .ready : .notNeeded
       )
+      if let installPlan = plan, let route = executionRouteUsed {
+        await reportInstallExecution(
+          apiClient: apiClient,
+          executionId: activeExecutionId,
+          plan: installPlan,
+          installedApp: installedApp,
+          executionRoute: route,
+          status: "succeeded",
+          installedVersion: installedVersion,
+          errorMessage: nil,
+          verification: verificationSummary
+        )
+      }
       cleanupStagingDirectory(stagedDirectory)
       return true
     } catch {
@@ -339,8 +391,66 @@ final class InstallCoordinator {
         recoveryAction: recoveryAction(for: error),
         helperStatus: helperSetupState(for: error) ?? (usedPrivilegedHelper ? .failed : .notNeeded)
       )
+      if let installPlan = plan, let route = executionRouteUsed {
+        let reportExecutionId = executionId ?? installPlan.localId
+        await reportInstallExecution(
+          apiClient: apiClient,
+          executionId: reportExecutionId,
+          plan: installPlan,
+          installedApp: installedApp,
+          executionRoute: route,
+          status: installStatusString(for: error),
+          installedVersion: nil,
+          errorMessage: error.localizedDescription,
+          verification: verificationSummary
+        )
+      }
       cleanupStagingDirectory(stagedDirectory)
       return false
+    }
+  }
+
+  private func installStatusString(for error: Error) -> String {
+    if let installError = error as? InstallError {
+      switch installError {
+      case .cancelled:
+        return "cancelled"
+      default:
+        break
+      }
+    }
+    if error is CancellationError {
+      return "cancelled"
+    }
+    return "failed"
+  }
+
+  private func reportInstallExecution(
+    apiClient: InventoryAPIClient,
+    executionId: String,
+    plan: InstallPlan,
+    installedApp: InstalledApp,
+    executionRoute: ExecutionRoute,
+    status: String,
+    installedVersion: String?,
+    errorMessage: String?,
+    verification: InstallVerificationSummary?
+  ) async {
+    do {
+      _ = try await apiClient.reportInstallExecutionStatus(
+        executionId: executionId,
+        plan: plan,
+        installedApp: installedApp,
+        executionRoute: executionRoute,
+        status: status,
+        installedVersion: installedVersion,
+        errorMessage: errorMessage,
+        verification: verification
+      )
+    } catch {
+      Logger.api.error(
+        "Failed to report install execution \(executionId) for \(installedApp.name): \(error.localizedDescription)"
+      )
     }
   }
 
@@ -569,9 +679,13 @@ final class InstallCoordinator {
     downloadedArtifactURL: URL,
     expectedHash: String?,
     installedApp: InstalledApp,
-    strategy: InstallStrategy
-  ) async throws -> VerificationSummary {
-    var summary = VerificationSummary(strategy: strategy.rawValue)
+    strategy: InstallStrategy,
+    executionRoute: ExecutionRoute?
+  ) async throws -> InstallVerificationSummary {
+    var summary = InstallVerificationSummary(
+      strategy: strategy.rawValue,
+      executionRoute: executionRoute?.rawValue
+    )
 
     // Verify hash if the server provided one
     if let expectedHash {
@@ -624,9 +738,13 @@ final class InstallCoordinator {
     packageURL: URL,
     expectedHash: String?,
     installedApp: InstalledApp,
-    strategy: InstallStrategy
-  ) async throws -> VerificationSummary {
-    var summary = VerificationSummary(strategy: strategy.rawValue)
+    strategy: InstallStrategy,
+    executionRoute: ExecutionRoute?
+  ) async throws -> InstallVerificationSummary {
+    var summary = InstallVerificationSummary(
+      strategy: strategy.rawValue,
+      executionRoute: executionRoute?.rawValue
+    )
 
     // Verify hash if the server provided one
     if let expectedHash {

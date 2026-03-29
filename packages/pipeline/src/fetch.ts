@@ -1,6 +1,6 @@
 import { createDb } from "@versioneer/db";
 import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/schema";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import { githubApiHeaders } from "./types";
 import type { Env, SourceFetchJob } from "./types";
@@ -46,7 +46,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
       .select()
       .from(sourceFetches)
       .where(eq(sourceFetches.sourceId, source.id))
-      .orderBy(sourceFetches.fetchedAt)
+      .orderBy(desc(sourceFetches.fetchedAt))
       .limit(1)
       .get();
 
@@ -55,7 +55,10 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
       if (lastFetch.lastModified) headers["If-Modified-Since"] = lastFetch.lastModified;
     }
 
-    const response = await fetch(source.baseUrl!, { headers });
+    const response =
+      source.sourceType === "electron_generic"
+        ? await fetchElectronGenericFeed(source.baseUrl!, headers)
+        : await fetch(source.baseUrl!, { headers });
 
     if (response.status === 304) {
       await db.insert(sourceFetches).values({
@@ -164,4 +167,26 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
 
     throw error;
   }
+}
+
+async function fetchElectronGenericFeed(
+  baseUrl: string,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const candidates = buildElectronFeedCandidates(baseUrl);
+
+  let lastResponse: Response | undefined;
+  for (const candidate of candidates) {
+    const response = await fetch(candidate, { headers });
+    if (response.ok || response.status === 304) return response;
+    lastResponse = response;
+  }
+
+  return lastResponse ?? fetch(baseUrl, { headers });
+}
+
+function buildElectronFeedCandidates(baseUrl: string): string[] {
+  if (baseUrl.endsWith("latest-mac.yml") || baseUrl.endsWith("latest.yml")) return [baseUrl];
+  const normalized = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  return [`${normalized}latest-mac.yml`, `${normalized}latest.yml`];
 }

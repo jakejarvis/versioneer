@@ -42,7 +42,7 @@ import {
 const appsSearchSchema = z.object({
   ...paginatedSearchShape,
   search: z.string().catch(""),
-  status: z.enum(["all", "active", "deprecated", "merged", "unlisted"]).catch("all"),
+  status: z.enum(["all", "draft", "public", "deprecated", "merged", "unlisted"]).catch("all"),
 });
 
 export const Route = createFileRoute("/apps/")({
@@ -194,7 +194,8 @@ function AppsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="public">Public</SelectItem>
                   <SelectItem value="deprecated">Deprecated</SelectItem>
                   <SelectItem value="merged">Merged</SelectItem>
                   <SelectItem value="unlisted">Unlisted</SelectItem>

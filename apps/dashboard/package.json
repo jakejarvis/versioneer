@@ -25,6 +25,7 @@
     "@tanstack/react-start": "^1.167.12",
     "@tanstack/react-table": "^8.21.3",
     "@versioneer/db": "workspace:*",
+    "@versioneer/identity": "workspace:*",
     "@versioneer/parsers": "workspace:*",
     "@versioneer/pipeline": "workspace:*",
     "@versioneer/schema": "workspace:*",

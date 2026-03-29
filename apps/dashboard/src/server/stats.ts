@@ -7,6 +7,7 @@ import {
   releases,
   clientFeedback,
   discoveredApps,
+  catalogSuggestions,
 } from "@versioneer/schema";
 import { env } from "cloudflare:workers";
 import { sql } from "drizzle-orm";
@@ -32,10 +33,10 @@ export const getStats = createServerFn({ method: "GET" }).handler(async () => {
     .from(releases)
     .where(sql`${releases.createdAt} > datetime('now', '-7 days')`);
 
-  const [verifiedCount] = await db
+  const [publicCount] = await db
     .select({ count: sql<number>`count(*)` })
     .from(apps)
-    .where(sql`${apps.isVerified} = 1`);
+    .where(sql`${apps.status} = 'public'`);
 
   const [pendingFeedbackCount] = await db
     .select({ count: sql<number>`count(*)` })
@@ -47,14 +48,20 @@ export const getStats = createServerFn({ method: "GET" }).handler(async () => {
     .from(discoveredApps)
     .where(sql`${discoveredApps.status} = 'pending'`);
 
+  const [pendingSuggestionCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(catalogSuggestions)
+    .where(sql`${catalogSuggestions.status} = 'pending'`);
+
   return {
     totalApps: appCount?.count ?? 0,
     activeSources: activeSourceCount?.count ?? 0,
     errorSources: errorSourceCount?.count ?? 0,
     openFailures: openFailureCount?.count ?? 0,
     recentReleases: recentReleaseCount?.count ?? 0,
-    verifiedApps: verifiedCount?.count ?? 0,
+    publicApps: publicCount?.count ?? 0,
     pendingFeedback: pendingFeedbackCount?.count ?? 0,
     pendingDiscoveredApps: pendingDiscoveredCount?.count ?? 0,
+    pendingCatalogSuggestions: pendingSuggestionCount?.count ?? 0,
   };
 });

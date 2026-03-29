@@ -5,16 +5,19 @@ import {
   sourceFetches,
   parserRuns,
   auditLog,
+  catalogSuggestions,
   generateId,
   idPrefixes,
 } from "@versioneer/schema";
 import { sourceCreateSchema, sourceUpdateSchema } from "@versioneer/validation";
 import { env } from "cloudflare:workers";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { authMiddleware } from "./middleware";
+import { normalizeSourceBaseUrl, syncSourceDerivedAliases } from "./source-derived-aliases";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
 
@@ -56,6 +59,65 @@ function sourceFetchOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
   }
 }
 
+function defaultRoleForSourceType(
+  sourceType: (typeof sources.$inferSelect)["sourceType"],
+): NonNullable<(typeof sources.$inferSelect)["role"]> {
+  if (sourceType === "homebrew_cask") return "corroborating";
+  if (sourceType === "rss_feed" || sourceType === "json_feed") return "reference";
+  return "authority";
+}
+
+function defaultRuntimeStatusForSourceType(
+  sourceType: (typeof sources.$inferSelect)["sourceType"],
+): (typeof sources.$inferSelect)["status"] {
+  if (sourceType === "rss_feed" || sourceType === "json_feed") return "disabled";
+  return "active";
+}
+
+async function createAuthorityHandoffSuggestion(params: {
+  db: ReturnType<typeof createDb>;
+  appId: string;
+  channel: string | null;
+  fromSourceId: string;
+  toSourceId: string;
+  now: string;
+}): Promise<void> {
+  const dedupeKey = `authority_handoff:${params.appId}:${params.channel ?? "stable"}:${params.fromSourceId}:${params.toSourceId}`;
+  const existing = await params.db
+    .select({ id: catalogSuggestions.id })
+    .from(catalogSuggestions)
+    .where(eq(catalogSuggestions.dedupeKey, dedupeKey))
+    .get();
+  if (existing) return;
+
+  await params.db.insert(catalogSuggestions).values({
+    id: generateId(idPrefixes.catalogSuggestion),
+    queueType: "authority_handoff",
+    status: "pending",
+    appId: params.appId,
+    sourceId: params.toSourceId,
+    bundleKey: null,
+    dedupeKey,
+    title: `Review authority handoff for ${params.channel ?? "stable"} channel`,
+    canonicalSnapshotJson: null,
+    proposedChangeJson: JSON.stringify({
+      appId: params.appId,
+      channel: params.channel,
+      fromSourceId: params.fromSourceId,
+      toSourceId: params.toSourceId,
+    }),
+    evidenceSummaryJson: JSON.stringify({
+      conflictingAuthorityId: params.fromSourceId,
+      newSourceId: params.toSourceId,
+    }),
+    evidenceCount: 0,
+    firstSeenAt: params.now,
+    lastSeenAt: params.now,
+    createdAt: params.now,
+    updatedAt: params.now,
+  });
+}
+
 // GET /sources - list with pagination and filters
 export const listSources = createServerFn({ method: "GET" })
   .inputValidator(
@@ -64,7 +126,16 @@ export const listSources = createServerFn({ method: "GET" })
       offset: z.number().int().min(0).default(0),
       status: z.enum(["active", "paused", "disabled", "error"]).optional(),
       sourceType: z
-        .enum(["sparkle", "github_releases", "manual", "homebrew_cask", "mac_app_store"])
+        .enum([
+          "sparkle",
+          "github_releases",
+          "manual",
+          "homebrew_cask",
+          "mac_app_store",
+          "electron_generic",
+          "rss_feed",
+          "json_feed",
+        ])
         .optional(),
       appId: z.string().optional(),
       sortBy: z.string().optional(),
@@ -133,21 +204,94 @@ export const createSource = createServerFn({ method: "POST" })
     const db = createDb(env.DB);
     const now = new Date().toISOString();
     const id = generateId(idPrefixes.source);
+    const normalizedBaseUrl = normalizeSourceBaseUrl(data.sourceType, data.baseUrl ?? null);
+    const desiredRole =
+      data.reviewStatus === "approved"
+        ? (data.role ?? defaultRoleForSourceType(data.sourceType))
+        : (data.role ?? null);
+    const conflictingAuthority =
+      data.reviewStatus === "approved" && desiredRole === "authority"
+        ? await db
+            .select({ id: sources.id })
+            .from(sources)
+            .where(
+              and(
+                eq(sources.appId, data.appId),
+                eq(sources.reviewStatus, "approved"),
+                eq(sources.role, "authority"),
+                data.channel ? eq(sources.channel, data.channel) : sql`${sources.channel} is null`,
+              ),
+            )
+            .get()
+        : null;
+    const persistedRole = conflictingAuthority ? "corroborating" : desiredRole;
+    const runtimeStatus =
+      data.reviewStatus === "approved"
+        ? defaultRuntimeStatusForSourceType(data.sourceType)
+        : "disabled";
+
+    if (data.reviewStatus === "approved" && data.sourceType === "sparkle" && normalizedBaseUrl) {
+      try {
+        await assertNoConflictingExactAlias(db, {
+          aliasType: "sparkle_feed",
+          value: normalizedBaseUrl,
+          appId: data.appId,
+        });
+      } catch (error) {
+        if (error instanceof AliasConflictError) {
+          throw new Error(`Conflicting sparkle feed already belongs to app ${error.appId}`, {
+            cause: error,
+          });
+        }
+        throw error;
+      }
+    }
 
     await db.insert(sources).values({
       id,
       appId: data.appId,
       sourceType: data.sourceType,
       label: data.label ?? null,
-      baseUrl: data.baseUrl ?? null,
+      baseUrl: normalizedBaseUrl,
       configJson: data.configJson ?? null,
       parserKey: data.parserKey,
       channel: data.channel ?? null,
       pollIntervalMinutes: data.pollIntervalMinutes,
-      status: "active",
+      reviewStatus: data.reviewStatus,
+      role: persistedRole,
+      status: runtimeStatus,
+      approvedAt: data.reviewStatus === "approved" ? now : null,
+      reviewedAt: data.reviewStatus === "approved" ? now : null,
+      reviewedBy: data.reviewStatus === "approved" ? context.user.email : null,
       createdAt: now,
       updatedAt: now,
     });
+
+    if (data.reviewStatus === "approved") {
+      await syncSourceDerivedAliases({
+        db,
+        appId: data.appId,
+        sourceId: id,
+        sourceType: data.sourceType,
+        baseUrl: normalizedBaseUrl,
+        now,
+      });
+    }
+
+    if (conflictingAuthority) {
+      await createAuthorityHandoffSuggestion({
+        db,
+        appId: data.appId,
+        channel: data.channel ?? null,
+        fromSourceId: conflictingAuthority.id,
+        toSourceId: id,
+        now,
+      });
+    }
+
+    if (data.reviewStatus === "approved" && runtimeStatus === "active") {
+      await env.SOURCE_FETCH_QUEUE.send({ sourceId: id, reason: "source-create", force: true });
+    }
 
     await db.insert(auditLog).values({
       id: generateId(idPrefixes.auditLog),
@@ -176,16 +320,125 @@ export const updateSource = createServerFn({ method: "POST" })
 
     const now = new Date().toISOString();
     const updates: Record<string, unknown> = { updatedAt: now };
+    const nextBaseUrl =
+      fields.baseUrl !== undefined
+        ? normalizeSourceBaseUrl(existing.sourceType, fields.baseUrl)
+        : existing.baseUrl;
+    const nextReviewStatus = fields.reviewStatus ?? existing.reviewStatus;
+    const transitionedToApproved =
+      nextReviewStatus === "approved" && existing.reviewStatus !== "approved";
+    const desiredRole =
+      nextReviewStatus === "approved"
+        ? ((fields.role !== undefined
+            ? fields.role
+            : transitionedToApproved
+              ? null
+              : existing.role) ?? defaultRoleForSourceType(existing.sourceType))
+        : fields.role !== undefined
+          ? fields.role
+          : existing.role;
+    const nextChannel = fields.channel !== undefined ? fields.channel : existing.channel;
+    const conflictingAuthority =
+      nextReviewStatus === "approved" && desiredRole === "authority"
+        ? await db
+            .select({ id: sources.id })
+            .from(sources)
+            .where(
+              and(
+                eq(sources.appId, existing.appId),
+                ne(sources.id, existing.id),
+                eq(sources.reviewStatus, "approved"),
+                eq(sources.role, "authority"),
+                nextChannel ? eq(sources.channel, nextChannel) : sql`${sources.channel} is null`,
+              ),
+            )
+            .get()
+        : null;
+    const persistedRole = conflictingAuthority ? "corroborating" : desiredRole;
+    const nextStatus =
+      nextReviewStatus === "approved"
+        ? (fields.status ??
+          (transitionedToApproved
+            ? defaultRuntimeStatusForSourceType(existing.sourceType)
+            : existing.status))
+        : (fields.status ?? (fields.reviewStatus !== undefined ? "disabled" : existing.status));
+
+    if (nextReviewStatus === "approved" && existing.sourceType === "sparkle" && nextBaseUrl) {
+      try {
+        await assertNoConflictingExactAlias(db, {
+          aliasType: "sparkle_feed",
+          value: nextBaseUrl,
+          appId: existing.appId,
+        });
+      } catch (error) {
+        if (error instanceof AliasConflictError) {
+          throw new Error(`Conflicting sparkle feed already belongs to app ${error.appId}`, {
+            cause: error,
+          });
+        }
+        throw error;
+      }
+    }
+
     if (fields.label !== undefined) updates.label = fields.label;
-    if (fields.baseUrl !== undefined) updates.baseUrl = fields.baseUrl;
+    if (fields.baseUrl !== undefined) updates.baseUrl = nextBaseUrl;
     if (fields.configJson !== undefined) updates.configJson = fields.configJson;
     if (fields.parserKey !== undefined) updates.parserKey = fields.parserKey;
     if (fields.pollIntervalMinutes !== undefined)
       updates.pollIntervalMinutes = fields.pollIntervalMinutes;
     if (fields.channel !== undefined) updates.channel = fields.channel;
-    if (fields.status !== undefined) updates.status = fields.status;
+    if (fields.reviewStatus !== undefined) updates.reviewStatus = nextReviewStatus;
+    if (fields.role !== undefined || conflictingAuthority || transitionedToApproved) {
+      updates.role = persistedRole;
+    }
+    if (fields.status !== undefined || fields.reviewStatus !== undefined) {
+      updates.status = nextStatus;
+    }
+    if (fields.reviewStatus !== undefined) {
+      updates.reviewedAt = now;
+      updates.reviewedBy = context.user.email;
+      if (nextReviewStatus === "approved" && !existing.approvedAt) {
+        updates.approvedAt = now;
+      }
+    }
 
     await db.update(sources).set(updates).where(eq(sources.id, id));
+
+    await syncSourceDerivedAliases({
+      db,
+      appId: existing.appId,
+      sourceId: existing.id,
+      sourceType: existing.sourceType,
+      baseUrl: nextReviewStatus === "approved" ? nextBaseUrl : null,
+      now,
+    });
+
+    if (conflictingAuthority) {
+      await createAuthorityHandoffSuggestion({
+        db,
+        appId: existing.appId,
+        channel: nextChannel ?? null,
+        fromSourceId: conflictingAuthority.id,
+        toSourceId: existing.id,
+        now,
+      });
+    }
+
+    const shouldQueueFetch =
+      nextReviewStatus === "approved" &&
+      nextStatus === "active" &&
+      (transitionedToApproved ||
+        nextBaseUrl !== existing.baseUrl ||
+        fields.configJson !== undefined ||
+        fields.parserKey !== undefined ||
+        (fields.status === "active" && existing.status !== "active"));
+    if (shouldQueueFetch) {
+      await env.SOURCE_FETCH_QUEUE.send({
+        sourceId: existing.id,
+        reason: "source-update",
+        force: true,
+      });
+    }
 
     await db.insert(auditLog).values({
       id: generateId(idPrefixes.auditLog),

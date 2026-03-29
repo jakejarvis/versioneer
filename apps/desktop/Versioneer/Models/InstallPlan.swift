@@ -7,6 +7,7 @@ nonisolated struct InstallPlan: Sendable {
   let strategy: InstallStrategy
   let appId: String
   let releaseId: String
+  let channel: String?
   let artifact: AppDecision.Artifact?
 
   init(
@@ -14,12 +15,14 @@ nonisolated struct InstallPlan: Sendable {
     strategy: InstallStrategy,
     appId: String,
     releaseId: String,
+    channel: String? = nil,
     artifact: AppDecision.Artifact? = nil
   ) {
     self.localId = localId
     self.strategy = strategy
     self.appId = appId
     self.releaseId = releaseId
+    self.channel = channel
     self.artifact = artifact
   }
 
@@ -33,6 +36,7 @@ nonisolated struct InstallPlan: Sendable {
     self.strategy = strategy
     self.appId = appId
     self.releaseId = releaseId
+    self.channel = result.channel
     self.artifact = result.artifact
   }
 }

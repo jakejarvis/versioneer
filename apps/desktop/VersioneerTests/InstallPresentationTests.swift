@@ -23,7 +23,8 @@ struct InstallPresentationTests {
       appName: "OBS Studio",
       bundleId: "com.obsproject.obs-studio",
       decision: .updateAvailable,
-      isVerified: false,
+      trackingState: .localOnly,
+      localReasonCode: .noApprovedSource,
       installStrategy: .dmgCopyReplace
     )
 

@@ -6,6 +6,7 @@ import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
 import { authMiddleware } from "./middleware";
 
 export const updateAlias = createServerFn({ method: "POST" })
@@ -15,6 +16,27 @@ export const updateAlias = createServerFn({ method: "POST" })
     const db = createDb(env.DB);
     const existing = await db.select().from(appAliases).where(eq(appAliases.id, data.id)).get();
     if (!existing) throw new Error("Not found");
+
+    if (data.isActive === true && !existing.isActive) {
+      try {
+        await assertNoConflictingExactAlias(db, {
+          aliasType: existing.aliasType,
+          value: existing.value,
+          appId: existing.appId,
+          excludeAliasId: existing.id,
+          isExact: existing.isExact,
+          isActive: true,
+        });
+      } catch (error) {
+        if (error instanceof AliasConflictError) {
+          throw new Error(
+            `Conflicting ${existing.aliasType.replaceAll("_", " ")} already belongs to app ${error.appId}`,
+            { cause: error },
+          );
+        }
+        throw error;
+      }
+    }
 
     const updates: Record<string, unknown> = {};
     if (data.isActive !== undefined) updates.isActive = data.isActive;

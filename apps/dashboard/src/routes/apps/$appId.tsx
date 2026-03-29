@@ -147,9 +147,9 @@ function AppDetailPage() {
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold tracking-tight">{app.canonicalName}</h2>
               <StatusBadge status={app.status} />
-              {app.isVerified ? (
+              {app.status === "public" ? (
                 <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                  Verified
+                  Public
                 </span>
               ) : null}
             </div>
@@ -558,6 +558,8 @@ function SourcesTab({ appId }: { appId: string }) {
               sourceType: row.original.sourceType,
               parserKey: row.original.parserKey,
               channel: row.original.channel,
+              reviewStatus: row.original.reviewStatus,
+              role: row.original.role,
               status: row.original.status,
               app: null,
             }}

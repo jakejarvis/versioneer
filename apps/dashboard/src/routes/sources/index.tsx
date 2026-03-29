@@ -32,7 +32,19 @@ import {
 const sourcesSearchSchema = z.object({
   ...paginatedSearchShape,
   status: z.enum(["all", "active", "paused", "disabled", "error"]).catch("all"),
-  type: z.enum(["all", "sparkle", "github_releases", "manual", "homebrew_cask"]).catch("all"),
+  type: z
+    .enum([
+      "all",
+      "sparkle",
+      "github_releases",
+      "manual",
+      "homebrew_cask",
+      "mac_app_store",
+      "electron_generic",
+      "rss_feed",
+      "json_feed",
+    ])
+    .catch("all"),
 });
 
 export const Route = createFileRoute("/sources/")({
@@ -83,6 +95,8 @@ function SourcesPage() {
               sourceType: row.original.sourceType,
               parserKey: row.original.parserKey,
               channel: row.original.channel,
+              reviewStatus: row.original.reviewStatus,
+              role: row.original.role,
               status: row.original.status,
               app: row.original.app,
             }}

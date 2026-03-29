@@ -11,6 +11,10 @@ export function generateId(prefix: string): string {
 export const idPrefixes = {
   app: "app",
   alias: "alias",
+  catalogSuggestion: "sug",
+  suggestionEvidence: "sev",
+  trustAssertion: "tas",
+  installExecution: "exec",
 
   source: "src",
   sourceFetch: "fetch",

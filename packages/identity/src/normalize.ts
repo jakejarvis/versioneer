@@ -1,9 +1,12 @@
 /**
  * Normalize a string for fuzzy matching.
- * Lowercases, removes non-alphanumeric, collapses whitespace.
+ * Strips a trailing .app bundle extension, lowercases, removes
+ * non-alphanumeric, and collapses whitespace.
  */
 export function normalizeName(name: string): string {
   return name
+    .trim()
+    .replace(/\.app$/i, "")
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, "")
     .replace(/\s+/g, " ")

@@ -20,7 +20,6 @@ import type { Env, RecomputeLatestJob } from "./types";
  * Admin override on the app record takes precedence.
  */
 function inferInstallStrategy(
-  appOverride: string | null,
   sourceType: string | null,
   artifactType: string | null,
 ):
@@ -30,9 +29,6 @@ function inferInstallStrategy(
   | "pkg_install"
   | "mac_app_store"
   | "manual_only" {
-  if (appOverride) {
-    return appOverride as ReturnType<typeof inferInstallStrategy>;
-  }
   if (sourceType === "sparkle") return "sparkle";
   if (sourceType === "mac_app_store") return "mac_app_store";
   if (artifactType === "dmg") return "dmg_copy_replace";
@@ -58,18 +54,33 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
     if (channels.length === 0) channels = ["stable"];
   }
 
-  // Load app and its primary source type for strategy inference
+  // Load app and its approved authority sources for strategy inference
   const app = await db.select().from(apps).where(eq(apps.id, job.appId)).get();
   if (!app) return;
 
   const appSources = await db
-    .select({ sourceType: sources.sourceType })
+    .select({
+      id: sources.id,
+      sourceType: sources.sourceType,
+      channel: sources.channel,
+    })
     .from(sources)
-    .where(and(eq(sources.appId, job.appId), eq(sources.status, "active")))
+    .where(
+      and(
+        eq(sources.appId, job.appId),
+        eq(sources.status, "active"),
+        eq(sources.reviewStatus, "approved"),
+        eq(sources.role, "authority"),
+      ),
+    )
     .all();
-  const primarySourceType = appSources[0]?.sourceType ?? null;
 
   for (const channel of channels) {
+    const authoritySource =
+      appSources.find((source) => source.channel === channel) ??
+      appSources.find((source) => source.channel === null) ??
+      null;
+
     // Get all active releases for this app and channel
     const candidateReleases = await db
       .select()
@@ -127,8 +138,7 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
 
     // Infer install strategy
     const installStrategy = inferInstallStrategy(
-      app.installStrategyOverride,
-      primarySourceType,
+      authoritySource?.sourceType ?? null,
       primaryArtifact?.artifactType ?? null,
     );
 
@@ -139,6 +149,7 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
         .set({
           releaseId: winningRelease.id,
           artifactId: primaryArtifact?.id ?? null,
+          authoritySourceId: authoritySource?.id ?? null,
           versionNormalized: winningRelease.versionNormalized,
           versionRaw: winningRelease.versionRaw,
           releasedAt: winningRelease.releasedAt,
@@ -152,6 +163,7 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
         appId: job.appId,
         channel,
         releaseId: winningRelease.id,
+        authoritySourceId: authoritySource?.id ?? null,
         artifactId: primaryArtifact?.id ?? null,
         versionNormalized: winningRelease.versionNormalized,
         versionRaw: winningRelease.versionRaw,

@@ -349,7 +349,8 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
             <div>
               <SheetTitle className="text-base">Onboard New App</SheetTitle>
               <SheetDescription className="mt-0.5 text-xs">
-                Review pre-populated data, then add to the catalog.
+                Review pre-populated data, then submit a draft and source suggestions for catalog
+                review.
               </SheetDescription>
             </div>
             <Button

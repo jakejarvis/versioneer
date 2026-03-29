@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { appDecisionSchema } from "../index";
+import {
+  appDecisionSchema,
+  installExecutionStatusRequestSchema,
+  installPrepareRequestSchema,
+} from "../index";
 
 describe("appDecisionSchema install payload", () => {
   it("parses install and artifact metadata", () => {
@@ -12,7 +16,8 @@ describe("appDecisionSchema install payload", () => {
       matchedAppName: "Foo",
       matchConfidence: 99,
       decision: "update_available",
-      isVerified: true,
+      trackingState: "public",
+      localReasonCode: null,
       latestVersion: "2.0.0",
       latestVersionRaw: "2.0.0",
       latestReleaseId: "rel_123",
@@ -33,5 +38,45 @@ describe("appDecisionSchema install payload", () => {
 
     expect(parsed.artifact?.id).toBe("art_123");
     expect(parsed.installStrategy).toBe("zip_replace");
+  });
+
+  it("parses install execution prepare and terminal status payloads", () => {
+    const prepare = installPrepareRequestSchema.parse({
+      client: {
+        platform: "macos",
+        appVersion: "1.0.0",
+        osVersion: "15.4",
+        systemArchitecture: "arm64",
+      },
+      appId: "app_123",
+      releaseId: "rel_123",
+      artifactId: "art_123",
+      installStrategy: "zip_replace",
+      executionRoute: "local_replace",
+      previousVersion: "1.0.0",
+      bundleId: "com.example.foo",
+      teamId: "TEAM123456",
+    });
+
+    const status = installExecutionStatusRequestSchema.parse({
+      ...prepare,
+      status: "succeeded",
+      installedVersion: "2.0.0",
+      verification: {
+        strategy: "zip_replace",
+        executionRoute: "local_replace",
+        hashVerified: true,
+        signatureVerified: true,
+        notarizationVerified: true,
+        bundleIdMatch: true,
+        teamIdMatch: true,
+        observedBundleId: "com.example.foo",
+        observedTeamId: "TEAM123456",
+        observedVersion: "2.0.0",
+      },
+    });
+
+    expect(status.verification?.signatureVerified).toBe(true);
+    expect(status.executionRoute).toBe("local_replace");
   });
 });

@@ -13,9 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@versioneer/contracts": "workspace:*",
-    "@versioneer/db": "workspace:*",
-    "@versioneer/schema": "workspace:*"
+    "@versioneer/contracts": "workspace:*"
   },
   "devDependencies": {
     "@versioneer/typescript-config": "workspace:*",

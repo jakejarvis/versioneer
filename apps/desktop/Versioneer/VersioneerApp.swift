@@ -45,15 +45,21 @@ struct VersioneerApp: App {
         }
         .keyboardShortcut("2", modifiers: .command)
 
-        Button(AppState.FilterSection.notTracked.rawValue) {
-          appState.setSelectedSection(.notTracked)
+        Button(AppState.FilterSection.localOnly.rawValue) {
+          appState.setSelectedSection(.localOnly)
         }
         .keyboardShortcut("3", modifiers: .command)
+
+        Button(AppState.FilterSection.needsReview.rawValue) {
+          appState.setSelectedSection(.needsReview)
+        }
+        .keyboardShortcut("4", modifiers: .command)
 
         Button(AppState.FilterSection.ignored.rawValue) {
           appState.setSelectedSection(.ignored)
         }
-        .keyboardShortcut("4", modifiers: .command)
+        .keyboardShortcut("5", modifiers: .command)
+
 
         Divider()
 

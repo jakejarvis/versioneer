@@ -33,7 +33,7 @@ export const listDiscoveredApps = createServerFn({ method: "GET" })
     z.object({
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
-      status: z.enum(["pending", "approved", "dismissed", "mas_app"]).default("pending"),
+      status: z.enum(["pending", "linked", "dismissed", "support_only"]).default("pending"),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,
     }),

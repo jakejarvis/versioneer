@@ -13,15 +13,19 @@ export const discoveredApps = sqliteTable(
     sightingCount: integer("sighting_count").notNull().default(1),
     firstSeenAt: text("first_seen_at").notNull(),
     lastSeenAt: text("last_seen_at").notNull(),
-    status: text("status", { enum: ["pending", "approved", "dismissed", "mas_app"] })
+    status: text("status", { enum: ["pending", "linked", "dismissed", "support_only"] })
       .notNull()
       .default("pending"),
-    onboardedAppId: text("onboarded_app_id").references(() => apps.id),
+    linkedAppId: text("linked_app_id").references(() => apps.id),
     dismissedAt: text("dismissed_at"),
     dismissedBy: text("dismissed_by"),
     sampleVersions: text("sample_versions"),
     sparkleFeedUrl: text("sparkle_feed_url"),
+    sparklePublicKey: text("sparkle_public_key"),
+    isSparkleApp: integer("is_sparkle_app", { mode: "boolean" }),
     isMasApp: integer("is_mas_app", { mode: "boolean" }),
+    isElectronApp: integer("is_electron_app", { mode: "boolean" }),
+    electronUpdateProvider: text("electron_update_provider"),
     electronUpdateUrl: text("electron_update_url"),
 
     // Client-reported metadata
@@ -56,6 +60,8 @@ export const discoveredApps = sqliteTable(
     })
       .notNull()
       .default("untested"),
+    latestReasonCode: text("latest_reason_code"),
+    primarySuggestionId: text("primary_suggestion_id"),
     confidenceScore: integer("confidence_score"),
     iconR2Key: text("icon_r2_key"),
 

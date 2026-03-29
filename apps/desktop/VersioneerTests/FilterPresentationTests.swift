@@ -9,29 +9,33 @@ struct FilterPresentationTests {
     let summary = AppState.ScanSummary(
       totalApps: 50,
       updatesAvailableCount: 3,
-      notTrackedCount: 2,
+      localOnlyCount: 2,
+      needsReviewCount: 1,
       ignoredCount: 4,
       lastCompletedAt: Date()
     )
 
     let presentation = FilterPresentation.make(summary: summary, selectedSection: .all)
 
-    #expect(presentation.chips.count == 4)
+    #expect(presentation.chips.count == 5)
     #expect(presentation.chips[0].title == "All")
     #expect(presentation.chips[0].count == 50)
     #expect(presentation.chips[1].title == "Updates")
     #expect(presentation.chips[1].count == 3)
-    #expect(presentation.chips[2].title == "Not Tracked")
+    #expect(presentation.chips[2].title == "Local Only")
     #expect(presentation.chips[2].count == 2)
-    #expect(presentation.chips[3].title == "Ignored")
-    #expect(presentation.chips[3].count == 4)
+    #expect(presentation.chips[3].title == "Review")
+    #expect(presentation.chips[3].count == 1)
+    #expect(presentation.chips[4].title == "Ignored")
+    #expect(presentation.chips[4].count == 4)
   }
 
   @Test func updateAllVisibleWhenAllSectionSelectedWithUpdates() {
     let summary = AppState.ScanSummary(
       totalApps: 50,
       updatesAvailableCount: 3,
-      notTrackedCount: 0,
+      localOnlyCount: 0,
+      needsReviewCount: 0,
       ignoredCount: 2,
       lastCompletedAt: Date()
     )
@@ -49,7 +53,8 @@ struct FilterPresentationTests {
     let summary = AppState.ScanSummary(
       totalApps: 50,
       updatesAvailableCount: 0,
-      notTrackedCount: 0,
+      localOnlyCount: 0,
+      needsReviewCount: 0,
       ignoredCount: 0,
       lastCompletedAt: Date()
     )
@@ -60,20 +65,24 @@ struct FilterPresentationTests {
     #expect(presentation.updateAllCount == 0)
   }
 
-  @Test func updateAllHiddenWhenNotTrackedSectionSelected() {
+  @Test func updateAllHiddenWhenLocalOnlyOrReviewSectionSelected() {
     let summary = AppState.ScanSummary(
       totalApps: 50,
       updatesAvailableCount: 5,
-      notTrackedCount: 2,
+      localOnlyCount: 2,
+      needsReviewCount: 1,
       ignoredCount: 1,
       lastCompletedAt: Date()
     )
 
-    let notTrackedSelected = FilterPresentation.make(
-      summary: summary, selectedSection: .notTracked)
+    let localOnlySelected = FilterPresentation.make(
+      summary: summary, selectedSection: .localOnly)
+    let needsReviewSelected = FilterPresentation.make(
+      summary: summary, selectedSection: .needsReview)
     let ignoredSelected = FilterPresentation.make(summary: summary, selectedSection: .ignored)
 
-    #expect(!notTrackedSelected.showUpdateAll)
+    #expect(!localOnlySelected.showUpdateAll)
+    #expect(!needsReviewSelected.showUpdateAll)
     #expect(!ignoredSelected.showUpdateAll)
   }
 }

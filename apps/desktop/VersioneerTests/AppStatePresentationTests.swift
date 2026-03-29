@@ -19,15 +19,17 @@ struct AppStatePresentationTests {
       bundleId: "com.example.update",
       decision: .updateAvailable
     )
-    let notTracked = DesktopUITestFixtures.makeDecision(
+    let localOnly = DesktopUITestFixtures.makeDecision(
       appName: "Mystery",
       bundleId: "com.example.mystery",
-      decision: .notTracked,
+      decision: .localOnly,
+      trackingState: .localOnly,
+      localReasonCode: .notFound,
       installStrategy: nil,
       artifact: nil
     )
 
-    seed(state, with: [notTracked, stable, update])
+    seed(state, with: [localOnly, stable, update])
     state.installCoordinator.previewSetState(
       DesktopUITestFixtures.operationState(
         appDisplayName: "Stable",
@@ -39,7 +41,7 @@ struct AppStatePresentationTests {
 
     let orderedIDs = state.resultsBrowserRows.map(\.id)
 
-    #expect(orderedIDs == [stable.id, update.id, notTracked.id])
+    #expect(orderedIDs == [stable.id, update.id, localOnly.id])
   }
 
   @Test func sectionBadgesAndSearchReflectVisibleResults() {
@@ -49,10 +51,12 @@ struct AppStatePresentationTests {
       bundleId: "org.mozilla.firefox",
       decision: .updateAvailable
     )
-    let notTracked = DesktopUITestFixtures.makeDecision(
+    let localOnly = DesktopUITestFixtures.makeDecision(
       appName: "Mystery App",
       bundleId: "com.example.mystery",
-      decision: .notTracked,
+      decision: .localOnly,
+      trackingState: .localOnly,
+      localReasonCode: .notFound,
       installStrategy: nil,
       artifact: nil
     )
@@ -60,6 +64,8 @@ struct AppStatePresentationTests {
       appName: "Unknown Utility",
       bundleId: "com.example.utility",
       decision: .ambiguous,
+      trackingState: .localOnly,
+      localReasonCode: .ambiguousMatch,
       installStrategy: nil,
       artifact: nil
     )
@@ -71,18 +77,20 @@ struct AppStatePresentationTests {
       artifact: nil
     )
 
-    seed(state, with: [update, notTracked, ambiguous, supported])
-    state.selectedSection = .notTracked
+    seed(state, with: [update, localOnly, ambiguous, supported])
+    state.selectedSection = .localOnly
 
     #expect(state.badgeCount(for: .updatesAvailable) == 1)
-    #expect(state.badgeCount(for: .notTracked) == 2)
-    #expect(state.filteredResults.map(\.id) == [notTracked.id, ambiguous.id])
+    #expect(state.badgeCount(for: .localOnly) == 2)
+    #expect(state.badgeCount(for: .needsReview) == 1)
+    #expect(state.filteredResults.map(\.id) == [localOnly.id, ambiguous.id])
 
     state.searchText = "Utility"
 
     #expect(state.filteredResults.map(\.id) == [ambiguous.id])
     #expect(state.scanSummary.updatesAvailableCount == 1)
-    #expect(state.scanSummary.notTrackedCount == 2)
+    #expect(state.scanSummary.localOnlyCount == 2)
+    #expect(state.scanSummary.needsReviewCount == 1)
   }
 
   @Test func userIgnoredAppsMoveIntoIgnoredSectionAndRestoreAfterUnignore() {
@@ -99,7 +107,7 @@ struct AppStatePresentationTests {
 
     #expect(state.scanSummary.totalApps == 0)
     #expect(state.scanSummary.ignoredCount == 1)
-    #expect(state.updatableResults.isEmpty == false)
+    #expect(state.updatableResults.isEmpty)
 
     state.selectedSection = .all
     #expect(state.filteredResults.isEmpty)

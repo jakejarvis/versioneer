@@ -8,7 +8,7 @@ nonisolated enum VersionFormatting {
     case .upToDate: "Up to Date"
     case .updateAvailable: "Update Available"
     case .ambiguous: "Ambiguous"
-    case .notTracked: "Not Tracked"
+    case .localOnly: "Local Only"
     }
   }
 

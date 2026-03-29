@@ -87,33 +87,43 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
   ) -> (text: String, tone: Tone, systemImage: String) {
     switch installState.phase {
     case .preparing:
-      ("Preparing Install", .accent, "arrow.down.circle.fill")
+      return ("Preparing Install", .accent, "arrow.down.circle.fill")
     case .downloading:
-      ("Downloading", .accent, "arrow.down.circle.fill")
+      return ("Downloading", .accent, "arrow.down.circle.fill")
     case .verifying:
-      ("Verifying", .accent, "checkmark.shield.fill")
+      return ("Verifying", .accent, "checkmark.shield.fill")
     case .installing:
       if installState.helperStatus == .preparing {
-        ("Preparing Helper", .accent, "gearshape.fill")
+        return ("Preparing Helper", .accent, "gearshape.fill")
       } else {
-        ("Installing", .accent, "arrow.down.circle.fill")
+        return ("Installing", .accent, "arrow.down.circle.fill")
       }
     case .relaunching:
-      ("Relaunching", .accent, "arrow.clockwise")
+      return ("Relaunching", .accent, "arrow.clockwise")
     case .completed:
-      ("Updated", .positive, "checkmark.circle.fill")
+      return ("Updated", .positive, "checkmark.circle.fill")
     case .failed:
-      ("Install Failed", .error, "xmark.circle.fill")
+      return ("Install Failed", .error, "xmark.circle.fill")
     case .idle:
+      if result.isLocalOnly {
+        switch result.decision {
+        case .updateAvailable:
+          return ("Local Update Available", .attention, "arrow.up.circle")
+        case .ambiguous:
+          return ("Needs Review", .attention, "scope")
+        case .upToDate, .localOnly:
+          return ("Local Only", .neutral, "desktopcomputer")
+        }
+      }
       switch result.decision {
       case .upToDate:
-        ("Up to Date", .positive, "checkmark.circle.fill")
+        return ("Up to Date", .positive, "checkmark.circle.fill")
       case .updateAvailable:
-        ("Update Available", .accent, "arrow.up.circle.fill")
+        return ("Update Available", .accent, "arrow.up.circle.fill")
       case .ambiguous:
-        ("Needs Review", .attention, "scope")
-      case .notTracked:
-        ("Not Tracked", .neutral, "questionmark.circle")
+        return ("Needs Review", .attention, "scope")
+      case .localOnly:
+        return ("Local Only", .neutral, "desktopcomputer")
       }
     }
   }
@@ -132,13 +142,13 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
     case .idle:
       switch result.decision {
       case .updateAvailable:
-        return 3
+        return result.isLocalOnly ? 4 : 3
       case .ambiguous:
-        return 4
-      case .upToDate:
         return 5
-      case .notTracked:
+      case .upToDate:
         return 6
+      case .localOnly:
+        return 7
       }
     }
   }

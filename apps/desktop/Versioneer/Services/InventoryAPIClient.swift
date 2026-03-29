@@ -1,5 +1,4 @@
 import AppKit
-import CryptoKit
 import Foundation
 import Logging
 import zlib
@@ -101,10 +100,6 @@ nonisolated struct InventoryAPIClient: Sendable {
     scanDurationMs: Int?,
     channelPreferences: InventoryCheckRequest.ChannelPreferences?
   ) -> InventoryCheckRequest {
-    let osVer = ProcessInfo.processInfo.operatingSystemVersion
-    let osVersion = "\(osVer.majorVersion).\(osVer.minorVersion).\(osVer.patchVersion)"
-    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-
     let inventoryApps = apps.map { app in
       InventoryCheckRequest.InventoryApp(
         appName: app.name,
@@ -112,29 +107,136 @@ nonisolated struct InventoryAPIClient: Sendable {
         version: app.version,
         buildNumber: app.buildNumber,
         teamId: app.teamId,
-        pathHash: pathHash(app.path),
         architecture: app.architecture,
         sparkleFeedUrl: app.sparkleFeedUrl,
+        sparklePublicKey: app.sparklePublicKey,
+        isSparkleApp: app.isSparkleApp ? true : nil,
         isMasApp: app.isMasApp ? true : nil,
+        isElectronApp: app.isElectronApp ? true : nil,
+        electronUpdateProvider: app.electronUpdateProvider,
         electronUpdateUrl: app.electronUpdateUrl,
         codeSigningAuthority: app.codeSigningAuthority,
         appCategory: app.appCategory,
         minMacOSVersion: app.minMacOSVersion,
         iconBase64: Self.extractIconBase64(for: app),
-        isHomebrewInstalled: app.isHomebrewInstalled ? true : nil
+        isHomebrewInstalled: app.isHomebrewInstalled ? true : nil,
+        homebrewCaskToken: app.homebrewCaskToken
       )
     }
 
     return InventoryCheckRequest(
-      client: .init(
-        platform: "macos",
-        appVersion: appVersion,
-        osVersion: osVersion,
-        systemArchitecture: Self.systemArchitecture(),
-        channelPreferences: channelPreferences
-      ),
+      client: buildClientInfo(channelPreferences: channelPreferences),
       apps: inventoryApps,
       scanDurationMs: scanDurationMs
+    )
+  }
+
+  func prepareInstallExecution(
+    plan: InstallPlan,
+    installedApp: InstalledApp,
+    executionRoute: InstallCoordinator.ExecutionRoute
+  ) async throws -> InstallPrepareResponse {
+    let endpoint = baseURL.appendingPathComponent("v1/install/prepare")
+    var request = URLRequest(url: endpoint)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+    let payload = InstallPrepareRequest(
+      client: buildClientInfo(channelPreferences: nil),
+      appId: plan.appId,
+      releaseId: plan.releaseId,
+      artifactId: plan.artifact?.id,
+      installStrategy: plan.strategy.rawValue,
+      executionRoute: executionRoute.rawValue,
+      channel: plan.channel,
+      previousVersion: installedApp.version,
+      bundleId: installedApp.bundleId,
+      teamId: installedApp.teamId
+    )
+    request.httpBody = try JSONEncoder().encode(payload)
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw APIError.invalidResponse
+    }
+
+    guard httpResponse.statusCode == 200 else {
+      let body = String(data: data, encoding: .utf8) ?? ""
+      throw APIError.httpError(statusCode: httpResponse.statusCode, body: body)
+    }
+
+    do {
+      return try JSONDecoder().decode(InstallPrepareResponse.self, from: data)
+    } catch {
+      throw APIError.decodingFailed(error.localizedDescription)
+    }
+  }
+
+  func reportInstallExecutionStatus(
+    executionId: String,
+    plan: InstallPlan,
+    installedApp: InstalledApp,
+    executionRoute: InstallCoordinator.ExecutionRoute,
+    status: String,
+    installedVersion: String?,
+    errorMessage: String?,
+    verification: InstallVerificationSummary?
+  ) async throws -> InstallExecutionStatusResponse {
+    let endpoint = baseURL.appendingPathComponent("v1/install/executions/\(executionId)/status")
+    var request = URLRequest(url: endpoint)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+    let payload = InstallExecutionStatusRequest(
+      client: buildClientInfo(channelPreferences: nil),
+      appId: plan.appId,
+      releaseId: plan.releaseId,
+      artifactId: plan.artifact?.id,
+      installStrategy: plan.strategy.rawValue,
+      executionRoute: executionRoute.rawValue,
+      channel: plan.channel,
+      previousVersion: installedApp.version,
+      installedVersion: installedVersion ?? installedApp.version,
+      bundleId: installedApp.bundleId,
+      teamId: installedApp.teamId,
+      status: status,
+      errorMessage: errorMessage,
+      verification: verification
+    )
+    request.httpBody = try JSONEncoder().encode(payload)
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw APIError.invalidResponse
+    }
+
+    guard httpResponse.statusCode == 200 else {
+      let body = String(data: data, encoding: .utf8) ?? ""
+      throw APIError.httpError(statusCode: httpResponse.statusCode, body: body)
+    }
+
+    do {
+      return try JSONDecoder().decode(InstallExecutionStatusResponse.self, from: data)
+    } catch {
+      throw APIError.decodingFailed(error.localizedDescription)
+    }
+  }
+
+  private func buildClientInfo(
+    channelPreferences: InventoryCheckRequest.ChannelPreferences?
+  ) -> InventoryCheckRequest.ClientInfo {
+    let osVer = ProcessInfo.processInfo.operatingSystemVersion
+    let osVersion = "\(osVer.majorVersion).\(osVer.minorVersion).\(osVer.patchVersion)"
+    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+
+    return .init(
+      platform: "macos",
+      appVersion: appVersion,
+      osVersion: osVersion,
+      systemArchitecture: Self.systemArchitecture(),
+      channelPreferences: channelPreferences
     )
   }
 
@@ -159,12 +261,6 @@ nonisolated struct InventoryAPIClient: Sendable {
       }
     }
     return reported
-  }
-
-  /// Simple hash of the app path for deduplication on the backend.
-  private func pathHash(_ path: String) -> String {
-    let digest = SHA256.hash(data: Data(path.utf8))
-    return digest.map { String(format: "%02x", $0) }.joined()
   }
 
   /// Compresses data using gzip (RFC 1952) via zlib's deflateInit2.

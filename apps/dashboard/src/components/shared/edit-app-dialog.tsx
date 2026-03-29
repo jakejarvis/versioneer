@@ -5,7 +5,6 @@ import { useUpdateApp } from "@/api/hooks/use-apps";
 import type { App } from "@/api/types";
 import { FormField } from "@/components/shared/form-field";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -40,8 +39,6 @@ export function EditAppDialog({ app, open, onOpenChange }: EditAppDialogProps) {
       status: app.status,
       mergedIntoAppId: app.mergedIntoAppId ?? "",
       notes: app.notes ?? "",
-      isVerified: app.isVerified,
-      installStrategyOverride: app.installStrategyOverride ?? "",
       defaultReleaseNotesUrl: app.defaultReleaseNotesUrl ?? "",
     },
     onSubmit: async ({ value }) => {
@@ -53,8 +50,6 @@ export function EditAppDialog({ app, open, onOpenChange }: EditAppDialogProps) {
           status: value.status,
           mergedIntoAppId: value.status === "merged" ? value.mergedIntoAppId || null : null,
           notes: value.notes || null,
-          isVerified: value.isVerified,
-          installStrategyOverride: value.installStrategyOverride || null,
           defaultReleaseNotesUrl: value.defaultReleaseNotesUrl || null,
         },
         {
@@ -140,7 +135,8 @@ export function EditAppDialog({ app, open, onOpenChange }: EditAppDialogProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="public">Public</SelectItem>
                     <SelectItem value="deprecated">Deprecated</SelectItem>
                     <SelectItem value="merged">Merged</SelectItem>
                     <SelectItem value="unlisted">Unlisted</SelectItem>
@@ -175,34 +171,6 @@ export function EditAppDialog({ app, open, onOpenChange }: EditAppDialogProps) {
             }
           </form.Subscribe>
 
-          <form.Field name="installStrategyOverride">
-            {(field) => (
-              <FormField
-                label="Install Strategy Override"
-                name={field.name}
-                meta={field.state.meta}
-                description="Leave empty to use auto-detected strategy."
-              >
-                <Select
-                  value={field.state.value || "auto"}
-                  onValueChange={(v) => field.handleChange(v === "auto" ? "" : v)}
-                >
-                  <SelectTrigger id={field.name}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Auto-detect</SelectItem>
-                    <SelectItem value="sparkle">Sparkle</SelectItem>
-                    <SelectItem value="zip_replace">ZIP Replace</SelectItem>
-                    <SelectItem value="dmg_copy_replace">DMG Copy Replace</SelectItem>
-                    <SelectItem value="pkg_install">PKG Install</SelectItem>
-                    <SelectItem value="manual_only">Manual Only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormField>
-            )}
-          </form.Field>
-
           <form.Field name="defaultReleaseNotesUrl">
             {(field) => (
               <FormField
@@ -233,21 +201,6 @@ export function EditAppDialog({ app, open, onOpenChange }: EditAppDialogProps) {
                   onBlur={field.handleBlur}
                 />
               </FormField>
-            )}
-          </form.Field>
-
-          <form.Field name="isVerified">
-            {(field) => (
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id={field.name}
-                  checked={field.state.value}
-                  onCheckedChange={(checked) => field.handleChange(checked === true)}
-                />
-                <label htmlFor={field.name} className="text-sm font-medium">
-                  Verified
-                </label>
-              </div>
             )}
           </form.Field>
 

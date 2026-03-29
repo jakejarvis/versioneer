@@ -3,6 +3,13 @@ export type {
   InventoryCheckRequest,
   InventoryCheckResponse,
   AppDecision,
+  InstallPrepareRequest,
+  InstallPrepareResponse,
+  InstallExecutionStatusRequest,
+  InstallExecutionStatusResponse,
+  InstallVerificationSummary,
+  InstallExecutionRoute,
+  InstallExecutionStatus,
 } from "@versioneer/validation";
 
 // Internal API types
@@ -34,7 +41,7 @@ export interface AppInfo {
   vendorName: string | null;
   homepageUrl: string | null;
   defaultReleaseNotesUrl: string | null;
-  status: string;
+  status: "draft" | "public" | "merged" | "deprecated" | "unlisted";
 }
 
 export interface ReleaseInfo {

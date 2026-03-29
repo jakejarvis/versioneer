@@ -11,8 +11,55 @@ export interface DashboardStats {
   errorSources: number;
   openFailures: number;
   recentReleases: number;
-  verifiedApps: number;
+  publicApps: number;
   pendingFeedback: number;
+  pendingDiscoveredApps: number;
+  pendingCatalogSuggestions: number;
+}
+
+export interface CatalogSuggestion {
+  id: string;
+  queueType:
+    | "new_app"
+    | "new_source"
+    | "metadata_change"
+    | "authority_handoff"
+    | "merge_proposal"
+    | "release_discrepancy";
+  status: "pending" | "approved" | "rejected" | "superseded";
+  appId: string | null;
+  sourceId: string | null;
+  bundleKey: string | null;
+  dedupeKey: string;
+  title: string;
+  canonicalSnapshotJson: string | null;
+  proposedChangeJson: string;
+  evidenceSummaryJson: string | null;
+  evidenceCount: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  app: AppSummary | null;
+  source: SourceSummary | null;
+}
+
+export interface SuggestionEvidence {
+  id: string;
+  suggestionId: string;
+  appId: string | null;
+  sourceId: string | null;
+  evidenceType: "scan" | "crawl" | "fetch_parse" | "install_verify" | "homebrew" | "manual";
+  fingerprint: string;
+  payloadJson: string;
+  observedAt: string;
+  createdAt: string;
+}
+
+export interface CatalogSuggestionDetail extends CatalogSuggestion {
+  evidence: SuggestionEvidence[];
 }
 
 export interface App {
@@ -21,14 +68,12 @@ export interface App {
   canonicalName: string;
   vendorName: string | null;
   homepageUrl: string | null;
-  status: "active" | "deprecated" | "merged" | "unlisted";
+  status: "draft" | "public" | "deprecated" | "merged" | "unlisted";
   mergedIntoAppId: string | null;
   notes: string | null;
-  isVerified: boolean;
-  verifiedAt: string | null;
-  installStrategyOverride: string | null;
   defaultReleaseNotesUrl: string | null;
   iconR2Key: string | null;
+  publicTrackedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,10 +89,20 @@ export interface AppSummary {
 
 export interface SourceSummary {
   id: string;
-  sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask" | "mac_app_store";
+  sourceType:
+    | "sparkle"
+    | "github_releases"
+    | "manual"
+    | "homebrew_cask"
+    | "mac_app_store"
+    | "electron_generic"
+    | "rss_feed"
+    | "json_feed";
   label: string | null;
   parserKey: string;
   channel: string | null;
+  reviewStatus: "pending" | "approved" | "rejected" | "disabled";
+  role: "authority" | "corroborating" | "reference" | null;
   status: "active" | "paused" | "disabled" | "error";
   app: AppSummary | null;
 }
@@ -100,13 +155,23 @@ export interface AppAlias {
 export interface Source {
   id: string;
   appId: string;
-  sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask" | "mac_app_store";
+  sourceType:
+    | "sparkle"
+    | "github_releases"
+    | "manual"
+    | "homebrew_cask"
+    | "mac_app_store"
+    | "electron_generic"
+    | "rss_feed"
+    | "json_feed";
   label: string | null;
   baseUrl: string | null;
   configJson: string | null;
   parserKey: string;
   channel: string | null;
   pollIntervalMinutes: number;
+  reviewStatus: "pending" | "approved" | "rejected" | "disabled";
+  role: "authority" | "corroborating" | "reference" | null;
   status: "active" | "paused" | "disabled" | "error";
   lastSuccessAt: string | null;
   lastFailureAt: string | null;

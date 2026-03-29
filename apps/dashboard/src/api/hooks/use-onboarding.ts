@@ -15,7 +15,12 @@ export function useValidateSource() {
   return useMutation({
     mutationFn: (input: {
       url: string;
-      sourceType: "sparkle" | "github_releases" | "homebrew_cask" | "mac_app_store";
+      sourceType:
+        | "sparkle"
+        | "github_releases"
+        | "homebrew_cask"
+        | "mac_app_store"
+        | "electron_generic";
     }) => validateSource({ data: input }),
   });
 }
@@ -45,7 +50,15 @@ export function useOnboardDiscoveredApp() {
         value: string;
       }[];
       sources?: {
-        sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask" | "mac_app_store";
+        sourceType:
+          | "sparkle"
+          | "github_releases"
+          | "manual"
+          | "homebrew_cask"
+          | "mac_app_store"
+          | "electron_generic"
+          | "rss_feed"
+          | "json_feed";
         baseUrl: string;
         parserKey: string;
         pollIntervalMinutes?: number;
@@ -58,6 +71,7 @@ export function useOnboardDiscoveredApp() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["apps"] });
       void qc.invalidateQueries({ queryKey: ["discovered-apps"] });
+      void qc.invalidateQueries({ queryKey: ["catalog-suggestions"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });

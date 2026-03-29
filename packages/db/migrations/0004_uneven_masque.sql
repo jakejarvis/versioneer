@@ -1,1 +1,0 @@
-ALTER TABLE `apps` ADD `icon_r2_key` text;

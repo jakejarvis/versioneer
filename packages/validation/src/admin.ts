@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { channelSchema } from "./common";
-import { installStrategySchema } from "./install";
 
 export const appCreateSchema = z.object({
   slug: z
@@ -19,11 +18,9 @@ export const appUpdateSchema = z.object({
   canonicalName: z.string().min(1).max(500).optional(),
   vendorName: z.string().max(500).nullable().optional(),
   homepageUrl: z.string().url().max(2000).nullable().optional(),
-  status: z.enum(["active", "deprecated", "merged", "unlisted"]).optional(),
+  status: z.enum(["draft", "public", "deprecated", "merged", "unlisted"]).optional(),
   mergedIntoAppId: z.string().nullable().optional(),
   notes: z.string().max(5000).nullable().optional(),
-  isVerified: z.boolean().optional(),
-  installStrategyOverride: installStrategySchema.nullable().optional(),
   defaultReleaseNotesUrl: z.string().url().max(2000).nullable().optional(),
   iconR2Key: z.string().max(500).nullable().optional(),
 });
@@ -56,13 +53,24 @@ export const aliasUpdateSchema = z.object({
 
 export const sourceCreateSchema = z.object({
   appId: z.string().min(1),
-  sourceType: z.enum(["sparkle", "github_releases", "manual", "homebrew_cask", "mac_app_store"]),
+  sourceType: z.enum([
+    "sparkle",
+    "github_releases",
+    "manual",
+    "homebrew_cask",
+    "mac_app_store",
+    "electron_generic",
+    "rss_feed",
+    "json_feed",
+  ]),
   label: z.string().max(500).optional(),
   baseUrl: z.string().url().max(2000).optional(),
   configJson: z.string().max(10000).optional(),
   parserKey: z.string().min(1).max(200),
   channel: channelSchema.nullable().optional(),
   pollIntervalMinutes: z.number().int().min(5).max(10080).default(60),
+  reviewStatus: z.enum(["pending", "approved", "rejected", "disabled"]).default("pending"),
+  role: z.enum(["authority", "corroborating", "reference"]).nullable().optional(),
 });
 
 export const sourceUpdateSchema = z.object({
@@ -72,6 +80,8 @@ export const sourceUpdateSchema = z.object({
   parserKey: z.string().min(1).max(200).optional(),
   channel: channelSchema.nullable().optional(),
   pollIntervalMinutes: z.number().int().min(5).max(10080).optional(),
+  reviewStatus: z.enum(["pending", "approved", "rejected", "disabled"]).optional(),
+  role: z.enum(["authority", "corroborating", "reference"]).nullable().optional(),
   status: z.enum(["active", "paused", "disabled", "error"]).optional(),
 });
 

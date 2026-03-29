@@ -167,6 +167,14 @@ struct DetailPaneView: View {
           }
         }
       }
+
+      if result.isLocalOnly {
+        GlassBanner(
+          title: result.localOnlyStatusTitle,
+          detail: result.localOnlyDescription,
+          tint: result.decision == .updateAvailable ? .orange : .secondary
+        )
+      }
     }
   }
 
@@ -436,29 +444,50 @@ struct DetailPaneView: View {
   // MARK: - Helpers
 
   private var decisionTitle: String {
+    if result.isLocalOnly {
+      return result.localOnlyStatusTitle
+    }
     switch result.decision {
-    case .updateAvailable: "Update Available"
-    case .upToDate: "Up to Date"
-    case .ambiguous: "Needs Review"
-    case .notTracked: "Not Tracked"
+    case .updateAvailable:
+      return "Update Available"
+    case .upToDate:
+      return "Up to Date"
+    case .ambiguous:
+      return "Needs Review"
+    case .localOnly:
+      return "Local Only"
     }
   }
 
   private var decisionTint: Color {
+    if result.isLocalOnly {
+      return result.decision == .updateAvailable ? .orange : .secondary
+    }
     switch result.decision {
-    case .updateAvailable: .accentColor
-    case .upToDate: .green
-    case .ambiguous: .orange
-    case .notTracked: .secondary
+    case .updateAvailable:
+      return .accentColor
+    case .upToDate:
+      return .green
+    case .ambiguous:
+      return .orange
+    case .localOnly:
+      return .secondary
     }
   }
 
   private var decisionSymbol: String {
+    if result.isLocalOnly {
+      return result.decision == .updateAvailable ? "arrow.up.circle" : "desktopcomputer"
+    }
     switch result.decision {
-    case .updateAvailable: "arrow.up.circle.fill"
-    case .upToDate: "checkmark.circle.fill"
-    case .ambiguous: "scope"
-    case .notTracked: "questionmark.circle"
+    case .updateAvailable:
+      return "arrow.up.circle.fill"
+    case .upToDate:
+      return "checkmark.circle.fill"
+    case .ambiguous:
+      return "scope"
+    case .localOnly:
+      return "desktopcomputer"
     }
   }
 

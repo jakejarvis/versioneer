@@ -63,6 +63,20 @@ function findMatchingAlias(
           a.aliasType === "bundle_id" &&
           a.normalizedValue === input.bundleId?.toLowerCase().trim(),
       );
+    case "sparkle_feed":
+      return aliases.find(
+        (a) =>
+          a.appId === appId &&
+          a.aliasType === "sparkle_feed" &&
+          a.normalizedValue === input.sparkleFeedUrl?.toLowerCase().trim(),
+      );
+    case "homebrew_cask":
+      return aliases.find(
+        (a) =>
+          a.appId === appId &&
+          a.aliasType === "homebrew_cask" &&
+          a.normalizedValue === input.homebrewCaskToken?.toLowerCase().trim(),
+      );
     case "team_id_name":
       return aliases.find(
         (a) => a.appId === appId && (a.aliasType === "team_id" || a.aliasType === "name"),

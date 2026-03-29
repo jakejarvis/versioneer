@@ -1,19 +1,26 @@
 import { createDb } from "@versioneer/db";
-import { matchApp } from "@versioneer/identity";
+import { matchApp, normalizeAliasValue } from "@versioneer/identity";
 import type { AliasRecord } from "@versioneer/identity";
-import { enrichDiscoveredApp, shouldEnrich } from "@versioneer/pipeline";
+import {
+  enrichDiscoveredApp,
+  fetchHomepageSourceCandidates,
+  shouldEnrich,
+} from "@versioneer/pipeline";
 import {
   apps,
   appAliases,
   appLatestReleases,
   artifacts,
+  catalogSuggestions,
   releases,
   sources,
   discoveredApps,
   generateId,
   idPrefixes,
+  suggestionEvidence,
+  trustAssertions,
 } from "@versioneer/schema";
-import { inventoryCheckRequestSchema } from "@versioneer/validation";
+import { inventoryCheckRequestSchema, toGitHubApiReleasesUrl } from "@versioneer/validation";
 import type { AppDecision } from "@versioneer/validation";
 import { normalizeVersion } from "@versioneer/versioning";
 import { compareVersionStrings } from "@versioneer/versioning";
@@ -24,6 +31,7 @@ import { HTTPException } from "hono/http-exception";
 import type { z } from "zod";
 
 import type { Env } from "../../env";
+import { findConflictingExactAlias } from "./alias-conflicts";
 import { isArchCompatible, isOsVersionCompatible, computeStaleSince } from "./helpers";
 
 function computeLookupKey(appName: string, bundleId?: string | null): string {
@@ -32,6 +40,736 @@ function computeLookupKey(appName: string, bundleId?: string | null): string {
     .toLowerCase()
     .trim()
     .replace(/\.app$/, "")}`;
+}
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\.app$/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+async function allocateDraftSlug(
+  db: ReturnType<typeof createDb>,
+  name: string,
+  suffixSeed: string,
+): Promise<string> {
+  const base = slugify(name) || "app";
+  let candidate = base;
+  let counter = 1;
+
+  while (true) {
+    const existing = await db
+      .select({ id: apps.id })
+      .from(apps)
+      .where(eq(apps.slug, candidate))
+      .get();
+    if (!existing) return candidate;
+    candidate = `${base}-${suffixSeed.slice(0, 6)}-${counter}`;
+    counter += 1;
+  }
+}
+
+async function ensureCanonicalAlias(params: {
+  db: ReturnType<typeof createDb>;
+  appId: string;
+  aliasType: "bundle_id" | "name" | "team_id" | "sparkle_feed" | "homebrew_cask";
+  value: string | null | undefined;
+  now: string;
+}): Promise<void> {
+  const { db, appId, aliasType, value, now } = params;
+  if (!value) return;
+  const normalizedValue = normalizeAliasValue(aliasType, value);
+  const conflictingAlias = await findConflictingExactAlias(db, {
+    aliasType,
+    value,
+    appId,
+  });
+  if (conflictingAlias) return;
+
+  const existing = await db
+    .select({ id: appAliases.id })
+    .from(appAliases)
+    .where(
+      and(
+        eq(appAliases.appId, appId),
+        eq(appAliases.aliasType, aliasType),
+        eq(appAliases.normalizedValue, normalizedValue),
+      ),
+    )
+    .get();
+
+  if (existing) return;
+
+  await db.insert(appAliases).values({
+    id: generateId(idPrefixes.alias),
+    appId,
+    aliasType,
+    value,
+    normalizedValue,
+    isExact: true,
+    priority: 0,
+    confidenceWeight: 100,
+    source: "inventory_scan",
+    isActive: true,
+    createdAt: now,
+  });
+}
+
+async function ensureDraftApp(params: {
+  db: ReturnType<typeof createDb>;
+  discoveredAppId?: string;
+  existingAppId?: string | null;
+  appName: string;
+  bundleId?: string | null;
+  teamId?: string | null;
+  sparkleFeedUrl?: string | null;
+  homebrewCaskToken?: string | null;
+  now: string;
+}): Promise<string> {
+  const { db, existingAppId, appName, bundleId, teamId, sparkleFeedUrl, homebrewCaskToken, now } =
+    params;
+
+  if (existingAppId) return existingAppId;
+
+  for (const candidate of [
+    bundleId ? { aliasType: "bundle_id" as const, value: bundleId } : null,
+    sparkleFeedUrl ? { aliasType: "sparkle_feed" as const, value: sparkleFeedUrl } : null,
+    homebrewCaskToken ? { aliasType: "homebrew_cask" as const, value: homebrewCaskToken } : null,
+  ]) {
+    if (!candidate) continue;
+    const conflictingAlias = await findConflictingExactAlias(db, candidate);
+    if (conflictingAlias) {
+      return conflictingAlias.appId;
+    }
+  }
+
+  const appId = generateId(idPrefixes.app);
+  const slug = await allocateDraftSlug(db, appName, appId);
+  await db.insert(apps).values({
+    id: appId,
+    slug,
+    canonicalName: appName,
+    status: "draft",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await ensureCanonicalAlias({ db, appId, aliasType: "name", value: appName, now });
+  await ensureCanonicalAlias({ db, appId, aliasType: "bundle_id", value: bundleId, now });
+  await ensureCanonicalAlias({ db, appId, aliasType: "team_id", value: teamId, now });
+  await ensureCanonicalAlias({ db, appId, aliasType: "sparkle_feed", value: sparkleFeedUrl, now });
+  await ensureCanonicalAlias({
+    db,
+    appId,
+    aliasType: "homebrew_cask",
+    value: homebrewCaskToken,
+    now,
+  });
+
+  return appId;
+}
+
+async function upsertSuggestion(params: {
+  db: ReturnType<typeof createDb>;
+  queueType:
+    | "new_app"
+    | "new_source"
+    | "metadata_change"
+    | "authority_handoff"
+    | "merge_proposal"
+    | "release_discrepancy";
+  dedupeKey: string;
+  title: string;
+  proposedChangeJson: string;
+  canonicalSnapshotJson?: string | null;
+  appId?: string | null;
+  sourceId?: string | null;
+  bundleKey?: string | null;
+  evidenceType: "scan" | "crawl" | "fetch_parse" | "install_verify" | "homebrew" | "manual";
+  evidenceFingerprint: string;
+  evidencePayloadJson: string;
+  now: string;
+}): Promise<void> {
+  const {
+    db,
+    queueType,
+    dedupeKey,
+    title,
+    proposedChangeJson,
+    canonicalSnapshotJson,
+    appId,
+    sourceId,
+    bundleKey,
+    evidenceType,
+    evidenceFingerprint,
+    evidencePayloadJson,
+    now,
+  } = params;
+
+  let suggestion = await db
+    .select()
+    .from(catalogSuggestions)
+    .where(eq(catalogSuggestions.dedupeKey, dedupeKey))
+    .get();
+
+  if (!suggestion) {
+    const suggestionId = generateId(idPrefixes.catalogSuggestion);
+    await db.insert(catalogSuggestions).values({
+      id: suggestionId,
+      queueType,
+      status: "pending",
+      appId: appId ?? null,
+      sourceId: sourceId ?? null,
+      bundleKey: bundleKey ?? null,
+      dedupeKey,
+      title,
+      canonicalSnapshotJson: canonicalSnapshotJson ?? null,
+      proposedChangeJson,
+      evidenceSummaryJson: evidencePayloadJson,
+      evidenceCount: 1,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    suggestion = await db
+      .select()
+      .from(catalogSuggestions)
+      .where(eq(catalogSuggestions.id, suggestionId))
+      .get();
+  } else {
+    await db
+      .update(catalogSuggestions)
+      .set({
+        appId: appId ?? suggestion.appId,
+        sourceId: sourceId ?? suggestion.sourceId,
+        title,
+        canonicalSnapshotJson: canonicalSnapshotJson ?? suggestion.canonicalSnapshotJson,
+        proposedChangeJson,
+        evidenceSummaryJson: evidencePayloadJson,
+        evidenceCount: sql`${catalogSuggestions.evidenceCount} + 1`,
+        lastSeenAt: now,
+        updatedAt: now,
+      })
+      .where(eq(catalogSuggestions.id, suggestion.id));
+  }
+
+  if (!suggestion) return;
+
+  const existingEvidence = await db
+    .select({ id: suggestionEvidence.id })
+    .from(suggestionEvidence)
+    .where(
+      and(
+        eq(suggestionEvidence.suggestionId, suggestion.id),
+        eq(suggestionEvidence.fingerprint, evidenceFingerprint),
+      ),
+    )
+    .get();
+  if (existingEvidence) return;
+
+  await db.insert(suggestionEvidence).values({
+    id: generateId(idPrefixes.suggestionEvidence),
+    suggestionId: suggestion.id,
+    appId: appId ?? null,
+    sourceId: sourceId ?? null,
+    evidenceType,
+    fingerprint: evidenceFingerprint,
+    payloadJson: evidencePayloadJson,
+    observedAt: now,
+    createdAt: now,
+  });
+}
+
+function defaultSuggestedRoleForSourceType(
+  sourceType:
+    | "sparkle"
+    | "github_releases"
+    | "manual"
+    | "homebrew_cask"
+    | "mac_app_store"
+    | "electron_generic"
+    | "rss_feed"
+    | "json_feed",
+): "authority" | "corroborating" | "reference" {
+  if (sourceType === "homebrew_cask") return "corroborating";
+  if (sourceType === "rss_feed" || sourceType === "json_feed") return "reference";
+  return "authority";
+}
+
+function defaultSuggestedParserKeyForSourceType(
+  sourceType:
+    | "sparkle"
+    | "github_releases"
+    | "manual"
+    | "homebrew_cask"
+    | "mac_app_store"
+    | "electron_generic"
+    | "rss_feed"
+    | "json_feed",
+): string {
+  switch (sourceType) {
+    case "sparkle":
+      return "sparkle";
+    case "github_releases":
+      return "github-releases";
+    case "homebrew_cask":
+      return "homebrew-cask";
+    case "mac_app_store":
+      return "mac-app-store";
+    case "electron_generic":
+      return "electron-generic";
+    case "rss_feed":
+      return "rss-reference";
+    case "json_feed":
+      return "json-reference";
+    case "manual":
+    default:
+      return "manual";
+  }
+}
+
+function normalizeSuggestedSourceUrl(
+  sourceType:
+    | "sparkle"
+    | "github_releases"
+    | "manual"
+    | "homebrew_cask"
+    | "mac_app_store"
+    | "electron_generic"
+    | "rss_feed"
+    | "json_feed",
+  url: string,
+): string {
+  if (sourceType === "github_releases") {
+    return toGitHubApiReleasesUrl(url) ?? url;
+  }
+  return url;
+}
+
+function macAppStoreLookupUrl(bundleId: string): string {
+  return `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(bundleId)}&country=us`;
+}
+
+async function findExistingAlias(params: {
+  db: ReturnType<typeof createDb>;
+  appId: string;
+  aliasType:
+    | "bundle_id"
+    | "name"
+    | "team_id"
+    | "sparkle_feed"
+    | "homepage"
+    | "download_pattern"
+    | "github_repo"
+    | "mas_app_id"
+    | "homebrew_cask";
+  value: string;
+}) {
+  return params.db
+    .select({ id: appAliases.id })
+    .from(appAliases)
+    .where(
+      and(
+        eq(appAliases.appId, params.appId),
+        eq(appAliases.aliasType, params.aliasType),
+        eq(appAliases.normalizedValue, normalizeAliasValue(params.aliasType, params.value)),
+      ),
+    )
+    .get();
+}
+
+async function findExistingSource(params: {
+  db: ReturnType<typeof createDb>;
+  appId: string;
+  sourceType:
+    | "sparkle"
+    | "github_releases"
+    | "manual"
+    | "homebrew_cask"
+    | "mac_app_store"
+    | "electron_generic"
+    | "rss_feed"
+    | "json_feed";
+  baseUrl: string;
+}) {
+  const normalizedUrl = normalizeSuggestedSourceUrl(params.sourceType, params.baseUrl);
+  return params.db
+    .select({
+      id: sources.id,
+      sourceType: sources.sourceType,
+      baseUrl: sources.baseUrl,
+      role: sources.role,
+      reviewStatus: sources.reviewStatus,
+      channel: sources.channel,
+    })
+    .from(sources)
+    .where(
+      and(
+        eq(sources.appId, params.appId),
+        eq(sources.sourceType, params.sourceType),
+        eq(sources.baseUrl, normalizedUrl),
+      ),
+    )
+    .get();
+}
+
+async function createSourceSuggestion(params: {
+  db: ReturnType<typeof createDb>;
+  appId: string;
+  appName: string;
+  lookupKey: string;
+  sourceType:
+    | "sparkle"
+    | "github_releases"
+    | "manual"
+    | "homebrew_cask"
+    | "mac_app_store"
+    | "electron_generic"
+    | "rss_feed"
+    | "json_feed";
+  baseUrl: string;
+  role?: "authority" | "corroborating" | "reference";
+  title?: string;
+  canonicalSnapshotJson?: string | null;
+  evidenceType: "scan" | "crawl" | "fetch_parse" | "install_verify" | "homebrew" | "manual";
+  evidenceFingerprint: string;
+  evidencePayloadJson: string;
+  now: string;
+}): Promise<void> {
+  const existing = await findExistingSource({
+    db: params.db,
+    appId: params.appId,
+    sourceType: params.sourceType,
+    baseUrl: params.baseUrl,
+  });
+  if (existing) return;
+
+  const normalizedUrl = normalizeSuggestedSourceUrl(params.sourceType, params.baseUrl);
+  await upsertSuggestion({
+    db: params.db,
+    queueType: "new_source",
+    dedupeKey: `source:${params.appId}:${params.sourceType}:${normalizedUrl}`,
+    title:
+      params.title ??
+      `Review ${params.sourceType.replaceAll("_", " ")} source for ${params.appName}`,
+    canonicalSnapshotJson: params.canonicalSnapshotJson ?? null,
+    proposedChangeJson: JSON.stringify({
+      appId: params.appId,
+      sourceType: params.sourceType,
+      baseUrl: normalizedUrl,
+      role: params.role ?? defaultSuggestedRoleForSourceType(params.sourceType),
+      parserKey: defaultSuggestedParserKeyForSourceType(params.sourceType),
+    }),
+    appId: params.appId,
+    bundleKey: params.lookupKey,
+    evidenceType: params.evidenceType,
+    evidenceFingerprint: params.evidenceFingerprint,
+    evidencePayloadJson: params.evidencePayloadJson,
+    now: params.now,
+  });
+}
+
+async function createAliasSuggestion(params: {
+  db: ReturnType<typeof createDb>;
+  appId: string;
+  appName: string;
+  lookupKey: string;
+  aliasType:
+    | "bundle_id"
+    | "name"
+    | "team_id"
+    | "sparkle_feed"
+    | "homepage"
+    | "download_pattern"
+    | "github_repo"
+    | "mas_app_id"
+    | "homebrew_cask";
+  value: string;
+  canonicalSnapshotJson?: string | null;
+  evidenceType: "scan" | "crawl" | "fetch_parse" | "install_verify" | "homebrew" | "manual";
+  evidenceFingerprint: string;
+  evidencePayloadJson: string;
+  now: string;
+}): Promise<void> {
+  const existing = await findExistingAlias({
+    db: params.db,
+    appId: params.appId,
+    aliasType: params.aliasType,
+    value: params.value,
+  });
+  if (existing) return;
+
+  await upsertSuggestion({
+    db: params.db,
+    queueType: "metadata_change",
+    dedupeKey: `alias:${params.appId}:${params.aliasType}:${normalizeAliasValue(params.aliasType, params.value)}`,
+    title: `Review ${params.aliasType.replaceAll("_", " ")} for ${params.appName}`,
+    canonicalSnapshotJson: params.canonicalSnapshotJson ?? null,
+    proposedChangeJson: JSON.stringify({
+      changeType: "alias",
+      appId: params.appId,
+      aliasType: params.aliasType,
+      value: params.value,
+    }),
+    appId: params.appId,
+    bundleKey: params.lookupKey,
+    evidenceType: params.evidenceType,
+    evidenceFingerprint: params.evidenceFingerprint,
+    evidencePayloadJson: params.evidencePayloadJson,
+    now: params.now,
+  });
+}
+
+async function createTrustAssertionSuggestion(params: {
+  db: ReturnType<typeof createDb>;
+  appId: string;
+  appName: string;
+  lookupKey: string;
+  sourceId?: string | null;
+  assertionType:
+    | "sparkle_public_key"
+    | "bundle_id"
+    | "team_id"
+    | "notarization_expectation"
+    | "signature_requirement";
+  value: string;
+  canonicalSnapshotJson?: string | null;
+  evidenceFingerprint: string;
+  evidencePayloadJson: string;
+  now: string;
+}): Promise<void> {
+  const existingAssertion = await params.db
+    .select({ id: trustAssertions.id })
+    .from(trustAssertions)
+    .where(
+      and(
+        eq(trustAssertions.appId, params.appId),
+        params.sourceId
+          ? eq(trustAssertions.sourceId, params.sourceId)
+          : sql`${trustAssertions.sourceId} is null`,
+        eq(trustAssertions.assertionType, params.assertionType),
+        eq(trustAssertions.value, params.value),
+      ),
+    )
+    .get();
+  if (existingAssertion) return;
+
+  await upsertSuggestion({
+    db: params.db,
+    queueType: "metadata_change",
+    dedupeKey: `trust:${params.appId}:${params.sourceId ?? "none"}:${params.assertionType}:${params.value}`,
+    title: `Review ${params.assertionType.replaceAll("_", " ")} for ${params.appName}`,
+    canonicalSnapshotJson: params.canonicalSnapshotJson ?? null,
+    proposedChangeJson: JSON.stringify({
+      changeType: "trust_assertion",
+      appId: params.appId,
+      sourceId: params.sourceId ?? null,
+      assertionType: params.assertionType,
+      value: params.value,
+    }),
+    appId: params.appId,
+    sourceId: params.sourceId ?? null,
+    bundleKey: params.lookupKey,
+    evidenceType: "scan",
+    evidenceFingerprint: params.evidenceFingerprint,
+    evidencePayloadJson: params.evidencePayloadJson,
+    now: params.now,
+  });
+}
+
+async function createAppMetadataSuggestion(params: {
+  db: ReturnType<typeof createDb>;
+  appId: string;
+  appName: string;
+  lookupKey: string;
+  canonicalName?: string;
+  vendorName?: string | null;
+  homepageUrl?: string | null;
+  canonicalSnapshotJson?: string | null;
+  evidenceType: "scan" | "crawl" | "fetch_parse" | "install_verify" | "homebrew" | "manual";
+  evidenceFingerprint: string;
+  evidencePayloadJson: string;
+  now: string;
+}): Promise<void> {
+  if (
+    !params.canonicalName &&
+    params.vendorName === undefined &&
+    params.homepageUrl === undefined
+  ) {
+    return;
+  }
+
+  await upsertSuggestion({
+    db: params.db,
+    queueType: "metadata_change",
+    dedupeKey: `app_fields:${params.appId}:${params.vendorName ?? ""}:${params.homepageUrl ?? ""}`,
+    title: `Review metadata for ${params.appName}`,
+    canonicalSnapshotJson: params.canonicalSnapshotJson ?? null,
+    proposedChangeJson: JSON.stringify({
+      changeType: "app_fields",
+      appId: params.appId,
+      canonicalName: params.canonicalName,
+      vendorName: params.vendorName ?? null,
+      homepageUrl: params.homepageUrl ?? null,
+    }),
+    appId: params.appId,
+    bundleKey: params.lookupKey,
+    evidenceType: params.evidenceType,
+    evidenceFingerprint: params.evidenceFingerprint,
+    evidencePayloadJson: params.evidencePayloadJson,
+    now: params.now,
+  });
+}
+
+async function createDiscoveryFollowupSuggestions(params: {
+  db: ReturnType<typeof createDb>;
+  appId: string;
+  appName: string;
+  lookupKey: string;
+  bundleId?: string | null;
+  discoveredRow: typeof discoveredApps.$inferSelect;
+  now: string;
+}): Promise<void> {
+  const { db, appId, appName, lookupKey, bundleId, discoveredRow, now } = params;
+  const [appRow, currentAuthoritySources] = await Promise.all([
+    db
+      .select({
+        id: apps.id,
+        canonicalName: apps.canonicalName,
+        vendorName: apps.vendorName,
+        homepageUrl: apps.homepageUrl,
+        status: apps.status,
+      })
+      .from(apps)
+      .where(eq(apps.id, appId))
+      .get(),
+    db
+      .select({
+        id: sources.id,
+        sourceType: sources.sourceType,
+        baseUrl: sources.baseUrl,
+        role: sources.role,
+        channel: sources.channel,
+      })
+      .from(sources)
+      .where(
+        and(
+          eq(sources.appId, appId),
+          eq(sources.reviewStatus, "approved"),
+          eq(sources.role, "authority"),
+        ),
+      )
+      .all(),
+  ]);
+
+  const canonicalSnapshotJson = appRow
+    ? JSON.stringify({
+        canonicalName: appRow.canonicalName,
+        vendorName: appRow.vendorName,
+        homepageUrl: appRow.homepageUrl,
+        status: appRow.status,
+        authoritySources: currentAuthoritySources.map((source) => ({
+          id: source.id,
+          sourceType: source.sourceType,
+          baseUrl: source.baseUrl,
+          channel: source.channel,
+        })),
+      })
+    : null;
+
+  if (
+    (discoveredRow.enrichedVendorName && discoveredRow.enrichedVendorName !== appRow?.vendorName) ||
+    (discoveredRow.enrichedHomepageUrl && discoveredRow.enrichedHomepageUrl !== appRow?.homepageUrl)
+  ) {
+    await createAppMetadataSuggestion({
+      db,
+      appId,
+      appName,
+      lookupKey,
+      vendorName: discoveredRow.enrichedVendorName ?? undefined,
+      homepageUrl: discoveredRow.enrichedHomepageUrl ?? undefined,
+      canonicalSnapshotJson,
+      evidenceType: "fetch_parse",
+      evidenceFingerprint: `metadata:${lookupKey}:${discoveredRow.enrichedVendorName ?? ""}:${discoveredRow.enrichedHomepageUrl ?? ""}`,
+      evidencePayloadJson: JSON.stringify({
+        vendorName: discoveredRow.enrichedVendorName ?? null,
+        homepageUrl: discoveredRow.enrichedHomepageUrl ?? null,
+      }),
+      now,
+    });
+  }
+
+  if (discoveredRow.homebrewCaskAppcastUrl) {
+    await createSourceSuggestion({
+      db,
+      appId,
+      appName,
+      lookupKey,
+      sourceType: "sparkle",
+      baseUrl: discoveredRow.homebrewCaskAppcastUrl,
+      title: `Review Homebrew-linked appcast for ${appName}`,
+      canonicalSnapshotJson,
+      evidenceType: "homebrew",
+      evidenceFingerprint: `homebrew-appcast:${lookupKey}:${discoveredRow.homebrewCaskAppcastUrl}`,
+      evidencePayloadJson: JSON.stringify({
+        homebrewCaskToken: discoveredRow.homebrewCaskToken ?? null,
+        homebrewCaskVersion: discoveredRow.homebrewCaskVersion ?? null,
+        appcastUrl: discoveredRow.homebrewCaskAppcastUrl,
+      }),
+      now,
+    });
+  }
+
+  if (discoveredRow.isMasApp && bundleId) {
+    const lookupUrl = macAppStoreLookupUrl(bundleId);
+    await createSourceSuggestion({
+      db,
+      appId,
+      appName,
+      lookupKey,
+      sourceType: "mac_app_store",
+      baseUrl: lookupUrl,
+      title: `Review Mac App Store source for ${appName}`,
+      canonicalSnapshotJson,
+      evidenceType: "fetch_parse",
+      evidenceFingerprint: `mas:${lookupKey}:${lookupUrl}`,
+      evidencePayloadJson: JSON.stringify({
+        bundleId,
+        lookupUrl,
+      }),
+      now,
+    });
+  }
+
+  const homepageUrl = discoveredRow.enrichedHomepageUrl ?? discoveredRow.homebrewCaskHomepage;
+  if (!homepageUrl) return;
+
+  const homepageCandidates = await fetchHomepageSourceCandidates(homepageUrl);
+  for (const candidate of homepageCandidates) {
+    await createSourceSuggestion({
+      db,
+      appId,
+      appName,
+      lookupKey,
+      sourceType: candidate.sourceType,
+      baseUrl: candidate.url,
+      role: candidate.role,
+      title: `Review ${candidate.sourceType.replaceAll("_", " ")} discovered from homepage for ${appName}`,
+      canonicalSnapshotJson,
+      evidenceType: "crawl",
+      evidenceFingerprint: `crawl:${lookupKey}:${candidate.sourceType}:${candidate.url}`,
+      evidencePayloadJson: JSON.stringify({
+        homepageUrl,
+        candidateUrl: candidate.url,
+        reason: candidate.reason,
+      }),
+      now,
+    });
+  }
 }
 
 /**
@@ -168,14 +906,18 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
     // Load app details
     const appMap = new Map<
       string,
-      { canonicalName: string; iconR2Key: string | null; isVerified: boolean }
+      {
+        canonicalName: string;
+        iconR2Key: string | null;
+        status: "draft" | "public" | "merged" | "deprecated" | "unlisted";
+      }
     >();
     const allApps = await db
       .select({
         id: apps.id,
         canonicalName: apps.canonicalName,
         iconR2Key: apps.iconR2Key,
-        isVerified: apps.isVerified,
+        status: apps.status,
       })
       .from(apps)
       .all();
@@ -183,7 +925,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       appMap.set(a.id, {
         canonicalName: a.canonicalName,
         iconR2Key: a.iconR2Key,
-        isVerified: a.isVerified,
+        status: a.status,
       });
     }
 
@@ -219,7 +961,13 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
     const allSources = await db
       .select({ appId: sources.appId, lastSuccessAt: sources.lastSuccessAt })
       .from(sources)
-      .where(eq(sources.status, "active"))
+      .where(
+        and(
+          eq(sources.status, "active"),
+          eq(sources.reviewStatus, "approved"),
+          eq(sources.role, "authority"),
+        ),
+      )
       .all();
     const latestSourceSuccessByApp = new Map<string, string | null>();
     for (const s of allSources) {
@@ -239,11 +987,15 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           bundleId: installedApp.bundleId,
           teamId: installedApp.teamId,
           version: installedApp.version,
+          sparkleFeedUrl: installedApp.sparkleFeedUrl,
+          homebrewCaskToken: installedApp.homebrewCaskToken,
         },
         aliasRecords,
       );
 
-      let decision: AppDecision["decision"] = "not_tracked";
+      let decision: AppDecision["decision"] = "local_only";
+      let trackingState: AppDecision["trackingState"] = "local_only";
+      let localReasonCode: AppDecision["localReasonCode"] = "not_found";
       let latestVersion: string | null = null;
       let latestVersionRaw: string | null = null;
       let releasedAt: string | null = null;
@@ -254,12 +1006,11 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       let staleSince: string | null = null;
 
       const appInfo = matchResult.appId ? appMap.get(matchResult.appId) : undefined;
-      const isVerified = appInfo?.isVerified ?? false;
+      const isPublic = appInfo?.status === "public";
 
       if (matchResult.matched && matchResult.appId) {
-        if (!isVerified) {
-          // Unverified apps are not tracked — no update info returned
-          decision = "not_tracked";
+        if (!isPublic) {
+          localReasonCode = appInfo?.status === "draft" ? "matched_draft" : "no_approved_source";
         } else {
           const requestedChannel = perAppChannels[matchResult.appId] ?? defaultChannel;
           const channelMap = latestByAppChannel.get(matchResult.appId);
@@ -267,6 +1018,8 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
             ? (channelMap.get(requestedChannel) ?? channelMap.get("stable"))
             : undefined;
           if (latest) {
+            trackingState = "public";
+            localReasonCode = null;
             // Compute staleness
             const lastSuccess = latestSourceSuccessByApp.get(matchResult.appId) ?? null;
             staleSince = computeStaleSince(lastSuccess);
@@ -372,16 +1125,21 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 decision = "ambiguous";
               }
             } else {
-              decision = "not_tracked";
+              decision = "local_only";
+              trackingState = "local_only";
+              localReasonCode = "no_approved_source";
             }
           } else {
-            decision = "not_tracked";
+            trackingState = "local_only";
+            localReasonCode = "no_approved_source";
           }
         }
       }
 
       if (matchResult.ambiguous) {
         decision = "ambiguous";
+        trackingState = "local_only";
+        localReasonCode = "ambiguous_match";
       }
 
       const iconUrl = appInfo?.iconR2Key ? `${c.env.ASSETS_BASE_URL}/${appInfo.iconR2Key}` : null;
@@ -394,7 +1152,8 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         matchedAppName: matchResult.appName,
         matchConfidence: matchResult.confidence,
         decision,
-        isVerified,
+        trackingState,
+        localReasonCode,
         latestVersion,
         latestVersionRaw,
         homebrewCaskToken: matchResult.appId
@@ -421,16 +1180,22 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           string,
           {
             appName: string;
+            matchedAppId?: string | null;
             bundleId?: string | null;
             teamId?: string | null;
             version?: string | null;
             sparkleFeedUrl?: string | null;
+            sparklePublicKey?: string | null;
+            isSparkleApp?: boolean | null;
             isMasApp?: boolean | null;
+            isElectronApp?: boolean | null;
+            electronUpdateProvider?: string | null;
             electronUpdateUrl?: string | null;
             codeSigningAuthority?: string | null;
             appCategory?: string | null;
             minMacOSVersion?: string | null;
             iconBase64?: string | null;
+            homebrewCaskToken?: string | null;
           }
         >();
         for (const installedApp of request.apps) {
@@ -438,22 +1203,28 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
             (r) =>
               r.appName === installedApp.appName && r.bundleId === (installedApp.bundleId ?? null),
           );
-          if (result && result.matchedAppId !== null) continue;
+          if (result?.trackingState === "public") continue;
 
           const key = computeLookupKey(installedApp.appName, installedApp.bundleId);
           if (!unmatchedByKey.has(key)) {
             unmatchedByKey.set(key, {
               appName: installedApp.appName,
+              matchedAppId: result?.matchedAppId ?? null,
               bundleId: installedApp.bundleId,
               teamId: installedApp.teamId,
               version: installedApp.version,
               sparkleFeedUrl: installedApp.sparkleFeedUrl,
+              sparklePublicKey: installedApp.sparklePublicKey,
+              isSparkleApp: installedApp.isSparkleApp,
               isMasApp: installedApp.isMasApp,
+              isElectronApp: installedApp.isElectronApp,
+              electronUpdateProvider: installedApp.electronUpdateProvider,
               electronUpdateUrl: installedApp.electronUpdateUrl,
               codeSigningAuthority: installedApp.codeSigningAuthority,
               appCategory: installedApp.appCategory,
               minMacOSVersion: installedApp.minMacOSVersion,
               iconBase64: installedApp.iconBase64,
+              homebrewCaskToken: installedApp.homebrewCaskToken,
             });
           }
         }
@@ -485,18 +1256,112 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 sightingCount: sql`${discoveredApps.sightingCount} + 1`,
                 lastSeenAt: now,
                 updatedAt: now,
+                status: existing.linkedAppId ? "linked" : existing.status,
                 appName: app.bundleId && !existing.bundleId ? app.appName : existing.appName,
                 bundleId: app.bundleId ?? existing.bundleId,
                 teamId: app.teamId ?? existing.teamId,
                 sampleVersions: JSON.stringify(sampleVersions),
                 sparkleFeedUrl: app.sparkleFeedUrl ?? existing.sparkleFeedUrl,
+                sparklePublicKey: app.sparklePublicKey ?? existing.sparklePublicKey,
+                isSparkleApp: app.isSparkleApp ?? existing.isSparkleApp,
                 isMasApp: app.isMasApp ?? existing.isMasApp,
+                isElectronApp: app.isElectronApp ?? existing.isElectronApp,
+                electronUpdateProvider:
+                  app.electronUpdateProvider ?? existing.electronUpdateProvider,
                 electronUpdateUrl: app.electronUpdateUrl ?? existing.electronUpdateUrl,
                 codeSigningAuthority: app.codeSigningAuthority ?? existing.codeSigningAuthority,
                 appCategory: app.appCategory ?? existing.appCategory,
                 minMacOSVersion: app.minMacOSVersion ?? existing.minMacOSVersion,
+                homebrewCaskToken: app.homebrewCaskToken ?? existing.homebrewCaskToken,
               })
               .where(eq(discoveredApps.id, existing.id));
+
+            const draftAppId = await ensureDraftApp({
+              db,
+              discoveredAppId: existing.id,
+              existingAppId: existing.linkedAppId ?? app.matchedAppId ?? null,
+              appName: app.appName,
+              bundleId: app.bundleId,
+              teamId: app.teamId,
+              sparkleFeedUrl: app.sparkleFeedUrl,
+              homebrewCaskToken: app.homebrewCaskToken,
+              now,
+            });
+            await db
+              .update(discoveredApps)
+              .set({ linkedAppId: draftAppId, status: "linked", updatedAt: now })
+              .where(eq(discoveredApps.id, existing.id));
+
+            await upsertSuggestion({
+              db,
+              queueType: "new_app",
+              dedupeKey: `new_app:${draftAppId}`,
+              title: `Review draft app ${app.appName}`,
+              proposedChangeJson: JSON.stringify({
+                canonicalName: app.appName,
+                bundleId: app.bundleId ?? null,
+                teamId: app.teamId ?? null,
+              }),
+              appId: draftAppId,
+              bundleKey: existing.lookupKey,
+              evidenceType: "scan",
+              evidenceFingerprint: `scan:${existing.lookupKey}:${now}`,
+              evidencePayloadJson: JSON.stringify({
+                bundleId: app.bundleId ?? null,
+                teamId: app.teamId ?? null,
+                version: app.version ?? null,
+              }),
+              now,
+            });
+
+            if (app.sparkleFeedUrl) {
+              await upsertSuggestion({
+                db,
+                queueType: "new_source",
+                dedupeKey: `source:${draftAppId}:sparkle:${app.sparkleFeedUrl}`,
+                title: `Approve Sparkle source for ${app.appName}`,
+                proposedChangeJson: JSON.stringify({
+                  appId: draftAppId,
+                  sourceType: "sparkle",
+                  baseUrl: app.sparkleFeedUrl,
+                  role: "authority",
+                }),
+                appId: draftAppId,
+                bundleKey: existing.lookupKey,
+                evidenceType: "scan",
+                evidenceFingerprint: `sparkle:${existing.lookupKey}:${app.sparkleFeedUrl}`,
+                evidencePayloadJson: JSON.stringify({
+                  sparkleFeedUrl: app.sparkleFeedUrl,
+                  sparklePublicKey: app.sparklePublicKey ?? null,
+                }),
+                now,
+              });
+            }
+
+            if (app.electronUpdateUrl) {
+              await upsertSuggestion({
+                db,
+                queueType: "new_source",
+                dedupeKey: `source:${draftAppId}:electron:${app.electronUpdateUrl}`,
+                title: `Approve Electron feed for ${app.appName}`,
+                proposedChangeJson: JSON.stringify({
+                  appId: draftAppId,
+                  sourceType: "electron_generic",
+                  baseUrl: app.electronUpdateUrl,
+                  role: "authority",
+                  provider: app.electronUpdateProvider ?? null,
+                }),
+                appId: draftAppId,
+                bundleKey: existing.lookupKey,
+                evidenceType: "scan",
+                evidenceFingerprint: `electron:${existing.lookupKey}:${app.electronUpdateUrl}`,
+                evidencePayloadJson: JSON.stringify({
+                  electronUpdateUrl: app.electronUpdateUrl,
+                  electronUpdateProvider: app.electronUpdateProvider ?? null,
+                }),
+                now,
+              });
+            }
 
             // Store icon if not yet present
             if (!existing.iconR2Key && app.iconBase64) {
@@ -519,10 +1384,37 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 configKv: c.env.CONFIG_KV,
               });
             }
+
+            const refreshedDiscovered = await db
+              .select()
+              .from(discoveredApps)
+              .where(eq(discoveredApps.id, existing.id))
+              .get();
+            if (refreshedDiscovered) {
+              await createDiscoveryFollowupSuggestions({
+                db,
+                appId: draftAppId,
+                appName: app.appName,
+                lookupKey: existing.lookupKey,
+                bundleId: app.bundleId,
+                discoveredRow: refreshedDiscovered,
+                now,
+              });
+            }
           } else {
             const sampleVersions = app.version ? [app.version] : [];
-            const initialStatus = app.isMasApp ? "mas_app" : "pending";
             const newId = generateId(idPrefixes.discoveredApp);
+            const draftAppId = await ensureDraftApp({
+              db,
+              discoveredAppId: newId,
+              existingAppId: app.matchedAppId ?? null,
+              appName: app.appName,
+              bundleId: app.bundleId,
+              teamId: app.teamId,
+              sparkleFeedUrl: app.sparkleFeedUrl,
+              homebrewCaskToken: app.homebrewCaskToken,
+              now,
+            });
             await db.insert(discoveredApps).values({
               id: newId,
               lookupKey: key,
@@ -532,17 +1424,94 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
               sightingCount: 1,
               firstSeenAt: now,
               lastSeenAt: now,
-              status: initialStatus,
+              status: "linked",
+              linkedAppId: draftAppId,
               sampleVersions: JSON.stringify(sampleVersions),
               sparkleFeedUrl: app.sparkleFeedUrl ?? null,
+              sparklePublicKey: app.sparklePublicKey ?? null,
+              isSparkleApp: app.isSparkleApp ?? null,
               isMasApp: app.isMasApp ?? null,
+              isElectronApp: app.isElectronApp ?? null,
+              electronUpdateProvider: app.electronUpdateProvider ?? null,
               electronUpdateUrl: app.electronUpdateUrl ?? null,
               codeSigningAuthority: app.codeSigningAuthority ?? null,
               appCategory: app.appCategory ?? null,
               minMacOSVersion: app.minMacOSVersion ?? null,
+              homebrewCaskToken: app.homebrewCaskToken ?? null,
               createdAt: now,
               updatedAt: now,
             });
+
+            await upsertSuggestion({
+              db,
+              queueType: "new_app",
+              dedupeKey: `new_app:${draftAppId}`,
+              title: `Review draft app ${app.appName}`,
+              proposedChangeJson: JSON.stringify({
+                canonicalName: app.appName,
+                bundleId: app.bundleId ?? null,
+                teamId: app.teamId ?? null,
+              }),
+              appId: draftAppId,
+              bundleKey: key,
+              evidenceType: "scan",
+              evidenceFingerprint: `scan:${key}:${now}`,
+              evidencePayloadJson: JSON.stringify({
+                bundleId: app.bundleId ?? null,
+                teamId: app.teamId ?? null,
+                version: app.version ?? null,
+              }),
+              now,
+            });
+
+            if (app.sparkleFeedUrl) {
+              await upsertSuggestion({
+                db,
+                queueType: "new_source",
+                dedupeKey: `source:${draftAppId}:sparkle:${app.sparkleFeedUrl}`,
+                title: `Approve Sparkle source for ${app.appName}`,
+                proposedChangeJson: JSON.stringify({
+                  appId: draftAppId,
+                  sourceType: "sparkle",
+                  baseUrl: app.sparkleFeedUrl,
+                  role: "authority",
+                }),
+                appId: draftAppId,
+                bundleKey: key,
+                evidenceType: "scan",
+                evidenceFingerprint: `sparkle:${key}:${app.sparkleFeedUrl}`,
+                evidencePayloadJson: JSON.stringify({
+                  sparkleFeedUrl: app.sparkleFeedUrl,
+                  sparklePublicKey: app.sparklePublicKey ?? null,
+                }),
+                now,
+              });
+            }
+
+            if (app.electronUpdateUrl) {
+              await upsertSuggestion({
+                db,
+                queueType: "new_source",
+                dedupeKey: `source:${draftAppId}:electron:${app.electronUpdateUrl}`,
+                title: `Approve Electron feed for ${app.appName}`,
+                proposedChangeJson: JSON.stringify({
+                  appId: draftAppId,
+                  sourceType: "electron_generic",
+                  baseUrl: app.electronUpdateUrl,
+                  role: "authority",
+                  provider: app.electronUpdateProvider ?? null,
+                }),
+                appId: draftAppId,
+                bundleKey: key,
+                evidenceType: "scan",
+                evidenceFingerprint: `electron:${key}:${app.electronUpdateUrl}`,
+                evidencePayloadJson: JSON.stringify({
+                  electronUpdateUrl: app.electronUpdateUrl,
+                  electronUpdateProvider: app.electronUpdateProvider ?? null,
+                }),
+                now,
+              });
+            }
 
             // Store icon if provided
             if (app.iconBase64) {
@@ -555,7 +1524,6 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
               }
             }
 
-            // Enrich newly discovered app if it has a feed URL or is a MAS app
             if (app.sparkleFeedUrl || app.electronUpdateUrl || (app.isMasApp && app.bundleId)) {
               await enrichDiscoveredApp({
                 discoveredAppId: newId,
@@ -563,6 +1531,23 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 githubToken: c.env.GITHUB_TOKEN,
                 assetsBucket: c.env.ASSETS_BUCKET,
                 configKv: c.env.CONFIG_KV,
+              });
+            }
+
+            const refreshedDiscovered = await db
+              .select()
+              .from(discoveredApps)
+              .where(eq(discoveredApps.id, newId))
+              .get();
+            if (refreshedDiscovered) {
+              await createDiscoveryFollowupSuggestions({
+                db,
+                appId: draftAppId,
+                appName: app.appName,
+                lookupKey: key,
+                bundleId: app.bundleId,
+                discoveredRow: refreshedDiscovered,
+                now,
               });
             }
           }
@@ -599,6 +1584,172 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
             }
           } catch {
             // Non-critical — continue
+          }
+        }
+
+        // Keep approved apps accruing alias, source, and trust suggestions instead of icons only
+        for (const installedApp of request.apps) {
+          const result = results.find(
+            (row) =>
+              row.appName === installedApp.appName &&
+              row.bundleId === (installedApp.bundleId ?? null),
+          );
+          if (!result?.matchedAppId || result.trackingState !== "public") continue;
+
+          const appRow = await db
+            .select({
+              id: apps.id,
+              canonicalName: apps.canonicalName,
+              vendorName: apps.vendorName,
+              homepageUrl: apps.homepageUrl,
+              status: apps.status,
+            })
+            .from(apps)
+            .where(eq(apps.id, result.matchedAppId))
+            .get();
+          if (!appRow) continue;
+
+          const lookupKey = computeLookupKey(installedApp.appName, installedApp.bundleId);
+          const canonicalSnapshotJson = JSON.stringify({
+            canonicalName: appRow.canonicalName,
+            vendorName: appRow.vendorName,
+            homepageUrl: appRow.homepageUrl,
+            status: appRow.status,
+          });
+
+          if (installedApp.bundleId) {
+            await createAliasSuggestion({
+              db,
+              appId: appRow.id,
+              appName: appRow.canonicalName,
+              lookupKey,
+              aliasType: "bundle_id",
+              value: installedApp.bundleId,
+              canonicalSnapshotJson,
+              evidenceType: "scan",
+              evidenceFingerprint: `public-bundle:${lookupKey}:${installedApp.bundleId}`,
+              evidencePayloadJson: JSON.stringify({ bundleId: installedApp.bundleId }),
+              now,
+            });
+          }
+
+          if (installedApp.teamId) {
+            await createAliasSuggestion({
+              db,
+              appId: appRow.id,
+              appName: appRow.canonicalName,
+              lookupKey,
+              aliasType: "team_id",
+              value: installedApp.teamId,
+              canonicalSnapshotJson,
+              evidenceType: "scan",
+              evidenceFingerprint: `public-team:${lookupKey}:${installedApp.teamId}`,
+              evidencePayloadJson: JSON.stringify({ teamId: installedApp.teamId }),
+              now,
+            });
+          }
+
+          if (installedApp.homebrewCaskToken) {
+            await createAliasSuggestion({
+              db,
+              appId: appRow.id,
+              appName: appRow.canonicalName,
+              lookupKey,
+              aliasType: "homebrew_cask",
+              value: installedApp.homebrewCaskToken,
+              canonicalSnapshotJson,
+              evidenceType: "scan",
+              evidenceFingerprint: `public-homebrew:${lookupKey}:${installedApp.homebrewCaskToken}`,
+              evidencePayloadJson: JSON.stringify({
+                homebrewCaskToken: installedApp.homebrewCaskToken,
+              }),
+              now,
+            });
+          }
+
+          if (installedApp.sparkleFeedUrl) {
+            await createSourceSuggestion({
+              db,
+              appId: appRow.id,
+              appName: appRow.canonicalName,
+              lookupKey,
+              sourceType: "sparkle",
+              baseUrl: installedApp.sparkleFeedUrl,
+              canonicalSnapshotJson,
+              evidenceType: "scan",
+              evidenceFingerprint: `public-sparkle:${lookupKey}:${installedApp.sparkleFeedUrl}`,
+              evidencePayloadJson: JSON.stringify({
+                sparkleFeedUrl: installedApp.sparkleFeedUrl,
+                sparklePublicKey: installedApp.sparklePublicKey ?? null,
+              }),
+              now,
+            });
+          }
+
+          if (installedApp.electronUpdateUrl) {
+            await createSourceSuggestion({
+              db,
+              appId: appRow.id,
+              appName: appRow.canonicalName,
+              lookupKey,
+              sourceType: "electron_generic",
+              baseUrl: installedApp.electronUpdateUrl,
+              canonicalSnapshotJson,
+              evidenceType: "scan",
+              evidenceFingerprint: `public-electron:${lookupKey}:${installedApp.electronUpdateUrl}`,
+              evidencePayloadJson: JSON.stringify({
+                electronUpdateUrl: installedApp.electronUpdateUrl,
+                electronUpdateProvider: installedApp.electronUpdateProvider ?? null,
+              }),
+              now,
+            });
+          }
+
+          if (installedApp.isMasApp && installedApp.bundleId) {
+            const lookupUrl = macAppStoreLookupUrl(installedApp.bundleId);
+            await createSourceSuggestion({
+              db,
+              appId: appRow.id,
+              appName: appRow.canonicalName,
+              lookupKey,
+              sourceType: "mac_app_store",
+              baseUrl: lookupUrl,
+              canonicalSnapshotJson,
+              evidenceType: "scan",
+              evidenceFingerprint: `public-mas:${lookupKey}:${lookupUrl}`,
+              evidencePayloadJson: JSON.stringify({
+                bundleId: installedApp.bundleId,
+                lookupUrl,
+              }),
+              now,
+            });
+          }
+
+          if (installedApp.sparklePublicKey) {
+            const sparkleSource = installedApp.sparkleFeedUrl
+              ? await findExistingSource({
+                  db,
+                  appId: appRow.id,
+                  sourceType: "sparkle",
+                  baseUrl: installedApp.sparkleFeedUrl,
+                })
+              : null;
+            await createTrustAssertionSuggestion({
+              db,
+              appId: appRow.id,
+              appName: appRow.canonicalName,
+              lookupKey,
+              sourceId: sparkleSource?.id ?? null,
+              assertionType: "sparkle_public_key",
+              value: installedApp.sparklePublicKey,
+              canonicalSnapshotJson,
+              evidenceFingerprint: `public-sparkle-key:${lookupKey}:${installedApp.sparklePublicKey}`,
+              evidencePayloadJson: JSON.stringify({
+                sparkleFeedUrl: installedApp.sparkleFeedUrl ?? null,
+                sparklePublicKey: installedApp.sparklePublicKey,
+              }),
+              now,
+            });
           }
         }
       })(),

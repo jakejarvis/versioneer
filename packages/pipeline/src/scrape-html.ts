@@ -1,6 +1,13 @@
 import * as cheerio from "cheerio";
 
 export type CheerioDoc = cheerio.CheerioAPI;
+export interface HomepageSourceCandidate {
+  sourceType: "sparkle" | "github_releases" | "electron_generic" | "rss_feed" | "json_feed";
+  url: string;
+  role: "authority" | "reference";
+  parserKey: string;
+  reason: string;
+}
 
 /**
  * Fetches a URL and returns a parsed cheerio document.
@@ -132,10 +139,170 @@ export function extractTitle(doc: CheerioDoc): string | null {
   return title ? title.trim() : null;
 }
 
-function resolveUrl(href: string, base: string): string {
+export function discoverHomepageSourceCandidates(
+  doc: CheerioDoc,
+  baseUrl: string,
+): HomepageSourceCandidate[] {
+  const candidates = new Map<string, HomepageSourceCandidate>();
+  const base = safeParseUrl(baseUrl);
+  if (!base) return [];
+
+  const addCandidate = (candidate: HomepageSourceCandidate) => {
+    const key = `${candidate.sourceType}:${candidate.url}`;
+    if (!candidates.has(key)) {
+      candidates.set(key, candidate);
+    }
+  };
+
+  doc('link[rel~="alternate"][href]').each((_, element) => {
+    const href = doc(element).attr("href");
+    if (!href) return;
+    const url = resolveUrl(href, baseUrl);
+    const parsed = safeParseUrl(url);
+    if (!parsed || parsed.origin !== base.origin) return;
+
+    const type = (doc(element).attr("type") ?? "").toLowerCase();
+    const pathname = parsed.pathname.toLowerCase();
+    if (
+      type.includes("rss") ||
+      type.includes("atom") ||
+      pathname.endsWith(".rss") ||
+      pathname.endsWith(".atom")
+    ) {
+      addCandidate({
+        sourceType: "rss_feed",
+        url,
+        role: "reference",
+        parserKey: "rss-reference",
+        reason: "homepage alternate feed link",
+      });
+      return;
+    }
+
+    if (type.includes("json") || pathname.endsWith(".json")) {
+      addCandidate({
+        sourceType: "json_feed",
+        url,
+        role: "reference",
+        parserKey: "json-reference",
+        reason: "homepage alternate JSON feed",
+      });
+    }
+  });
+
+  doc("a[href], link[href]").each((_, element) => {
+    const href = doc(element).attr("href");
+    if (!href) return;
+    if (href.startsWith("mailto:") || href.startsWith("javascript:")) return;
+
+    const url = resolveUrl(href, baseUrl);
+    const parsed = safeParseUrl(url);
+    if (!parsed) return;
+    const pathname = parsed.pathname.toLowerCase();
+
+    const githubRepo = normalizeGitHubRepoUrl(url);
+    if (githubRepo) {
+      addCandidate({
+        sourceType: "github_releases",
+        url: githubRepo,
+        role: "authority",
+        parserKey: "github-releases",
+        reason: "homepage GitHub repository link",
+      });
+      return;
+    }
+
+    if (parsed.origin !== base.origin) return;
+
+    if (pathname.endsWith("/latest-mac.yml") || pathname.endsWith("/latest.yml")) {
+      addCandidate({
+        sourceType: "electron_generic",
+        url,
+        role: "authority",
+        parserKey: "electron-generic",
+        reason: "homepage Electron update manifest",
+      });
+      return;
+    }
+
+    if (pathname.includes("appcast") || pathname.includes("sparkle")) {
+      addCandidate({
+        sourceType: "sparkle",
+        url,
+        role: "authority",
+        parserKey: "sparkle",
+        reason: "homepage Sparkle appcast link",
+      });
+      return;
+    }
+
+    if (
+      pathname.endsWith(".rss") ||
+      pathname.endsWith(".atom") ||
+      pathname.endsWith("/feed") ||
+      pathname.endsWith("/feed.xml") ||
+      pathname.endsWith("/rss") ||
+      pathname.endsWith("/rss.xml") ||
+      pathname.endsWith("/atom.xml")
+    ) {
+      addCandidate({
+        sourceType: "rss_feed",
+        url,
+        role: "reference",
+        parserKey: "rss-reference",
+        reason: "homepage RSS or Atom feed link",
+      });
+      return;
+    }
+
+    if (
+      pathname.endsWith(".json") &&
+      /(release|releases|update|updates|feed|downloads?)/.test(pathname)
+    ) {
+      addCandidate({
+        sourceType: "json_feed",
+        url,
+        role: "reference",
+        parserKey: "json-reference",
+        reason: "homepage JSON update link",
+      });
+    }
+  });
+
+  return [...candidates.values()];
+}
+
+export async function fetchHomepageSourceCandidates(
+  baseUrl: string,
+  options: { timeoutMs?: number; headers?: Record<string, string> } = {},
+): Promise<HomepageSourceCandidate[]> {
+  const doc = await fetchAndParse(baseUrl, options);
+  if (!doc) return [];
+  return discoverHomepageSourceCandidates(doc, baseUrl);
+}
+
+export function resolveUrl(href: string, base: string): string {
   try {
     return new URL(href, base).toString();
   } catch {
     return href;
   }
+}
+
+function safeParseUrl(url: string): URL | null {
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeGitHubRepoUrl(url: string): string | null {
+  const parsed = safeParseUrl(url);
+  if (!parsed) return null;
+  if (parsed.hostname !== "github.com" && parsed.hostname !== "www.github.com") return null;
+
+  const [owner, repo] = parsed.pathname.split("/").filter(Boolean);
+  if (!owner || !repo) return null;
+  return `https://github.com/${owner}/${repo}`;
 }

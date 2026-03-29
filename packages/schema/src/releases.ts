@@ -1,7 +1,7 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import { apps } from "./catalog";
-import { parserRuns } from "./sources";
+import { sources, parserRuns } from "./sources";
 
 export const releases = sqliteTable(
   "releases",
@@ -17,6 +17,7 @@ export const releases = sqliteTable(
     releasedAt: text("released_at"),
     isPrerelease: integer("is_prerelease", { mode: "boolean" }).notNull().default(false),
     sourceConfidence: integer("source_confidence"),
+    publishedBySourceId: text("published_by_source_id").references(() => sources.id),
     status: text("status", { enum: ["active", "superseded", "draft"] })
       .notNull()
       .default("active"),
@@ -95,6 +96,7 @@ export const appLatestReleases = sqliteTable(
     releaseId: text("release_id")
       .notNull()
       .references(() => releases.id),
+    authoritySourceId: text("authority_source_id").references(() => sources.id),
     artifactId: text("artifact_id"),
     versionNormalized: text("version_normalized").notNull(),
     versionRaw: text("version_raw").notNull(),

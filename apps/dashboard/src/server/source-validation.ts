@@ -4,6 +4,7 @@ import {
   githubReleasesParser,
   homebrewCaskParser,
   macAppStoreParser,
+  electronGenericParser,
 } from "@versioneer/parsers";
 import { githubApiHeaders } from "@versioneer/pipeline";
 import { env } from "cloudflare:workers";
@@ -13,17 +14,24 @@ export const validateSource = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       url: z.string().url(),
-      sourceType: z.enum(["sparkle", "github_releases", "homebrew_cask", "mac_app_store"]),
+      sourceType: z.enum([
+        "sparkle",
+        "github_releases",
+        "homebrew_cask",
+        "mac_app_store",
+        "electron_generic",
+      ]),
     }),
   )
   .handler(async ({ data }) => {
     const { url, sourceType } = data;
+    const fetchUrl = sourceType === "electron_generic" ? resolveElectronFeedUrl(url) : url;
 
     let response: Response;
     try {
       const headers: Record<string, string> =
         sourceType === "github_releases" ? githubApiHeaders(env.GITHUB_TOKEN) : {};
-      response = await fetch(url, {
+      response = await fetch(fetchUrl, {
         signal: AbortSignal.timeout(10_000),
         headers,
       });
@@ -57,8 +65,13 @@ export const validateSource = createServerFn({ method: "POST" })
           ? homebrewCaskParser
           : sourceType === "mac_app_store"
             ? macAppStoreParser
-            : githubReleasesParser;
-    const parsed = parser.parse(body);
+            : sourceType === "electron_generic"
+              ? electronGenericParser
+              : githubReleasesParser;
+    const parsed = parser.parse(
+      body,
+      sourceType === "electron_generic" ? { sourceBaseUrl: url } : undefined,
+    );
 
     if (parsed.releases.length === 0) {
       return {
@@ -88,3 +101,9 @@ export const validateSource = createServerFn({ method: "POST" })
       })),
     };
   });
+
+function resolveElectronFeedUrl(url: string): string {
+  if (url.endsWith("latest-mac.yml") || url.endsWith("latest.yml")) return url;
+  const normalized = url.endsWith("/") ? url : `${url}/`;
+  return `${normalized}latest-mac.yml`;
+}

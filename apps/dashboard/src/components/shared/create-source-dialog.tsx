@@ -20,13 +20,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type SourceType = "sparkle" | "github_releases" | "manual" | "homebrew_cask" | "mac_app_store";
+type SourceType =
+  | "sparkle"
+  | "github_releases"
+  | "manual"
+  | "homebrew_cask"
+  | "mac_app_store"
+  | "electron_generic"
+  | "rss_feed"
+  | "json_feed";
 
 const PARSER_KEY_DEFAULTS: Record<SourceType, string> = {
   sparkle: "sparkle",
   github_releases: "github_releases",
   homebrew_cask: "homebrew_cask",
   mac_app_store: "mac_app_store",
+  electron_generic: "electron_generic",
+  rss_feed: "manual",
+  json_feed: "manual",
   manual: "manual",
 };
 
@@ -121,6 +132,7 @@ export function CreateSourceDialog({ appId, open, onOpenChange }: CreateSourceDi
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="sparkle">Sparkle</SelectItem>
+                    <SelectItem value="electron_generic">Electron Generic</SelectItem>
                     <SelectItem value="github_releases">GitHub Releases</SelectItem>
                     <SelectItem value="homebrew_cask">Homebrew Cask</SelectItem>
                     <SelectItem value="mac_app_store">Mac App Store</SelectItem>

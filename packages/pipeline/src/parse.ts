@@ -57,10 +57,13 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
   const body = await r2Object.text();
 
   const parserRunId = generateId(idPrefixes.parserRun);
-  const config = source.configJson ? JSON.parse(source.configJson) : undefined;
+  const config = source.configJson ? JSON.parse(source.configJson) : {};
 
   try {
-    const output = parser.parse(body, config);
+    const output = parser.parse(body, {
+      ...config,
+      sourceBaseUrl: source.baseUrl,
+    });
 
     // Insert parser run
     await db.insert(parserRuns).values({
@@ -131,6 +134,7 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
           releasedAt: parsedRelease.publishedAt ?? null,
           isPrerelease: parsedRelease.isPrerelease,
           sourceConfidence: output.confidence,
+          publishedBySourceId: source.id,
           releaseNotesHtml: parsedRelease.releaseNotesBody
             ? normalizeReleaseNotes(
                 parsedRelease.releaseNotesBody,
@@ -195,15 +199,18 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
       appId: source.appId,
     });
 
-    // Auto-verify: on first successful parse, mark the app as verified
-    if (output.releases.length > 0) {
+    if (
+      output.releases.length > 0 &&
+      source.reviewStatus === "approved" &&
+      source.role === "authority"
+    ) {
       const app = await db.select().from(apps).where(eq(apps.id, source.appId)).get();
-      if (app && !app.isVerified) {
+      if (app && app.status === "draft") {
         await db
           .update(apps)
           .set({
-            isVerified: true,
-            verifiedAt: new Date().toISOString(),
+            status: "public",
+            publicTrackedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           })
           .where(eq(apps.id, source.appId));

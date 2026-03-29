@@ -1,1 +1,0 @@
-ALTER TABLE `releases` ADD `release_notes_html` text;

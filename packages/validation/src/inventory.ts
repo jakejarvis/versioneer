@@ -9,16 +9,20 @@ export const installedAppSchema = z.object({
   version: z.string().max(200).optional(),
   buildNumber: z.string().max(200).optional(),
   teamId: z.string().max(100).optional(),
-  pathHash: z.string().max(100).optional(),
   architecture: z.string().max(50).optional(),
   sparkleFeedUrl: z.string().url().max(2000).optional(),
+  sparklePublicKey: z.string().max(500).optional(),
+  isSparkleApp: z.boolean().optional(),
   isMasApp: z.boolean().optional(),
+  isElectronApp: z.boolean().optional(),
+  electronUpdateProvider: z.string().max(100).optional(),
   electronUpdateUrl: z.string().url().max(2000).optional(),
   codeSigningAuthority: z.string().max(500).optional(),
   appCategory: z.string().max(200).optional(),
   minMacOSVersion: z.string().max(50).optional(),
   iconBase64: z.string().max(500000).optional(),
   isHomebrewInstalled: z.boolean().optional(),
+  homebrewCaskToken: z.string().max(200).optional(),
 });
 
 export type InstalledApp = z.infer<typeof installedAppSchema>;
@@ -49,8 +53,17 @@ export const appDecisionSchema = z.object({
   matchedAppId: z.string().nullable(),
   matchedAppName: z.string().nullable(),
   matchConfidence: z.number().nullable(),
-  decision: z.enum(["up_to_date", "update_available", "ambiguous", "not_tracked"]),
-  isVerified: z.boolean(),
+  decision: z.enum(["up_to_date", "update_available", "ambiguous", "local_only"]),
+  trackingState: z.enum(["public", "local_only"]),
+  localReasonCode: z
+    .enum([
+      "no_public_identity",
+      "no_approved_source",
+      "matched_draft",
+      "ambiguous_match",
+      "not_found",
+    ])
+    .nullable(),
   latestVersion: z.string().nullable(),
   latestVersionRaw: z.string().nullable(),
   latestReleaseId: z.string().nullable(),

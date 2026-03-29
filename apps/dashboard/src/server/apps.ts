@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createDb } from "@versioneer/db";
+import { normalizeAliasValue } from "@versioneer/identity";
 import {
   apps,
   appAliases,
@@ -15,6 +16,7 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
 import { buildAppSortDescriptors } from "./list-helpers";
 import { authMiddleware } from "./middleware";
 
@@ -60,7 +62,7 @@ export const listApps = createServerFn({ method: "GET" })
     z.object({
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
-      status: z.enum(["active", "deprecated", "merged", "unlisted"]).optional(),
+      status: z.enum(["draft", "public", "deprecated", "merged", "unlisted"]).optional(),
       search: z.string().optional(),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,
@@ -159,7 +161,7 @@ export const createApp = createServerFn({ method: "POST" })
       vendorName: data.vendorName ?? null,
       homepageUrl: data.homepageUrl ?? null,
       notes: data.notes ?? null,
-      status: "active",
+      status: "draft",
       createdAt: now,
       updatedAt: now,
     });
@@ -197,9 +199,6 @@ export const updateApp = createServerFn({ method: "POST" })
     if (fields.status !== undefined) updates.status = fields.status;
     if (fields.mergedIntoAppId !== undefined) updates.mergedIntoAppId = fields.mergedIntoAppId;
     if (fields.notes !== undefined) updates.notes = fields.notes;
-    if (fields.isVerified !== undefined) updates.isVerified = fields.isVerified;
-    if (fields.installStrategyOverride !== undefined)
-      updates.installStrategyOverride = fields.installStrategyOverride;
     if (fields.defaultReleaseNotesUrl !== undefined)
       updates.defaultReleaseNotesUrl = fields.defaultReleaseNotesUrl;
     if (fields.iconR2Key !== undefined) updates.iconR2Key = fields.iconR2Key;
@@ -238,13 +237,31 @@ export const createAlias = createServerFn({ method: "POST" })
     const db = createDb(env.DB);
     const now = new Date().toISOString();
     const id = generateId(idPrefixes.alias);
+    const normalizedValue = normalizeAliasValue(aliasData.aliasType, aliasData.value);
+
+    try {
+      await assertNoConflictingExactAlias(db, {
+        aliasType: aliasData.aliasType,
+        value: aliasData.value,
+        appId,
+        isExact: aliasData.isExact,
+      });
+    } catch (error) {
+      if (error instanceof AliasConflictError) {
+        throw new Error(
+          `Conflicting ${aliasData.aliasType.replaceAll("_", " ")} already belongs to app ${error.appId}`,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
 
     await db.insert(appAliases).values({
       id,
       appId,
       aliasType: aliasData.aliasType,
       value: aliasData.value,
-      normalizedValue: aliasData.normalizedValue ?? aliasData.value.toLowerCase(),
+      normalizedValue,
       isExact: aliasData.isExact,
       priority: aliasData.priority,
       confidenceWeight: aliasData.confidenceWeight,

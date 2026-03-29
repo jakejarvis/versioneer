@@ -1,6 +1,6 @@
 import { createDb } from "@versioneer/db";
 import { appAliases, discoveredApps, generateId, idPrefixes } from "@versioneer/schema";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, isNotNull, or } from "drizzle-orm";
 
 import type { Env } from "./types";
 
@@ -209,7 +209,12 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
       homebrewCaskToken: discoveredApps.homebrewCaskToken,
     })
     .from(discoveredApps)
-    .where(and(isNotNull(discoveredApps.bundleId), eq(discoveredApps.status, "pending")))
+    .where(
+      and(
+        isNotNull(discoveredApps.bundleId),
+        or(eq(discoveredApps.status, "pending"), eq(discoveredApps.status, "linked")),
+      ),
+    )
     .all();
 
   // Load existing homebrew_cask aliases to avoid duplicates

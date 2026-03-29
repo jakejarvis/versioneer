@@ -24,13 +24,12 @@ describe("entity summary shaping", () => {
       canonicalName: "Test App",
       vendorName: "Versioneer",
       homepageUrl: null,
-      status: "active",
+      status: "public",
       mergedIntoAppId: null,
       notes: null,
-      isVerified: true,
-      verifiedAt: "2026-01-01T00:00:00.000Z",
-      installStrategyOverride: null,
+      defaultReleaseNotesUrl: null,
       iconR2Key: "icons/test.png",
+      publicTrackedAt: "2026-01-01T00:00:00.000Z",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-02T00:00:00.000Z",
     } as Parameters<typeof toAppSummary>[0];
@@ -44,6 +43,8 @@ describe("entity summary shaping", () => {
       parserKey: "sparkle",
       channel: null,
       pollIntervalMinutes: 60,
+      reviewStatus: "approved",
+      role: "authority",
       status: "active",
       lastSuccessAt: null,
       lastFailureAt: null,
@@ -73,7 +74,7 @@ describe("entity summary shaping", () => {
       canonicalName: "Test App",
       vendorName: "Versioneer",
       iconR2Key: "icons/test.png",
-      status: "active",
+      status: "public",
     });
 
     expect(toSourceSummary(source, app)).toEqual({
@@ -82,6 +83,8 @@ describe("entity summary shaping", () => {
       label: "Stable appcast",
       parserKey: "sparkle",
       channel: null,
+      reviewStatus: "approved",
+      role: "authority",
       status: "active",
       app: {
         id: "app_test",
@@ -89,7 +92,7 @@ describe("entity summary shaping", () => {
         canonicalName: "Test App",
         vendorName: "Versioneer",
         iconR2Key: "icons/test.png",
-        status: "active",
+        status: "public",
       },
     });
 
@@ -106,7 +109,7 @@ describe("entity summary shaping", () => {
         canonicalName: "Test App",
         vendorName: "Versioneer",
         iconR2Key: "icons/test.png",
-        status: "active",
+        status: "public",
       },
     });
   });

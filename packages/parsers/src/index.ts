@@ -4,7 +4,9 @@ export { sparkleParser } from "./sparkle";
 export { githubReleasesParser } from "./github";
 export { homebrewCaskParser } from "./homebrew-cask";
 export { macAppStoreParser } from "./mac-app-store";
+export { electronGenericParser } from "./electron-generic";
 
+import { electronGenericParser } from "./electron-generic";
 // Auto-register built-in parsers
 import { githubReleasesParser } from "./github";
 import { homebrewCaskParser } from "./homebrew-cask";
@@ -16,3 +18,4 @@ registerParser(sparkleParser);
 registerParser(githubReleasesParser);
 registerParser(homebrewCaskParser);
 registerParser(macAppStoreParser);
+registerParser(electronGenericParser);

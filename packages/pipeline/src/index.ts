@@ -16,9 +16,11 @@ export type { CaskIndexSyncJob } from "./cask-index-sync";
 export type { EnrichmentResult } from "./enrich-discovered-app";
 export {
   fetchAndParse,
+  fetchHomepageSourceCandidates,
+  discoverHomepageSourceCandidates,
   extractIconUrl,
   extractOpenGraph,
   extractLinks,
   extractTitle,
 } from "./scrape-html";
-export type { CheerioDoc } from "./scrape-html";
+export type { CheerioDoc, HomepageSourceCandidate } from "./scrape-html";

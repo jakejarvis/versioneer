@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { inventoryCheckRequestSchema, inventoryCheckResponseSchema } from "./index";
+import {
+  installExecutionStatusResponseSchema,
+  installPrepareResponseSchema,
+  inventoryCheckRequestSchema,
+  inventoryCheckResponseSchema,
+} from "./index";
 
 describe("public contract schemas", () => {
   it("accepts an empty inventory scan payload", () => {
@@ -30,7 +35,8 @@ describe("public contract schemas", () => {
           matchedAppName: "Mozilla Firefox",
           matchConfidence: 98,
           decision: "update_available",
-          isVerified: true,
+          trackingState: "public",
+          localReasonCode: null,
           latestVersion: "127.0",
           latestVersionRaw: "127.0",
           latestReleaseId: "rel_firefox",
@@ -53,5 +59,19 @@ describe("public contract schemas", () => {
 
     expect(parsed.results[0]?.iconUrl).toBe("https://assets.example.com/firefox.png");
     expect(parsed.results[0]?.installStrategy).toBe("zip_replace");
+  });
+
+  it("accepts install prepare and status response payloads", () => {
+    const prepare = installPrepareResponseSchema.parse({
+      executionId: "exec_123",
+      status: "prepared",
+    });
+    const status = installExecutionStatusResponseSchema.parse({
+      executionId: "exec_123",
+      status: "recorded",
+    });
+
+    expect(prepare.executionId).toBe("exec_123");
+    expect(status.status).toBe("recorded");
   });
 });

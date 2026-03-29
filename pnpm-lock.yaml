@@ -123,6 +123,9 @@ importers:
       '@versioneer/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@versioneer/identity':
+        specifier: workspace:*
+        version: link:../../packages/identity
       '@versioneer/parsers':
         specifier: workspace:*
         version: link:../../packages/parsers
@@ -380,12 +383,6 @@ importers:
       '@versioneer/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@versioneer/db':
-        specifier: workspace:*
-        version: link:../db
-      '@versioneer/schema':
-        specifier: workspace:*
-        version: link:../schema
     devDependencies:
       '@versioneer/typescript-config':
         specifier: workspace:*

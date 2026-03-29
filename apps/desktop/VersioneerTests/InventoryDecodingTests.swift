@@ -17,7 +17,8 @@ struct InventoryDecodingTests {
             "matchedAppName": "Mozilla Firefox",
             "matchConfidence": 95.0,
             "decision": "up_to_date",
-            "isVerified": true,
+            "trackingState": "public",
+            "localReasonCode": null,
             "latestVersion": "126.0",
             "latestVersionRaw": "126.0",
             "releasedAt": "2024-06-10T00:00:00Z",
@@ -56,8 +57,9 @@ struct InventoryDecodingTests {
             "matchedAppId": null,
             "matchedAppName": null,
             "matchConfidence": null,
-            "decision": "not_tracked",
-            "isVerified": false,
+            "decision": "local_only",
+            "trackingState": "local_only",
+            "localReasonCode": "not_found",
             "latestVersion": null,
             "latestVersionRaw": null,
             "releasedAt": null,
@@ -78,16 +80,27 @@ struct InventoryDecodingTests {
     #expect(result.installedVersion == nil)
     #expect(result.matchedAppId == nil)
     #expect(result.matchConfidence == nil)
-    #expect(result.decision == .notTracked)
+    #expect(result.decision == .localOnly)
     #expect(result.latestVersion == nil)
   }
 
   @Test func decodesAllDecisionTypes() throws {
     let decisions = [
-      "up_to_date", "update_available", "ambiguous", "not_tracked",
+      "up_to_date", "update_available", "ambiguous", "local_only",
     ]
 
     for decisionStr in decisions {
+      let trackingState = decisionStr == "up_to_date" || decisionStr == "update_available"
+        ? "public" : "local_only"
+      let localReasonCode: String? =
+        switch decisionStr {
+        case "ambiguous":
+          "ambiguous_match"
+        case "local_only":
+          "not_found"
+        default:
+          nil
+        }
       let json = """
         {
           "processedAt": "2024-01-01T00:00:00Z",
@@ -100,7 +113,8 @@ struct InventoryDecodingTests {
               "matchedAppName": null,
               "matchConfidence": null,
               "decision": "\(decisionStr)",
-              "isVerified": false,
+              "trackingState": "\(trackingState)",
+              "localReasonCode": \(localReasonCode.map { "\"\($0)\"" } ?? "null"),
               "latestVersion": null,
               "latestVersionRaw": null,
               "releasedAt": null,
@@ -135,16 +149,20 @@ struct InventoryDecodingTests {
           version: "17.5",
           buildNumber: nil,
           teamId: nil,
-          pathHash: "abc123",
           architecture: nil,
           sparkleFeedUrl: nil,
+          sparklePublicKey: nil,
+          isSparkleApp: nil,
           isMasApp: nil,
+          isElectronApp: nil,
+          electronUpdateProvider: nil,
           electronUpdateUrl: nil,
           codeSigningAuthority: nil,
           appCategory: nil,
           minMacOSVersion: nil,
           iconBase64: nil,
-          isHomebrewInstalled: nil
+          isHomebrewInstalled: nil,
+          homebrewCaskToken: nil
         )
       ],
       scanDurationMs: 500

@@ -8,6 +8,8 @@ export interface MatchCandidate {
 export type MatchMethod =
   | "exact_bundle_id"
   | "alias_bundle_id"
+  | "sparkle_feed"
+  | "homebrew_cask"
   | "team_id_name"
   | "alias_name"
   | "match_rule"
@@ -28,6 +30,8 @@ export interface MatchInput {
   bundleId?: string | null;
   teamId?: string | null;
   version?: string | null;
+  sparkleFeedUrl?: string | null;
+  homebrewCaskToken?: string | null;
 }
 
 export interface AliasRecord {

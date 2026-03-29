@@ -8,7 +8,7 @@ import {
 } from "@/server/discovered-apps";
 
 interface UseDiscoveredAppsParams {
-  status?: "pending" | "approved" | "dismissed" | "mas_app";
+  status?: "pending" | "linked" | "dismissed" | "support_only";
   limit?: number;
   offset?: number;
   sortBy?: string;

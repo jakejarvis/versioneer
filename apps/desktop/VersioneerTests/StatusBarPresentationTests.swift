@@ -9,7 +9,8 @@ struct StatusBarPresentationTests {
     let summary = AppState.ScanSummary(
       totalApps: 52,
       updatesAvailableCount: 3,
-      notTrackedCount: 1,
+      localOnlyCount: 1,
+      needsReviewCount: 0,
       ignoredCount: 2,
       lastCompletedAt: Date()
     )
@@ -26,7 +27,8 @@ struct StatusBarPresentationTests {
     let summary = AppState.ScanSummary(
       totalApps: 0,
       updatesAvailableCount: 0,
-      notTrackedCount: 0,
+      localOnlyCount: 0,
+      needsReviewCount: 0,
       ignoredCount: 0,
       lastCompletedAt: nil
     )
@@ -42,7 +44,8 @@ struct StatusBarPresentationTests {
     let summary = AppState.ScanSummary(
       totalApps: 10,
       updatesAvailableCount: 0,
-      notTrackedCount: 0,
+      localOnlyCount: 0,
+      needsReviewCount: 0,
       ignoredCount: 1,
       lastCompletedAt: nil
     )
@@ -60,7 +63,8 @@ struct StatusBarPresentationTests {
     let summary = AppState.ScanSummary(
       totalApps: 1,
       updatesAvailableCount: 0,
-      notTrackedCount: 0,
+      localOnlyCount: 0,
+      needsReviewCount: 0,
       ignoredCount: 0,
       lastCompletedAt: Date()
     )

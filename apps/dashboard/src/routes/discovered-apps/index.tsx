@@ -41,7 +41,7 @@ import {
 
 const discoveredAppsSearchSchema = z.object({
   ...paginatedSearchShape,
-  status: z.enum(["pending", "approved", "dismissed", "mas_app"]).catch("pending"),
+  status: z.enum(["pending", "linked", "dismissed", "support_only"]).catch("pending"),
 });
 
 export const Route = createFileRoute("/discovered-apps/")({
@@ -59,7 +59,7 @@ interface DiscoveredApp {
   firstSeenAt: string;
   lastSeenAt: string;
   status: string;
-  onboardedAppId: string | null;
+  linkedAppId: string | null;
   sampleVersions: string | null;
   sparkleFeedUrl: string | null;
   electronUpdateUrl: string | null;
@@ -119,7 +119,7 @@ function DiscoveredAppsPage() {
   };
 
   const handleOnboardSuccess = (appId: string) => {
-    toast.success("App onboarded successfully");
+    toast.success("Draft created and submitted for review");
     void navigate({ to: "/apps/$appId", params: { appId } });
   };
 
@@ -257,14 +257,14 @@ function DiscoveredAppsPage() {
         meta: { label: "Status" },
         header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
         cell: ({ row }) => {
-          if (row.original.status === "approved" && row.original.onboardedAppId) {
+          if (row.original.status === "linked" && row.original.linkedAppId) {
             return (
               <Link
                 to="/apps/$appId"
-                params={{ appId: row.original.onboardedAppId }}
+                params={{ appId: row.original.linkedAppId }}
                 className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
               >
-                Approved
+                Linked
               </Link>
             );
           }

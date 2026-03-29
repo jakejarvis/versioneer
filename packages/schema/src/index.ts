@@ -5,4 +5,5 @@ export * from "./feedback";
 export * from "./ids";
 export * from "./ops";
 export * from "./releases";
+export * from "./review";
 export * from "./sources";

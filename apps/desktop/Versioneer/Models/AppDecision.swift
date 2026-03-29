@@ -10,7 +10,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
   let matchedAppName: String?
   let matchConfidence: Double?
   let decision: Decision
-  let isVerified: Bool
+  let trackingState: TrackingState
+  let localReasonCode: LocalReasonCode?
   let latestVersion: String?
   let latestVersionRaw: String?
   let latestReleaseId: String?
@@ -31,7 +32,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     matchedAppName: String?,
     matchConfidence: Double?,
     decision: Decision,
-    isVerified: Bool,
+    trackingState: TrackingState,
+    localReasonCode: LocalReasonCode?,
     latestVersion: String?,
     latestVersionRaw: String?,
     latestReleaseId: String?,
@@ -52,7 +54,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     self.matchedAppName = matchedAppName
     self.matchConfidence = matchConfidence
     self.decision = decision
-    self.isVerified = isVerified
+    self.trackingState = trackingState
+    self.localReasonCode = localReasonCode
     self.latestVersion = latestVersion
     self.latestVersionRaw = latestVersionRaw
     self.latestReleaseId = latestReleaseId
@@ -68,7 +71,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
 
   private enum CodingKeys: String, CodingKey {
     case appName, bundleId, installedVersion, matchedAppId, matchedAppName,
-      matchConfidence, decision, isVerified, latestVersion, latestVersionRaw,
+      matchConfidence, decision, trackingState, localReasonCode, latestVersion, latestVersionRaw,
       latestReleaseId, channel, availableChannels, homebrewCaskToken, releasedAt, staleSince, iconUrl,
       artifact, installStrategy
   }
@@ -83,7 +86,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     matchedAppName = try container.decodeIfPresent(String.self, forKey: .matchedAppName)
     matchConfidence = try container.decodeIfPresent(Double.self, forKey: .matchConfidence)
     decision = try container.decode(Decision.self, forKey: .decision)
-    isVerified = try container.decode(Bool.self, forKey: .isVerified)
+    trackingState = try container.decode(TrackingState.self, forKey: .trackingState)
+    localReasonCode = try container.decodeIfPresent(LocalReasonCode.self, forKey: .localReasonCode)
     latestVersion = try container.decodeIfPresent(String.self, forKey: .latestVersion)
     latestVersionRaw = try container.decodeIfPresent(String.self, forKey: .latestVersionRaw)
     latestReleaseId = try container.decodeIfPresent(String.self, forKey: .latestReleaseId)
@@ -101,7 +105,20 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     case upToDate = "up_to_date"
     case updateAvailable = "update_available"
     case ambiguous
-    case notTracked = "not_tracked"
+    case localOnly = "local_only"
+  }
+
+  enum TrackingState: String, Codable, Sendable, CaseIterable {
+    case catalog = "public"
+    case localOnly = "local_only"
+  }
+
+  enum LocalReasonCode: String, Codable, Sendable, CaseIterable {
+    case noPublicIdentity = "no_public_identity"
+    case noApprovedSource = "no_approved_source"
+    case matchedDraft = "matched_draft"
+    case ambiguousMatch = "ambiguous_match"
+    case notFound = "not_found"
   }
 
   struct Artifact: Codable, Hashable, Sendable {
@@ -119,6 +136,42 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     decision == .updateAvailable && installStrategy != nil
   }
 
+  var isVerified: Bool {
+    trackingState == .catalog
+  }
+
+  var isLocalOnly: Bool {
+    trackingState == .localOnly
+  }
+
+  var localOnlyStatusTitle: String {
+    switch decision {
+    case .updateAvailable:
+      "Local Update Available"
+    case .ambiguous:
+      "Needs Review"
+    case .upToDate, .localOnly:
+      "Local Only"
+    }
+  }
+
+  var localOnlyDescription: String {
+    switch localReasonCode {
+    case .noPublicIdentity:
+      "Versioneer does not have a public catalog identity for this app yet."
+    case .noApprovedSource:
+      "Versioneer found this app, but it does not have an approved public update source yet."
+    case .matchedDraft:
+      "Versioneer matched this app to an internal draft entry that is still under review."
+    case .ambiguousMatch:
+      "Versioneer found multiple possible catalog matches and needs a reviewer to resolve them."
+    case .notFound:
+      "Versioneer is using local metadata because this app is not in the public catalog yet."
+    case nil:
+      "Versioneer is using local metadata because this app is not backed by a public catalog entry."
+    }
+  }
+
   /// Returns a copy with only the decision field changed.
   func replacing(decision newDecision: Decision) -> AppDecision {
     AppDecision(
@@ -129,7 +182,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       matchedAppName: matchedAppName,
       matchConfidence: matchConfidence,
       decision: newDecision,
-      isVerified: isVerified,
+      trackingState: trackingState,
+      localReasonCode: localReasonCode,
       latestVersion: latestVersion,
       latestVersionRaw: latestVersionRaw,
       latestReleaseId: latestReleaseId,

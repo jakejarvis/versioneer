@@ -17,7 +17,7 @@ import { uploadAppIcon, deleteAppIcon } from "@/server/icons";
 import { triggerFetch } from "@/server/sources";
 
 interface UseAppsParams {
-  status?: "active" | "deprecated" | "merged" | "unlisted";
+  status?: "draft" | "public" | "deprecated" | "merged" | "unlisted";
   search?: string;
   limit?: number;
   offset?: number;

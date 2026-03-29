@@ -26,15 +26,19 @@ nonisolated struct InventoryCheckRequest: Codable, Sendable {
     let version: String?
     let buildNumber: String?
     let teamId: String?
-    let pathHash: String?
     let architecture: String?
     let sparkleFeedUrl: String?
+    let sparklePublicKey: String?
+    let isSparkleApp: Bool?
     let isMasApp: Bool?
+    let isElectronApp: Bool?
+    let electronUpdateProvider: String?
     let electronUpdateUrl: String?
     let codeSigningAuthority: String?
     let appCategory: String?
     let minMacOSVersion: String?
     let iconBase64: String?
     let isHomebrewInstalled: Bool?
+    let homebrewCaskToken: String?
   }
 }
