@@ -70,6 +70,7 @@ export function useCreateSource() {
       void qc.invalidateQueries({ queryKey: ["sources"] });
       void qc.invalidateQueries({ queryKey: ["apps", variables.appId, "sources"] });
       void qc.invalidateQueries({ queryKey: ["apps", variables.appId] });
+      void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });
 }
@@ -82,6 +83,7 @@ export function useUpdateSource(id: string) {
       void qc.invalidateQueries({ queryKey: ["sources"] });
       void qc.invalidateQueries({ queryKey: ["sources", id] });
       void qc.invalidateQueries({ queryKey: ["apps"] });
+      void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });
 }

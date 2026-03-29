@@ -11,8 +11,9 @@ import {
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { Toaster } from "sonner";
 
-import { Sidebar } from "@/components/layout/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { AppSidebar } from "@/components/layout/sidebar";
+import { Separator } from "@/components/ui/separator";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemeProvider, themeInitScript } from "@/lib/theme";
 import { getSession } from "@/server/auth";
 
@@ -51,14 +52,19 @@ export const Route = createRootRoute({
 
 function AppShell() {
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto">
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 md:hidden">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <span className="text-sm font-semibold">Versioneer</span>
+        </header>
         <div className="mx-auto max-w-6xl px-6 py-5">
           <Outlet />
         </div>
-      </main>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
@@ -75,10 +81,8 @@ function RootComponent() {
       <body className="antialiased">
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
-            <TooltipProvider>
-              {isLoginPage ? <Outlet /> : <AppShell />}
-              <Toaster position="bottom-right" richColors theme="dark" />
-            </TooltipProvider>
+            {isLoginPage ? <Outlet /> : <AppShell />}
+            <Toaster position="bottom-right" richColors theme="dark" />
           </ThemeProvider>
           <ReactQueryDevtools />
         </QueryClientProvider>

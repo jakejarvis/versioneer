@@ -27,7 +27,10 @@ export function useUpdateJobFailure() {
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: "resolved" | "abandoned" | "retrying" }) =>
       updateJobFailure({ data: { id, status } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["job-failures"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["job-failures"] });
+      void qc.invalidateQueries({ queryKey: ["stats"] });
+    },
   });
 }
 
@@ -35,7 +38,10 @@ export function useRetryJobFailure() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => retryJobFailure({ data: { id } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["job-failures"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["job-failures"] });
+      void qc.invalidateQueries({ queryKey: ["stats"] });
+    },
   });
 }
 
@@ -43,6 +49,9 @@ export function useRetryAllJobFailures() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (jobType?: string) => retryAllJobFailures({ data: jobType ? { jobType } : {} }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["job-failures"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["job-failures"] });
+      void qc.invalidateQueries({ queryKey: ["stats"] });
+    },
   });
 }

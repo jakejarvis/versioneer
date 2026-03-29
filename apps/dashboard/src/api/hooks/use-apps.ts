@@ -50,7 +50,10 @@ export function useCreateApp() {
       homepageUrl?: string;
       notes?: string;
     }) => createApp({ data: input }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["apps"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["apps"] });
+      void qc.invalidateQueries({ queryKey: ["stats"] });
+    },
   });
 }
 
@@ -61,6 +64,7 @@ export function useUpdateApp(id: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["apps"] });
       void qc.invalidateQueries({ queryKey: ["apps", id] });
+      void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });
 }

@@ -51,6 +51,7 @@ export function useCreateRelease() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["releases"] });
       void qc.invalidateQueries({ queryKey: ["apps"] });
+      void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });
 }
