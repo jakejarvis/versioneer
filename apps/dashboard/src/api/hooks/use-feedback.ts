@@ -39,6 +39,7 @@ export function useUpdateFeedback() {
     }) => updateFeedback({ data: { id, status } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["feedback"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });

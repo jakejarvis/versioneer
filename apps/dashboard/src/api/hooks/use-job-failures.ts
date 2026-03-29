@@ -29,6 +29,7 @@ export function useUpdateJobFailure() {
       updateJobFailure({ data: { id, status } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["job-failures"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });
@@ -40,6 +41,7 @@ export function useRetryJobFailure() {
     mutationFn: (id: string) => retryJobFailure({ data: { id } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["job-failures"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });
@@ -51,6 +53,7 @@ export function useRetryAllJobFailures() {
     mutationFn: (jobType?: string) => retryAllJobFailures({ data: jobType ? { jobType } : {} }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["job-failures"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });

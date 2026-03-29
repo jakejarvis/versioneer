@@ -17,6 +17,74 @@ export interface DashboardStats {
   pendingCatalogSuggestions: number;
 }
 
+export interface DashboardOverviewSection {
+  pendingCatalogSuggestions: number;
+  pendingDiscoveredApps: number;
+  pendingFeedback: number;
+  openFailures: number;
+}
+
+export interface DashboardSourceHealthSection {
+  activeSources: number;
+  errorSources: number;
+  staleSources: number;
+}
+
+export interface DashboardCatalogContextSection {
+  publicApps: number;
+  totalApps: number;
+  recentReleases: number;
+}
+
+export interface HomepageDiscoveryItem {
+  id: string;
+  appName: string;
+  bundleId: string | null;
+  sightingCount: number;
+  lastSeenAt: string;
+  enrichmentStatus: string;
+  sourceValidationStatus: string;
+  confidenceScore: number | null;
+  enrichedLatestVersion: string | null;
+  enrichedVendorName: string | null;
+  iconR2Key: string | null;
+  homebrewCaskToken: string | null;
+  homebrewCaskVersion: string | null;
+}
+
+export interface HomepageRunItem {
+  id: string;
+  jobType: "poll_sources" | "cask_index_sync";
+  trigger: "manual" | "scheduled";
+  status: "running" | "completed" | "failed";
+  actorId: string | null;
+  itemsQueued: number | null;
+  itemsTotal: number | null;
+  errorMessage: string | null;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface AtRiskSourceItem extends SourceListItem {
+  risk: "error" | "overdue";
+  overdueMinutes: number | null;
+}
+
+export interface DashboardHomepageData {
+  overview: {
+    needsAttention: DashboardOverviewSection;
+    sourceHealth: DashboardSourceHealthSection;
+    catalogContext: DashboardCatalogContextSection;
+  };
+  pendingSuggestions: CatalogSuggestion[];
+  pendingDiscoveries: HomepageDiscoveryItem[];
+  newFeedback: FeedbackListItem[];
+  openFailures: JobFailureListItem[];
+  atRiskSources: AtRiskSourceItem[];
+  recentRuns: HomepageRunItem[];
+  recentReleases: ReleaseListItem[];
+}
+
 export interface CatalogSuggestion {
   id: string;
   queueType:

@@ -14,7 +14,7 @@ import {
 } from "@/server/sources";
 
 interface UseSourcesParams {
-  status?: "active" | "paused" | "disabled" | "error";
+  status?: "active" | "paused" | "disabled" | "error" | "at_risk";
   sourceType?:
     | "sparkle"
     | "github_releases"
@@ -70,6 +70,7 @@ export function useCreateSource() {
       void qc.invalidateQueries({ queryKey: ["sources"] });
       void qc.invalidateQueries({ queryKey: ["apps", variables.appId, "sources"] });
       void qc.invalidateQueries({ queryKey: ["apps", variables.appId] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });
@@ -83,6 +84,7 @@ export function useUpdateSource(id: string) {
       void qc.invalidateQueries({ queryKey: ["sources"] });
       void qc.invalidateQueries({ queryKey: ["sources", id] });
       void qc.invalidateQueries({ queryKey: ["apps"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });
@@ -120,7 +122,10 @@ export function useTriggerSourceFetch() {
   return useMutation({
     mutationFn: ({ sourceId, force }: { sourceId: string; force?: boolean }) =>
       triggerFetch({ data: { sourceId, reason: "manual", force: force ?? false } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["sources"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
+    },
   });
 }
 
@@ -133,6 +138,7 @@ export function useReorderSources() {
       void qc.invalidateQueries({ queryKey: ["sources"] });
       void qc.invalidateQueries({ queryKey: ["apps", variables.appId, "sources"] });
       void qc.invalidateQueries({ queryKey: ["apps", variables.appId] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
     },
   });
 }

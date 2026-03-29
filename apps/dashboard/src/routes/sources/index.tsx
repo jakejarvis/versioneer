@@ -31,7 +31,7 @@ import {
 
 const sourcesSearchSchema = z.object({
   ...paginatedSearchShape,
-  status: z.enum(["all", "active", "paused", "disabled", "error"]).catch("all"),
+  status: z.enum(["all", "active", "paused", "disabled", "error", "at_risk"]).catch("all"),
   type: z
     .enum([
       "all",
@@ -235,6 +235,7 @@ function SourcesPage() {
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="at_risk">At Risk</SelectItem>
                   <SelectItem value="paused">Paused</SelectItem>
                   <SelectItem value="disabled">Disabled</SelectItem>
                   <SelectItem value="error">Error</SelectItem>

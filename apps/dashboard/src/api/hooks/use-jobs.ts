@@ -22,7 +22,10 @@ export function useTriggerPollSources() {
   return useMutation({
     mutationFn: ({ force }: { force?: boolean } = {}) =>
       triggerPollSources({ data: { force: force ?? false } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cron-job-runs"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["cron-job-runs"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
+    },
   });
 }
 
@@ -30,6 +33,9 @@ export function useTriggerCaskSync() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => triggerCaskSync(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cron-job-runs"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["cron-job-runs"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
+    },
   });
 }

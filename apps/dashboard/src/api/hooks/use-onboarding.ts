@@ -72,6 +72,7 @@ export function useOnboardDiscoveredApp() {
       void qc.invalidateQueries({ queryKey: ["apps"] });
       void qc.invalidateQueries({ queryKey: ["discovered-apps"] });
       void qc.invalidateQueries({ queryKey: ["catalog-suggestions"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });

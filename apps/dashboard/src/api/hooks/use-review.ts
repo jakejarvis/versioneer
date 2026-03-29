@@ -44,6 +44,7 @@ export function useApproveCatalogSuggestion() {
     onSuccess: (_result, id) => {
       void qc.invalidateQueries({ queryKey: ["catalog-suggestions"] });
       void qc.invalidateQueries({ queryKey: ["catalog-suggestions", id] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
       void qc.invalidateQueries({ queryKey: ["apps"] });
       void qc.invalidateQueries({ queryKey: ["sources"] });
@@ -59,6 +60,7 @@ export function useRejectCatalogSuggestion() {
     onSuccess: (_result, id) => {
       void qc.invalidateQueries({ queryKey: ["catalog-suggestions"] });
       void qc.invalidateQueries({ queryKey: ["catalog-suggestions", id] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });

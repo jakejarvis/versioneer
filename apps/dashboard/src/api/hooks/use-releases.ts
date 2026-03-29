@@ -51,6 +51,7 @@ export function useCreateRelease() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["releases"] });
       void qc.invalidateQueries({ queryKey: ["apps"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },
   });
@@ -68,6 +69,7 @@ export function useUpdateRelease(id: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["releases"] });
       void qc.invalidateQueries({ queryKey: ["releases", id] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
     },
   });
 }
@@ -96,6 +98,7 @@ export function usePinRelease() {
       void qc.invalidateQueries({ queryKey: ["releases"] });
       void qc.invalidateQueries({ queryKey: ["releases", releaseId] });
       void qc.invalidateQueries({ queryKey: ["apps"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
     },
   });
 }
@@ -108,6 +111,7 @@ export function useUnpinRelease() {
       void qc.invalidateQueries({ queryKey: ["releases"] });
       void qc.invalidateQueries({ queryKey: ["releases", releaseId] });
       void qc.invalidateQueries({ queryKey: ["apps"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
     },
   });
 }

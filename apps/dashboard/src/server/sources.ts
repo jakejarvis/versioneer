@@ -125,7 +125,7 @@ export const listSources = createServerFn({ method: "GET" })
     z.object({
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
-      status: z.enum(["active", "paused", "disabled", "error"]).optional(),
+      status: z.enum(["active", "paused", "disabled", "error", "at_risk"]).optional(),
       sourceType: z
         .enum([
           "sparkle",
@@ -148,11 +148,33 @@ export const listSources = createServerFn({ method: "GET" })
     const db = createDb(env.DB);
 
     const conditions = [];
-    if (status) conditions.push(eq(sources.status, status));
+    if (status === "at_risk") {
+      conditions.push(sql`
+        ${sources.status} = 'error'
+        or (
+          ${sources.status} = 'active'
+          and (
+            ${sources.lastFetchedAt} is null
+            or datetime(${sources.lastFetchedAt}, '+' || ${sources.pollIntervalMinutes} || ' minutes') <= datetime('now')
+          )
+        )
+      `);
+    } else if (status) {
+      conditions.push(eq(sources.status, status));
+    }
     if (sourceType) conditions.push(eq(sources.sourceType, sourceType));
     if (appId) conditions.push(eq(sources.appId, appId));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const orderBy =
+      status === "at_risk" && !sortBy
+        ? [
+            sql`case when ${sources.status} = 'error' then 0 else 1 end`,
+            desc(sources.lastFailureAt),
+            asc(sources.lastFetchedAt),
+            desc(sources.updatedAt),
+          ]
+        : sourceOrderBy(sortBy, sortDir);
 
     const [countResult] = await db
       .select({ count: sql<number>`count(*)` })
@@ -162,7 +184,7 @@ export const listSources = createServerFn({ method: "GET" })
       .select()
       .from(sources)
       .where(where)
-      .orderBy(...sourceOrderBy(sortBy, sortDir))
+      .orderBy(...orderBy)
       .limit(limit)
       .offset(offset);
     const appMap = await loadAppsByIds(
