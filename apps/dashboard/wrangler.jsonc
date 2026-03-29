@@ -36,7 +36,7 @@
   "services": [
     {
       "binding": "PIPELINE_WORKER",
-      "service": "versioneer-worker"
+      "service": "versioneer-worker-dev"
     }
   ],
 
@@ -86,7 +86,7 @@
       "services": [
         {
           "binding": "PIPELINE_WORKER",
-          "service": "versioneer-worker"
+          "service": "versioneer-worker-production"
         }
       ],
       "workflows": [

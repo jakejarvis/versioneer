@@ -20,6 +20,7 @@ export const validateSource = createServerFn({ method: "POST" })
         "homebrew_cask",
         "mac_app_store",
         "electron_generic",
+        "web_page",
       ]),
     }),
   )

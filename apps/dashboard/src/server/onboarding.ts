@@ -63,6 +63,7 @@ const sourceInputSchema = z.object({
     "electron_generic",
     "rss_feed",
     "json_feed",
+    "web_page",
   ]),
   baseUrl: z.string().url(),
   parserKey: z.string().min(1),

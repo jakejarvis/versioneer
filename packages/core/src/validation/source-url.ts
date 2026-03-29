@@ -20,6 +20,7 @@ export function resolveSourceUrl(sourceType: string, identifier: string): string
     case "electron_generic":
     case "rss_feed":
     case "json_feed":
+    case "web_page":
       return trimmed;
 
     case "github_releases": {
@@ -82,6 +83,7 @@ export function extractSourceIdentifier(sourceType: string, baseUrl: string | nu
     case "electron_generic":
     case "rss_feed":
     case "json_feed":
+    case "web_page":
       return baseUrl;
 
     default:

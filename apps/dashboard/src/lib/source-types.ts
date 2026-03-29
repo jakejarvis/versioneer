@@ -81,6 +81,16 @@ export const SOURCE_TYPES = {
     defaultRole: "reference",
     defaultRuntimeStatus: "disabled",
   },
+  web_page: {
+    label: "Web Page",
+    color: "border-teal-500/30 bg-teal-500/10 text-teal-400",
+    pollInterval: 1440,
+    input: { label: "Page URL", placeholder: "https://example.com/downloads" },
+    parserKey: "web-page",
+    validatable: false,
+    defaultRole: "authority",
+    defaultRuntimeStatus: "active",
+  },
   manual: {
     label: "Manual",
     color: "border-cyan-500/30 bg-cyan-500/10 text-cyan-400",

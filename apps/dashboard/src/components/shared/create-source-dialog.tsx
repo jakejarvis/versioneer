@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { SOURCE_TYPES, type SourceType } from "@/lib/source-types";
 
 interface CreateSourceDialogProps {
@@ -39,6 +40,7 @@ export function CreateSourceDialog({ appId, open, onOpenChange }: CreateSourceDi
       parserKey: "sparkle",
       channel: "",
       pollIntervalMinutes: 60,
+      configJson: "",
     },
     onSubmit: async ({ value }) => {
       createSource.mutate(
@@ -48,6 +50,7 @@ export function CreateSourceDialog({ appId, open, onOpenChange }: CreateSourceDi
           label: value.label || undefined,
           baseUrl: value.baseUrl || undefined,
           parserKey: value.parserKey,
+          configJson: value.configJson || undefined,
           pollIntervalMinutes: value.pollIntervalMinutes,
         },
         {
@@ -155,6 +158,33 @@ export function CreateSourceDialog({ appId, open, onOpenChange }: CreateSourceDi
                         aria-invalid={
                           field.state.meta.isTouched && field.state.meta.errors.length > 0
                         }
+                      />
+                    </FormField>
+                  )}
+                </form.Field>
+              ) : null
+            }
+          </form.Subscribe>
+
+          <form.Subscribe selector={(state) => state.values.sourceType}>
+            {(sourceType) =>
+              sourceType === "web_page" ? (
+                <form.Field name="configJson">
+                  {(field) => (
+                    <FormField
+                      label="Selector Config (JSON)"
+                      name={field.name}
+                      meta={field.state.meta}
+                      description="CSS selectors to extract version and download URLs."
+                    >
+                      <Textarea
+                        id={field.name}
+                        rows={5}
+                        className="font-mono text-xs"
+                        placeholder={'{\n  "versionSelector": "",\n  "downloadSelector": ""\n}'}
+                        value={field.state.value}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        onBlur={field.handleBlur}
                       />
                     </FormField>
                   )}

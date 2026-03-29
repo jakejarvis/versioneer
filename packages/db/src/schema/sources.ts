@@ -19,6 +19,7 @@ export const sources = sqliteTable(
         "electron_generic",
         "rss_feed",
         "json_feed",
+        "web_page",
       ],
     }).notNull(),
     label: text("label"),

@@ -58,7 +58,8 @@ export function useOnboardDiscoveredApp() {
           | "mac_app_store"
           | "electron_generic"
           | "rss_feed"
-          | "json_feed";
+          | "json_feed"
+          | "web_page";
         baseUrl: string;
         parserKey: string;
         pollIntervalMinutes?: number;

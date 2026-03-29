@@ -124,6 +124,7 @@ export const listSources = createServerFn({ method: "GET" })
           "electron_generic",
           "rss_feed",
           "json_feed",
+          "web_page",
         ])
         .optional(),
       appId: z.string().optional(),

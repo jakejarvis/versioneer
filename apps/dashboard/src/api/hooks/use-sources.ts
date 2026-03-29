@@ -23,7 +23,8 @@ interface UseSourcesParams {
     | "mac_app_store"
     | "electron_generic"
     | "rss_feed"
-    | "json_feed";
+    | "json_feed"
+    | "web_page";
   appId?: string;
   limit?: number;
   offset?: number;
@@ -59,7 +60,8 @@ export function useCreateSource() {
         | "mac_app_store"
         | "electron_generic"
         | "rss_feed"
-        | "json_feed";
+        | "json_feed"
+        | "web_page";
       label?: string;
       baseUrl?: string;
       configJson?: string;

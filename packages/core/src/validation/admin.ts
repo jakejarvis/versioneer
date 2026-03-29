@@ -62,6 +62,7 @@ export const sourceCreateSchema = z.object({
     "electron_generic",
     "rss_feed",
     "json_feed",
+    "web_page",
   ]),
   label: z.string().max(500).optional(),
   baseUrl: z.string().url().max(2000).optional(),

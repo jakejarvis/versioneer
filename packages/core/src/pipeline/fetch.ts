@@ -5,6 +5,16 @@ import { desc, eq } from "drizzle-orm";
 import { githubApiHeaders } from "./types";
 import type { Env, FetchStepResult, SourceFetchJob } from "./types";
 
+async function fetchGitHubReleases(
+  baseUrl: string,
+  conditionalHeaders: Record<string, string>,
+  env: Env,
+): Promise<Response> {
+  return fetch(baseUrl, {
+    headers: { ...githubApiHeaders(env.GITHUB_TOKEN), ...conditionalHeaders },
+  });
+}
+
 export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<FetchStepResult> {
   const db = createDb(env.DB);
   const now = new Date().toISOString();
@@ -38,10 +48,8 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
 
   // Perform HTTP fetch
   try {
-    const headers: Record<string, string> =
-      source.sourceType === "github_releases" ? githubApiHeaders(env.GITHUB_TOKEN) : {};
-
     // Use etag/last-modified for conditional requests
+    const conditionalHeaders: Record<string, string> = {};
     const lastFetch = await db
       .select()
       .from(sourceFetches)
@@ -51,14 +59,16 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
       .get();
 
     if (!job.force && lastFetch) {
-      if (lastFetch.etag) headers["If-None-Match"] = lastFetch.etag;
-      if (lastFetch.lastModified) headers["If-Modified-Since"] = lastFetch.lastModified;
+      if (lastFetch.etag) conditionalHeaders["If-None-Match"] = lastFetch.etag;
+      if (lastFetch.lastModified) conditionalHeaders["If-Modified-Since"] = lastFetch.lastModified;
     }
 
     const response =
-      source.sourceType === "electron_generic"
-        ? await fetchElectronGenericFeed(source.baseUrl!, headers)
-        : await fetch(source.baseUrl!, { headers });
+      source.sourceType === "github_releases"
+        ? await fetchGitHubReleases(source.baseUrl!, conditionalHeaders, env)
+        : source.sourceType === "electron_generic"
+          ? await fetchElectronGenericFeed(source.baseUrl!, conditionalHeaders)
+          : await fetch(source.baseUrl!, { headers: conditionalHeaders });
 
     if (response.status === 304) {
       await db.insert(sourceFetches).values({

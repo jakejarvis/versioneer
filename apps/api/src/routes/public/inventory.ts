@@ -157,7 +157,8 @@ function defaultSuggestedRoleForSourceType(
     | "mac_app_store"
     | "electron_generic"
     | "rss_feed"
-    | "json_feed",
+    | "json_feed"
+    | "web_page",
 ): "authority" | "corroborating" | "reference" {
   if (sourceType === "homebrew_cask") return "corroborating";
   if (sourceType === "rss_feed" || sourceType === "json_feed") return "reference";
@@ -173,7 +174,8 @@ function defaultSuggestedParserKeyForSourceType(
     | "mac_app_store"
     | "electron_generic"
     | "rss_feed"
-    | "json_feed",
+    | "json_feed"
+    | "web_page",
 ): string {
   switch (sourceType) {
     case "sparkle":
@@ -190,6 +192,8 @@ function defaultSuggestedParserKeyForSourceType(
       return "rss-reference";
     case "json_feed":
       return "json-reference";
+    case "web_page":
+      return "web-page";
     case "manual":
     default:
       return "manual";
@@ -205,7 +209,8 @@ function normalizeSuggestedSourceUrl(
     | "mac_app_store"
     | "electron_generic"
     | "rss_feed"
-    | "json_feed",
+    | "json_feed"
+    | "web_page",
   url: string,
 ): string {
   if (sourceType === "github_releases") {
