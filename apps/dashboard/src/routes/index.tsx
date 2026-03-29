@@ -124,9 +124,8 @@ function DashboardPage() {
     homepage.overview.sourceHealth.errorSources + homepage.overview.sourceHealth.staleSources;
 
   return (
-    <div className="relative">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top_left,_color-mix(in_oklab,var(--color-chart-2)_16%,transparent),transparent_55%),radial-gradient(circle_at_top_right,_color-mix(in_oklab,var(--color-chart-1)_14%,transparent),transparent_45%)] opacity-80" />
-      <div className="relative max-w-3xl">
+    <div>
+      <div className="max-w-3xl">
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h2>
         <div className="mt-4 flex flex-wrap gap-2">
           <HeroPill label="Attention items" value={attentionTotal} tone="amber" />
@@ -139,7 +138,7 @@ function DashboardPage() {
         </div>
       </div>
 
-      <div className="relative mt-6 grid gap-4 lg:grid-cols-3">
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <OverviewCard
           title="Needs Attention"
           description="Open queues across review, discovery, feedback, and failures."
@@ -521,7 +520,7 @@ function SectionCard({
 }) {
   return (
     <Card className="gap-0 overflow-hidden rounded-2xl border-border/75 bg-linear-to-b from-muted/16 via-card to-card shadow-[0_1px_0_rgba(255,255,255,0.03),0_20px_38px_-30px_rgba(0,0,0,0.9)]">
-      <CardHeader className="border-b border-border/60 bg-linear-to-r from-muted/28 to-transparent pb-4">
+      <CardHeader className="border-b border-border/60 pb-4">
         <div className="flex items-start gap-3">
           <div className="rounded-2xl border border-border/70 bg-background/55 p-2.5 text-muted-foreground shadow-inner">
             <Icon className="h-4 w-4" />
