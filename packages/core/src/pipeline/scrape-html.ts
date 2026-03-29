@@ -1,5 +1,7 @@
 import * as cheerio from "cheerio";
 
+import { parseGitHubRepoUrl } from "../validation/github-url";
+
 export type CheerioDoc = cheerio.CheerioAPI;
 export interface HomepageSourceCandidate {
   sourceType: "sparkle" | "github_releases" | "electron_generic" | "rss_feed" | "json_feed";
@@ -200,11 +202,11 @@ export function discoverHomepageSourceCandidates(
     if (!parsed) return;
     const pathname = parsed.pathname.toLowerCase();
 
-    const githubRepo = normalizeGitHubRepoUrl(url);
-    if (githubRepo) {
+    const ghParsed = parseGitHubRepoUrl(url);
+    if (ghParsed) {
       addCandidate({
         sourceType: "github_releases",
-        url: githubRepo,
+        url: `https://github.com/${ghParsed.owner}/${ghParsed.repo}`,
         role: "authority",
         parserKey: "github-releases",
         reason: "homepage GitHub repository link",
@@ -295,14 +297,4 @@ function safeParseUrl(url: string): URL | null {
   } catch {
     return null;
   }
-}
-
-function normalizeGitHubRepoUrl(url: string): string | null {
-  const parsed = safeParseUrl(url);
-  if (!parsed) return null;
-  if (parsed.hostname !== "github.com" && parsed.hostname !== "www.github.com") return null;
-
-  const [owner, repo] = parsed.pathname.split("/").filter(Boolean);
-  if (!owner || !repo) return null;
-  return `https://github.com/${owner}/${repo}`;
 }

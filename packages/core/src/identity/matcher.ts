@@ -1,3 +1,4 @@
+import { normalizeAliasValue } from "./aliases";
 import { normalizeBundleId, normalizeName } from "./normalize";
 import type { MatchInput, MatchResult, MatchCandidate, AliasRecord } from "./types";
 
@@ -9,10 +10,6 @@ const CONFIDENCE_TEAM_NAME = 80;
 const CONFIDENCE_ALIAS_NAME = 60;
 const MULTI_SIGNAL_BONUS = 8;
 const AMBIGUITY_THRESHOLD = 10;
-
-function normalizeAliasValue(value: string): string {
-  return value.toLowerCase().trim();
-}
 
 /**
  * Match an installed app against known aliases.
@@ -48,7 +45,7 @@ export function matchApp(input: MatchInput, aliases: AliasRecord[]): MatchResult
       candidates,
       aliases,
       "sparkle_feed",
-      normalizeAliasValue(input.sparkleFeedUrl),
+      normalizeAliasValue("sparkle_feed", input.sparkleFeedUrl),
       "sparkle_feed",
       CONFIDENCE_SPARKLE_FEED,
     );
@@ -59,7 +56,7 @@ export function matchApp(input: MatchInput, aliases: AliasRecord[]): MatchResult
       candidates,
       aliases,
       "homebrew_cask",
-      normalizeAliasValue(input.homebrewCaskToken),
+      normalizeAliasValue("homebrew_cask", input.homebrewCaskToken),
       "homebrew_cask",
       CONFIDENCE_HOMEBREW_CASK,
     );

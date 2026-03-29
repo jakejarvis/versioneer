@@ -43,3 +43,14 @@ export interface AliasRecord {
   isExact: boolean;
   confidenceWeight: number;
 }
+
+export interface MatchExplanation {
+  method: string;
+  confidence: number;
+  matchedAliasType: string | null;
+  matchedAliasValue: string | null;
+  candidateCount: number;
+  ambiguous: boolean;
+  ambiguityGap: number | null;
+  topCandidates: { appId: string; appName: string; method: string; confidence: number }[];
+}

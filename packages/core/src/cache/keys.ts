@@ -6,18 +6,6 @@ export function bundleLookupKey(bundleId: string): string {
   return `lookup:bundle:${bundleId.toLowerCase()}`;
 }
 
-export function teamLookupKey(teamId: string): string {
-  return `lookup:team:${teamId.toLowerCase()}`;
-}
-
-export function featureFlagKey(flag: string): string {
-  return `feature:${flag}`;
-}
-
-export function blockSourceKey(sourceId: string): string {
-  return `block:source:${sourceId}`;
-}
-
 export function recentReleasesKey(): string {
   return "recent-releases";
 }

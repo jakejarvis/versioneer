@@ -4,7 +4,6 @@
   "private": true,
   "exports": {
     "./cache": "./src/cache/index.ts",
-    "./contracts": "./src/contracts.ts",
     "./identity": "./src/identity/index.ts",
     "./parsers": "./src/parsers/index.ts",
     "./pipeline": "./src/pipeline/index.ts",

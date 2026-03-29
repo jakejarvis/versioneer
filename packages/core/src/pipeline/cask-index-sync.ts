@@ -29,9 +29,10 @@ export interface CaskIndexSyncJob {
  * Extracts bundle IDs from a cask entry's artifacts.
  * Looks at zap/trash paths and uninstall/quit directives.
  */
+const BUNDLE_ID_RE = /^[a-zA-Z][a-zA-Z0-9-]*(\.[a-zA-Z0-9-]+){2,}$/;
+
 export function extractBundleIdsFromCask(artifacts: unknown[]): string[] {
   const bundleIds = new Set<string>();
-  const bundleIdPattern = /^[a-zA-Z][a-zA-Z0-9-]*(\.[a-zA-Z0-9-]+){2,}$/;
 
   for (const artifact of artifacts) {
     if (typeof artifact !== "object" || artifact === null) continue;
@@ -56,11 +57,11 @@ export function extractBundleIdsFromCask(artifacts: unknown[]): string[] {
       for (const entry of obj.uninstall) {
         if (typeof entry !== "object" || entry === null) continue;
         const quit = (entry as Record<string, unknown>).quit;
-        if (typeof quit === "string" && bundleIdPattern.test(quit)) {
+        if (typeof quit === "string" && BUNDLE_ID_RE.test(quit)) {
           bundleIds.add(quit.toLowerCase());
         } else if (Array.isArray(quit)) {
           for (const q of quit) {
-            if (typeof q === "string" && bundleIdPattern.test(q)) {
+            if (typeof q === "string" && BUNDLE_ID_RE.test(q)) {
               bundleIds.add(q.toLowerCase());
             }
           }
@@ -68,7 +69,7 @@ export function extractBundleIdsFromCask(artifacts: unknown[]): string[] {
         const signal = (entry as Record<string, unknown>).signal;
         if (typeof signal === "object" && signal !== null) {
           for (const key of Object.keys(signal as Record<string, unknown>)) {
-            if (bundleIdPattern.test(key)) {
+            if (BUNDLE_ID_RE.test(key)) {
               bundleIds.add(key.toLowerCase());
             }
           }
@@ -81,13 +82,12 @@ export function extractBundleIdsFromCask(artifacts: unknown[]): string[] {
 }
 
 function extractBundleIdFromPath(path: string, bundleIds: Set<string>): void {
-  const bundleIdPattern = /^[a-zA-Z][a-zA-Z0-9-]*(\.[a-zA-Z0-9-]+){2,}$/;
   // Group containers strip team ID prefix, leaving shorter IDs (e.g. "com.1password")
   const shortBundleIdPattern = /^[a-zA-Z][a-zA-Z0-9-]*\.[a-zA-Z0-9-]+$/;
 
   // Patterns like ~/Library/Preferences/com.example.app.plist
   const prefPlistMatch = path.match(/~\/Library\/Preferences\/([a-zA-Z][a-zA-Z0-9.-]+)\.plist$/);
-  if (prefPlistMatch?.[1] && bundleIdPattern.test(prefPlistMatch[1])) {
+  if (prefPlistMatch?.[1] && BUNDLE_ID_RE.test(prefPlistMatch[1])) {
     bundleIds.add(prefPlistMatch[1].toLowerCase());
     return;
   }
@@ -110,7 +110,7 @@ function extractBundleIdFromPath(path: string, bundleIds: Set<string>): void {
 
   for (const pattern of containerPaths) {
     const match = path.match(pattern);
-    if (match?.[1] && bundleIdPattern.test(match[1])) {
+    if (match?.[1] && BUNDLE_ID_RE.test(match[1])) {
       bundleIds.add(match[1].toLowerCase());
       return;
     }
