@@ -80,6 +80,7 @@ private struct GeneralSettingsTab: View {
 
         LabeledContent("Update feed") {
           Text(selfUpdateService.feedURL?.absoluteString ?? "Unavailable")
+            .font(.callout.monospaced())
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.trailing)
             .textSelection(.enabled)
@@ -491,6 +492,7 @@ private struct AdvancedSettingsTab: View {
     Form {
       Section {
         TextField("Server URL", text: $urlString)
+          .font(.body.monospaced())
           .textFieldStyle(.roundedBorder)
 
         if hasPendingChange {

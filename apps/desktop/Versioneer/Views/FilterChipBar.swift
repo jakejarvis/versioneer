@@ -72,22 +72,22 @@ struct FilterChipBar: View {
       }
     } label: {
       HStack(spacing: 5) {
-        Image(systemName: section.systemImage)
-          .font(.caption2.weight(.semibold))
+        Image(systemName: isSelected ? section.selectedSystemImage : section.systemImage)
+          .font(.callout.weight(.semibold))
         Text(section.shortTitle)
-          .font(.caption.weight(.semibold))
+          .font(.callout.weight(.semibold))
           .lineLimit(1)
         Text("\(count)")
-          .font(.caption2.monospacedDigit().weight(.medium))
+          .font(.caption.monospacedDigit().weight(.medium))
           .foregroundStyle(
-            isSelected ? Color.accentColor.opacity(0.6) : Color.secondary.opacity(0.6))
+            isSelected ? Color.accentColor.opacity(0.75) : Color.secondary.opacity(0.65))
       }
       .fixedSize(horizontal: true, vertical: false)
       .padding(.horizontal, 10)
       .padding(.vertical, 6)
       .background(
         isSelected
-          ? Color.accentColor.opacity(0.12)
+          ? Color.accentColor.opacity(0.18)
           : (hoveredSection == section ? Color.primary.opacity(0.04) : Color.clear),
         in: .capsule
       )
@@ -106,7 +106,7 @@ struct FilterChipBar: View {
         startPoint: .leading,
         endPoint: .trailing
       )
-      .frame(width: 10)
+      .frame(width: 20)
 
       Rectangle()
         .fill(.black)
@@ -116,7 +116,7 @@ struct FilterChipBar: View {
         startPoint: .leading,
         endPoint: .trailing
       )
-      .frame(width: 10)
+      .frame(width: 20)
     }
   }
 }

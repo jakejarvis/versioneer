@@ -3,10 +3,6 @@ import SwiftUI
 struct StatusBarView: View {
   @Environment(AppState.self) private var appState
 
-  private var isLoading: Bool {
-    appState.loadState == .scanning || appState.loadState == .submitting
-  }
-
   var body: some View {
     let presentation = appState.statusBarPresentation
 
@@ -16,32 +12,11 @@ struct StatusBarView: View {
       Spacer()
 
       Text(presentation.appCountText)
-
-      Button {
-        Task { await appState.scanAndSubmit() }
-      } label: {
-        Group {
-          if isLoading {
-            ProgressView()
-              .controlSize(.mini)
-          } else {
-            Image(systemName: "arrow.clockwise")
-          }
-        }
-        .frame(width: 14, height: 14)
-      }
-      .buttonStyle(.plain)
-      .focusEffectDisabled()
-      .foregroundStyle(.secondary)
-      .disabled(isLoading)
-      .help("Refresh (⌘R)")
-      .accessibilityLabel("Refresh")
-      .accessibilityHint("Scans for installed apps and checks for updates")
     }
     .font(.caption)
     .foregroundStyle(.secondary)
     .padding(.horizontal, 14)
-    .padding(.vertical, 8)
+    .padding(.vertical, 6)
     .adaptiveMaterial()
     .overlay(alignment: .top) {
       Divider()

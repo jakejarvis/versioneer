@@ -1,31 +1,25 @@
+import AppKit
 import SwiftUI
 
 struct RootView: View {
   @Environment(AppState.self) private var appState
-  @Environment(InstallCoordinator.self) private var installCoordinator
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   @State private var searchInput: String = ""
   @State private var searchDebounceTask: Task<Void, Never>?
 
   var body: some View {
-    ZStack {
-      // Main content
-      VStack(spacing: 0) {
-        FilterChipBar()
-        listContent
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .background(resultsPaneBackground)
-        StatusBarView()
+    NavigationSplitView {
+      sidebarContent
+        .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 360)
+    } detail: {
+      detailContent
+    }
+    .navigationSplitViewStyle(.balanced)
+    .toolbar {
+      ToolbarItem(placement: .principal) {
+        toolbarStatusLabel
       }
 
-      // Full-window overlay
-      if appState.detailResult != nil {
-        DetailOverlayView()
-          .motionAwareAnimation(.spring(duration: 0.3), value: appState.detailResult?.id)
-      }
-    }
-    .toolbar {
       ToolbarItemGroup(placement: .primaryAction) {
         Button {
           Task { await appState.scanAndSubmit() }
@@ -57,21 +51,44 @@ struct RootView: View {
       }
     }
     .toolbarRole(.editor)
-    .frame(minWidth: 500, minHeight: 400)
+    .frame(minWidth: 680, minHeight: 500)
     .background(TranslucentWindowBackground())
     .versioneerAnalyticsScreen(name: "main_window", class: "RootView")
-    .onKeyPress(.escape) {
-      if appState.detailResult != nil {
-        withMotionAwareAnimation(reduceMotion: reduceMotion) {
-          appState.closeDetail()
-        }
-        return .handled
-      }
-      return .ignored
-    }
     .task {
+      guard appState.settings.scanOnLaunch else { return }
+      guard !isRunningPreview else { return }
       await Task.yield()
       await appState.scanAndSubmit()
+    }
+    .task(id: appState.visibleUpdateCount) {
+      updateDockBadge(with: appState.visibleUpdateCount)
+    }
+  }
+
+  private var sidebarContent: some View {
+    VStack(spacing: 0) {
+      FilterChipBar()
+      listContent
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(resultsPaneBackground)
+      StatusBarView()
+    }
+  }
+
+  @ViewBuilder
+  private var detailContent: some View {
+    if let selectedResult = appState.selectedResult {
+      DetailPaneView(result: selectedResult)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(detailPaneBackground)
+    } else {
+      ContentUnavailableView {
+        Label("Select an App", systemImage: "sidebar.right")
+      } description: {
+        Text("Choose an app from the list to view its status, versions, and update actions.")
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(detailPaneBackground)
     }
   }
 
@@ -93,12 +110,18 @@ struct RootView: View {
         retryAction: { Task { await appState.scanAndSubmit() } }
       )
     } else if rows.isEmpty && !appState.searchText.isEmpty {
-      ContentUnavailableView.search(text: appState.searchText)
+      ContentUnavailableView {
+        Label("No Search Results", systemImage: "magnifyingglass")
+      } description: {
+        Text(
+          "No apps match \"\(appState.searchText)\". Try a different search term or clear the search field."
+        )
+      }
     } else if rows.isEmpty {
       ContentUnavailableView {
         Label("No Results", systemImage: "app.dashed")
       } description: {
-        Text("No apps match the current filter.")
+        Text("No apps match the current filter. Try a different section or search term.")
       }
     } else {
       appList(rows: rows)
@@ -116,26 +139,35 @@ struct RootView: View {
     }
     .listStyle(.inset)
     .scrollContentBackground(.hidden)
-    .onChange(of: appState.selectedAppID) { _, newValue in
-      guard let newValue else {
-        withMotionAwareAnimation(reduceMotion: reduceMotion) {
-          appState.detailResult = nil
-        }
-        return
-      }
-      withMotionAwareAnimation(reduceMotion: reduceMotion) {
-        appState.openDetail(id: newValue)
-      }
+  }
+
+  private var toolbarStatusLabel: some View {
+    Label(toolbarStatusText, systemImage: toolbarStatusSystemImage)
+      .font(.caption.weight(.semibold))
+      .foregroundStyle(toolbarStatusTint)
+      .lineLimit(1)
+      .help(toolbarStatusText)
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel(toolbarStatusText)
+  }
+
+  private var toolbarStatusText: String {
+    switch appState.visibleUpdateCount {
+    case 0:
+      "All Apps Up to Date"
+    case 1:
+      "1 Update Available"
+    default:
+      "\(appState.visibleUpdateCount) Updates Available"
     }
-    .onKeyPress(.return) {
-      if let selectedID = appState.selectedAppID, appState.detailResult == nil {
-        withMotionAwareAnimation(reduceMotion: reduceMotion) {
-          appState.openDetail(id: selectedID)
-        }
-        return .handled
-      }
-      return .ignored
-    }
+  }
+
+  private var toolbarStatusSystemImage: String {
+    appState.visibleUpdateCount > 0 ? "arrow.up.circle.fill" : "checkmark.circle"
+  }
+
+  private var toolbarStatusTint: Color {
+    appState.visibleUpdateCount > 0 ? .accentColor : .secondary
   }
 
   private var resultsPaneBackground: some View {
@@ -143,5 +175,21 @@ struct RootView: View {
       .overlay {
         Color.primary.opacity(0.03)
       }
+  }
+
+  private var detailPaneBackground: some View {
+    Color(nsColor: .windowBackgroundColor)
+      .overlay {
+        Color.primary.opacity(0.02)
+      }
+  }
+
+  private func updateDockBadge(with count: Int) {
+    NSApp.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
+    NSApp.dockTile.display()
+  }
+
+  private var isRunningPreview: Bool {
+    ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
   }
 }

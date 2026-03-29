@@ -35,7 +35,7 @@ struct ReleaseNotesWebView: NSViewRepresentable {
           body {
               font-family: -apple-system, BlinkMacSystemFont, sans-serif;
               font-size: 13px;
-              line-height: 1.55;
+              line-height: 1.45;
               color: -apple-system-label;
               margin: 12px;
               word-wrap: break-word;

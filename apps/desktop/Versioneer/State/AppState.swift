@@ -4,6 +4,11 @@ import Logging
 import Observation
 import UniformTypeIdentifiers
 
+nonisolated struct ReleaseNotesContent: Equatable, Sendable {
+  let html: String?
+  let url: URL?
+}
+
 /// Top-level shared application state.
 @Observable
 @MainActor
@@ -52,11 +57,18 @@ final class AppState {
       case .ignored: "minus.circle"
       }
     }
+
+    var selectedSystemImage: String {
+      switch self {
+      case .all: "app.dashed"
+      case .updatesAvailable: "arrow.up.circle.fill"
+      case .notTracked: "questionmark.circle.fill"
+      case .ignored: "minus.circle.fill"
+      }
+    }
   }
 
   var selectedSection: FilterSection = .all
-  var selectedResult: AppDecision?
-  var detailResult: AppDecision?
   var selectedAppID: String?
   var resultsSort: ResultsBrowserSort = .updatesFirst
 
@@ -83,8 +95,8 @@ final class AppState {
   /// Icon cache to avoid re-loading from disk on every view redraw.
   private var iconCache: [String: NSImage] = [:]
 
-  /// Cached release notes HTML keyed by release ID.
-  private var releaseNotesCache: [String: String?] = [:]
+  /// Cached release notes keyed by release ID.
+  private var releaseNotesCache: [String: ReleaseNotesContent?] = [:]
 
   // MARK: - Loading state
 
@@ -146,18 +158,13 @@ final class AppState {
 
     scanSummary = ScanSummary(
       totalApps: visibleResults.count,
-      updatesAvailableCount: inventoryResults.filter { $0.decision == .updateAvailable }.count,
+      updatesAvailableCount: visibleResults.filter { $0.decision == .updateAvailable }.count,
       notTrackedCount: inventoryResults.filter {
         ($0.decision == .notTracked || $0.decision == .ambiguous) && !isUserIgnored($0)
       }.count,
       ignoredCount: userIgnoredResultIDs.count,
       lastCompletedAt: lastScanCompletedAt
     )
-  }
-
-  var selectedResultID: String? {
-    get { selectedResult?.id }
-    set { selectResult(id: newValue) }
   }
 
   private(set) var resultsBrowserRows: [ResultsBrowserRowPresentation] = []
@@ -173,7 +180,16 @@ final class AppState {
   }
 
   var updatableResults: [AppDecision] {
-    inventoryResults.filter { $0.decision == .updateAvailable }
+    inventoryResults.filter { $0.decision == .updateAvailable && !isUserIgnored($0) }
+  }
+
+  var visibleUpdateCount: Int {
+    updatableResults.count
+  }
+
+  var selectedResult: AppDecision? {
+    guard let selectedAppID else { return nil }
+    return inventoryResultsByID[selectedAppID]
   }
 
   var statusBarPresentation: StatusBarPresentation {
@@ -196,7 +212,9 @@ final class AppState {
     case .all:
       sectionFiltered = inventoryResults.filter { !isUserIgnored($0) }
     case .updatesAvailable:
-      sectionFiltered = inventoryResults.filter { $0.decision == .updateAvailable }
+      sectionFiltered = inventoryResults.filter {
+        $0.decision == .updateAvailable && !isUserIgnored($0)
+      }
     case .notTracked:
       sectionFiltered = inventoryResults.filter {
         ($0.decision == .notTracked || $0.decision == .ambiguous) && !isUserIgnored($0)
@@ -218,7 +236,9 @@ final class AppState {
   func badgeCount(for section: FilterSection) -> Int? {
     switch section {
     case .updatesAvailable:
-      let count = inventoryResults.filter { $0.decision == .updateAvailable }.count
+      let count = inventoryResults.filter {
+        $0.decision == .updateAvailable && !isUserIgnored($0)
+      }.count
       return count > 0 ? count : nil
     case .notTracked:
       let count = inventoryResults.filter {
@@ -238,16 +258,19 @@ final class AppState {
   func setSelectedSection(_ section: FilterSection) {
     selectedSection = section
     rebuildResultsBrowserRows()
+    syncSelectedAppIDToVisibleRows()
   }
 
   func setResultsSort(_ sort: ResultsBrowserSort) {
     resultsSort = sort
     rebuildResultsBrowserRows()
+    syncSelectedAppIDToVisibleRows()
   }
 
   func setSearchText(_ text: String) {
     searchText = text
     rebuildResultsBrowserRows()
+    syncSelectedAppIDToVisibleRows()
   }
 
   /// Rebuilds path and installed-app lookup tables from the current `installedApps` array.
@@ -368,19 +391,11 @@ final class AppState {
     copyToPasteboard(path)
   }
 
-  func selectResult(id: String?) {
-    guard let id else {
-      selectedResult = nil
-      return
-    }
-    selectedResult = inventoryResultsByID[id]
-  }
-
   func scanAndSubmit() async {
     loadState = .scanning
-    let previousSelectionID = selectedResult?.id
+    let previousSelectionID = selectedAppID
     if !hasCachedResults {
-      selectedResult = nil
+      selectedAppID = nil
     }
 
     let startTime = CFAbsoluteTimeGetCurrent()
@@ -595,14 +610,18 @@ final class AppState {
   // MARK: - Release Notes
 
   /// Fetches release notes for a given release ID. Returns cached result if available.
-  func fetchReleaseNotes(releaseId: String) async -> String? {
+  func fetchReleaseNotes(releaseId: String) async -> ReleaseNotesContent? {
     if let cached = releaseNotesCache[releaseId] {
       return cached
     }
     do {
       let response = try await apiClient.fetchReleaseNotes(releaseId: releaseId)
-      releaseNotesCache[releaseId] = response.releaseNotesHtml
-      return response.releaseNotesHtml
+      let content = ReleaseNotesContent(
+        html: response.releaseNotesHtml,
+        url: response.releaseNotesUrl.flatMap(URL.init(string:))
+      )
+      releaseNotesCache[releaseId] = content
+      return content
     } catch {
       Logger.api.error(
         "Failed to fetch release notes for \(releaseId): \(error.localizedDescription)")
@@ -649,13 +668,10 @@ final class AppState {
   }
 
   func openDetail(id: String) {
-    detailResult = inventoryResultsByID[id]
-    selectedResult = detailResult
-    selectedAppID = id
+    selectedAppID = inventoryResultsByID[id] == nil ? nil : id
   }
 
   func closeDetail() {
-    detailResult = nil
     selectedAppID = nil
   }
 
@@ -706,7 +722,7 @@ final class AppState {
   }
 
   func refreshDisplayedResults(preservingSelectionID selectionID: String? = nil) {
-    let preferredSelectionID = selectionID ?? selectedAppID ?? selectedResult?.id
+    let preferredSelectionID = selectionID ?? selectedAppID
     userIgnoredResultIDs = Set(
       rawInventoryResults.compactMap { decision in
         guard let installedApp = self.installedApp(for: decision),
@@ -719,25 +735,7 @@ final class AppState {
     inventoryResultsByID = Dictionary(uniqueKeysWithValues: inventoryResults.map { ($0.id, $0) })
     rebuildScanSummary()
     rebuildResultsBrowserRows()
-
-    guard let preferredSelectionID else { return }
-
-    let movedIntoHiddenIgnoredSection =
-      userIgnoredResultIDs.contains(preferredSelectionID) && selectedSection != .ignored
-    let movedOutOfIgnoredSection =
-      !userIgnoredResultIDs.contains(preferredSelectionID) && selectedSection == .ignored
-
-    if movedIntoHiddenIgnoredSection || movedOutOfIgnoredSection {
-      if selectedAppID == preferredSelectionID || detailResult?.id == preferredSelectionID {
-        closeDetail()
-      }
-      if selectedResult?.id == preferredSelectionID {
-        selectedResult = nil
-      }
-      return
-    }
-
-    restoreSelection(with: preferredSelectionID)
+    syncSelectedAppIDToVisibleRows(preferredSelectionID: preferredSelectionID)
   }
 
   private func sort(
@@ -777,13 +775,15 @@ final class AppState {
     }
   }
 
-  private func restoreSelection(with id: String?) {
-    guard let id else { return }
-    selectResult(id: id)
-    // Refresh the detail panel with updated data from the new inventory results
-    if detailResult != nil {
-      detailResult = inventoryResultsByID[id]
+  private func syncSelectedAppIDToVisibleRows(preferredSelectionID: String? = nil) {
+    let candidateID = preferredSelectionID ?? selectedAppID
+    guard let candidateID else {
+      selectedAppID = nil
+      return
     }
+
+    let isVisible = resultsBrowserRows.contains { $0.id == candidateID }
+    selectedAppID = isVisible ? candidateID : nil
   }
 
   private func copyToPasteboard(_ value: String) {

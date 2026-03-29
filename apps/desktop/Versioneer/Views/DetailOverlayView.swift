@@ -1,50 +1,11 @@
 import SwiftUI
 
-struct DetailOverlayView: View {
+struct DetailPaneView: View {
   @Environment(AppState.self) private var appState
   @Environment(InstallCoordinator.self) private var installCoordinator
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-  var body: some View {
-    if let result = appState.detailResult {
-      ZStack {
-        // Dimmed backdrop — fade only, tap to dismiss
-        Color.black.opacity(0.3)
-          .ignoresSafeArea()
-          .transition(.opacity)
-          .onTapGesture {
-            withMotionAwareAnimation(reduceMotion: reduceMotion) {
-              appState.closeDetail()
-            }
-          }
-
-        // Detail card — fade + scale
-        DetailCardView(result: result)
-          .frame(maxWidth: 460)
-          .frame(maxHeight: .infinity)
-          .padding(.vertical, 24)
-          .padding(.horizontal, 20)
-          .transition(
-            .motionAware(
-              .opacity.combined(with: .scale(scale: 0.95)),
-              reduceMotion: reduceMotion
-            ))
-      }
-    }
-  }
-}
-
-// MARK: - Detail Card
-
-private struct DetailCardView: View {
-  @Environment(AppState.self) private var appState
-  @Environment(InstallCoordinator.self) private var installCoordinator
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
   let result: AppDecision
 
-  @State private var closeButtonHovered = false
   @State private var showFeedbackSheet = false
   @State private var showInstallWarning = false
   @State private var showBrewBypassWarning = false
@@ -55,7 +16,7 @@ private struct DetailCardView: View {
   @State private var feedbackSubmitting = false
   @State private var feedbackError: String?
   @State private var feedbackSuccess = false
-  @State private var releaseNotesHtml: String?
+  @State private var releaseNotes: ReleaseNotesContent?
   @State private var releaseNotesLoading = false
 
   private var installState: InstallCoordinator.OperationState {
@@ -70,53 +31,27 @@ private struct DetailCardView: View {
     appState.isUserIgnored(result)
   }
 
-  var body: some View {
-    VStack(spacing: 0) {
-      // Close button row
-      HStack {
-        Spacer()
-        Button {
-          withMotionAwareAnimation(reduceMotion: reduceMotion) {
-            appState.closeDetail()
-          }
-        } label: {
-          Image(systemName: "xmark.circle.fill")
-            .font(.title2)
-            .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(closeButtonHovered ? .primary : .secondary)
-        }
-        .buttonStyle(.plain)
-        .onHover { closeButtonHovered = $0 }
-        .accessibilityLabel("Close detail")
-      }
-      .padding(.horizontal, 16)
-      .padding(.top, 12)
-      .padding(.bottom, 2)
+  private var hasPrimaryActionSection: Bool {
+    isUserIgnored || (isBrewApp && result.decision == .updateAvailable)
+      || result.canInstall || result.decision == .updateAvailable
+  }
 
-      // Scrollable content
-      ScrollView {
-        VStack(alignment: .leading, spacing: 20) {
-          heroSection
-          actionSection
-          releaseNotesSection
-          footerSection
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 20) {
+        heroSection
+
+        if hasPrimaryActionSection {
+          primaryActionSection
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 20)
+
+        secondaryActionSection
+        releaseNotesSection
       }
+      .padding(24)
+      .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .if(reduceTransparency) {
-      $0.background(
-        Color(nsColor: .controlBackgroundColor),
-        in: .rect(cornerRadius: 22)
-      )
-    }
-    .if(!reduceTransparency) {
-      $0.glassEffect(.regular, in: .rect(cornerRadius: 22))
-    }
-    .task(id: result.latestReleaseId) {
-      await loadReleaseNotes()
-    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .sheet(isPresented: $showFeedbackSheet) {
       FeedbackSheetView(
         feedbackType: $feedbackType,
@@ -140,10 +75,23 @@ private struct DetailCardView: View {
         "This app is only provisionally verified. Versioneer will still run full local verification before installing."
       )
     }
+    .alert("Install directly?", isPresented: $showBrewBypassWarning) {
+      Button("Install Directly", role: .destructive) {
+        Task { await appState.install(result) }
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text(
+        "This app was installed via Homebrew. Installing directly may cause Homebrew to lose track of it. You can re-sync with `brew reinstall --cask`."
+      )
+    }
+    .task(id: result.latestReleaseId) {
+      await loadReleaseNotes()
+    }
     .onChange(of: feedbackSuccess) {
       guard feedbackSuccess else { return }
       Task {
-        try? await Task.sleep(for: .seconds(1.2))
+        try? await Task.sleep(for: .seconds(2))
         resetFeedbackState()
       }
     }
@@ -153,13 +101,13 @@ private struct DetailCardView: View {
 
   private var heroSection: some View {
     VStack(alignment: .leading, spacing: 14) {
-      HStack(spacing: 14) {
+      HStack(alignment: .top, spacing: 16) {
         Image(nsImage: appState.appIcon(for: result))
           .resizable()
           .aspectRatio(contentMode: .fit)
-          .frame(width: 48, height: 48)
+          .frame(width: 56, height: 56)
 
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
           Text(result.matchedAppName ?? result.appName)
             .font(.title3.weight(.semibold))
             .lineLimit(2)
@@ -222,14 +170,14 @@ private struct DetailCardView: View {
     }
   }
 
-  // MARK: - Action Section
+  // MARK: - Action Sections
 
   private var isBrewApp: Bool {
     appState.isHomebrewInstalled(for: result)
   }
 
   @ViewBuilder
-  private var actionSection: some View {
+  private var primaryActionSection: some View {
     if isUserIgnored {
       ignoredActionSection
     } else if isBrewApp && result.decision == .updateAvailable {
@@ -262,25 +210,9 @@ private struct DetailCardView: View {
       }
       .buttonStyle(.glassProminent)
       .controlSize(.large)
-
-      HStack(spacing: 10) {
-        Button("Open App") {
-          appState.openApp(result)
-        }
-        .disabled(appState.appPathText(for: result) == nil)
-
-        Button("Show in Finder") {
-          appState.revealAppInFinder(result)
-        }
-        .disabled(appState.appPathText(for: result) == nil)
-      }
-      .buttonStyle(.glass)
-      .controlSize(.regular)
     }
     .glassCard(interactive: true, cornerRadius: 22, padding: 18)
   }
-
-  // MARK: - Homebrew Upgrade Action
 
   private var brewUpgradeActionSection: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -343,19 +275,7 @@ private struct DetailCardView: View {
       .foregroundStyle(.secondary)
     }
     .glassCard(interactive: true, cornerRadius: 22, padding: 18)
-    .alert("Install directly?", isPresented: $showBrewBypassWarning) {
-      Button("Install Directly", role: .destructive) {
-        Task { await appState.install(result) }
-      }
-      Button("Cancel", role: .cancel) {}
-    } message: {
-      Text(
-        "This app was installed via Homebrew. Installing directly may cause Homebrew to lose track of it. You can re-sync with `brew reinstall --cask`."
-      )
-    }
   }
-
-  // MARK: - Standard Install Action
 
   private var standardInstallActionSection: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -410,6 +330,52 @@ private struct DetailCardView: View {
     .glassCard(interactive: true, cornerRadius: 22, padding: 18)
   }
 
+  private var secondaryActionSection: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      SectionHeader(title: "Quick Actions")
+
+      ViewThatFits(in: .horizontal) {
+        HStack(spacing: 10) {
+          openAppButton
+          showInFinderButton
+          reportIssueButton
+        }
+
+        VStack(alignment: .leading, spacing: 10) {
+          openAppButton
+          showInFinderButton
+          reportIssueButton
+        }
+      }
+    }
+    .glassCard(cornerRadius: 18, padding: 16)
+  }
+
+  private var openAppButton: some View {
+    Button("Open App") {
+      appState.openApp(result)
+    }
+    .buttonStyle(.glass)
+    .disabled(appState.appPathText(for: result) == nil)
+  }
+
+  private var showInFinderButton: some View {
+    Button("Show in Finder") {
+      appState.revealAppInFinder(result)
+    }
+    .buttonStyle(.glass)
+    .disabled(appState.appPathText(for: result) == nil)
+  }
+
+  private var reportIssueButton: some View {
+    Button("Report Issue") {
+      showFeedbackSheet = true
+      feedbackError = nil
+      feedbackSuccess = false
+    }
+    .buttonStyle(.glass)
+  }
+
   // MARK: - Release Notes Section
 
   @ViewBuilder
@@ -427,10 +393,27 @@ private struct DetailCardView: View {
               .font(.callout)
               .foregroundStyle(.secondary)
           }
-        } else if let releaseNotesHtml, !releaseNotesHtml.isEmpty {
-          ReleaseNotesWebView(html: releaseNotesHtml)
-            .frame(minHeight: 100, maxHeight: 300)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        } else if let releaseNotes {
+          if let html = releaseNotes.html, !html.isEmpty {
+            ReleaseNotesWebView(html: html)
+              .frame(minHeight: 100, maxHeight: 300)
+              .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+              .overlay(alignment: .top) {
+                releaseNotesFade(startPoint: .top, endPoint: .bottom)
+              }
+              .overlay(alignment: .bottom) {
+                releaseNotesFade(startPoint: .bottom, endPoint: .top)
+              }
+          } else {
+            Text("No release notes available.")
+              .font(.callout)
+              .foregroundStyle(.secondary)
+          }
+
+          if let url = releaseNotes.url {
+            Link("View Full Release Notes", destination: url)
+              .buttonStyle(.link)
+          }
         } else {
           Text("No release notes available.")
             .font(.callout)
@@ -440,19 +423,14 @@ private struct DetailCardView: View {
     }
   }
 
-  // MARK: - Footer Section
-
-  private var footerSection: some View {
-    Button {
-      showFeedbackSheet = true
-      feedbackError = nil
-      feedbackSuccess = false
-    } label: {
-      Text("Something wrong? Report an issue")
-        .font(.caption)
-        .foregroundStyle(.secondary)
-    }
-    .buttonStyle(.link)
+  private func releaseNotesFade(startPoint: UnitPoint, endPoint: UnitPoint) -> some View {
+    LinearGradient(
+      colors: [Color(nsColor: .windowBackgroundColor), .clear],
+      startPoint: startPoint,
+      endPoint: endPoint
+    )
+    .frame(height: 18)
+    .allowsHitTesting(false)
   }
 
   // MARK: - Helpers
@@ -468,7 +446,7 @@ private struct DetailCardView: View {
 
   private var decisionTint: Color {
     switch result.decision {
-    case .updateAvailable: .orange
+    case .updateAvailable: .accentColor
     case .upToDate: .green
     case .ambiguous: .orange
     case .notTracked: .secondary
@@ -513,11 +491,12 @@ private struct DetailCardView: View {
 
   private func loadReleaseNotes() async {
     guard let releaseId = result.latestReleaseId else {
-      releaseNotesHtml = nil
+      releaseNotes = nil
       return
     }
     releaseNotesLoading = true
-    releaseNotesHtml = await appState.fetchReleaseNotes(releaseId: releaseId)
+    releaseNotes = nil
+    releaseNotes = await appState.fetchReleaseNotes(releaseId: releaseId)
     releaseNotesLoading = false
   }
 
@@ -598,7 +577,8 @@ private struct ChannelPicker: View {
         StatusChip(
           title: currentChannel.capitalized,
           tint: channelTint,
-          systemImage: "antenna.radiowaves.left.and.right"
+          systemImage: "antenna.radiowaves.left.and.right",
+          interactive: true
         )
       }
       .menuStyle(.borderlessButton)

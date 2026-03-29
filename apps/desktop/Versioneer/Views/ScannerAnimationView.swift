@@ -19,9 +19,15 @@ struct ScannerAnimationView: View {
           .foregroundStyle(.secondary)
           .if(!reduceMotion) { $0.symbolEffect(.pulse, options: .repeating) }
 
-        Text("Discovering your apps…")
-          .font(.title3.weight(.medium))
-          .foregroundStyle(.primary)
+        VStack(spacing: 6) {
+          Text("Discovering your apps…")
+            .font(.title3.weight(.medium))
+            .foregroundStyle(.primary)
+
+          Text("Checking /Applications and ~/Applications")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
       }
 
       if !appState.installedApps.isEmpty {

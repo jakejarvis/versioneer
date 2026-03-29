@@ -21,7 +21,7 @@ struct VersioneerApp: App {
         .environment(appState.installCoordinator)
         .environment(selfUpdateService)
     }
-    .defaultSize(width: 600, height: 500)
+    .defaultSize(width: 900, height: 560)
     .windowResizability(.contentMinSize)
     .windowToolbarStyle(.unified(showsTitle: false))
     .commands {

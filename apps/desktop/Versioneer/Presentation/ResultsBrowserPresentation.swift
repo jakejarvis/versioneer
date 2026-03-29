@@ -109,7 +109,7 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
       case .upToDate:
         ("Up to Date", .positive, "checkmark.circle.fill")
       case .updateAvailable:
-        ("Update Available", .attention, "arrow.up.circle.fill")
+        ("Update Available", .accent, "arrow.up.circle.fill")
       case .ambiguous:
         ("Needs Review", .attention, "scope")
       case .notTracked:

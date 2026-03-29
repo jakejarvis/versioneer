@@ -21,50 +21,57 @@ struct FeedbackSheetView: View {
   let onSubmit: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 18) {
-      SectionHeader(
-        title: "Report Issue",
-        subtitle: "Send catalog feedback without leaving the desktop app."
-      )
+    NavigationStack {
+      Form {
+        Section {
+          Picker("Issue Type", selection: $feedbackType) {
+            ForEach(FeedbackType.allCases) { type in
+              Text(type.rawValue).tag(type)
+            }
+          }
+          .pickerStyle(.segmented)
+        }
 
-      Picker("Issue Type", selection: $feedbackType) {
-        ForEach(FeedbackType.allCases) { type in
-          Text(type.rawValue).tag(type)
+        Section {
+          feedbackBody
+
+          TextField("Additional comments (optional)", text: $feedbackComment, axis: .vertical)
+            .lineLimit(4...6)
+        } footer: {
+          Text("Send catalog feedback without leaving the desktop app.")
+        }
+
+        if let feedbackError {
+          Section {
+            Text(feedbackError)
+              .font(.callout)
+              .foregroundStyle(.red)
+          }
+        }
+
+        if feedbackSuccess {
+          Section {
+            Label("Thank you for your feedback.", systemImage: "checkmark.circle.fill")
+              .foregroundStyle(.green)
+          }
         }
       }
-      .pickerStyle(.segmented)
+      .formStyle(.grouped)
+      .navigationTitle("Report Issue")
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel", action: onCancel)
+            .keyboardShortcut(.cancelAction)
+        }
 
-      feedbackBody
-
-      TextField("Additional comments (optional)", text: $feedbackComment, axis: .vertical)
-        .textFieldStyle(.roundedBorder)
-        .lineLimit(4...6)
-
-      if let feedbackError {
-        Text(feedbackError)
-          .font(.callout)
-          .foregroundStyle(.red)
-      }
-
-      if feedbackSuccess {
-        Label("Feedback submitted.", systemImage: "checkmark.circle.fill")
-          .foregroundStyle(.green)
-      }
-
-      HStack {
-        Spacer()
-
-        Button("Cancel", action: onCancel)
-          .keyboardShortcut(.cancelAction)
-
-        Button("Submit", action: onSubmit)
-          .buttonStyle(.glassProminent)
-          .keyboardShortcut(.defaultAction)
-          .disabled(feedbackSubmitting)
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Submit", action: onSubmit)
+            .keyboardShortcut(.defaultAction)
+            .disabled(feedbackSubmitting)
+        }
       }
     }
-    .padding(20)
-    .frame(minWidth: 440)
+    .frame(minWidth: 480, minHeight: 360)
   }
 
   @ViewBuilder
@@ -80,7 +87,6 @@ struct FeedbackSheetView: View {
           .font(.callout)
           .foregroundStyle(.secondary)
         TextField("Correct latest version (optional)", text: $feedbackVersion)
-          .textFieldStyle(.roundedBorder)
       }
     case .missingApp:
       VStack(alignment: .leading, spacing: 10) {
@@ -88,7 +94,6 @@ struct FeedbackSheetView: View {
           .font(.callout)
           .foregroundStyle(.secondary)
         TextField("Homepage URL (optional)", text: $feedbackURL)
-          .textFieldStyle(.roundedBorder)
       }
     }
   }

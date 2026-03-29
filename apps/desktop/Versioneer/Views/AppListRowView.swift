@@ -7,6 +7,8 @@ struct AppListRowView: View {
 
   let row: ResultsBrowserRowPresentation
 
+  @State private var isHovered = false
+
   private var result: AppDecision? {
     appState.inventoryResultsByID[row.id]
   }
@@ -21,6 +23,10 @@ struct AppListRowView: View {
     return appState.isUserIgnored(result)
   }
 
+  private var isSelected: Bool {
+    appState.selectedAppID == row.id
+  }
+
   var body: some View {
     HStack(spacing: 12) {
       appIcon
@@ -28,7 +34,7 @@ struct AppListRowView: View {
       VStack(alignment: .leading, spacing: 2) {
         HStack(spacing: 5) {
           Text(row.appName)
-            .font(.body.weight(.medium))
+            .font(.body.weight(.semibold))
             .lineLimit(1)
             .truncationMode(.tail)
 
@@ -52,11 +58,16 @@ struct AppListRowView: View {
         .fixedSize()
         .motionAwareAnimation(.spring(duration: 0.25), value: installState.phase)
     }
-    .padding(.vertical, 5)
+    .padding(.vertical, 8)
     .padding(.horizontal, 4)
+    .background(
+      isHovered && !isSelected ? Color.primary.opacity(0.04) : .clear,
+      in: .rect(cornerRadius: 8)
+    )
     .contentShape(Rectangle())
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(row.appName), \(row.statusText)")
+    .onHover { isHovered = $0 }
     .contextMenu {
       if let result {
         rowContextMenu(for: result)
@@ -76,7 +87,7 @@ struct AppListRowView: View {
       }
     }
     .aspectRatio(contentMode: .fit)
-    .frame(width: 28, height: 28)
+    .frame(width: 36, height: 36)
   }
 
   @ViewBuilder
@@ -96,12 +107,12 @@ struct AppListRowView: View {
       .transition(.opacity)
     } else if let versionDiff = row.versionDiffText {
       Text(versionDiff)
-        .font(.caption.monospacedDigit())
-        .foregroundStyle(.orange)
+        .font(.footnote.monospacedDigit())
+        .foregroundStyle(Color.accentColor)
         .lineLimit(1)
     } else {
       Text(row.installedVersionText)
-        .font(.caption.monospacedDigit())
+        .font(.footnote.monospacedDigit())
         .foregroundStyle(.secondary)
         .lineLimit(1)
     }

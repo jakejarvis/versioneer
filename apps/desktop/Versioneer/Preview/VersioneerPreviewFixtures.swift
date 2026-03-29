@@ -94,7 +94,7 @@
 
     static func rootState(
       results: [AppDecision] = allResults,
-      detailResultID: String? = nil,
+      selectedAppID: String? = nil,
       loadState: AppState.LoadState = .done,
       installStates: [(AppDecision, InstallCoordinator.OperationState)] = [],
       ignoredRules: [IgnoredAppRule] = []
@@ -121,8 +121,8 @@
       state.resultsSort = .updatesFirst
       state.searchText = ""
 
-      if let detailResultID {
-        state.openDetail(id: detailResultID)
+      if let selectedAppID {
+        state.openDetail(id: selectedAppID)
       }
 
       for (result, operationState) in installStates {
@@ -267,7 +267,7 @@
   #Preview("Detail: Update Available") {
     PreviewHost(
       appState: VersioneerPreviewFixtures.rootState(
-        detailResultID: VersioneerPreviewFixtures.firefox.id)
+        selectedAppID: VersioneerPreviewFixtures.firefox.id)
     ) {
       RootView()
     }
@@ -276,7 +276,7 @@
   #Preview("Detail: Install In Progress") {
     PreviewHost(
       appState: VersioneerPreviewFixtures.rootState(
-        detailResultID: VersioneerPreviewFixtures.firefox.id,
+        selectedAppID: VersioneerPreviewFixtures.firefox.id,
         installStates: [
           (
             VersioneerPreviewFixtures.firefox,
@@ -296,7 +296,7 @@
   #Preview("Detail: Install Failed") {
     PreviewHost(
       appState: VersioneerPreviewFixtures.rootState(
-        detailResultID: VersioneerPreviewFixtures.textMate.id,
+        selectedAppID: VersioneerPreviewFixtures.textMate.id,
         installStates: [
           (
             VersioneerPreviewFixtures.textMate,

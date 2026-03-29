@@ -70,6 +70,9 @@ struct StatusChip: View {
   let tint: Color
   var systemImage: String?
   var showsProgress = false
+  var interactive = false
+
+  @State private var isHovered = false
 
   var body: some View {
     HStack(spacing: 6) {
@@ -88,8 +91,17 @@ struct StatusChip: View {
     .foregroundStyle(tint)
     .padding(.horizontal, 10)
     .padding(.vertical, 6)
-    .background(tint.opacity(0.12), in: .capsule)
+    .background(chipBackground, in: .capsule)
     .accessibilityElement(children: .combine)
+    .onHover { hovering in
+      guard interactive else { return }
+      isHovered = hovering
+    }
+  }
+
+  private var chipBackground: Color {
+    guard interactive else { return tint.opacity(0.12) }
+    return tint.opacity(isHovered ? 0.18 : 0.12)
   }
 }
 
@@ -119,6 +131,7 @@ struct GlassBanner: View {
       Spacer(minLength: 0)
     }
     .glassCard(cornerRadius: 18, padding: 14)
+    .focusEffectDisabled()
     .accessibilityElement(children: .combine)
   }
 }
@@ -152,11 +165,13 @@ struct VersionDiffLabel: View {
   var body: some View {
     HStack(spacing: 6) {
       Text(installed)
-      Image(systemName: "arrow.right")
-        .font(.caption2.weight(.bold))
+        .foregroundStyle(.tertiary)
+      Image(systemName: "chevron.right")
+        .font(.caption.weight(.semibold))
         .foregroundStyle(.secondary)
       Text(latest)
-        .foregroundStyle(.orange)
+        .fontWeight(.semibold)
+        .foregroundStyle(Color.accentColor)
     }
     .font(.callout.monospacedDigit())
     .accessibilityElement(children: .combine)
@@ -244,6 +259,7 @@ struct InstallProgressView: View {
       }
     }
     .glassCard(cornerRadius: 18, padding: 14)
+    .focusEffectDisabled()
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(progress.title), step \(progress.currentStep) of \(progress.totalSteps)")
   }
