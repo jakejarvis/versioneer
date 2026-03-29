@@ -1,5 +1,3 @@
-import { setCachedLatest, recentReleasesKey } from "@versioneer/cache";
-import type { CacheKV } from "@versioneer/cache";
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -9,10 +7,12 @@ import {
   sources,
   generateId,
   idPrefixes,
-} from "@versioneer/schema";
-import { compareVersionStrings } from "@versioneer/versioning";
+} from "@versioneer/db";
 import { eq, and } from "drizzle-orm";
 
+import { setCachedLatest, recentReleasesKey } from "../cache";
+import type { CacheKV } from "../cache";
+import { compareVersionStrings } from "../versioning";
 import type { Env, RecomputeLatestJob } from "./types";
 
 /**

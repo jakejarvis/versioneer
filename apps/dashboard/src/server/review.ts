@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
+import { normalizeAliasValue } from "@versioneer/core/identity";
 import { createDb } from "@versioneer/db";
-import { normalizeAliasValue } from "@versioneer/identity";
 import {
   apps,
   appAliases,
@@ -12,7 +12,7 @@ import {
   sources,
   suggestionEvidence,
   trustAssertions,
-} from "@versioneer/schema";
+} from "@versioneer/db";
 import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";

@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createDb } from "@versioneer/db";
-import { apps, auditLog, generateId, idPrefixes } from "@versioneer/schema";
+import { apps, auditLog, generateId, idPrefixes } from "@versioneer/db";
 import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { z } from "zod";

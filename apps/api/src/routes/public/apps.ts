@@ -1,5 +1,5 @@
 import { createDb } from "@versioneer/db";
-import { apps, releases } from "@versioneer/schema";
+import { apps, releases } from "@versioneer/db";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";

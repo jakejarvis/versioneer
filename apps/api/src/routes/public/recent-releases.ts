@@ -2,9 +2,9 @@ import {
   getCachedRecentReleases,
   setCachedRecentReleases,
   type CachedRecentRelease,
-} from "@versioneer/cache";
+} from "@versioneer/core/cache";
 import { createDb } from "@versioneer/db";
-import { apps, appLatestReleases } from "@versioneer/schema";
+import { apps, appLatestReleases } from "@versioneer/db";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { Hono } from "hono";
 

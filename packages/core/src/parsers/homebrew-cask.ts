@@ -1,5 +1,4 @@
-import { inferChannel, isPreRelease } from "@versioneer/versioning";
-
+import { inferChannel, isPreRelease } from "../versioning";
 import type { ParsedArtifact, ParsedRelease, ParserOutput, SourceParser } from "./types";
 
 interface CaskJson {

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { feedbackUpdateSchema } from "@versioneer/core/validation";
 import { createDb } from "@versioneer/db";
-import { auditLog, clientFeedback, generateId, idPrefixes } from "@versioneer/schema";
-import { feedbackUpdateSchema } from "@versioneer/validation";
+import { auditLog, clientFeedback, generateId, idPrefixes } from "@versioneer/db";
 import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";

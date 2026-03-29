@@ -1,5 +1,4 @@
 import { createDb } from "@versioneer/db";
-import { getParser } from "@versioneer/parsers";
 import {
   apps,
   sourceFetches,
@@ -10,10 +9,11 @@ import {
   artifacts,
   generateId,
   idPrefixes,
-} from "@versioneer/schema";
-import { normalizeVersion, inferChannel } from "@versioneer/versioning";
+} from "@versioneer/db";
 import { eq } from "drizzle-orm";
 
+import { getParser } from "../parsers";
+import { normalizeVersion, inferChannel } from "../versioning";
 import { normalizeReleaseNotes } from "./release-notes";
 import type { Env, SourceParseJob } from "./types";
 

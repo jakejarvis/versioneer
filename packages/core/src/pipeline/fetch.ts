@@ -1,5 +1,5 @@
 import { createDb } from "@versioneer/db";
-import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/schema";
+import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/db";
 import { desc, eq } from "drizzle-orm";
 
 import { githubApiHeaders } from "./types";

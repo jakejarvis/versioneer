@@ -1,5 +1,4 @@
-import { inferChannel } from "@versioneer/versioning";
-
+import { inferChannel } from "../versioning";
 import type { SourceParser, ParserOutput, ParsedRelease, ParsedArtifact } from "./types";
 
 /**

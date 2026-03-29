@@ -10,7 +10,7 @@ import {
   jobFailures,
   releases,
   sources,
-} from "@versioneer/schema";
+} from "@versioneer/db";
 import { env } from "cloudflare:workers";
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 

@@ -1,5 +1,5 @@
 {
-  "extends": "@versioneer/typescript-config/react-vite.json",
+  "extends": "@versioneer/tsconfig/react-vite.json",
   "compilerOptions": {
     "paths": {
       "@/*": ["./src/*"]

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { enrichDiscoveredApp } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
-import { enrichDiscoveredApp } from "@versioneer/pipeline";
-import { discoveredApps, auditLog, generateId, idPrefixes } from "@versioneer/schema";
+import { discoveredApps, auditLog, generateId, idPrefixes } from "@versioneer/db";
 import { env } from "cloudflare:workers";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";

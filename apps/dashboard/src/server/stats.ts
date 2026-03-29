@@ -8,7 +8,7 @@ import {
   clientFeedback,
   discoveredApps,
   catalogSuggestions,
-} from "@versioneer/schema";
+} from "@versioneer/db";
 import { env } from "cloudflare:workers";
 import { sql } from "drizzle-orm";
 

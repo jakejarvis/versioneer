@@ -1,5 +1,5 @@
 {
-  "extends": "@versioneer/typescript-config/worker.json",
+  "extends": "@versioneer/tsconfig/worker.json",
   "compilerOptions": {
     "types": ["./worker-configuration.d.ts"],
     "paths": {

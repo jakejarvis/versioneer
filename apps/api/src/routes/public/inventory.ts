@@ -1,7 +1,11 @@
+import { matchApp, normalizeAliasValue } from "@versioneer/core/identity";
+import type { AliasRecord } from "@versioneer/core/identity";
+import { enrichDiscoveredApp, shouldEnrich } from "@versioneer/core/pipeline";
+import { inventoryCheckRequestSchema, toGitHubApiReleasesUrl } from "@versioneer/core/validation";
+import type { AppDecision } from "@versioneer/core/validation";
+import { normalizeVersion } from "@versioneer/core/versioning";
+import { compareVersionStrings } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
-import { matchApp, normalizeAliasValue } from "@versioneer/identity";
-import type { AliasRecord } from "@versioneer/identity";
-import { enrichDiscoveredApp, shouldEnrich } from "@versioneer/pipeline";
 import {
   apps,
   appAliases,
@@ -15,11 +19,7 @@ import {
   idPrefixes,
   suggestionEvidence,
   trustAssertions,
-} from "@versioneer/schema";
-import { inventoryCheckRequestSchema, toGitHubApiReleasesUrl } from "@versioneer/validation";
-import type { AppDecision } from "@versioneer/validation";
-import { normalizeVersion } from "@versioneer/versioning";
-import { compareVersionStrings } from "@versioneer/versioning";
+} from "@versioneer/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";

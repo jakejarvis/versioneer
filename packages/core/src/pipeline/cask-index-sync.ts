@@ -1,5 +1,5 @@
 import { createDb } from "@versioneer/db";
-import { appAliases, discoveredApps, generateId, idPrefixes } from "@versioneer/schema";
+import { appAliases, discoveredApps, generateId, idPrefixes } from "@versioneer/db";
 import { eq, and, isNotNull, or } from "drizzle-orm";
 
 import type { Env } from "./types";

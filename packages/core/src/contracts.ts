@@ -1,18 +1,4 @@
-export type {
-  InstalledApp,
-  InventoryCheckRequest,
-  InventoryCheckResponse,
-  AppDecision,
-  InstallPrepareRequest,
-  InstallPrepareResponse,
-  InstallExecutionStatusRequest,
-  InstallExecutionStatusResponse,
-  InstallVerificationSummary,
-  InstallExecutionRoute,
-  InstallExecutionStatus,
-} from "@versioneer/validation";
-
-// Internal API types
+// Internal API types (formerly @versioneer/contracts)
 
 export interface SourceFetchRequest {
   sourceId: string;
@@ -56,8 +42,6 @@ export interface ReleaseInfo {
   status: string;
   releaseNotesUrl: string | null;
 }
-
-// Explanation types
 
 export interface MatchExplanation {
   method: string;

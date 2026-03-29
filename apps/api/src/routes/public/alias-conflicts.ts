@@ -1,10 +1,10 @@
-import { createDb } from "@versioneer/db";
 import {
   type AppAliasType,
   isGloballyUniqueExactAliasType,
   normalizeAliasValue,
-} from "@versioneer/identity";
-import { appAliases } from "@versioneer/schema";
+} from "@versioneer/core/identity";
+import { createDb } from "@versioneer/db";
+import { appAliases } from "@versioneer/db";
 import { and, eq, ne } from "drizzle-orm";
 
 type Db = ReturnType<typeof createDb>;

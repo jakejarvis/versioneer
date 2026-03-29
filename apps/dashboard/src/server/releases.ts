@@ -1,4 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
+import { releaseCreateSchema, releaseUpdateSchema } from "@versioneer/core/validation";
+import { normalizeVersion, isPreRelease, inferChannel } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
 import {
   releases,
@@ -8,9 +10,7 @@ import {
   auditLog,
   generateId,
   idPrefixes,
-} from "@versioneer/schema";
-import { releaseCreateSchema, releaseUpdateSchema } from "@versioneer/validation";
-import { normalizeVersion, isPreRelease, inferChannel } from "@versioneer/versioning";
+} from "@versioneer/db";
 import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";

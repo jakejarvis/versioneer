@@ -1,7 +1,7 @@
+import { normalizeAliasValue } from "@versioneer/core/identity";
+import { toGitHubApiReleasesUrl } from "@versioneer/core/validation";
 import { createDb } from "@versioneer/db";
-import { normalizeAliasValue } from "@versioneer/identity";
-import { appAliases, generateId, idPrefixes, sources } from "@versioneer/schema";
-import { toGitHubApiReleasesUrl } from "@versioneer/validation";
+import { appAliases, generateId, idPrefixes, sources } from "@versioneer/db";
 import { and, eq, ne } from "drizzle-orm";
 
 type Db = ReturnType<typeof createDb>;

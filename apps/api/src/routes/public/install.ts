@@ -1,4 +1,8 @@
 import { zValidator } from "@hono/zod-validator";
+import {
+  installExecutionStatusRequestSchema,
+  installPrepareRequestSchema,
+} from "@versioneer/core/validation";
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -11,11 +15,7 @@ import {
   releases,
   suggestionEvidence,
   trustAssertions,
-} from "@versioneer/schema";
-import {
-  installExecutionStatusRequestSchema,
-  installPrepareRequestSchema,
-} from "@versioneer/validation";
+} from "@versioneer/db";
 import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";

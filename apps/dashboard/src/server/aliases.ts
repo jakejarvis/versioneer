@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { aliasUpdateSchema } from "@versioneer/core/validation";
 import { createDb } from "@versioneer/db";
-import { appAliases, auditLog, generateId, idPrefixes } from "@versioneer/schema";
-import { aliasUpdateSchema } from "@versioneer/validation";
+import { appAliases, auditLog, generateId, idPrefixes } from "@versioneer/db";
 import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { z } from "zod";

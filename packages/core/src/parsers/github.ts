@@ -1,5 +1,4 @@
-import { inferChannel, isPreRelease } from "@versioneer/versioning";
-
+import { inferChannel, isPreRelease } from "../versioning";
 import type { SourceParser, ParserOutput, ParsedRelease, ParsedArtifact } from "./types";
 
 interface GitHubRelease {

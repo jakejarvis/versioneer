@@ -1,7 +1,7 @@
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { useForm } from "@tanstack/react-form";
-import { parseGitHubRepoUrl, resolveSourceUrl } from "@versioneer/validation";
+import { parseGitHubRepoUrl, resolveSourceUrl } from "@versioneer/core/validation";
 import {
   Check,
   CircleAlert,

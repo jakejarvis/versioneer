@@ -1,5 +1,5 @@
 import { createDb } from "@versioneer/db";
-import { adminUsers, adminSessions, adminAccounts, adminVerifications } from "@versioneer/schema";
+import { adminUsers, adminSessions, adminAccounts, adminVerifications } from "@versioneer/db";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";

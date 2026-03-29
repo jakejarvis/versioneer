@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { normalizeAliasValue } from "@versioneer/core/identity";
+import { lookupCaskTokenByBundleId } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
-import { normalizeAliasValue } from "@versioneer/identity";
-import { lookupCaskTokenByBundleId } from "@versioneer/pipeline";
 import {
   apps,
   appAliases,
@@ -10,7 +10,7 @@ import {
   auditLog,
   generateId,
   idPrefixes,
-} from "@versioneer/schema";
+} from "@versioneer/db";
 import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";

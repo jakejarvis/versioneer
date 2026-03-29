@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { sourceCreateSchema, sourceUpdateSchema } from "@versioneer/core/validation";
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -9,8 +10,7 @@ import {
   catalogSuggestions,
   generateId,
   idPrefixes,
-} from "@versioneer/schema";
-import { sourceCreateSchema, sourceUpdateSchema } from "@versioneer/validation";
+} from "@versioneer/db";
 import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";

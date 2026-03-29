@@ -1,9 +1,16 @@
 {
-  "name": "@versioneer/pipeline",
+  "name": "@versioneer/core",
   "version": "0.0.1",
   "private": true,
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "exports": {
+    "./cache": "./src/cache/index.ts",
+    "./contracts": "./src/contracts.ts",
+    "./identity": "./src/identity/index.ts",
+    "./parsers": "./src/parsers/index.ts",
+    "./pipeline": "./src/pipeline/index.ts",
+    "./validation": "./src/validation/index.ts",
+    "./versioning": "./src/versioning/index.ts"
+  },
   "scripts": {
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
@@ -13,24 +20,19 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@versioneer/cache": "workspace:*",
-    "@versioneer/contracts": "workspace:*",
     "@versioneer/db": "workspace:*",
-    "@versioneer/parsers": "workspace:*",
-    "@versioneer/schema": "workspace:*",
-    "@versioneer/validation": "workspace:*",
-    "@versioneer/versioning": "workspace:*",
     "cheerio": "^1.2.0",
     "dom-serializer": "^3.0.0",
     "domhandler": "^6.0.1",
     "domutils": "^4.0.2",
     "drizzle-orm": "catalog:",
     "htmlparser2": "^12.0.0",
-    "marked": "^17.0.5"
+    "marked": "^17.0.5",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260317.1",
-    "@versioneer/typescript-config": "workspace:*",
+    "@versioneer/tsconfig": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

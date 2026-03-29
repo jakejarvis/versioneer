@@ -16,11 +16,11 @@
     "db:migrate:remote": "wrangler d1 migrations apply versioneer-db-dev --remote"
   },
   "dependencies": {
-    "@versioneer/schema": "workspace:*",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "nanoid": "^5.1.7"
   },
   "devDependencies": {
-    "@versioneer/typescript-config": "workspace:*",
+    "@versioneer/tsconfig": "workspace:*",
     "drizzle-kit": "^0.31.10",
     "typescript": "catalog:",
     "wrangler": "catalog:"

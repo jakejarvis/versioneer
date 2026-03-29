@@ -1,9 +1,9 @@
 import { createDb } from "@versioneer/db";
-import { sparkleParser, githubReleasesParser } from "@versioneer/parsers";
-import { discoveredApps } from "@versioneer/schema";
-import { toGitHubApiReleasesUrl } from "@versioneer/validation";
+import { discoveredApps } from "@versioneer/db";
 import { eq } from "drizzle-orm";
 
+import { sparkleParser, githubReleasesParser } from "../parsers";
+import { toGitHubApiReleasesUrl } from "../validation";
 import { fetchAndParse, extractIconUrl } from "./scrape-html";
 import { githubApiHeaders } from "./types";
 

@@ -1,14 +1,14 @@
-import { createDb } from "@versioneer/db";
 import {
   handleSourceFetch,
   handleSourceParse,
   handleRecomputeLatest,
   handleCaskIndexSync,
   isCaskSyncDue,
-} from "@versioneer/pipeline";
-import { cronJobRuns, jobFailures, generateId, idPrefixes } from "@versioneer/schema";
+} from "@versioneer/core/pipeline";
+import { createDb } from "@versioneer/db";
+import { cronJobRuns, jobFailures, generateId, idPrefixes } from "@versioneer/db";
 // Import parsers to trigger auto-registration
-import "@versioneer/parsers";
+import "@versioneer/core/parsers";
 
 async function handleMessage<T>(
   message: Message<T>,
@@ -89,7 +89,7 @@ export default {
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
     const db = createDb(env.DB);
-    const { sources } = await import("@versioneer/schema");
+    const { sources } = await import("@versioneer/db");
     const { eq } = await import("drizzle-orm");
 
     const now = new Date();

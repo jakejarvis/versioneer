@@ -5,8 +5,8 @@ import {
   homebrewCaskParser,
   macAppStoreParser,
   electronGenericParser,
-} from "@versioneer/parsers";
-import { githubApiHeaders } from "@versioneer/pipeline";
+} from "@versioneer/core/parsers";
+import { githubApiHeaders } from "@versioneer/core/pipeline";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 

@@ -27,7 +27,7 @@ This repository contains the full system: the public API, internal dashboard, qu
 - `packages/parsers` - source parsers for upstream release feeds
 - `packages/pipeline` - queue handlers and release processing logic
 - `packages/cache` - KV helpers
-- `packages/typescript-config` - shared TypeScript config presets
+- `packages/tsconfig` - shared TypeScript config presets
 
 One important repo convention: shared packages are consumed directly from source. There is no separate package build step or checked-in `dist/` output for workspace libraries.
 

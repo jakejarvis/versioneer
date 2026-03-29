@@ -43,20 +43,15 @@ Cloudflare-native monorepo. pnpm workspaces + Turborepo.
 
 ### Packages
 
-All packages are consumed via source (`main: "src/index.ts"`) — no build step. Apps bundle them via Wrangler/Vite.
+All packages are consumed via source — no build step. Apps bundle them via Wrangler/Vite.
 
-| Package             | Purpose                                                   |
-| ------------------- | --------------------------------------------------------- |
-| `schema`            | Drizzle ORM table definitions (D1/SQLite)                 |
-| `db`                | Drizzle client, migrations, D1 binding config             |
-| `validation`        | Zod schemas (inventory, admin, common)                    |
-| `contracts`         | Shared API request/response types                         |
-| `identity`          | App matching logic (bundle ID, team ID, aliases)          |
-| `versioning`        | Version parsing, normalization, comparison                |
-| `parsers`           | Source parsers (Sparkle, GitHub releases)                 |
-| `pipeline`          | Queue job handlers (fetch, parse, recompute)              |
-| `cache`             | KV read/write helpers                                     |
-| `typescript-config` | Shared tsconfig bases (base, library, worker, react-vite) |
+| Package    | Purpose                                                                         |
+| ---------- | ------------------------------------------------------------------------------- |
+| `core`     | Identity matching, version parsing, source parsers, validation, pipeline, cache |
+| `db`       | Drizzle ORM schema, client, migrations, D1 binding config                       |
+| `tsconfig` | Shared tsconfig bases (base, library, worker, react-vite)                       |
+
+`core` uses subpath exports — import from `@versioneer/core/identity`, `@versioneer/core/pipeline`, etc.
 
 ### Cloudflare Bindings
 
@@ -73,11 +68,9 @@ The API worker and queue consumer share these bindings:
 
 Public (`/v1`): `POST /v1/inventory/check`, `GET /v1/apps/:appId`, `GET /v1/apps/:appId/releases`, `POST /v1/install/prepare`, `POST /v1/install/executions/:executionId/status`, `GET /v1/releases/:releaseId/notes`, `POST /v1/feedback`
 
-Internal (`/internal`): Full CRUD for apps, aliases, sources, releases, install-rules, overrides, review-queue, job-failures, audit-log, stats. Sub-routers in `apps/api/src/routes/internal/`.
-
 ### Queue Pipeline
 
-`source-fetch` -> `source-parse` -> `recompute-latest`. Handlers in `packages/pipeline/src/`. The queue consumer dispatches by queue name in `apps/queue-consumer/src/index.ts`. A scheduled handler runs `handleComputeScorecard` to compute per-app quality scores.
+`source-fetch` -> `source-parse` -> `recompute-latest`. Handlers in `packages/core/src/pipeline/`. The queue consumer dispatches by queue name in `apps/queue-consumer/src/index.ts`. A scheduled handler runs `handleComputeScorecard` to compute per-app quality scores.
 
 Additional pipeline modules: `release-notes.ts` (normalize/render release notes), `sanitize-html.ts`, `scorecard.ts` (quality metrics), `verification.ts` (verification tiers), `installability.ts` (installability classification), `explain.ts` (decision rationale).
 
@@ -85,11 +78,11 @@ Additional pipeline modules: `release-notes.ts` (normalize/render release notes)
 
 ### ID System
 
-All entities use prefixed nanoid text IDs: `app_xxx`, `src_xxx`, `rel_xxx`, etc. Generated via `generateId(idPrefixes.app)` from `@versioneer/schema`. Full prefix list: `app`, `alias`, `mr`, `src`, `fetch`, `parse`, `rel`, `obs`, `art`, `artc`, `alr`, `ir`, `cli`, `snap`, `cia`, `ovr`, `jf`, `rq`, `al`, `asc`, `shm`, `onb`, `fb`, `arto`, `exec`, `dapp`.
+All entities use prefixed nanoid text IDs: `app_xxx`, `src_xxx`, `rel_xxx`, etc. Generated via `generateId(idPrefixes.app)` from `@versioneer/db`. Full prefix list: `app`, `alias`, `mr`, `src`, `fetch`, `parse`, `rel`, `obs`, `art`, `artc`, `alr`, `ir`, `cli`, `snap`, `cia`, `ovr`, `jf`, `rq`, `al`, `asc`, `shm`, `onb`, `fb`, `arto`, `exec`, `dapp`.
 
 ### TypeScript Config
 
-Shared configs in `packages/typescript-config/`. Each package extends one:
+Shared configs in `packages/tsconfig/`. Each package extends one:
 
 - **library.json**: declaration + sourceMap (packages)
 - **worker.json**: CF Workers types + noEmit (api, queue-consumer)
@@ -122,7 +115,7 @@ Swift/SwiftUI native macOS app. Xcode project at `apps/desktop/Versioneer.xcodep
 
 ### Database Migrations
 
-Owned by `packages/db`. Drizzle Kit generates from `packages/schema/src/*.ts`. Migrations live in `packages/db/migrations/`. The `packages/db/wrangler.jsonc` has a minimal D1 binding just for running `wrangler d1 migrations apply`.
+Owned by `packages/db`. Drizzle Kit generates from `packages/db/src/schema/*.ts`. Migrations live in `packages/db/migrations/`. The `packages/db/wrangler.jsonc` has a minimal D1 binding just for running `wrangler d1 migrations apply`.
 
 ## Quality Gates
 

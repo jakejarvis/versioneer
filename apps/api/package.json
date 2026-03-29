@@ -14,20 +14,14 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.6",
-    "@versioneer/cache": "workspace:*",
-    "@versioneer/contracts": "workspace:*",
+    "@versioneer/core": "workspace:*",
     "@versioneer/db": "workspace:*",
-    "@versioneer/identity": "workspace:*",
-    "@versioneer/pipeline": "workspace:*",
-    "@versioneer/schema": "workspace:*",
-    "@versioneer/validation": "workspace:*",
-    "@versioneer/versioning": "workspace:*",
     "drizzle-orm": "catalog:",
     "hono": "^4.12.9",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@versioneer/typescript-config": "workspace:*",
+    "@versioneer/tsconfig": "workspace:*",
     "typescript": "catalog:",
     "wrangler": "catalog:"
   }

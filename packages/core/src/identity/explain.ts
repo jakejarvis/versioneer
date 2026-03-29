@@ -1,5 +1,4 @@
-import type { MatchExplanation } from "@versioneer/contracts";
-
+import type { MatchExplanation } from "../contracts";
 import type { AliasRecord, MatchInput, MatchResult } from "./types";
 
 export function generateMatchExplanation(
