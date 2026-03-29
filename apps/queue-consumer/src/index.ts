@@ -6,29 +6,12 @@ import {
   handleCaskIndexSync,
   isCaskSyncDue,
 } from "@versioneer/pipeline";
-import type {
-  SourceFetchJob,
-  SourceParseJob,
-  RecomputeLatestJob,
-  CaskIndexSyncJob,
-} from "@versioneer/pipeline";
 import { cronJobRuns, jobFailures, generateId, idPrefixes } from "@versioneer/schema";
 // Import parsers to trigger auto-registration
 import "@versioneer/parsers";
 
-interface QueueMessage<T = unknown> {
-  body: T;
-  ack(): void;
-  retry(): void;
-}
-
-interface QueueBatch<T = unknown> {
-  queue: string;
-  messages: QueueMessage<T>[];
-}
-
 async function handleMessage<T>(
-  message: QueueMessage<T>,
+  message: Message<T>,
   handler: (body: T, env: Env) => Promise<void>,
   env: Env,
   jobType: string,
@@ -38,66 +21,70 @@ async function handleMessage<T>(
     message.ack();
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[${jobType}] Error:`, errorMsg);
-
-    // Record failure
-    try {
-      const db = createDb(env.DB);
-      await db.insert(jobFailures).values({
-        id: generateId(idPrefixes.jobFailure),
-        jobType,
-        jobKey: JSON.stringify(message.body),
-        errorMessage: errorMsg,
-        retryCount: 0,
-        status: "open",
-        createdAt: new Date().toISOString(),
-      });
-    } catch (dbError) {
-      console.error("Failed to record job failure:", dbError);
-    }
-
+    console.error(`[${jobType}] Error (attempt ${message.attempts}):`, errorMsg);
     message.retry();
   }
 }
 
-export default {
-  async queue(batch: QueueBatch, env: Env): Promise<void> {
-    const queueName = batch.queue;
+/**
+ * Extracts the logical queue type from a full queue name like
+ * "versioneer-source-fetch-production" → "source-fetch".
+ */
+function queueType(queueName: string): string {
+  return queueName.replace(/^versioneer-/, "").replace(/-(dev|production)$/, "");
+}
 
-    for (const message of batch.messages) {
-      if (queueName.includes("source-fetch")) {
-        await handleMessage(
-          message as QueueMessage<SourceFetchJob>,
-          handleSourceFetch,
-          env,
-          "source-fetch",
-        );
-      } else if (queueName.includes("source-parse")) {
-        await handleMessage(
-          message as QueueMessage<SourceParseJob>,
-          handleSourceParse,
-          env,
-          "source-parse",
-        );
-      } else if (queueName.includes("recompute-latest")) {
-        await handleMessage(
-          message as QueueMessage<RecomputeLatestJob>,
-          handleRecomputeLatest,
-          env,
-          "recompute-latest",
-        );
-      } else if (queueName.includes("cask-index-sync")) {
-        await handleMessage(
-          message as QueueMessage<CaskIndexSyncJob>,
-          handleCaskIndexSync,
-          env,
-          "cask-index-sync",
-        );
-      } else {
-        console.error("Unknown queue:", queueName);
+export default {
+  async queue(batch: MessageBatch, env: Env): Promise<void> {
+    const type = queueType(batch.queue);
+
+    // DLQ consumer — record dead-lettered messages for dashboard visibility
+    if (type === "dlq") {
+      const db = createDb(env.DB);
+      for (const message of batch.messages) {
+        try {
+          const body = message.body as Record<string, unknown>;
+          await db.insert(jobFailures).values({
+            id: generateId(idPrefixes.jobFailure),
+            jobType: "dead-lettered",
+            jobKey: JSON.stringify(body),
+            errorMessage: "Message exhausted all retries and was dead-lettered",
+            retryCount: message.attempts,
+            status: "abandoned",
+            createdAt: new Date().toISOString(),
+          });
+        } catch (dbError) {
+          console.error("Failed to record DLQ message:", dbError);
+        }
         message.ack();
       }
+      return;
     }
+
+    // Route messages to handlers based on queue type
+    let handler: ((body: unknown, env: Env) => Promise<void>) | undefined;
+    switch (type) {
+      case "source-fetch":
+        handler = handleSourceFetch as (body: unknown, env: Env) => Promise<void>;
+        break;
+      case "source-parse":
+        handler = handleSourceParse as (body: unknown, env: Env) => Promise<void>;
+        break;
+      case "recompute-latest":
+        handler = handleRecomputeLatest as (body: unknown, env: Env) => Promise<void>;
+        break;
+    }
+
+    if (!handler) {
+      console.error("Unknown queue:", batch.queue);
+      for (const message of batch.messages) {
+        message.ack();
+      }
+      return;
+    }
+
+    // Process messages in parallel within the batch
+    await Promise.allSettled(batch.messages.map((msg) => handleMessage(msg, handler, env, type)));
   },
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
@@ -158,13 +145,16 @@ export default {
       }
     }
 
-    // --- Cask Index Sync ---
+    // --- Cask Index Sync (runs directly, no queue hop) ---
     {
       const runId = generateId(idPrefixes.cronJobRun);
       const startedAt = new Date().toISOString();
       try {
         if (await isCaskSyncDue(env as unknown as Parameters<typeof isCaskSyncDue>[0])) {
-          await env.CASK_INDEX_SYNC_QUEUE.send({ reason: "scheduled", force: false });
+          await handleCaskIndexSync(
+            { reason: "scheduled", force: false },
+            env as unknown as Parameters<typeof handleCaskIndexSync>[1],
+          );
           await db.insert(cronJobRuns).values({
             id: runId,
             jobType: "cask_index_sync",
@@ -176,7 +166,7 @@ export default {
           });
         }
       } catch (error) {
-        console.error("Failed to check/queue cask index sync:", error);
+        console.error("Cask index sync scheduled job failed:", error);
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "cask_index_sync",

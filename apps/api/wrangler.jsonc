@@ -54,10 +54,6 @@
       {
         "binding": "RECOMPUTE_LATEST_QUEUE",
         "queue": "versioneer-recompute-latest-dev"
-      },
-      {
-        "binding": "CASK_INDEX_SYNC_QUEUE",
-        "queue": "versioneer-cask-index-sync-dev"
       }
     ]
   },
@@ -117,10 +113,6 @@
           {
             "binding": "RECOMPUTE_LATEST_QUEUE",
             "queue": "versioneer-recompute-latest-production"
-          },
-          {
-            "binding": "CASK_INDEX_SYNC_QUEUE",
-            "queue": "versioneer-cask-index-sync-production"
           }
         ]
       },

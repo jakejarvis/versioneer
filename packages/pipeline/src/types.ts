@@ -6,7 +6,6 @@ export interface Env {
   SOURCE_FETCH_QUEUE: Queue;
   SOURCE_PARSE_QUEUE: Queue;
   RECOMPUTE_LATEST_QUEUE: Queue;
-  CASK_INDEX_SYNC_QUEUE: Queue;
   ENVIRONMENT: string;
   GITHUB_TOKEN?: string;
 }

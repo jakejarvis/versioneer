@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createDb } from "@versioneer/db";
+import { handleCaskIndexSync } from "@versioneer/pipeline";
 import { cronJobRuns, generateId, idPrefixes, sources } from "@versioneer/schema";
 import { env } from "cloudflare:workers";
 import { asc, desc, eq, sql } from "drizzle-orm";
@@ -131,9 +132,10 @@ export const triggerCaskSync = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const db = createDb(env.DB);
     const runId = generateId(idPrefixes.cronJobRun);
+    const startedAt = new Date().toISOString();
 
     try {
-      await env.CASK_INDEX_SYNC_QUEUE.send({ reason: "manual", force: true });
+      await handleCaskIndexSync({ reason: "manual", force: true }, env as never);
 
       await db.insert(cronJobRuns).values({
         id: runId,
@@ -142,7 +144,7 @@ export const triggerCaskSync = createServerFn({ method: "POST" })
         status: "completed",
         actorId: context.user.email,
         itemsQueued: 1,
-        startedAt: new Date().toISOString(),
+        startedAt,
         completedAt: new Date().toISOString(),
       });
 
@@ -156,7 +158,7 @@ export const triggerCaskSync = createServerFn({ method: "POST" })
         status: "failed",
         actorId: context.user.email,
         errorMessage,
-        startedAt: new Date().toISOString(),
+        startedAt,
         completedAt: new Date().toISOString(),
       });
       throw error;
