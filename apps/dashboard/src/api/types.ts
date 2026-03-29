@@ -43,7 +43,7 @@ export interface AppSummary {
 
 export interface SourceSummary {
   id: string;
-  sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
+  sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask" | "mac_app_store";
   label: string | null;
   parserKey: string;
   channel: string | null;
@@ -99,7 +99,7 @@ export interface AppAlias {
 export interface Source {
   id: string;
   appId: string;
-  sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
+  sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask" | "mac_app_store";
   label: string | null;
   baseUrl: string | null;
   configJson: string | null;
@@ -181,7 +181,7 @@ export interface ReleaseDetail extends Release {
 export interface Artifact {
   id: string;
   releaseId: string;
-  artifactType: "zip" | "dmg" | "pkg" | "appcast_enclosure" | "other";
+  artifactType: "zip" | "dmg" | "pkg" | "appcast_enclosure" | "mac_app_store" | "other";
   url: string;
   urlHash: string | null;
   sha256: string | null;

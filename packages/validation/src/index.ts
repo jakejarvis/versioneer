@@ -4,3 +4,4 @@ export * from "./admin";
 export * from "./feedback";
 export * from "./github-url";
 export * from "./install";
+export * from "./source-url";

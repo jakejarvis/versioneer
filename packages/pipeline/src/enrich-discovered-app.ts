@@ -104,6 +104,11 @@ export async function enrichDiscoveredApp(params: {
       }
     }
 
+    // Try Mac App Store lookup if no valid source yet
+    if (result.sourceValidationStatus !== "valid" && row.isMasApp && row.bundleId) {
+      await enrichFromMasLookup(row.bundleId, result);
+    }
+
     // Extract vendor name from code signing authority if not already set
     if (!result.enrichedVendorName && row.codeSigningAuthority) {
       result.enrichedVendorName = extractVendorFromSigningAuthority(row.codeSigningAuthority);
@@ -296,6 +301,55 @@ async function enrichFromGitHubReleases(
       result.enrichedHomepageUrl = `https://github.com/${match[1]}`;
     }
   }
+}
+
+async function enrichFromMasLookup(bundleId: string, result: EnrichmentResult): Promise<void> {
+  const url = `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(bundleId)}&country=us`;
+  let response: Response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  } catch {
+    result.sourceValidationStatus = "timeout";
+    return;
+  }
+
+  if (!response.ok) {
+    result.sourceValidationStatus = "invalid";
+    return;
+  }
+
+  const data = (await response.json()) as {
+    resultCount: number;
+    results: Array<{
+      version?: string;
+      currentVersionReleaseDate?: string;
+      artistName?: string;
+      sellerUrl?: string;
+      trackViewUrl?: string;
+      trackId?: number;
+      trackName?: string;
+      kind?: string;
+    }>;
+  };
+
+  if (!data.resultCount || !data.results?.length) {
+    result.sourceValidationStatus = "invalid";
+    return;
+  }
+
+  const entry = data.results.find((r) => r.kind === "mac-software") ?? data.results[0]!;
+  if (!entry.version) {
+    result.sourceValidationStatus = "invalid";
+    return;
+  }
+
+  result.sourceValidationStatus = "valid";
+  result.enrichedReleaseCount = 1;
+  result.enrichedLatestVersion = entry.version;
+  result.enrichedLatestPublishedAt = entry.currentVersionReleaseDate ?? null;
+  result.enrichedVendorName = entry.artistName ?? null;
+  result.enrichedHomepageUrl = entry.sellerUrl ?? entry.trackViewUrl ?? null;
+  result.enrichedFeedTitle = entry.trackName ?? null;
 }
 
 // ──────────────────────────────────────────────────────────

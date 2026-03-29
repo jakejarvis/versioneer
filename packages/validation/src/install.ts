@@ -5,6 +5,7 @@ export const installStrategySchema = z.enum([
   "zip_replace",
   "dmg_copy_replace",
   "pkg_install",
+  "mac_app_store",
   "manual_only",
 ]);
 

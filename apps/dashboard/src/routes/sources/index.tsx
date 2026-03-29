@@ -248,6 +248,7 @@ function SourcesPage() {
                   <SelectItem value="github_releases">GitHub Releases</SelectItem>
                   <SelectItem value="manual">Manual</SelectItem>
                   <SelectItem value="homebrew_cask">Homebrew Cask</SelectItem>
+                  <SelectItem value="mac_app_store">Mac App Store</SelectItem>
                 </SelectContent>
               </Select>
             </>

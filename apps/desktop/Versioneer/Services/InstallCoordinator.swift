@@ -315,6 +315,14 @@ final class InstallCoordinator {
           stagingDirectory: stagingDir
         )
 
+      case .macAppStore:
+        if let urlString = prepared.artifact?.downloadUrl,
+          let url = URL(string: urlString)
+        {
+          await NSWorkspace.shared.open(url)
+        }
+        verificationSummary = VerificationSummary(strategy: prepared.strategy.rawValue)
+
       case .manualOnly:
         throw InstallError.unsupportedStrategy
       }
@@ -786,6 +794,8 @@ final class InstallCoordinator {
       return needsPrivilege ? .privilegedReplace : .localReplace
     case .pkgInstall:
       return .privilegedPackage
+    case .macAppStore:
+      return .localReplace
     case .manualOnly:
       return .localReplace
     }

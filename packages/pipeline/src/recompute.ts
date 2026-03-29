@@ -23,11 +23,18 @@ function inferInstallStrategy(
   appOverride: string | null,
   sourceType: string | null,
   artifactType: string | null,
-): "sparkle" | "zip_replace" | "dmg_copy_replace" | "pkg_install" | "manual_only" {
+):
+  | "sparkle"
+  | "zip_replace"
+  | "dmg_copy_replace"
+  | "pkg_install"
+  | "mac_app_store"
+  | "manual_only" {
   if (appOverride) {
     return appOverride as ReturnType<typeof inferInstallStrategy>;
   }
   if (sourceType === "sparkle") return "sparkle";
+  if (sourceType === "mac_app_store") return "mac_app_store";
   if (artifactType === "dmg") return "dmg_copy_replace";
   if (artifactType === "zip") return "zip_replace";
   if (artifactType === "pkg") return "pkg_install";

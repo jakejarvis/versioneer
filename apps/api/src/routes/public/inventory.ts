@@ -643,8 +643,8 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
               }
             }
 
-            // Enrich newly discovered app if it has a feed URL
-            if (app.sparkleFeedUrl || app.electronUpdateUrl) {
+            // Enrich newly discovered app if it has a feed URL or is a MAS app
+            if (app.sparkleFeedUrl || app.electronUpdateUrl || (app.isMasApp && app.bundleId)) {
               await enrichDiscoveredApp({
                 discoveredAppId: newId,
                 db,

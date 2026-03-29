@@ -151,12 +151,13 @@ enum InstallStrategy: String, Codable, Sendable, CaseIterable {
   case zipReplace = "zip_replace"
   case dmgCopyReplace = "dmg_copy_replace"
   case pkgInstall = "pkg_install"
+  case macAppStore = "mac_app_store"
   case manualOnly = "manual_only"
 
   /// Whether the app should be quit before installation.
   nonisolated var requiresQuit: Bool {
     switch self {
-    case .sparkle: false
+    case .sparkle, .macAppStore: false
     case .zipReplace, .dmgCopyReplace, .pkgInstall, .manualOnly: true
     }
   }

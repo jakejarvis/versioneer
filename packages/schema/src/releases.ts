@@ -69,7 +69,7 @@ export const artifacts = sqliteTable(
       .notNull()
       .references(() => releases.id),
     artifactType: text("artifact_type", {
-      enum: ["zip", "dmg", "pkg", "appcast_enclosure", "other"],
+      enum: ["zip", "dmg", "pkg", "appcast_enclosure", "mac_app_store", "other"],
     }).notNull(),
     url: text("url").notNull(),
     urlHash: text("url_hash"),
@@ -99,7 +99,14 @@ export const appLatestReleases = sqliteTable(
     versionRaw: text("version_raw").notNull(),
     releasedAt: text("released_at"),
     installStrategy: text("install_strategy", {
-      enum: ["sparkle", "zip_replace", "dmg_copy_replace", "pkg_install", "manual_only"],
+      enum: [
+        "sparkle",
+        "zip_replace",
+        "dmg_copy_replace",
+        "pkg_install",
+        "mac_app_store",
+        "manual_only",
+      ],
     }),
     pinnedReleaseId: text("pinned_release_id"),
     pinnedAt: text("pinned_at"),

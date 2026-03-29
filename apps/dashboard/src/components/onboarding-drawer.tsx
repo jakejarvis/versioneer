@@ -1,5 +1,5 @@
 import { useForm } from "@tanstack/react-form";
-import { toGitHubApiReleasesUrl } from "@versioneer/validation";
+import { parseGitHubRepoUrl, resolveSourceUrl } from "@versioneer/validation";
 import {
   Check,
   CircleAlert,
@@ -11,7 +11,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useDiscoveredApp } from "@/api/hooks/use-discovered-apps";
 import {
@@ -68,13 +68,12 @@ const ALIAS_LABELS: Record<AliasType, string> = {
 // Source types — update feeds
 // ──────────────────────────────────────────────────────────
 
-type SourceType = "sparkle" | "github_releases" | "manual" | "homebrew_cask";
+type SourceType = "sparkle" | "github_releases" | "manual" | "homebrew_cask" | "mac_app_store";
 
 interface SourceEntry {
   key: string;
   sourceType: SourceType;
-  baseUrl: string;
-  parserKey: string;
+  identifier: string;
   pollIntervalMinutes: number;
   label?: string;
   status?: "active" | "paused";
@@ -84,6 +83,7 @@ const SOURCE_LABELS: Record<SourceType, string> = {
   sparkle: "Sparkle",
   github_releases: "GitHub Releases",
   homebrew_cask: "Homebrew Cask",
+  mac_app_store: "Mac App Store",
   manual: "Manual",
 };
 
@@ -91,6 +91,7 @@ const SOURCE_COLORS: Record<SourceType, string> = {
   sparkle: "border-orange-500/30 bg-orange-500/10 text-orange-400",
   github_releases: "border-neutral-500/30 bg-neutral-500/10 text-neutral-300",
   homebrew_cask: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+  mac_app_store: "border-blue-500/30 bg-blue-500/10 text-blue-400",
   manual: "border-cyan-500/30 bg-cyan-500/10 text-cyan-400",
 };
 
@@ -98,7 +99,16 @@ const DEFAULT_POLL_INTERVALS: Record<SourceType, number> = {
   sparkle: 60,
   github_releases: 60,
   homebrew_cask: 360,
+  mac_app_store: 1440,
   manual: 1440,
+};
+
+const SOURCE_INPUT_CONFIG: Record<SourceType, { label: string; placeholder: string }> = {
+  sparkle: { label: "Feed URL", placeholder: "https://example.com/appcast.xml" },
+  github_releases: { label: "Repository", placeholder: "owner/repo" },
+  homebrew_cask: { label: "Cask Token", placeholder: "firefox" },
+  mac_app_store: { label: "Bundle ID", placeholder: "com.example.app" },
+  manual: { label: "", placeholder: "" },
 };
 
 // ──────────────────────────────────────────────────────────
@@ -184,8 +194,19 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
             .filter((a) => a.value.trim())
             .map((a) => ({ aliasType: a.aliasType, value: a.value })),
           sources: value.sources
-            .filter((s) => s.baseUrl.trim())
-            .map(({ key: _key, ...rest }) => rest),
+            .filter((s) => s.identifier.trim())
+            .map((s) => {
+              const baseUrl = resolveSourceUrl(s.sourceType, s.identifier);
+              return {
+                sourceType: s.sourceType,
+                baseUrl: baseUrl ?? "",
+                parserKey: s.sourceType,
+                pollIntervalMinutes: s.pollIntervalMinutes,
+                label: s.label,
+                status: s.status,
+              };
+            })
+            .filter((s) => s.baseUrl),
           sourceValidated: value.sourceValidated,
           enrichmentHasReleases,
         },
@@ -241,24 +262,31 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
       newSources.push({
         key: crypto.randomUUID(),
         sourceType: "sparkle",
-        baseUrl: discoveredApp.sparkleFeedUrl,
-        parserKey: "sparkle",
+        identifier: discoveredApp.sparkleFeedUrl,
         pollIntervalMinutes: 60,
         status: "active",
       });
     }
     if (discoveredApp.electronUpdateUrl) {
-      const apiUrl = toGitHubApiReleasesUrl(discoveredApp.electronUpdateUrl);
-      if (apiUrl) {
+      const parsed = parseGitHubRepoUrl(discoveredApp.electronUpdateUrl);
+      if (parsed) {
         newSources.push({
           key: crypto.randomUUID(),
           sourceType: "github_releases",
-          baseUrl: apiUrl,
-          parserKey: "github_releases",
+          identifier: `${parsed.owner}/${parsed.repo}`,
           pollIntervalMinutes: 60,
           status: "active",
         });
       }
+    }
+    if (discoveredApp.isMasApp && discoveredApp.bundleId && newSources.length === 0) {
+      newSources.push({
+        key: crypto.randomUUID(),
+        sourceType: "mac_app_store",
+        identifier: discoveredApp.bundleId,
+        pollIntervalMinutes: 1440,
+        status: "active",
+      });
     }
 
     const newSlug = slugify(discoveredApp.appName);
@@ -294,8 +322,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
       form.pushFieldValue("sources", {
         key: crypto.randomUUID(),
         sourceType: "homebrew_cask",
-        baseUrl: `https://formulae.brew.sh/api/cask/${resolvedCaskToken}.json`,
-        parserKey: "homebrew_cask",
+        identifier: resolvedCaskToken,
         pollIntervalMinutes: 360,
         status: "active",
       });
@@ -603,7 +630,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                   <div className="flex items-center justify-between">
                     <form.Subscribe
                       selector={(s) =>
-                        s.values.sources.filter((src: SourceEntry) => src.baseUrl.trim()).length
+                        s.values.sources.filter((src: SourceEntry) => src.identifier.trim()).length
                       }
                     >
                       {(count) => <SectionHeader label={`Sources (${count})`} />}
@@ -616,9 +643,8 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                       onClick={() =>
                         form.pushFieldValue("sources", {
                           key: crypto.randomUUID(),
-                          sourceType: "sparkle",
-                          baseUrl: "",
-                          parserKey: "sparkle",
+                          sourceType: "sparkle" as SourceType,
+                          identifier: "",
                           pollIntervalMinutes: 60,
                           status: "active",
                         })
@@ -704,12 +730,18 @@ function SourceCard({
 }) {
   const validateMutation = useValidateSource();
 
-  const handleTestFeed = () => {
+  const handleTestFeed = useCallback(() => {
     if (source.sourceType === "manual") return;
+    const url = resolveSourceUrl(source.sourceType, source.identifier);
+    if (!url) return;
     validateMutation.mutate(
       {
-        url: source.baseUrl,
-        sourceType: source.sourceType as "sparkle" | "github_releases" | "homebrew_cask",
+        url,
+        sourceType: source.sourceType as
+          | "sparkle"
+          | "github_releases"
+          | "homebrew_cask"
+          | "mac_app_store",
       },
       {
         onSuccess: (data) => {
@@ -717,7 +749,8 @@ function SourceCard({
         },
       },
     );
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source.sourceType, source.identifier]);
 
   return (
     <div className="space-y-2 rounded-md border border-border/40 bg-muted/20 p-2.5">
@@ -729,7 +762,7 @@ function SourceCard({
               onChange={(e) => {
                 const newType = e.target.value as SourceType;
                 field.handleChange(newType);
-                form.setFieldValue(`sources[${index}].parserKey`, newType);
+                form.setFieldValue(`sources[${index}].identifier`, "");
                 form.setFieldValue(
                   `sources[${index}].pollIntervalMinutes`,
                   DEFAULT_POLL_INTERVALS[newType],
@@ -745,13 +778,13 @@ function SourceCard({
             </select>
           )}
         </form.Field>
-        <form.Field name={`sources[${index}].baseUrl`}>
+        <form.Field name={`sources[${index}].identifier`}>
           {(field: { state: { value: string }; handleChange: (v: string) => void }) => (
             <input
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
               className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-muted-foreground outline-none placeholder:text-muted-foreground/40"
-              placeholder="https://..."
+              placeholder={SOURCE_INPUT_CONFIG[source.sourceType].placeholder}
             />
           )}
         </form.Field>
@@ -766,7 +799,7 @@ function SourceCard({
         </Button>
       </div>
 
-      {source.sourceType !== "manual" && source.baseUrl && (
+      {source.sourceType !== "manual" && source.identifier && (
         <div className="flex items-center gap-2">
           <Button
             type="button"

@@ -48,7 +48,7 @@ const aliasInputSchema = z.object({
 });
 
 const sourceInputSchema = z.object({
-  sourceType: z.enum(["sparkle", "github_releases", "manual", "homebrew_cask"]),
+  sourceType: z.enum(["sparkle", "github_releases", "manual", "homebrew_cask", "mac_app_store"]),
   baseUrl: z.string().url(),
   parserKey: z.string().min(1),
   pollIntervalMinutes: z.number().int().min(5).max(10080).default(60),

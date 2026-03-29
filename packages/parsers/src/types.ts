@@ -14,7 +14,7 @@ export interface ParsedRelease {
 
 export interface ParsedArtifact {
   url: string;
-  type: "zip" | "dmg" | "pkg" | "appcast_enclosure" | "other";
+  type: "zip" | "dmg" | "pkg" | "appcast_enclosure" | "mac_app_store" | "other";
   sha256?: string;
   sizeBytes?: number;
   architecture?: string;

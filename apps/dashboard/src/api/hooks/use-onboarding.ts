@@ -15,7 +15,7 @@ export function useValidateSource() {
   return useMutation({
     mutationFn: (input: {
       url: string;
-      sourceType: "sparkle" | "github_releases" | "homebrew_cask";
+      sourceType: "sparkle" | "github_releases" | "homebrew_cask" | "mac_app_store";
     }) => validateSource({ data: input }),
   });
 }
@@ -45,7 +45,7 @@ export function useOnboardDiscoveredApp() {
         value: string;
       }[];
       sources?: {
-        sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask";
+        sourceType: "sparkle" | "github_releases" | "manual" | "homebrew_cask" | "mac_app_store";
         baseUrl: string;
         parserKey: string;
         pollIntervalMinutes?: number;

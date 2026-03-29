@@ -16,7 +16,14 @@ export const apps = sqliteTable(
     isVerified: integer("is_verified", { mode: "boolean" }).notNull().default(false),
     verifiedAt: text("verified_at"),
     installStrategyOverride: text("install_strategy_override", {
-      enum: ["sparkle", "zip_replace", "dmg_copy_replace", "pkg_install", "manual_only"],
+      enum: [
+        "sparkle",
+        "zip_replace",
+        "dmg_copy_replace",
+        "pkg_install",
+        "mac_app_store",
+        "manual_only",
+      ],
     }),
     iconR2Key: text("icon_r2_key"),
     createdAt: text("created_at").notNull(),
