@@ -123,17 +123,13 @@ final class InstallCoordinator {
   @discardableResult
   func startInstall(
     result: AppDecision,
-    installedApp: InstalledApp,
-    snapshotId: String,
-    apiClient: InventoryAPIClient
+    installedApp: InstalledApp
   ) async -> Bool {
     guard result.canInstall else { return false }
     if state(for: result).isRunning { return false }
 
-    let startedAt = Date()
     let operationKey = result.id
     let appDisplayName = result.matchedAppName ?? result.appName
-    var executionId: String?
     var verificationSummary = VerificationSummary(
       strategy: result.installStrategy?.rawValue ?? "unknown")
     var stagedDirectory: URL?
@@ -144,7 +140,7 @@ final class InstallCoordinator {
         for: operationKey,
         appDisplayName: appDisplayName,
         phase: .preparing,
-        detail: "Requesting install plan…",
+        detail: "Preparing install…",
         executionId: nil,
         errorMessage: nil,
         installedVersion: nil,
@@ -152,43 +148,32 @@ final class InstallCoordinator {
         helperStatus: .notNeeded
       )
 
-      let prepared = try await apiClient.prepareInstall(
-        snapshotId: snapshotId,
-        result: result,
-        installedApp: installedApp
-      )
-      executionId = prepared.executionId
-      stagedDirectory = try makeStagingDirectory(executionId: prepared.executionId)
+      guard let plan = InstallPlan(result: result) else {
+        throw InstallError.unsupportedStrategy
+      }
+      stagedDirectory = try makeStagingDirectory(executionId: plan.localId)
 
-      try await reportStatus(
-        apiClient: apiClient,
-        executionId: prepared.executionId,
-        status: .inProgress,
-        startedAt: startedAt,
-        details: ["phase": "preparing", "strategy": prepared.strategy.rawValue]
-      )
-
-      switch prepared.strategy {
+      switch plan.strategy {
       case .sparkle:
         updateState(
           for: operationKey,
           phase: .installing,
           detail: "Running the app's Sparkle updater…",
-          executionId: prepared.executionId,
+          executionId: plan.localId,
           errorMessage: nil,
           installedVersion: nil,
           recoveryAction: nil,
           helperStatus: .notNeeded
         )
         try await ExternalSparkleInstaller().install(appAt: URL(fileURLWithPath: installedApp.path))
-        verificationSummary = VerificationSummary(strategy: prepared.strategy.rawValue)
+        verificationSummary = VerificationSummary(strategy: plan.strategy.rawValue)
 
       case .zipReplace, .dmgCopyReplace:
         guard let stagingDir = stagedDirectory else { throw InstallError.missingStagingDirectory }
         let artifactURL = try await downloadArtifact(
-          artifact: prepared.artifact, strategy: prepared.strategy, to: stagingDir)
+          artifact: plan.artifact, strategy: plan.strategy, to: stagingDir)
         let preparedBundle = try await prepareAppBundle(
-          strategy: prepared.strategy,
+          strategy: plan.strategy,
           artifactURL: artifactURL,
           stagingDirectory: stagingDir
         )
@@ -204,7 +189,7 @@ final class InstallCoordinator {
           for: operationKey,
           phase: .verifying,
           detail: "Verifying downloaded app…",
-          executionId: prepared.executionId,
+          executionId: plan.localId,
           errorMessage: nil,
           installedVersion: nil,
           recoveryAction: nil,
@@ -213,21 +198,21 @@ final class InstallCoordinator {
         verificationSummary = try await verifyAppBundle(
           bundleURL: preparedBundle.appBundleURL,
           downloadedArtifactURL: artifactURL,
-          expectedHash: prepared.artifact?.sha256,
+          expectedHash: plan.artifact?.sha256,
           installedApp: installedApp,
-          strategy: prepared.strategy
+          strategy: plan.strategy
         )
 
         try await ensureTargetAppIsClosed(installedApp: installedApp)
 
         let destinationAppURL = URL(fileURLWithPath: installedApp.path)
-        switch executionRoute(for: prepared, destinationAppURL: destinationAppURL) {
+        switch executionRoute(for: plan, destinationAppURL: destinationAppURL) {
         case .localReplace:
           updateState(
             for: operationKey,
             phase: .installing,
             detail: "Replacing installed app…",
-            executionId: prepared.executionId,
+            executionId: plan.localId,
             errorMessage: nil,
             installedVersion: nil,
             recoveryAction: nil,
@@ -245,14 +230,14 @@ final class InstallCoordinator {
             for: operationKey,
             phase: .installing,
             detail: "Setting up privileged installer…",
-            executionId: prepared.executionId,
+            executionId: plan.localId,
             errorMessage: nil,
             installedVersion: nil,
             recoveryAction: nil,
             helperStatus: .preparing
           )
           try await replaceInstalledAppViaHelper(
-            executionId: prepared.executionId,
+            executionId: plan.localId,
             sourceAppURL: preparedBundle.appBundleURL,
             destinationAppURL: destinationAppURL,
             stagingDirectory: stagingDir
@@ -262,12 +247,12 @@ final class InstallCoordinator {
           throw InstallError.unsupportedStrategy
         }
 
-        if prepared.strategy.requiresQuit {
+        if plan.strategy.requiresQuit {
           updateState(
             for: operationKey,
             phase: .relaunching,
             detail: "Relaunching app…",
-            executionId: prepared.executionId,
+            executionId: plan.localId,
             errorMessage: nil,
             installedVersion: nil,
             recoveryAction: nil,
@@ -279,13 +264,13 @@ final class InstallCoordinator {
       case .pkgInstall:
         guard let stagingDir = stagedDirectory else { throw InstallError.missingStagingDirectory }
         let artifactURL = try await downloadArtifact(
-          artifact: prepared.artifact, strategy: prepared.strategy, to: stagingDir)
+          artifact: plan.artifact, strategy: plan.strategy, to: stagingDir)
 
         updateState(
           for: operationKey,
           phase: .verifying,
           detail: "Verifying package…",
-          executionId: prepared.executionId,
+          executionId: plan.localId,
           errorMessage: nil,
           installedVersion: nil,
           recoveryAction: nil,
@@ -293,9 +278,9 @@ final class InstallCoordinator {
         )
         verificationSummary = try await verifyPackage(
           packageURL: artifactURL,
-          expectedHash: prepared.artifact?.sha256,
+          expectedHash: plan.artifact?.sha256,
           installedApp: installedApp,
-          strategy: prepared.strategy
+          strategy: plan.strategy
         )
 
         usedPrivilegedHelper = true
@@ -303,47 +288,37 @@ final class InstallCoordinator {
           for: operationKey,
           phase: .installing,
           detail: "Setting up privileged installer…",
-          executionId: prepared.executionId,
+          executionId: plan.localId,
           errorMessage: nil,
           installedVersion: nil,
           recoveryAction: nil,
           helperStatus: .preparing
         )
         try await installPackageViaHelper(
-          executionId: prepared.executionId,
+          executionId: plan.localId,
           packageURL: artifactURL,
           stagingDirectory: stagingDir
         )
 
       case .macAppStore:
-        if let urlString = prepared.artifact?.downloadUrl,
+        if let urlString = plan.artifact?.downloadUrl,
           let url = URL(string: urlString)
         {
           await NSWorkspace.shared.open(url)
         }
-        verificationSummary = VerificationSummary(strategy: prepared.strategy.rawValue)
+        verificationSummary = VerificationSummary(strategy: plan.strategy.rawValue)
 
       case .manualOnly:
         throw InstallError.unsupportedStrategy
       }
 
       let installedVersion = readInstalledVersion(at: URL(fileURLWithPath: installedApp.path))
-      if let executionId {
-        try await reportStatus(
-          apiClient: apiClient,
-          executionId: executionId,
-          status: .completed,
-          startedAt: startedAt,
-          clientVersionAfter: installedVersion,
-          detailsJSONString: encodeVerificationSummary(verificationSummary)
-        )
-      }
 
       updateState(
         for: operationKey,
         phase: .completed,
         detail: "Install completed.",
-        executionId: executionId,
+        executionId: plan.localId,
         errorMessage: nil,
         installedVersion: installedVersion,
         recoveryAction: nil,
@@ -353,22 +328,12 @@ final class InstallCoordinator {
       return true
     } catch {
       Logger.install.error("Install failed for \(installedApp.name): \(error.localizedDescription)")
-      if let executionId {
-        try? await reportStatus(
-          apiClient: apiClient,
-          executionId: executionId,
-          status: .failed,
-          startedAt: startedAt,
-          errorMessage: error.localizedDescription,
-          detailsJSONString: encodeVerificationSummary(verificationSummary)
-        )
-      }
 
       updateState(
         for: operationKey,
         phase: .failed,
         detail: "Install failed.",
-        executionId: executionId,
+        executionId: nil,
         errorMessage: error.localizedDescription,
         installedVersion: nil,
         recoveryAction: recoveryAction(for: error),
@@ -497,38 +462,6 @@ final class InstallCoordinator {
     case .openSystemSettings:
       return "Open System Settings"
     }
-  }
-
-  private func reportStatus(
-    apiClient: InventoryAPIClient,
-    executionId: String,
-    status: InstallExecutionStatusUpdate.ActionStatus,
-    startedAt: Date,
-    clientVersionAfter: String? = nil,
-    errorMessage: String? = nil,
-    details: [String: String]? = nil,
-    detailsJSONString: String? = nil
-  ) async throws {
-    let renderedDetails: String? =
-      if let detailsJSONString {
-        detailsJSONString
-      } else if let details {
-        try details.asJSONString()
-      } else {
-        nil
-      }
-
-    try await apiClient.updateInstallExecution(
-      executionId: executionId,
-      status: InstallExecutionStatusUpdate(
-        installId: Self.installIdentifier(),
-        actionStatus: status,
-        clientVersionAfter: clientVersionAfter,
-        errorMessage: errorMessage,
-        durationMs: Int(Date().timeIntervalSince(startedAt) * 1000),
-        detailsJson: renderedDetails
-      )
-    )
   }
 
   private func downloadArtifact(
@@ -779,16 +712,16 @@ final class InstallCoordinator {
   }
 
   func executionRoute(
-    for prepared: InstallPrepareResponse,
+    for plan: InstallPlan,
     destinationAppURL: URL? = nil
   ) -> ExecutionRoute {
-    switch prepared.strategy {
+    switch plan.strategy {
     case .sparkle:
       return .sparkle
     case .zipReplace, .dmgCopyReplace:
       guard let destinationAppURL else { return .localReplace }
       let needsPrivilege =
-        prepared.strategy.requiresAdmin
+        plan.strategy.requiresAdmin
         || !FileManager.default.isWritableFile(
           atPath: destinationAppURL.deletingLastPathComponent().path)
       return needsPrivilege ? .privilegedReplace : .localReplace
@@ -983,12 +916,6 @@ final class InstallCoordinator {
     return String(output[matchRange])
   }
 
-  private func encodeVerificationSummary(_ summary: VerificationSummary) -> String? {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.sortedKeys]
-    return try? String(data: encoder.encode(summary), encoding: .utf8)
-  }
-
   private func recoveryAction(for error: Error) -> RecoveryAction? {
     guard let installError = error as? InstallError else { return nil }
     switch installError {
@@ -1052,16 +979,6 @@ final class InstallCoordinator {
       return child.lastPathComponent
     }
     return String(childPath.dropFirst(rootPath.count + 1))
-  }
-
-  private static func installIdentifier() -> String {
-    let key = "versioneer_install_id"
-    if let existing = UserDefaults.standard.string(forKey: key) {
-      return existing
-    }
-    let newId = UUID().uuidString
-    UserDefaults.standard.set(newId, forKey: key)
-    return newId
   }
 
   private func relevancePriority(for state: OperationState) -> Int {
@@ -1184,13 +1101,6 @@ enum InstallError: LocalizedError {
     case .privilegedHelperExecutionFailed(let message):
       message
     }
-  }
-}
-
-extension Dictionary where Key == String, Value == String {
-  fileprivate func asJSONString() throws -> String {
-    let data = try JSONSerialization.data(withJSONObject: self, options: [.sortedKeys])
-    return String(decoding: data, as: UTF8.self)
   }
 }
 

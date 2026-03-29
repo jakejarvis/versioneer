@@ -148,8 +148,7 @@ struct AppStatePresentationTests {
     cacheStore.save(
       ScanCacheStore.CachedScanData(
         installedApps: installedApps,
-        inventoryResults: [update],
-        snapshotId: "snapshot"
+        inventoryResults: [update]
       ))
 
     let reloadedState = AppState(settings: settings, cacheStore: cacheStore)

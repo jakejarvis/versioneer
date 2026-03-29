@@ -45,80 +45,6 @@ nonisolated struct InventoryAPIClient: Sendable {
     }
   }
 
-  /// Requests a server-issued install plan for a specific app/release.
-  func prepareInstall(
-    snapshotId: String,
-    result: AppDecision,
-    installedApp: InstalledApp
-  ) async throws -> InstallPrepareResponse {
-    guard let matchedAppId = result.matchedAppId,
-      let releaseId = result.latestReleaseId,
-      let strategy = result.installStrategy
-    else {
-      throw APIError.installNotAvailable
-    }
-
-    let endpoint = baseURL.appendingPathComponent("v1/install/prepare")
-    var request = URLRequest(url: endpoint)
-    request.httpMethod = "POST"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-    let payload = InstallPrepareRequest(
-      installId: installIdentifier(),
-      snapshotId: snapshotId,
-      matchedAppId: matchedAppId,
-      releaseId: releaseId,
-      installedVersion: result.installedVersion,
-      localAppPath: installedApp.path,
-      strategyCandidate: strategy
-    )
-
-    let encoder = JSONEncoder()
-    request.httpBody = try encoder.encode(payload)
-
-    let (data, response) = try await URLSession.shared.data(for: request)
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      throw APIError.invalidResponse
-    }
-
-    guard httpResponse.statusCode == 200 else {
-      let body = String(data: data, encoding: .utf8) ?? ""
-      throw APIError.httpError(statusCode: httpResponse.statusCode, body: body)
-    }
-
-    do {
-      return try JSONDecoder().decode(InstallPrepareResponse.self, from: data)
-    } catch {
-      throw APIError.decodingFailed(error.localizedDescription)
-    }
-  }
-
-  /// Updates the backend execution record for an install attempt.
-  func updateInstallExecution(
-    executionId: String,
-    status: InstallExecutionStatusUpdate
-  ) async throws {
-    let endpoint = baseURL.appendingPathComponent("v1/install/executions/\(executionId)/status")
-    var request = URLRequest(url: endpoint)
-    request.httpMethod = "POST"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-    let encoder = JSONEncoder()
-    request.httpBody = try encoder.encode(status)
-
-    let (data, response) = try await URLSession.shared.data(for: request)
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      throw APIError.invalidResponse
-    }
-
-    guard httpResponse.statusCode == 200 else {
-      let body = String(data: data, encoding: .utf8) ?? ""
-      throw APIError.httpError(statusCode: httpResponse.statusCode, body: body)
-    }
-  }
-
   /// Submits inventory and returns the decoded response.
   func checkInventory(
     apps: [InstalledApp],
@@ -174,7 +100,6 @@ nonisolated struct InventoryAPIClient: Sendable {
     scanDurationMs: Int?,
     channelPreferences: InventoryCheckRequest.ChannelPreferences?
   ) -> InventoryCheckRequest {
-    let installId = installIdentifier()
     let osVer = ProcessInfo.processInfo.operatingSystemVersion
     let osVersion = "\(osVer.majorVersion).\(osVer.minorVersion).\(osVer.patchVersion)"
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
@@ -201,7 +126,6 @@ nonisolated struct InventoryAPIClient: Sendable {
 
     return InventoryCheckRequest(
       client: .init(
-        installId: installId,
         platform: "macos",
         appVersion: appVersion,
         osVersion: osVersion,
@@ -211,17 +135,6 @@ nonisolated struct InventoryAPIClient: Sendable {
       apps: inventoryApps,
       scanDurationMs: scanDurationMs
     )
-  }
-
-  /// A stable per-machine identifier stored in UserDefaults.
-  private func installIdentifier() -> String {
-    let key = "versioneer_install_id"
-    if let existing = UserDefaults.standard.string(forKey: key) {
-      return existing
-    }
-    let newId = UUID().uuidString
-    UserDefaults.standard.set(newId, forKey: key)
-    return newId
   }
 
   /// Detects the real hardware architecture, seeing through Rosetta translation.
@@ -319,7 +232,6 @@ nonisolated enum APIError: LocalizedError, Sendable {
   case invalidResponse
   case httpError(statusCode: Int, body: String)
   case decodingFailed(String)
-  case installNotAvailable
 
   var errorDescription: String? {
     switch self {
@@ -329,8 +241,6 @@ nonisolated enum APIError: LocalizedError, Sendable {
       "Server returned status \(statusCode)"
     case .decodingFailed(let message):
       "Failed to decode response: \(message)"
-    case .installNotAvailable:
-      "Install is not available for this app"
     }
   }
 }

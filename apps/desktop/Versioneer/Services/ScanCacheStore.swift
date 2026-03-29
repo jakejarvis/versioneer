@@ -9,7 +9,6 @@ nonisolated struct ScanCacheStore: Sendable {
   struct CachedScanData: Codable, Sendable {
     let installedApps: [InstalledApp]
     let inventoryResults: [AppDecision]
-    let snapshotId: String?
   }
 
   private static let fileName = "ScanCache.json"

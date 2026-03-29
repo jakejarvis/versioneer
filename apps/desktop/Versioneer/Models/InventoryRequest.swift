@@ -7,7 +7,6 @@ nonisolated struct InventoryCheckRequest: Codable, Sendable {
   let scanDurationMs: Int?
 
   struct ClientInfo: Codable, Sendable {
-    let installId: String
     let platform: String
     let appVersion: String?
     let osVersion: String?

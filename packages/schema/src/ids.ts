@@ -19,13 +19,9 @@ export const idPrefixes = {
   releaseObservation: "obs",
   artifact: "art",
   appLatestRelease: "alr",
-  client: "cli",
-  clientInventorySnapshot: "snap",
-  clientInventoryApp: "cia",
   jobFailure: "jf",
   auditLog: "al",
   feedback: "fb",
-  updateExecution: "exec",
   discoveredApp: "dapp",
   cronJobRun: "cjr",
 } as const;

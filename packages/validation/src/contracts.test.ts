@@ -1,17 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  installExecutionStatusUpdateSchema,
-  installPrepareRequestSchema,
-  inventoryCheckRequestSchema,
-  inventoryCheckResponseSchema,
-} from "./index";
+import { inventoryCheckRequestSchema, inventoryCheckResponseSchema } from "./index";
 
 describe("public contract schemas", () => {
   it("accepts an empty inventory scan payload", () => {
     const parsed = inventoryCheckRequestSchema.parse({
       client: {
-        installId: "install_test",
         platform: "macos",
         appVersion: "1.0",
         osVersion: "15.0",
@@ -26,7 +20,6 @@ describe("public contract schemas", () => {
 
   it("accepts the inventory response shape used by the desktop app", () => {
     const parsed = inventoryCheckResponseSchema.parse({
-      snapshotId: "cis_123",
       processedAt: "2026-03-26T18:00:00Z",
       results: [
         {
@@ -60,34 +53,5 @@ describe("public contract schemas", () => {
 
     expect(parsed.results[0]?.iconUrl).toBe("https://assets.example.com/firefox.png");
     expect(parsed.results[0]?.installStrategy).toBe("zip_replace");
-  });
-
-  it("accepts install prepare requests from the desktop client", () => {
-    const parsed = installPrepareRequestSchema.parse({
-      installId: "install_test",
-      snapshotId: "cis_123",
-      matchedAppId: "app_firefox",
-      releaseId: "rel_firefox",
-      installedVersion: "126.0",
-      localAppPath: "/Applications/Firefox.app",
-      strategyCandidate: "zip_replace",
-    });
-
-    expect(parsed.strategyCandidate).toBe("zip_replace");
-    expect(parsed.localAppPath).toBe("/Applications/Firefox.app");
-  });
-
-  it("accepts execution status updates from the desktop client", () => {
-    const parsed = installExecutionStatusUpdateSchema.parse({
-      installId: "install_test",
-      actionStatus: "completed",
-      clientVersionAfter: "127.0",
-      errorMessage: null,
-      durationMs: 3210,
-      detailsJson: '{"strategy":"zip_replace"}',
-    });
-
-    expect(parsed.actionStatus).toBe("completed");
-    expect(parsed.clientVersionAfter).toBe("127.0");
   });
 });

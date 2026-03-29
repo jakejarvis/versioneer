@@ -115,7 +115,6 @@
       state.rawInventoryResults = results
       state.inventoryResults = results
       state.refreshDisplayedResults()
-      state.snapshotId = "preview_snapshot"
       state.loadState = loadState
       state.lastScanCompletedAt = Date().addingTimeInterval(-900)
       state.selectedSection = .all

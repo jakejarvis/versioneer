@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   ScrollText,
   MessageSquare,
-  Play,
   Timer,
   type LucideIcon,
 } from "lucide-react";
@@ -27,7 +26,6 @@ export const navItems: NavItem[] = [
   { label: "Job Failures", path: "/job-failures", icon: AlertTriangle },
   { label: "Audit Log", path: "/audit-log", icon: ScrollText },
   { label: "Feedback", path: "/feedback", icon: MessageSquare },
-  { label: "Executions", path: "/executions", icon: Play },
   { label: "Jobs", path: "/jobs", icon: Timer },
 ];
 

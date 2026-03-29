@@ -1,5 +1,5 @@
 import { createDb } from "@versioneer/db";
-import { matchApp, generateMatchExplanation } from "@versioneer/identity";
+import { matchApp } from "@versioneer/identity";
 import type { AliasRecord } from "@versioneer/identity";
 import { enrichDiscoveredApp, shouldEnrich } from "@versioneer/pipeline";
 import {
@@ -9,9 +9,6 @@ import {
   artifacts,
   releases,
   sources,
-  clients,
-  clientInventorySnapshots,
-  clientInventoryApps,
   discoveredApps,
   generateId,
   idPrefixes,
@@ -153,49 +150,6 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
     const request = c.get("inventoryRequest");
     const db = createDb(c.env.DB);
     const now = new Date().toISOString();
-
-    // Upsert client
-    let client = await db
-      .select()
-      .from(clients)
-      .where(eq(clients.anonymousInstallId, request.client.installId))
-      .get();
-
-    if (!client) {
-      const clientId = generateId(idPrefixes.client);
-      await db.insert(clients).values({
-        id: clientId,
-        anonymousInstallId: request.client.installId,
-        platform: request.client.platform,
-        appVersion: request.client.appVersion ?? null,
-        firstSeenAt: now,
-        lastSeenAt: now,
-      });
-      client = {
-        id: clientId,
-        anonymousInstallId: request.client.installId,
-        platform: request.client.platform,
-        appVersion: request.client.appVersion ?? null,
-        firstSeenAt: now,
-        lastSeenAt: now,
-      };
-    } else {
-      await db
-        .update(clients)
-        .set({ lastSeenAt: now, appVersion: request.client.appVersion ?? client.appVersion })
-        .where(eq(clients.id, client.id));
-    }
-
-    // Create snapshot
-    const snapshotId = generateId(idPrefixes.clientInventorySnapshot);
-    await db.insert(clientInventorySnapshots).values({
-      id: snapshotId,
-      clientId: client.id,
-      osVersion: request.client.osVersion ?? null,
-      scanDurationMs: request.scanDurationMs ?? null,
-      appCount: request.apps.length,
-      createdAt: now,
-    });
 
     // Load all active aliases for matching
     const allAliases = await db
@@ -430,48 +384,6 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         decision = "ambiguous";
       }
 
-      // Generate match explanation
-      const matchExplanation = generateMatchExplanation(
-        {
-          appName: installedApp.appName,
-          bundleId: installedApp.bundleId,
-          teamId: installedApp.teamId,
-          version: installedApp.version,
-        },
-        matchResult,
-        aliasRecords,
-      );
-
-      // Store inventory app record
-      const ciaId = generateId(idPrefixes.clientInventoryApp);
-      await db.insert(clientInventoryApps).values({
-        id: ciaId,
-        snapshotId,
-        appName: installedApp.appName,
-        bundleId: installedApp.bundleId ?? null,
-        installedVersionRaw: installedApp.version ?? null,
-        installedVersionNormalized: installedApp.version
-          ? normalizeVersion(installedApp.version)
-          : null,
-        buildNumber: installedApp.buildNumber ?? null,
-        teamId: installedApp.teamId ?? null,
-        pathHash: installedApp.pathHash ?? null,
-        architecture: installedApp.architecture ?? null,
-        sparkleFeedUrl: installedApp.sparkleFeedUrl ?? null,
-        isMasApp: installedApp.isMasApp ?? null,
-        electronUpdateUrl: installedApp.electronUpdateUrl ?? null,
-        isHomebrewInstalled: installedApp.isHomebrewInstalled ?? null,
-        matchedAppId: matchResult.appId,
-        matchMethod: matchResult.method,
-        matchConfidence: matchResult.confidence,
-        decisionStatus: decision,
-        latestReleaseId,
-        latestVersionNormalized: latestVersion,
-        latestVersionRaw,
-        matchExplanationJson: JSON.stringify(matchExplanation),
-        createdAt: now,
-      });
-
       const iconUrl = appInfo?.iconR2Key ? `${c.env.ASSETS_BASE_URL}/${appInfo.iconR2Key}` : null;
 
       results.push({
@@ -693,7 +605,6 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
     );
 
     return c.json({
-      snapshotId,
       results,
       processedAt: now,
     });

@@ -25,7 +25,6 @@ export type InstalledApp = z.infer<typeof installedAppSchema>;
 
 export const inventoryCheckRequestSchema = z.object({
   client: z.object({
-    installId: z.string().min(1).max(200),
     platform: z.string().default("macos"),
     appVersion: z.string().max(50).optional(),
     osVersion: z.string().max(50).optional(),
@@ -68,7 +67,6 @@ export const appDecisionSchema = z.object({
 export type AppDecision = z.infer<typeof appDecisionSchema>;
 
 export const inventoryCheckResponseSchema = z.object({
-  snapshotId: z.string(),
   results: z.array(appDecisionSchema),
   processedAt: z.string(),
 });

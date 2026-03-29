@@ -256,36 +256,6 @@ export interface AuditLogListItem extends AuditLogEntry {
   targetRef: LinkedEntityRef | null;
 }
 
-export interface UpdateExecution {
-  id: string;
-  clientId: string;
-  appId: string;
-  releaseId: string;
-  artifactId: string | null;
-  actionType:
-    | "view_notes"
-    | "download"
-    | "assisted_replace"
-    | "sparkle"
-    | "pkg_install"
-    | "automation"
-    | "homebrew_upgrade";
-  actionStatus: "initiated" | "in_progress" | "completed" | "failed" | "cancelled";
-  clientVersionBefore: string | null;
-  clientVersionAfter: string | null;
-  installStrategy: string | null;
-  errorMessage: string | null;
-  detailsJson: string | null;
-  durationMs: number | null;
-  initiatedAt: string;
-  completedAt: string | null;
-}
-
-export interface ExecutionListItem extends UpdateExecution {
-  app: AppSummary | null;
-  release: ReleaseSummary | null;
-}
-
 export interface MatchExplanation {
   method: string;
   confidence: number;
@@ -299,9 +269,6 @@ export interface MatchExplanation {
 
 export interface FeedbackItem {
   id: string;
-  clientId: string;
-  snapshotId: string | null;
-  inventoryAppId: string | null;
   feedbackType: "wrong_match" | "wrong_version" | "app_request" | "general";
   targetAppId: string | null;
   bundleId: string | null;

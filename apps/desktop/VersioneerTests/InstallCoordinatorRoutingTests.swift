@@ -7,11 +7,11 @@ struct InstallCoordinatorRoutingTests {
   @MainActor
   @Test func nonAdminReplaceStaysLocal() throws {
     let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
-    let prepared = makePrepared(strategy: .zipReplace)
+    let plan = makePlan(strategy: .zipReplace)
     let destination = try makeWritableDestination(named: "Local.app")
 
     #expect(
-      coordinator.executionRoute(for: prepared, destinationAppURL: destination) == .localReplace)
+      coordinator.executionRoute(for: plan, destinationAppURL: destination) == .localReplace)
   }
 
   @MainActor
@@ -19,35 +19,35 @@ struct InstallCoordinatorRoutingTests {
     let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
     // pkgInstall requires admin by default; for dmgCopyReplace, admin is determined by
     // file system writability. Use an unwritable destination to trigger privileged path.
-    let prepared = makePrepared(strategy: .dmgCopyReplace)
+    let plan = makePlan(strategy: .dmgCopyReplace)
     let destination = URL(fileURLWithPath: "/Applications/Admin.app")
 
     #expect(
-      coordinator.executionRoute(for: prepared, destinationAppURL: destination) == .privilegedReplace
+      coordinator.executionRoute(for: plan, destinationAppURL: destination) == .privilegedReplace
     )
   }
 
   @MainActor
   @Test func packageInstallAlwaysUsesPrivilegedHelper() {
     let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
-    let prepared = makePrepared(strategy: .pkgInstall)
+    let plan = makePlan(strategy: .pkgInstall)
 
-    #expect(coordinator.executionRoute(for: prepared) == .privilegedPackage)
+    #expect(coordinator.executionRoute(for: plan) == .privilegedPackage)
   }
 
   @MainActor
   @Test func sparkleBypassesPrivilegedHelper() {
     let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
-    let prepared = makePrepared(strategy: .sparkle)
+    let plan = makePlan(strategy: .sparkle)
 
-    #expect(coordinator.executionRoute(for: prepared) == .sparkle)
+    #expect(coordinator.executionRoute(for: plan) == .sparkle)
   }
 
-  private func makePrepared(
+  private func makePlan(
     strategy: InstallStrategy
-  ) -> InstallPrepareResponse {
-    InstallPrepareResponse(
-      executionId: "exec_test",
+  ) -> InstallPlan {
+    InstallPlan(
+      localId: "local_test",
       strategy: strategy,
       appId: "app_test",
       releaseId: "rel_test",

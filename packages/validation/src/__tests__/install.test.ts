@@ -1,40 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  appDecisionSchema,
-  installPrepareRequestSchema,
-  installExecutionStatusUpdateSchema,
-} from "../index";
-
-describe("installPrepareRequestSchema", () => {
-  it("accepts a valid install prepare request", () => {
-    const parsed = installPrepareRequestSchema.parse({
-      installId: "machine-123",
-      snapshotId: "snap_123",
-      matchedAppId: "app_123",
-      releaseId: "rel_123",
-      installedVersion: "1.0.0",
-      localAppPath: "/Applications/Foo.app",
-      strategyCandidate: "zip_replace",
-    });
-
-    expect(parsed.strategyCandidate).toBe("zip_replace");
-  });
-});
-
-describe("installExecutionStatusUpdateSchema", () => {
-  it("accepts execution status updates with details JSON", () => {
-    const parsed = installExecutionStatusUpdateSchema.parse({
-      installId: "machine-123",
-      actionStatus: "completed",
-      clientVersionAfter: "2.0.0",
-      durationMs: 1234,
-      detailsJson: '{"hashVerified":true}',
-    });
-
-    expect(parsed.actionStatus).toBe("completed");
-  });
-});
+import { appDecisionSchema } from "../index";
 
 describe("appDecisionSchema install payload", () => {
   it("parses install and artifact metadata", () => {

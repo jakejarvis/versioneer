@@ -16,7 +16,6 @@ import { Route as ReleasesIndexRouteImport } from './routes/releases/index'
 import { Route as JobsIndexRouteImport } from './routes/jobs/index'
 import { Route as JobFailuresIndexRouteImport } from './routes/job-failures/index'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback/index'
-import { Route as ExecutionsIndexRouteImport } from './routes/executions/index'
 import { Route as DiscoveredAppsIndexRouteImport } from './routes/discovered-apps/index'
 import { Route as AuditLogIndexRouteImport } from './routes/audit-log/index'
 import { Route as AppsIndexRouteImport } from './routes/apps/index'
@@ -59,11 +58,6 @@ const JobFailuresIndexRoute = JobFailuresIndexRouteImport.update({
 const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
   id: '/feedback/',
   path: '/feedback/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ExecutionsIndexRoute = ExecutionsIndexRouteImport.update({
-  id: '/executions/',
-  path: '/executions/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DiscoveredAppsIndexRoute = DiscoveredAppsIndexRouteImport.update({
@@ -116,7 +110,6 @@ export interface FileRoutesByFullPath {
   '/apps/': typeof AppsIndexRoute
   '/audit-log/': typeof AuditLogIndexRoute
   '/discovered-apps/': typeof DiscoveredAppsIndexRoute
-  '/executions/': typeof ExecutionsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/job-failures/': typeof JobFailuresIndexRoute
   '/jobs/': typeof JobsIndexRoute
@@ -134,7 +127,6 @@ export interface FileRoutesByTo {
   '/apps': typeof AppsIndexRoute
   '/audit-log': typeof AuditLogIndexRoute
   '/discovered-apps': typeof DiscoveredAppsIndexRoute
-  '/executions': typeof ExecutionsIndexRoute
   '/feedback': typeof FeedbackIndexRoute
   '/job-failures': typeof JobFailuresIndexRoute
   '/jobs': typeof JobsIndexRoute
@@ -153,7 +145,6 @@ export interface FileRoutesById {
   '/apps/': typeof AppsIndexRoute
   '/audit-log/': typeof AuditLogIndexRoute
   '/discovered-apps/': typeof DiscoveredAppsIndexRoute
-  '/executions/': typeof ExecutionsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/job-failures/': typeof JobFailuresIndexRoute
   '/jobs/': typeof JobsIndexRoute
@@ -173,7 +164,6 @@ export interface FileRouteTypes {
     | '/apps/'
     | '/audit-log/'
     | '/discovered-apps/'
-    | '/executions/'
     | '/feedback/'
     | '/job-failures/'
     | '/jobs/'
@@ -191,7 +181,6 @@ export interface FileRouteTypes {
     | '/apps'
     | '/audit-log'
     | '/discovered-apps'
-    | '/executions'
     | '/feedback'
     | '/job-failures'
     | '/jobs'
@@ -209,7 +198,6 @@ export interface FileRouteTypes {
     | '/apps/'
     | '/audit-log/'
     | '/discovered-apps/'
-    | '/executions/'
     | '/feedback/'
     | '/job-failures/'
     | '/jobs/'
@@ -228,7 +216,6 @@ export interface RootRouteChildren {
   AppsIndexRoute: typeof AppsIndexRoute
   AuditLogIndexRoute: typeof AuditLogIndexRoute
   DiscoveredAppsIndexRoute: typeof DiscoveredAppsIndexRoute
-  ExecutionsIndexRoute: typeof ExecutionsIndexRoute
   FeedbackIndexRoute: typeof FeedbackIndexRoute
   JobFailuresIndexRoute: typeof JobFailuresIndexRoute
   JobsIndexRoute: typeof JobsIndexRoute
@@ -287,13 +274,6 @@ declare module '@tanstack/react-router' {
       path: '/feedback'
       fullPath: '/feedback/'
       preLoaderRoute: typeof FeedbackIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/executions/': {
-      id: '/executions/'
-      path: '/executions'
-      fullPath: '/executions/'
-      preLoaderRoute: typeof ExecutionsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/discovered-apps/': {
@@ -364,7 +344,6 @@ const rootRouteChildren: RootRouteChildren = {
   AppsIndexRoute: AppsIndexRoute,
   AuditLogIndexRoute: AuditLogIndexRoute,
   DiscoveredAppsIndexRoute: DiscoveredAppsIndexRoute,
-  ExecutionsIndexRoute: ExecutionsIndexRoute,
   FeedbackIndexRoute: FeedbackIndexRoute,
   JobFailuresIndexRoute: JobFailuresIndexRoute,
   JobsIndexRoute: JobsIndexRoute,

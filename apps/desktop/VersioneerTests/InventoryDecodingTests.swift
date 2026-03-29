@@ -7,7 +7,6 @@ struct InventoryDecodingTests {
   @Test func decodesFullResponse() throws {
     let json = """
       {
-        "snapshotId": "cis_abc123",
         "processedAt": "2024-06-15T10:30:00Z",
         "results": [
           {
@@ -34,7 +33,6 @@ struct InventoryDecodingTests {
       from: data
     )
 
-    #expect(response.snapshotId == "cis_abc123")
     #expect(response.results.count == 1)
 
     let result = response.results[0]
@@ -49,7 +47,6 @@ struct InventoryDecodingTests {
   @Test func decodesNullableFields() throws {
     let json = """
       {
-        "snapshotId": "cis_xyz",
         "processedAt": "2024-06-15T10:30:00Z",
         "results": [
           {
@@ -93,7 +90,6 @@ struct InventoryDecodingTests {
     for decisionStr in decisions {
       let json = """
         {
-          "snapshotId": "cis_test",
           "processedAt": "2024-01-01T00:00:00Z",
           "results": [
             {
@@ -126,11 +122,11 @@ struct InventoryDecodingTests {
   @Test func encodesInventoryRequest() throws {
     let request = InventoryCheckRequest(
       client: .init(
-        installId: "test-id",
         platform: "macos",
         appVersion: "1.0",
         osVersion: "14.5",
-        systemArchitecture: "arm64"
+        systemArchitecture: "arm64",
+        channelPreferences: nil
       ),
       apps: [
         .init(
@@ -159,7 +155,6 @@ struct InventoryDecodingTests {
       try JSONSerialization.jsonObject(with: data) as! [String: Any]
 
     let client = dict["client"] as! [String: Any]
-    #expect(client["installId"] as? String == "test-id")
     #expect(client["platform"] as? String == "macos")
 
     let apps = dict["apps"] as! [[String: Any]]

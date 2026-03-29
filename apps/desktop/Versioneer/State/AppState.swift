@@ -66,7 +66,6 @@ final class AppState {
   var rawInventoryResults: [AppDecision] = []
   var inventoryResults: [AppDecision] = []
   var userIgnoredResultIDs: Set<String> = []
-  var snapshotId: String?
   var searchText: String = ""
   var lastScanCompletedAt: Date?
 
@@ -115,7 +114,6 @@ final class AppState {
     if let cached = cacheStore.load() {
       installedApps = cached.installedApps
       rawInventoryResults = cached.inventoryResults
-      snapshotId = cached.snapshotId
       loadState = .done
       rebuildLookupTables()
       refreshDisplayedResults()
@@ -420,29 +418,25 @@ final class AppState {
         local: localResults,
         apps: apps
       )
-      snapshotId = response.snapshotId
       loadState = .done
       lastScanCompletedAt = Date()
       refreshDisplayedResults(preservingSelectionID: previousSelectionID)
       cacheStore.save(
         ScanCacheStore.CachedScanData(
           installedApps: installedApps,
-          inventoryResults: rawInventoryResults,
-          snapshotId: response.snapshotId
+          inventoryResults: rawInventoryResults
         ))
     } catch {
       // Backend failed — fall back to local results if we have any
       if !localResults.isEmpty {
         rawInventoryResults = buildLocalOnlyResults(local: localResults, apps: apps)
-        snapshotId = nil
         loadState = .done
         lastScanCompletedAt = Date()
         refreshDisplayedResults(preservingSelectionID: previousSelectionID)
         cacheStore.save(
           ScanCacheStore.CachedScanData(
             installedApps: installedApps,
-            inventoryResults: rawInventoryResults,
-            snapshotId: nil
+            inventoryResults: rawInventoryResults
           ))
       } else {
         loadState = .error(error.localizedDescription)
@@ -672,15 +666,11 @@ final class AppState {
   }
 
   func install(_ result: AppDecision) async {
-    guard let snapshotId,
-      let installedApp = installedApp(for: result)
-    else { return }
+    guard let installedApp = installedApp(for: result) else { return }
 
     let didInstall = await installCoordinator.startInstall(
       result: result,
-      installedApp: installedApp,
-      snapshotId: snapshotId,
-      apiClient: apiClient
+      installedApp: installedApp
     )
 
     if didInstall {

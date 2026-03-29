@@ -303,14 +303,6 @@ function FeedbackPage() {
                     <dd className="font-mono">{selectedItem.bundleId}</dd>
                   </div>
                 )}
-                {selectedItem.snapshotId && (
-                  <div className="flex gap-2">
-                    <dt className="w-24 text-muted-foreground">Snapshot</dt>
-                    <dd>
-                      <IdDisplay id={selectedItem.snapshotId} />
-                    </dd>
-                  </div>
-                )}
               </dl>
               {selectedItem.payloadJson && (
                 <div>

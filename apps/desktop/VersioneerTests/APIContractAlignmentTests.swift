@@ -7,7 +7,6 @@ struct APIContractAlignmentTests {
   @Test func inventoryResponseDecodesBackendShapeWithIconUrlAndInstallMetadata() throws {
     let json = """
       {
-        "snapshotId": "cis_contract",
         "processedAt": "2026-03-26T18:00:00Z",
         "results": [
           {
@@ -47,49 +46,5 @@ struct APIContractAlignmentTests {
     #expect(result.installStrategy == .zipReplace)
     #expect(result.isVerified == true)
     #expect(result.canInstall == true)
-  }
-
-  @Test func installPrepareRequestEncodesBackendFieldNames() throws {
-    let request = InstallPrepareRequest(
-      installId: "install_test",
-      snapshotId: "cis_contract",
-      matchedAppId: "app_firefox",
-      releaseId: "rel_firefox",
-      installedVersion: "126.0",
-      localAppPath: "/Applications/Firefox.app",
-      strategyCandidate: .zipReplace
-    )
-
-    let payload = try encodedJSONObject(from: request)
-
-    #expect(payload["installId"] as? String == "install_test")
-    #expect(payload["snapshotId"] as? String == "cis_contract")
-    #expect(payload["matchedAppId"] as? String == "app_firefox")
-    #expect(payload["releaseId"] as? String == "rel_firefox")
-    #expect(payload["localAppPath"] as? String == "/Applications/Firefox.app")
-    #expect(payload["strategyCandidate"] as? String == "zip_replace")
-  }
-
-  @Test func installStatusUpdateEncodesBackendFieldNames() throws {
-    let update = InstallExecutionStatusUpdate(
-      installId: "install_test",
-      actionStatus: .inProgress,
-      clientVersionAfter: nil,
-      errorMessage: nil,
-      durationMs: 2100,
-      detailsJson: "{\"phase\":\"installing\"}"
-    )
-
-    let payload = try encodedJSONObject(from: update)
-
-    #expect(payload["installId"] as? String == "install_test")
-    #expect(payload["actionStatus"] as? String == "in_progress")
-    #expect(payload["durationMs"] as? Int == 2100)
-    #expect(payload["detailsJson"] as? String == "{\"phase\":\"installing\"}")
-  }
-
-  private func encodedJSONObject<T: Encodable>(from value: T) throws -> [String: Any] {
-    let data = try JSONEncoder().encode(value)
-    return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
   }
 }
