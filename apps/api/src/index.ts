@@ -3,7 +3,6 @@ import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "hono/logger";
 
-import type { Env } from "./env";
 import { publicRoutes } from "./routes/public/index";
 
 const app = new Hono<{ Bindings: Env }>();

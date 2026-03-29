@@ -16,6 +16,8 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { pipelineWorker } from "@/lib/pipeline";
+
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
 import { buildAppSortDescriptors } from "./list-helpers";
 import { authMiddleware } from "./middleware";
@@ -357,6 +359,6 @@ export const recomputeLatest = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data: { appId, channel } }) => {
-    await env.RECOMPUTE_LATEST_QUEUE.send({ appId, channel });
+    await pipelineWorker.recomputeLatest({ appId, channel });
     return { status: "queued" };
   });

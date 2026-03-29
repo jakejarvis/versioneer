@@ -15,6 +15,8 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { pipelineWorker } from "@/lib/pipeline";
+
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { authMiddleware } from "./middleware";
 
@@ -172,7 +174,7 @@ export const createRelease = createServerFn({ method: "POST" })
     });
 
     // Trigger recompute latest for this app/channel
-    await env.RECOMPUTE_LATEST_QUEUE.send({ appId: data.appId, channel });
+    await pipelineWorker.recomputeLatest({ appId: data.appId, channel });
 
     return { id, status: "created" };
   });
@@ -246,7 +248,7 @@ export const pinRelease = createServerFn({ method: "POST" })
         ),
       );
 
-    await env.RECOMPUTE_LATEST_QUEUE.send({ appId: release.appId, channel: release.channel });
+    await pipelineWorker.recomputeLatest({ appId: release.appId, channel: release.channel });
 
     return { status: "pinned" };
   });
@@ -274,7 +276,7 @@ export const unpinRelease = createServerFn({ method: "POST" })
         ),
       );
 
-    await env.RECOMPUTE_LATEST_QUEUE.send({ appId: release.appId, channel: release.channel });
+    await pipelineWorker.recomputeLatest({ appId: release.appId, channel: release.channel });
 
     return { status: "unpinned" };
   });

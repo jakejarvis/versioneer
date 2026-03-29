@@ -1,5 +1,5 @@
 {
-  "name": "@versioneer/queue-consumer",
+  "name": "@versioneer/worker",
   "version": "0.0.1",
   "private": true,
   "scripts": {

@@ -15,6 +15,7 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { pipelineWorker, sourcePipeline } from "@/lib/pipeline";
 import { defaultRoleForSourceType, defaultRuntimeStatusForSourceType } from "@/lib/source-types";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
@@ -316,7 +317,9 @@ export const createSource = createServerFn({ method: "POST" })
     }
 
     if (data.reviewStatus === "approved" && runtimeStatus === "active") {
-      await env.SOURCE_FETCH_QUEUE.send({ sourceId: id, reason: "source-create", force: true });
+      await sourcePipeline.create({
+        params: { sourceId: id, reason: "source-create", force: true },
+      });
     }
 
     await db.insert(auditLog).values({
@@ -467,10 +470,8 @@ export const updateSource = createServerFn({ method: "POST" })
         fields.parserKey !== undefined ||
         (fields.status === "active" && existing.status !== "active"));
     if (shouldQueueFetch) {
-      await env.SOURCE_FETCH_QUEUE.send({
-        sourceId: existing.id,
-        reason: "source-update",
-        force: true,
+      await sourcePipeline.create({
+        params: { sourceId: existing.id, reason: "source-update", force: true },
       });
     }
 
@@ -503,7 +504,7 @@ export const triggerFetch = createServerFn({ method: "POST" })
     const source = await db.select().from(sources).where(eq(sources.id, sourceId)).get();
     if (!source) throw new Error("Not found");
 
-    await env.SOURCE_FETCH_QUEUE.send({ sourceId, reason, force });
+    await sourcePipeline.create({ params: { sourceId, reason, force } });
     return { status: "queued", sourceId };
   });
 
@@ -552,7 +553,7 @@ export const reparse = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ sourceFetchId: z.string().min(1) }))
   .handler(async ({ data: { sourceFetchId } }) => {
-    await env.SOURCE_PARSE_QUEUE.send({ sourceFetchId });
+    await pipelineWorker.reparse({ sourceFetchId });
     return { status: "queued", sourceFetchId };
   });
 

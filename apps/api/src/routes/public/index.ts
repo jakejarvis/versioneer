@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
 import { appsRoutes } from "./apps";
 import { feedbackRoutes } from "./feedback";
 import { installRoutes } from "./install";

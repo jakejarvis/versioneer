@@ -17,6 +17,7 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { pipelineWorker, sourcePipeline } from "@/lib/pipeline";
 import {
   defaultLabelForSourceType,
   defaultParserKeyForSourceType,
@@ -412,7 +413,9 @@ async function approveNewSourceSuggestion(params: {
   }
 
   if (sourceId && runtimeStatus === "active") {
-    await env.SOURCE_FETCH_QUEUE.send({ sourceId, reason: "catalog-review", force: true });
+    await sourcePipeline.create({
+      params: { sourceId, reason: "catalog-review", force: true },
+    });
   }
 
   return sourceId;
@@ -526,10 +529,8 @@ async function approveAuthorityHandoffSuggestion(params: {
     })
     .where(eq(sources.id, payload.toSourceId));
 
-  await env.SOURCE_FETCH_QUEUE.send({
-    sourceId: payload.toSourceId,
-    reason: "authority-handoff",
-    force: true,
+  await sourcePipeline.create({
+    params: { sourceId: payload.toSourceId, reason: "authority-handoff", force: true },
   });
 }
 
@@ -608,14 +609,12 @@ async function approveReleaseDiscrepancySuggestion(params: {
     createdAt: params.now,
   });
 
-  await env.RECOMPUTE_LATEST_QUEUE.send({ appId: release.appId, channel: release.channel });
+  await pipelineWorker.recomputeLatest({ appId: release.appId, channel: release.channel });
 
   const sourceId = payload?.sourceId ?? release.publishedBySourceId ?? null;
   if (sourceId) {
-    await env.SOURCE_FETCH_QUEUE.send({
-      sourceId,
-      reason: "release-discrepancy",
-      force: true,
+    await sourcePipeline.create({
+      params: { sourceId, reason: "release-discrepancy", force: true },
     });
   }
 }

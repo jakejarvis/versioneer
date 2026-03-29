@@ -5,6 +5,8 @@ import { env } from "cloudflare:workers";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { pipelineWorker, sourcePipeline } from "@/lib/pipeline";
+
 import { loadEntityRefsByIds } from "./entity-summaries";
 import { authMiddleware } from "./middleware";
 
@@ -119,21 +121,19 @@ export const retryJobFailure = createServerFn({ method: "POST" })
     switch (failure.jobType) {
       case "source-fetch":
         if (failure.relatedId) {
-          await env.SOURCE_FETCH_QUEUE.send({
-            sourceId: failure.relatedId,
-            reason: "retry",
-            force: true,
+          await sourcePipeline.create({
+            params: { sourceId: failure.relatedId, reason: "retry", force: true },
           });
         }
         break;
       case "source-parse":
         if (failure.relatedId) {
-          await env.SOURCE_PARSE_QUEUE.send({ sourceFetchId: failure.relatedId });
+          await pipelineWorker.reparse({ sourceFetchId: failure.relatedId });
         }
         break;
       case "recompute-latest":
         if (failure.relatedId) {
-          await env.RECOMPUTE_LATEST_QUEUE.send({ appId: failure.relatedId });
+          await pipelineWorker.recomputeLatest({ appId: failure.relatedId });
         }
         break;
     }
@@ -168,23 +168,21 @@ export const retryAllJobFailures = createServerFn({ method: "POST" })
       switch (failure.jobType) {
         case "source-fetch":
           if (failure.relatedId) {
-            await env.SOURCE_FETCH_QUEUE.send({
-              sourceId: failure.relatedId,
-              reason: "retry",
-              force: true,
+            await sourcePipeline.create({
+              params: { sourceId: failure.relatedId, reason: "retry", force: true },
             });
             retried++;
           }
           break;
         case "source-parse":
           if (failure.relatedId) {
-            await env.SOURCE_PARSE_QUEUE.send({ sourceFetchId: failure.relatedId });
+            await pipelineWorker.reparse({ sourceFetchId: failure.relatedId });
             retried++;
           }
           break;
         case "recompute-latest":
           if (failure.relatedId) {
-            await env.RECOMPUTE_LATEST_QUEUE.send({ appId: failure.relatedId });
+            await pipelineWorker.recomputeLatest({ appId: failure.relatedId });
             retried++;
           }
           break;

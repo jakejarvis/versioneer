@@ -4,8 +4,6 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 
-import type { Env } from "../../env";
-
 export const appsRoutes = new Hono<{ Bindings: Env }>()
   // GET /v1/apps/:appId
   .get("/apps/:appId", async (c) => {

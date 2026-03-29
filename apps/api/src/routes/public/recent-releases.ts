@@ -8,8 +8,6 @@ import { apps, appLatestReleases } from "@versioneer/db";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { Hono } from "hono";
 
-import type { Env } from "../../env";
-
 export const recentReleasesRoutes = new Hono<{ Bindings: Env }>()
   // GET /v1/releases/recent
   .get("/releases/recent", async (c) => {

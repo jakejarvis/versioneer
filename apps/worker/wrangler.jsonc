@@ -1,14 +1,30 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "versioneer-api",
+  "name": "versioneer-worker",
   "main": "src/index.ts",
 
   "compatibility_date": "2026-02-24",
   "compatibility_flags": ["nodejs_compat"],
 
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+
+  "workflows": [
+    {
+      "name": "versioneer-source-pipeline-dev",
+      "binding": "SOURCE_PIPELINE",
+      "class_name": "SourcePipelineWorkflow"
+    }
+  ],
+
+  "dev": {
+    "port": 8788,
+    "inspector_port": 9230
+  },
+
   "vars": {
-    "ENVIRONMENT": "dev",
-    "ASSETS_BASE_URL": "http://localhost:8787/assets"
+    "ENVIRONMENT": "dev"
   },
 
   "d1_databases": [
@@ -23,10 +39,6 @@
     {
       "binding": "RAW_BUCKET",
       "bucket_name": "versioneer-raw-dev"
-    },
-    {
-      "binding": "ASSETS_BUCKET",
-      "bucket_name": "versioneer-assets-dev"
     }
   ],
 
@@ -43,18 +55,20 @@
 
   "env": {
     "production": {
-      "routes": [
-        {
-          "pattern": "api.versioneer.app",
-          "zone_name": "versioneer.app",
-          "custom_domain": true
-        }
-      ],
       "workers_dev": false,
       "preview_urls": false,
+      "triggers": {
+        "crons": ["*/15 * * * *"]
+      },
+      "workflows": [
+        {
+          "name": "versioneer-source-pipeline-production",
+          "binding": "SOURCE_PIPELINE",
+          "class_name": "SourcePipelineWorkflow"
+        }
+      ],
       "vars": {
-        "ENVIRONMENT": "production",
-        "ASSETS_BASE_URL": "https://assets-prod.versioneer.app"
+        "ENVIRONMENT": "production"
       },
       "d1_databases": [
         {
@@ -67,10 +81,6 @@
         {
           "binding": "RAW_BUCKET",
           "bucket_name": "versioneer-raw-production"
-        },
-        {
-          "binding": "ASSETS_BUCKET",
-          "bucket_name": "versioneer-assets-production"
         }
       ],
       "kv_namespaces": [

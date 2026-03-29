@@ -26,7 +26,6 @@ import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import type { z } from "zod";
 
-import type { Env } from "../../env";
 import { isArchCompatible, isOsVersionCompatible, computeStaleSince } from "./helpers";
 
 function computeLookupKey(appName: string, bundleId?: string | null): string {

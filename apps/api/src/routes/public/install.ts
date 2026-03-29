@@ -20,8 +20,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 
-import type { Env } from "../../env";
-
 function validationErrorResponse(result: { error: { issues: unknown[] } }) {
   return Response.json({ error: "Invalid request", details: result.error.issues }, { status: 400 });
 }

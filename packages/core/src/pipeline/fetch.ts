@@ -3,9 +3,9 @@ import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/db";
 import { desc, eq } from "drizzle-orm";
 
 import { githubApiHeaders } from "./types";
-import type { Env, SourceFetchJob } from "./types";
+import type { Env, FetchStepResult, SourceFetchJob } from "./types";
 
-export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<void> {
+export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<FetchStepResult> {
   const db = createDb(env.DB);
   const now = new Date().toISOString();
 
@@ -16,7 +16,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
   }
 
   if (source.status === "disabled" && !job.force) {
-    return;
+    return { sourceFetchId: null, shouldParse: false, appId: source.appId };
   }
 
   if (!source.baseUrl && source.sourceType !== "manual") {
@@ -33,7 +33,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
       fetchStatus: "success",
       fetchedAt: now,
     });
-    return;
+    return { sourceFetchId: fetchId, shouldParse: false, appId: source.appId };
   }
 
   // Perform HTTP fetch
@@ -76,7 +76,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
         .set({ lastFetchedAt: now, lastSuccessAt: now, updatedAt: now })
         .where(eq(sources.id, source.id));
 
-      return;
+      return { sourceFetchId: fetchId, shouldParse: false, appId: source.appId };
     }
 
     if (!response.ok) {
@@ -95,7 +95,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
         .set({ lastFetchedAt: now, lastFailureAt: now, updatedAt: now })
         .where(eq(sources.id, source.id));
 
-      return;
+      return { sourceFetchId: null, shouldParse: false, appId: source.appId };
     }
 
     // Store raw body in R2
@@ -147,8 +147,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
       })
       .where(eq(sources.id, source.id));
 
-    // Enqueue parse job
-    await env.SOURCE_PARSE_QUEUE.send({ sourceFetchId: fetchId });
+    return { sourceFetchId: fetchId, shouldParse: true, appId: source.appId };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
 

@@ -3,11 +3,19 @@ export interface Env {
   RAW_BUCKET: R2Bucket;
   CACHE_KV: KVNamespace;
   CONFIG_KV: KVNamespace;
-  SOURCE_FETCH_QUEUE: Queue;
-  SOURCE_PARSE_QUEUE: Queue;
-  RECOMPUTE_LATEST_QUEUE: Queue;
   ENVIRONMENT: string;
   GITHUB_TOKEN?: string;
+}
+
+export interface FetchStepResult {
+  sourceFetchId: string | null;
+  shouldParse: boolean;
+  appId: string;
+}
+
+export interface ParseStepResult {
+  appId: string;
+  releaseCount: number;
 }
 
 /**

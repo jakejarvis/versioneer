@@ -4,7 +4,7 @@ set -euo pipefail
 # Versioneer deploy script
 # Usage: ./scripts/deploy.sh [--env production|dev] [--skip-checks]
 #
-# Deploys all Cloudflare apps (api, queue-consumer, dashboard)
+# Deploys all Cloudflare apps (api, worker, dashboard)
 # and applies D1 migrations for the target environment.
 
 ENV="production"
@@ -62,8 +62,8 @@ pnpm --filter @versioneer/db exec wrangler d1 migrations apply "$D1_DATABASE" --
 echo "==> Deploying API worker"
 pnpm --filter @versioneer/api exec wrangler deploy $WRANGLER_ENV_FLAG
 
-echo "==> Deploying queue consumer"
-pnpm --filter @versioneer/queue-consumer exec wrangler deploy $WRANGLER_ENV_FLAG
+echo "==> Deploying worker"
+pnpm --filter @versioneer/worker exec wrangler deploy $WRANGLER_ENV_FLAG
 
 echo "==> Deploying dashboard"
 # the --env flag won't work here; see https://developers.cloudflare.com/workers/vite-plugin/reference/migrating-from-wrangler-dev/#cloudflare-environments

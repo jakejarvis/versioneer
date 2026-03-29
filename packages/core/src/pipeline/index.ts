@@ -1,4 +1,11 @@
-export type { Env, SourceFetchJob, SourceParseJob, RecomputeLatestJob } from "./types";
+export type {
+  Env,
+  SourceFetchJob,
+  SourceParseJob,
+  RecomputeLatestJob,
+  FetchStepResult,
+  ParseStepResult,
+} from "./types";
 export { githubApiHeaders } from "./types";
 export { handleSourceFetch } from "./fetch";
 export { handleSourceParse } from "./parse";

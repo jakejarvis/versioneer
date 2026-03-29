@@ -6,6 +6,8 @@ import { env } from "cloudflare:workers";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { sourcePipeline } from "@/lib/pipeline";
+
 import { authMiddleware } from "./middleware";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
@@ -90,10 +92,8 @@ export const triggerPollSources = createServerFn({ method: "POST" })
           });
 
       for (const source of dueSources) {
-        await env.SOURCE_FETCH_QUEUE.send({
-          sourceId: source.id,
-          reason: "manual",
-          force,
+        await sourcePipeline.create({
+          params: { sourceId: source.id, reason: "manual", force },
         });
       }
 

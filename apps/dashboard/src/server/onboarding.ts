@@ -15,6 +15,7 @@ import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { sourcePipeline } from "@/lib/pipeline";
 import { defaultRoleForSourceType, defaultRuntimeStatusForSourceType } from "@/lib/source-types";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
@@ -275,10 +276,8 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
 
     // 6. Queue initial source fetches
     for (const sourceId of sourceIds) {
-      await env.SOURCE_FETCH_QUEUE.send({
-        sourceId,
-        reason: "onboarding",
-        force: true,
+      await sourcePipeline.create({
+        params: { sourceId, reason: "onboarding", force: true },
       });
     }
 

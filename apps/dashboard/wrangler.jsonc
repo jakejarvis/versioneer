@@ -33,22 +33,21 @@
     }
   ],
 
-  "queues": {
-    "producers": [
-      {
-        "binding": "SOURCE_FETCH_QUEUE",
-        "queue": "versioneer-source-fetch-dev"
-      },
-      {
-        "binding": "SOURCE_PARSE_QUEUE",
-        "queue": "versioneer-source-parse-dev"
-      },
-      {
-        "binding": "RECOMPUTE_LATEST_QUEUE",
-        "queue": "versioneer-recompute-latest-dev"
-      }
-    ]
-  },
+  "services": [
+    {
+      "binding": "PIPELINE_WORKER",
+      "service": "versioneer-worker"
+    }
+  ],
+
+  "workflows": [
+    {
+      "name": "versioneer-source-pipeline-dev",
+      "binding": "SOURCE_PIPELINE",
+      "class_name": "SourcePipelineWorkflow",
+      "script_name": "versioneer-worker"
+    }
+  ],
 
   "env": {
     "production": {
@@ -84,22 +83,20 @@
           "database_id": "ebebaf93-b3a1-4832-b3e7-39845bb7422f"
         }
       ],
-      "queues": {
-        "producers": [
-          {
-            "binding": "SOURCE_FETCH_QUEUE",
-            "queue": "versioneer-source-fetch-production"
-          },
-          {
-            "binding": "SOURCE_PARSE_QUEUE",
-            "queue": "versioneer-source-parse-production"
-          },
-          {
-            "binding": "RECOMPUTE_LATEST_QUEUE",
-            "queue": "versioneer-recompute-latest-production"
-          }
-        ]
-      },
+      "services": [
+        {
+          "binding": "PIPELINE_WORKER",
+          "service": "versioneer-worker"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "versioneer-source-pipeline-production",
+          "binding": "SOURCE_PIPELINE",
+          "class_name": "SourcePipelineWorkflow",
+          "script_name": "versioneer-worker"
+        }
+      ],
       "observability": {
         "enabled": true,
         "head_sampling_rate": 1,

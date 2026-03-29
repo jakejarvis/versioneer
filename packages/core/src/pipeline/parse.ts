@@ -15,9 +15,9 @@ import { eq } from "drizzle-orm";
 import { getParser } from "../parsers";
 import { normalizeVersion, inferChannel } from "../versioning";
 import { normalizeReleaseNotes } from "./release-notes";
-import type { Env, SourceParseJob } from "./types";
+import type { Env, ParseStepResult, SourceParseJob } from "./types";
 
-export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<void> {
+export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<ParseStepResult> {
   const db = createDb(env.DB);
   const now = new Date().toISOString();
 
@@ -33,7 +33,13 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
   }
 
   if (fetchRecord.fetchStatus !== "success" || !fetchRecord.r2Key) {
-    return; // Nothing to parse
+    // Load source just to get appId for return
+    const source = await db
+      .select()
+      .from(sources)
+      .where(eq(sources.id, fetchRecord.sourceId))
+      .get();
+    return { appId: source?.appId ?? "", releaseCount: 0 };
   }
 
   // Load source for parser key and app ID
@@ -194,11 +200,6 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
       }
     }
 
-    // Enqueue recompute-latest
-    await env.RECOMPUTE_LATEST_QUEUE.send({
-      appId: source.appId,
-    });
-
     if (
       output.releases.length > 0 &&
       source.reviewStatus === "approved" &&
@@ -216,6 +217,8 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
           .where(eq(apps.id, source.appId));
       }
     }
+
+    return { appId: source.appId, releaseCount: output.releases.length };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
 
