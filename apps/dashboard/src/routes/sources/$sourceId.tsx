@@ -1,6 +1,7 @@
+import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
-import { ArrowLeft, RefreshCw, Zap } from "lucide-react";
+import { ArrowLeft, Ban, RefreshCw, RotateCcw, Save, Zap } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -13,13 +14,16 @@ import {
   useUpdateSource,
 } from "@/api/hooks/use-sources";
 import type { ParserRun, SourceFetch } from "@/api/types";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { AppEntityLink } from "@/components/shared/entity-link";
+import { FormField } from "@/components/shared/form-field";
 import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -28,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/sources/$sourceId")({
   component: SourceDetailPage,
@@ -39,6 +44,7 @@ function SourceDetailPage() {
   const triggerFetch = useTriggerSourceFetch();
   const updateSource = useUpdateSource(sourceId);
   const [expandedFetch, setExpandedFetch] = useState<string | null>(null);
+  const [disableConfirmOpen, setDisableConfirmOpen] = useState(false);
   const [fetchPagination, setFetchPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 25,
@@ -159,33 +165,61 @@ function SourceDetailPage() {
             <Zap />
             Trigger Fetch
           </Button>
+          {source.status !== "disabled" ? (
+            <Button variant="destructive" size="sm" onClick={() => setDisableConfirmOpen(true)}>
+              <Ban className="h-4 w-4" />
+              Disable
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                updateSource.mutate(
+                  { status: "active" },
+                  {
+                    onSuccess: () => toast.success("Source re-enabled"),
+                    onError: (error) => toast.error(error.message),
+                  },
+                )
+              }
+            >
+              <RotateCcw className="h-4 w-4" />
+              Re-enable
+            </Button>
+          )}
         </div>
       </div>
 
-      <div className="mt-4 rounded-lg border p-4">
-        <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-4">
-          <div>
-            <dt className="text-muted-foreground">Base URL</dt>
-            <dd className="mt-0.5 break-all font-mono text-xs">{source.baseUrl ?? "--"}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Poll Interval</dt>
-            <dd className="mt-0.5">{source.pollIntervalMinutes}m</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Last Success</dt>
-            <dd className="mt-0.5">
-              <TimeAgo date={source.lastSuccessAt} />
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Last Failure</dt>
-            <dd className="mt-0.5">
-              <TimeAgo date={source.lastFailureAt} />
-            </dd>
-          </div>
-        </dl>
-      </div>
+      {source.status === "disabled" ? (
+        <div className="mt-4 rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          This source is disabled and will not be polled for updates.
+        </div>
+      ) : null}
+
+      <SourceEditForm sourceId={sourceId} source={source} />
+
+      <ConfirmDialog
+        open={disableConfirmOpen}
+        onOpenChange={setDisableConfirmOpen}
+        title="Disable Source"
+        description="This source will stop being polled for updates. Existing fetch history and parser runs will be preserved. You can re-enable it later."
+        confirmLabel="Disable"
+        variant="destructive"
+        loading={updateSource.isPending}
+        onConfirm={() =>
+          updateSource.mutate(
+            { status: "disabled" },
+            {
+              onSuccess: () => {
+                toast.success("Source disabled");
+                setDisableConfirmOpen(false);
+              },
+              onError: (error) => toast.error(error.message),
+            },
+          )
+        }
+      />
 
       <div className="mt-6">
         <div className="mb-3">
@@ -215,6 +249,175 @@ function SourceDetailPage() {
           }
         />
       </div>
+    </div>
+  );
+}
+
+function SourceEditForm({
+  sourceId,
+  source,
+}: {
+  sourceId: string;
+  source: {
+    label: string | null;
+    baseUrl: string | null;
+    parserKey: string;
+    pollIntervalMinutes: number;
+    configJson: string | null;
+    lastSuccessAt: string | null;
+    lastFailureAt: string | null;
+  };
+}) {
+  const updateSource = useUpdateSource(sourceId);
+
+  const form = useForm({
+    defaultValues: {
+      label: source.label ?? "",
+      baseUrl: source.baseUrl ?? "",
+      parserKey: source.parserKey,
+      pollIntervalMinutes: source.pollIntervalMinutes,
+      configJson: source.configJson ?? "",
+    },
+    onSubmit: async ({ value }) => {
+      updateSource.mutate(
+        {
+          label: value.label || null,
+          baseUrl: value.baseUrl || null,
+          parserKey: value.parserKey,
+          pollIntervalMinutes: value.pollIntervalMinutes,
+          configJson: value.configJson || null,
+        },
+        {
+          onSuccess: () => toast.success("Source updated"),
+          onError: (err) => toast.error(err.message),
+        },
+      );
+    },
+  });
+
+  return (
+    <div className="mt-4 rounded-lg border p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-medium">Configuration</h3>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span>
+            Last success: <TimeAgo date={source.lastSuccessAt} />
+          </span>
+          <span>
+            Last failure: <TimeAgo date={source.lastFailureAt} />
+          </span>
+        </div>
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void form.handleSubmit();
+        }}
+        className="grid gap-4 sm:grid-cols-2"
+      >
+        <form.Field name="label">
+          {(field) => (
+            <FormField label="Label" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                placeholder="Optional label"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+              />
+            </FormField>
+          )}
+        </form.Field>
+        <form.Field name="baseUrl">
+          {(field) => (
+            <FormField label="Base URL" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                placeholder="https://..."
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+              />
+            </FormField>
+          )}
+        </form.Field>
+        <form.Field
+          name="parserKey"
+          validators={{
+            onBlur: ({ value }) => (!value ? "Parser key is required" : undefined),
+          }}
+        >
+          {(field) => (
+            <FormField label="Parser Key" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+              />
+            </FormField>
+          )}
+        </form.Field>
+        <form.Field name="pollIntervalMinutes">
+          {(field) => (
+            <FormField
+              label="Poll Interval (minutes)"
+              name={field.name}
+              meta={field.state.meta}
+              description="Min 5, max 10080."
+            >
+              <Input
+                id={field.name}
+                type="number"
+                min={5}
+                max={10080}
+                value={field.state.value}
+                onChange={(e) => field.handleChange(Number(e.target.value))}
+                onBlur={field.handleBlur}
+              />
+            </FormField>
+          )}
+        </form.Field>
+        <div className="sm:col-span-2">
+          <form.Field name="configJson">
+            {(field) => (
+              <FormField
+                label="Config JSON"
+                name={field.name}
+                meta={field.state.meta}
+                description="Optional JSON configuration for the parser."
+              >
+                <Textarea
+                  id={field.name}
+                  placeholder="{}"
+                  rows={3}
+                  className="font-mono text-xs"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                />
+              </FormField>
+            )}
+          </form.Field>
+        </div>
+        <div className="flex justify-end sm:col-span-2">
+          <form.Subscribe
+            selector={(state) => [state.canSubmit, state.isSubmitting, state.isDirty]}
+          >
+            {([canSubmit, isSubmitting, isDirty]) => (
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!canSubmit || isSubmitting || !isDirty || updateSource.isPending}
+              >
+                <Save className="h-4 w-4" />
+                {updateSource.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            )}
+          </form.Subscribe>
+        </div>
+      </form>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
@@ -10,6 +11,7 @@ import type { AppListItem } from "@/api/types";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { AppEntityLink } from "@/components/shared/entity-link";
+import { FormField } from "@/components/shared/form-field";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
@@ -21,7 +23,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -231,36 +232,36 @@ function CreateAppDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [slug, setSlug] = useState("");
-  const [name, setName] = useState("");
-  const [vendor, setVendor] = useState("");
-  const [homepage, setHomepage] = useState("");
-  const [notes, setNotes] = useState("");
   const createApp = useCreateApp();
 
-  const handleSubmit = () => {
-    createApp.mutate(
-      {
-        slug,
-        canonicalName: name,
-        vendorName: vendor || undefined,
-        homepageUrl: homepage || undefined,
-        notes: notes || undefined,
-      },
-      {
-        onSuccess: () => {
-          toast.success("App created");
-          onOpenChange(false);
-          setSlug("");
-          setName("");
-          setVendor("");
-          setHomepage("");
-          setNotes("");
+  const form = useForm({
+    defaultValues: {
+      slug: "",
+      canonicalName: "",
+      vendorName: "",
+      homepageUrl: "",
+      notes: "",
+    },
+    onSubmit: async ({ value }) => {
+      createApp.mutate(
+        {
+          slug: value.slug,
+          canonicalName: value.canonicalName,
+          vendorName: value.vendorName || undefined,
+          homepageUrl: value.homepageUrl || undefined,
+          notes: value.notes || undefined,
         },
-        onError: (err) => toast.error(err.message),
-      },
-    );
-  };
+        {
+          onSuccess: () => {
+            toast.success("App created");
+            onOpenChange(false);
+            form.reset();
+          },
+          onError: (err) => toast.error(err.message),
+        },
+      );
+    },
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -268,51 +269,114 @@ function CreateAppDialog({
         <DialogHeader>
           <DialogTitle>Create App</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>Slug</Label>
-            <Input placeholder="my-app" value={slug} onChange={(e) => setSlug(e.target.value)} />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Lowercase, hyphens only. Must be unique.
-            </p>
-          </div>
-          <div>
-            <Label>Name</Label>
-            <Input placeholder="My App" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div>
-            <Label>Vendor</Label>
-            <Input
-              placeholder="Vendor Name"
-              value={vendor}
-              onChange={(e) => setVendor(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Homepage URL</Label>
-            <Input
-              placeholder="https://example.com"
-              value={homepage}
-              onChange={(e) => setHomepage(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Notes</Label>
-            <Textarea
-              placeholder="Optional notes..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={!slug || !name || createApp.isPending}>
-            {createApp.isPending ? "Creating..." : "Create"}
-          </Button>
-        </DialogFooter>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field
+            name="slug"
+            validators={{
+              onBlur: ({ value }) => {
+                if (!value) return "Slug is required";
+                if (!/^[a-z0-9-]+$/.test(value))
+                  return "Slug must be lowercase alphanumeric with hyphens";
+                return undefined;
+              },
+            }}
+          >
+            {(field) => (
+              <FormField
+                label="Slug"
+                name={field.name}
+                meta={field.state.meta}
+                description="Lowercase, hyphens only. Must be unique."
+              >
+                <Input
+                  id={field.name}
+                  placeholder="my-app"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+                />
+              </FormField>
+            )}
+          </form.Field>
+          <form.Field
+            name="canonicalName"
+            validators={{
+              onBlur: ({ value }) => (!value ? "Name is required" : undefined),
+            }}
+          >
+            {(field) => (
+              <FormField label="Name" name={field.name} meta={field.state.meta}>
+                <Input
+                  id={field.name}
+                  placeholder="My App"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+                />
+              </FormField>
+            )}
+          </form.Field>
+          <form.Field name="vendorName">
+            {(field) => (
+              <FormField label="Vendor" name={field.name} meta={field.state.meta}>
+                <Input
+                  id={field.name}
+                  placeholder="Vendor Name"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                />
+              </FormField>
+            )}
+          </form.Field>
+          <form.Field name="homepageUrl">
+            {(field) => (
+              <FormField label="Homepage URL" name={field.name} meta={field.state.meta}>
+                <Input
+                  id={field.name}
+                  placeholder="https://example.com"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+                />
+              </FormField>
+            )}
+          </form.Field>
+          <form.Field name="notes">
+            {(field) => (
+              <FormField label="Notes" name={field.name} meta={field.state.meta}>
+                <Textarea
+                  id={field.name}
+                  placeholder="Optional notes..."
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                />
+              </FormField>
+            )}
+          </form.Field>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
+              {([canSubmit, isSubmitting]) => (
+                <Button type="submit" disabled={!canSubmit || isSubmitting || createApp.isPending}>
+                  {createApp.isPending ? "Creating..." : "Create"}
+                </Button>
+              )}
+            </form.Subscribe>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

@@ -19,6 +19,7 @@
   "dependencies": {
     "@fontsource/geist-mono": "^5.2.7",
     "@fontsource/geist-sans": "^5.2.5",
+    "@tanstack/react-form": "^1.28.5",
     "@tanstack/react-query": "^5.95.2",
     "@tanstack/react-router": "^1.168.7",
     "@tanstack/react-start": "^1.167.12",

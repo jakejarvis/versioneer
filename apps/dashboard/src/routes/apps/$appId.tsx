@@ -1,6 +1,16 @@
+import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
-import { ArrowLeft, ExternalLink, Plus, RefreshCw, Trash2, Upload, Zap } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Upload,
+  Zap,
+} from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -19,9 +29,12 @@ import {
 } from "@/api/hooks/use-apps";
 import type { AppAlias, AppLatestRelease, Release, Source } from "@/api/types";
 import { AppIcon } from "@/components/shared/app-icon";
+import { CreateSourceDialog } from "@/components/shared/create-source-dialog";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { EditAppDialog } from "@/components/shared/edit-app-dialog";
 import { SourceEntityLink } from "@/components/shared/entity-link";
+import { FormField } from "@/components/shared/form-field";
 import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
@@ -34,7 +47,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -54,6 +66,7 @@ function AppDetailPage() {
   const { appId } = Route.useParams();
   const { data: app, isLoading } = useApp(appId);
   const [tab, setTab] = useState("overview");
+  const [editOpen, setEditOpen] = useState(false);
   const uploadIconMutation = useUploadAppIcon(appId);
   const deleteIconMutation = useDeleteAppIcon(appId);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +100,7 @@ function AppDetailPage() {
         <div className="flex items-start gap-4">
           <div className="group relative">
             <AppIcon iconR2Key={app.iconR2Key} appName={app.canonicalName} size={48} />
+
             <div className="absolute inset-0 flex items-center justify-center gap-1 rounded-md bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
               <button
                 type="button"
@@ -156,6 +170,10 @@ function AppDetailPage() {
             </div>
           </div>
         </div>
+        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+          <Pencil className="h-4 w-4" />
+          Edit
+        </Button>
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="mt-6">
@@ -178,6 +196,8 @@ function AppDetailPage() {
           <ReleasesTab appId={appId} />
         </TabsContent>
       </Tabs>
+
+      <EditAppDialog app={app} open={editOpen} onOpenChange={setEditOpen} />
     </div>
   );
 }
@@ -399,32 +419,35 @@ function CreateAliasDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [aliasType, setAliasType] = useState<
-    | "bundle_id"
-    | "name"
-    | "team_id"
-    | "sparkle_feed"
-    | "homepage"
-    | "download_pattern"
-    | "github_repo"
-    | "mas_app_id"
-  >("bundle_id");
-  const [value, setValue] = useState("");
   const createAlias = useCreateAlias(appId);
 
-  const handleSubmit = () => {
-    createAlias.mutate(
-      { aliasType, value },
-      {
-        onSuccess: () => {
-          toast.success("Alias created");
-          onOpenChange(false);
-          setValue("");
+  const form = useForm({
+    defaultValues: {
+      aliasType: "bundle_id" as
+        | "bundle_id"
+        | "name"
+        | "team_id"
+        | "sparkle_feed"
+        | "homepage"
+        | "download_pattern"
+        | "github_repo"
+        | "mas_app_id",
+      value: "",
+    },
+    onSubmit: async ({ value }) => {
+      createAlias.mutate(
+        { aliasType: value.aliasType, value: value.value },
+        {
+          onSuccess: () => {
+            toast.success("Alias created");
+            onOpenChange(false);
+            form.reset();
+          },
+          onError: (error) => toast.error(error.message),
         },
-        onError: (error) => toast.error(error.message),
-      },
-    );
-  };
+      );
+    },
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -432,45 +455,72 @@ function CreateAliasDialog({
         <DialogHeader>
           <DialogTitle>Add Alias</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label>Type</Label>
-            <Select
-              value={aliasType}
-              onValueChange={(nextAliasType) => setAliasType(nextAliasType as typeof aliasType)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="bundle_id">Bundle ID</SelectItem>
-                <SelectItem value="name">Name</SelectItem>
-                <SelectItem value="team_id">Team ID</SelectItem>
-                <SelectItem value="sparkle_feed">Sparkle Feed</SelectItem>
-                <SelectItem value="homepage">Homepage</SelectItem>
-                <SelectItem value="download_pattern">Download Pattern</SelectItem>
-                <SelectItem value="github_repo">GitHub Repo</SelectItem>
-                <SelectItem value="mas_app_id">App Store ID</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label>Value</Label>
-            <Input
-              placeholder="com.example.app"
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={!value || createAlias.isPending}>
-            {createAlias.isPending ? "Adding..." : "Add"}
-          </Button>
-        </DialogFooter>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void form.handleSubmit();
+          }}
+          className="flex flex-col gap-4"
+        >
+          <form.Field name="aliasType">
+            {(field) => (
+              <FormField label="Type" name={field.name} meta={field.state.meta}>
+                <Select
+                  value={field.state.value}
+                  onValueChange={(v) => field.handleChange(v as typeof field.state.value)}
+                >
+                  <SelectTrigger id={field.name}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bundle_id">Bundle ID</SelectItem>
+                    <SelectItem value="name">Name</SelectItem>
+                    <SelectItem value="team_id">Team ID</SelectItem>
+                    <SelectItem value="sparkle_feed">Sparkle Feed</SelectItem>
+                    <SelectItem value="homepage">Homepage</SelectItem>
+                    <SelectItem value="download_pattern">Download Pattern</SelectItem>
+                    <SelectItem value="github_repo">GitHub Repo</SelectItem>
+                    <SelectItem value="mas_app_id">App Store ID</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+            )}
+          </form.Field>
+          <form.Field
+            name="value"
+            validators={{
+              onBlur: ({ value }) => (!value ? "Value is required" : undefined),
+            }}
+          >
+            {(field) => (
+              <FormField label="Value" name={field.name} meta={field.state.meta}>
+                <Input
+                  id={field.name}
+                  placeholder="com.example.app"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+                />
+              </FormField>
+            )}
+          </form.Field>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
+              {([canSubmit, isSubmitting]) => (
+                <Button
+                  type="submit"
+                  disabled={!canSubmit || isSubmitting || createAlias.isPending}
+                >
+                  {createAlias.isPending ? "Adding..." : "Add"}
+                </Button>
+              )}
+            </form.Subscribe>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -479,6 +529,7 @@ function CreateAliasDialog({
 function SourcesTab({ appId }: { appId: string }) {
   const { data, isLoading } = useAppSources(appId);
   const triggerFetch = useTriggerFetch();
+  const [createSourceOpen, setCreateSourceOpen] = useState(false);
 
   const queueFetch = useCallback(
     (sourceId: string) => {
@@ -576,13 +627,32 @@ function SourcesTab({ appId }: { appId: string }) {
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={data?.items ?? []}
-      isLoading={isLoading}
-      emptyMessage="No sources configured."
-      enableColumnVisibility
-    />
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h3 className="font-medium">Sources</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Update feeds that provide release information for this app.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setCreateSourceOpen(true)}>
+          <Plus />
+          Add Source
+        </Button>
+      </div>
+      <DataTable
+        columns={columns}
+        data={data?.items ?? []}
+        isLoading={isLoading}
+        emptyMessage="No sources configured."
+        enableColumnVisibility
+      />
+      <CreateSourceDialog
+        appId={appId}
+        open={createSourceOpen}
+        onOpenChange={setCreateSourceOpen}
+      />
+    </div>
   );
 }
 
