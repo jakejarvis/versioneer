@@ -21,6 +21,7 @@ export const releases = sqliteTable(
       .notNull()
       .default("active"),
     releaseNotesHtml: text("release_notes_html"),
+    releaseNotesUrl: text("release_notes_url"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },

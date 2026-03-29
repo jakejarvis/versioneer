@@ -155,6 +155,7 @@ export const createRelease = createServerFn({ method: "POST" })
       isPrerelease: isPreRelease(data.versionRaw),
       status: "active",
       releaseNotesHtml: data.releaseNotesHtml ?? null,
+      releaseNotesUrl: data.releaseNotesUrl ?? null,
       createdAt: now,
       updatedAt: now,
     });
@@ -192,6 +193,7 @@ export const updateRelease = createServerFn({ method: "POST" })
     if (fields.status !== undefined) updates.status = fields.status;
     if (fields.channel !== undefined) updates.channel = fields.channel;
     if (fields.releaseNotesHtml !== undefined) updates.releaseNotesHtml = fields.releaseNotesHtml;
+    if (fields.releaseNotesUrl !== undefined) updates.releaseNotesUrl = fields.releaseNotesUrl;
 
     await db.update(releases).set(updates).where(eq(releases.id, id));
 

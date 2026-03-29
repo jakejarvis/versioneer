@@ -18,6 +18,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     let appId: String
     let versionRaw: String
     let releaseNotesHtml: String?
+    let releaseNotesUrl: String?
   }
 
   /// Fetches release notes HTML for a specific release.

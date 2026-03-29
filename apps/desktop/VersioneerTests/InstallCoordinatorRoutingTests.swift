@@ -20,7 +20,7 @@ struct InstallCoordinatorRoutingTests {
     // pkgInstall requires admin by default; for dmgCopyReplace, admin is determined by
     // file system writability. Use an unwritable destination to trigger privileged path.
     let plan = makePlan(strategy: .dmgCopyReplace)
-    let destination = URL(fileURLWithPath: "/Applications/Admin.app")
+    let destination = try makeUnwritableDestination(named: "Admin.app")
 
     #expect(
       coordinator.executionRoute(for: plan, destinationAppURL: destination) == .privilegedReplace
@@ -59,6 +59,16 @@ struct InstallCoordinatorRoutingTests {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    return root.appendingPathComponent(name, isDirectory: true)
+  }
+
+  private func makeUnwritableDestination(named name: String) throws -> URL {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    // Remove write permission so isWritableFile returns false
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o555], ofItemAtPath: root.path)
     return root.appendingPathComponent(name, isDirectory: true)
   }
 }

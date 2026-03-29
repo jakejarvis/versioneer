@@ -27,6 +27,7 @@ export interface App {
   isVerified: boolean;
   verifiedAt: string | null;
   installStrategyOverride: string | null;
+  defaultReleaseNotesUrl: string | null;
   iconR2Key: string | null;
   createdAt: string;
   updatedAt: string;
@@ -162,6 +163,7 @@ export interface Release {
   sourceConfidence: number | null;
   status: "active" | "superseded" | "draft";
   releaseNotesHtml: string | null;
+  releaseNotesUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

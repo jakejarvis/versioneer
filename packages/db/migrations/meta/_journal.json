@@ -134,6 +134,13 @@
       "when": 1774789467963,
       "tag": "0018_even_pestilence",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1774792581516,
+      "tag": "0019_black_excalibur",
+      "breakpoints": true
     }
   ]
 }

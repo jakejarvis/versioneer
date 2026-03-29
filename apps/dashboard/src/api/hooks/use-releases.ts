@@ -46,6 +46,7 @@ export function useCreateRelease() {
       channel?: string;
       releasedAt?: string;
       releaseNotesHtml?: string;
+      releaseNotesUrl?: string;
     }) => createRelease({ data: input }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["releases"] });
@@ -61,6 +62,7 @@ export function useUpdateRelease(id: string) {
       status?: "active" | "superseded" | "draft";
       channel?: string;
       releaseNotesHtml?: string | null;
+      releaseNotesUrl?: string | null;
     }) => updateRelease({ data: { id, ...input } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["releases"] });

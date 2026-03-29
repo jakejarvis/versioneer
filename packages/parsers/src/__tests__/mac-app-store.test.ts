@@ -96,11 +96,14 @@ describe("macAppStoreParser", () => {
     expect(release.isPrerelease).toBe(false);
   });
 
-  it("extracts release notes and publish date", () => {
+  it("extracts release notes, URL, and publish date", () => {
     const result = macAppStoreParser.parse(SAMPLE_RESPONSE);
     const release = result.releases[0]!;
     expect(release.releaseNotesBody).toBe("Bug fixes and performance improvements.");
     expect(release.releaseNotesFormat).toBe("markdown");
+    expect(release.releaseNotesUrl).toBe(
+      "https://apps.apple.com/us/app/slack-for-desktop/id803453959",
+    );
     expect(release.publishedAt).toBe("2026-03-19T15:37:31Z");
   });
 

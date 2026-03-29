@@ -38,6 +38,7 @@ export function CreateReleaseDialog({ appId, open, onOpenChange }: CreateRelease
       channel: "stable",
       releasedAt: "",
       releaseNotesHtml: "",
+      releaseNotesUrl: "",
     },
     onSubmit: async ({ value }) => {
       createRelease.mutate(
@@ -48,6 +49,7 @@ export function CreateReleaseDialog({ appId, open, onOpenChange }: CreateRelease
           channel: value.channel,
           releasedAt: value.releasedAt || undefined,
           releaseNotesHtml: value.releaseNotesHtml || undefined,
+          releaseNotesUrl: value.releaseNotesUrl || undefined,
         },
         {
           onSuccess: () => {
@@ -166,6 +168,25 @@ export function CreateReleaseDialog({ appId, open, onOpenChange }: CreateRelease
               )}
             </form.Field>
           </div>
+
+          <form.Field name="releaseNotesUrl">
+            {(field) => (
+              <FormField
+                label="Release Notes URL"
+                name={field.name}
+                meta={field.state.meta}
+                description="Link to external changelog or release notes page."
+              >
+                <Input
+                  id={field.name}
+                  placeholder="https://example.com/changelog"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                />
+              </FormField>
+            )}
+          </form.Field>
 
           <form.Field name="releaseNotesHtml">
             {(field) => (

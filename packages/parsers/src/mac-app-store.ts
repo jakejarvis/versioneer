@@ -51,6 +51,7 @@ export const macAppStoreParser: SourceParser = {
         channel: "stable",
         isPrerelease: false,
         publishedAt: entry.currentVersionReleaseDate,
+        releaseNotesUrl: entry.trackViewUrl,
         releaseNotesBody: entry.releaseNotes,
         releaseNotesFormat: "markdown",
         artifacts: entry.trackViewUrl

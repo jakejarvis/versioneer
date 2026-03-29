@@ -20,6 +20,7 @@ import { IdDisplay } from "@/components/shared/id-display";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -309,7 +310,11 @@ function ReleaseDetailPage() {
         </dl>
       </div>
 
-      <ReleaseNotesSection releaseId={releaseId} releaseNotesHtml={release.releaseNotesHtml} />
+      <ReleaseNotesSection
+        releaseId={releaseId}
+        releaseNotesHtml={release.releaseNotesHtml}
+        releaseNotesUrl={release.releaseNotesUrl}
+      />
 
       <div className="mt-6">
         <div className="mb-3">
@@ -352,17 +357,20 @@ const NOTES_PROSE_CLASSES =
 function ReleaseNotesSection({
   releaseId,
   releaseNotesHtml,
+  releaseNotesUrl,
 }: {
   releaseId: string;
   releaseNotesHtml: string | null;
+  releaseNotesUrl: string | null;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(releaseNotesHtml ?? "");
+  const [draftHtml, setDraftHtml] = useState(releaseNotesHtml ?? "");
+  const [draftUrl, setDraftUrl] = useState(releaseNotesUrl ?? "");
   const updateRelease = useUpdateRelease(releaseId);
 
   const handleSave = () => {
     updateRelease.mutate(
-      { releaseNotesHtml: draft || null },
+      { releaseNotesHtml: draftHtml || null, releaseNotesUrl: draftUrl || null },
       {
         onSuccess: () => {
           toast.success("Release notes updated");
@@ -376,14 +384,27 @@ function ReleaseNotesSection({
   return (
     <div className="mt-6">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-lg font-medium">Release Notes</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-medium">Release Notes</h3>
+          {!editing && releaseNotesUrl ? (
+            <a
+              href={releaseNotesUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
+            >
+              View external <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : null}
+        </div>
         {editing ? (
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
-                setDraft(releaseNotesHtml ?? "");
+                setDraftHtml(releaseNotesHtml ?? "");
+                setDraftUrl(releaseNotesUrl ?? "");
                 setEditing(false);
               }}
             >
@@ -403,13 +424,30 @@ function ReleaseNotesSection({
         )}
       </div>
       {editing ? (
-        <Textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          rows={12}
-          className="font-mono text-xs"
-          placeholder="<p>Release notes HTML...</p>"
-        />
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-muted-foreground">
+              Release Notes URL
+            </label>
+            <Input
+              value={draftUrl}
+              onChange={(e) => setDraftUrl(e.target.value)}
+              placeholder="https://example.com/changelog/v1.2.3"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-muted-foreground">
+              Release Notes HTML
+            </label>
+            <Textarea
+              value={draftHtml}
+              onChange={(e) => setDraftHtml(e.target.value)}
+              rows={12}
+              className="font-mono text-xs"
+              placeholder="<p>Release notes HTML...</p>"
+            />
+          </div>
+        </div>
       ) : releaseNotesHtml ? (
         <div
           className={NOTES_PROSE_CLASSES}

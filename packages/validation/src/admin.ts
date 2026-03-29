@@ -24,6 +24,7 @@ export const appUpdateSchema = z.object({
   notes: z.string().max(5000).nullable().optional(),
   isVerified: z.boolean().optional(),
   installStrategyOverride: installStrategySchema.nullable().optional(),
+  defaultReleaseNotesUrl: z.string().url().max(2000).nullable().optional(),
   iconR2Key: z.string().max(500).nullable().optional(),
 });
 
@@ -81,12 +82,14 @@ export const releaseCreateSchema = z.object({
   channel: channelSchema.default("stable"),
   releasedAt: z.string().max(50).optional(),
   releaseNotesHtml: z.string().max(500000).optional(),
+  releaseNotesUrl: z.string().url().max(2000).optional(),
 });
 
 export const releaseUpdateSchema = z.object({
   status: z.enum(["active", "superseded", "draft"]).optional(),
   channel: channelSchema.optional(),
   releaseNotesHtml: z.string().max(500000).nullable().optional(),
+  releaseNotesUrl: z.string().url().max(2000).nullable().optional(),
 });
 
 export const releasePinSchema = z.object({

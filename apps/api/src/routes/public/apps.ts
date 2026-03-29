@@ -40,8 +40,11 @@ export const appsRoutes = new Hono<{ Bindings: Env }>()
         appId: releases.appId,
         versionRaw: releases.versionRaw,
         releaseNotesHtml: releases.releaseNotesHtml,
+        releaseNotesUrl: releases.releaseNotesUrl,
+        appDefaultReleaseNotesUrl: apps.defaultReleaseNotesUrl,
       })
       .from(releases)
+      .innerJoin(apps, eq(apps.id, releases.appId))
       .where(eq(releases.id, releaseId))
       .get();
 
@@ -54,5 +57,6 @@ export const appsRoutes = new Hono<{ Bindings: Env }>()
       appId: release.appId,
       versionRaw: release.versionRaw,
       releaseNotesHtml: release.releaseNotesHtml,
+      releaseNotesUrl: release.releaseNotesUrl ?? release.appDefaultReleaseNotesUrl,
     });
   });

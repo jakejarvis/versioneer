@@ -200,6 +200,8 @@ export const updateApp = createServerFn({ method: "POST" })
     if (fields.isVerified !== undefined) updates.isVerified = fields.isVerified;
     if (fields.installStrategyOverride !== undefined)
       updates.installStrategyOverride = fields.installStrategyOverride;
+    if (fields.defaultReleaseNotesUrl !== undefined)
+      updates.defaultReleaseNotesUrl = fields.defaultReleaseNotesUrl;
     if (fields.iconR2Key !== undefined) updates.iconR2Key = fields.iconR2Key;
 
     await db.update(apps).set(updates).where(eq(apps.id, id));

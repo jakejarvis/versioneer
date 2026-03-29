@@ -33,6 +33,7 @@ export interface AppInfo {
   canonicalName: string;
   vendorName: string | null;
   homepageUrl: string | null;
+  defaultReleaseNotesUrl: string | null;
   status: string;
 }
 
@@ -46,6 +47,7 @@ export interface ReleaseInfo {
   releasedAt: string | null;
   isPrerelease: boolean;
   status: string;
+  releaseNotesUrl: string | null;
 }
 
 // Explanation types

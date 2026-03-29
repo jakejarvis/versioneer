@@ -115,6 +115,7 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
             releasedAt: parsedRelease.publishedAt ?? matchingRelease.releasedAt,
             sourceConfidence: output.confidence,
             releaseNotesHtml: updatedNotesHtml,
+            releaseNotesUrl: parsedRelease.releaseNotesUrl ?? matchingRelease.releaseNotesUrl,
             updatedAt: new Date().toISOString(),
           })
           .where(eq(releases.id, releaseId));
@@ -136,6 +137,7 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
                 parsedRelease.releaseNotesFormat ?? "html",
               )
             : null,
+          releaseNotesUrl: parsedRelease.releaseNotesUrl ?? null,
           status: "active",
           createdAt: now,
           updatedAt: now,

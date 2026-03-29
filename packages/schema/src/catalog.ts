@@ -25,6 +25,7 @@ export const apps = sqliteTable(
         "manual_only",
       ],
     }),
+    defaultReleaseNotesUrl: text("default_release_notes_url"),
     iconR2Key: text("icon_r2_key"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),

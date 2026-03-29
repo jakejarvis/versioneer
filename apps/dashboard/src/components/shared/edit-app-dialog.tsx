@@ -42,6 +42,7 @@ export function EditAppDialog({ app, open, onOpenChange }: EditAppDialogProps) {
       notes: app.notes ?? "",
       isVerified: app.isVerified,
       installStrategyOverride: app.installStrategyOverride ?? "",
+      defaultReleaseNotesUrl: app.defaultReleaseNotesUrl ?? "",
     },
     onSubmit: async ({ value }) => {
       updateApp.mutate(
@@ -54,6 +55,7 @@ export function EditAppDialog({ app, open, onOpenChange }: EditAppDialogProps) {
           notes: value.notes || null,
           isVerified: value.isVerified,
           installStrategyOverride: value.installStrategyOverride || null,
+          defaultReleaseNotesUrl: value.defaultReleaseNotesUrl || null,
         },
         {
           onSuccess: () => {
@@ -197,6 +199,25 @@ export function EditAppDialog({ app, open, onOpenChange }: EditAppDialogProps) {
                     <SelectItem value="manual_only">Manual Only</SelectItem>
                   </SelectContent>
                 </Select>
+              </FormField>
+            )}
+          </form.Field>
+
+          <form.Field name="defaultReleaseNotesUrl">
+            {(field) => (
+              <FormField
+                label="Default Release Notes URL"
+                name={field.name}
+                meta={field.state.meta}
+                description="Fallback URL for releases that don't have their own."
+              >
+                <Input
+                  id={field.name}
+                  placeholder="https://example.com/changelog"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                />
               </FormField>
             )}
           </form.Field>
