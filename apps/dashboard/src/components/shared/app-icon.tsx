@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { cn } from "@/lib/utils";
 
 interface AppIconProps {
@@ -9,20 +11,15 @@ interface AppIconProps {
   className?: string;
 }
 
-export function AppIcon({ iconR2Key, iconUrl, appName, size = 32, className }: AppIconProps) {
-  const src = iconUrl ?? (iconR2Key ? `/api/assets/${iconR2Key}` : null);
-  if (src) {
-    return (
-      <img
-        src={src}
-        alt={`${appName} icon`}
-        width={size}
-        height={size}
-        className={cn("rounded-md object-contain", className)}
-      />
-    );
-  }
-
+function Initials({
+  appName,
+  size,
+  className,
+}: {
+  appName: string;
+  size: number;
+  className?: string;
+}) {
   return (
     <div
       className={cn(
@@ -34,4 +31,24 @@ export function AppIcon({ iconR2Key, iconUrl, appName, size = 32, className }: A
       {appName.charAt(0).toUpperCase()}
     </div>
   );
+}
+
+export function AppIcon({ iconR2Key, iconUrl, appName, size = 32, className }: AppIconProps) {
+  const src = iconUrl ?? (iconR2Key ? `/api/assets/${iconR2Key}` : null);
+  const [failed, setFailed] = useState(false);
+
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt={`${appName} icon`}
+        width={size}
+        height={size}
+        className={cn("rounded-md object-contain", className)}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return <Initials appName={appName} size={size} className={className} />;
 }

@@ -69,6 +69,7 @@ export function useUpdateRelease(id: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["releases"] });
       void qc.invalidateQueries({ queryKey: ["releases", id] });
+      void qc.invalidateQueries({ queryKey: ["apps"] });
       void qc.invalidateQueries({ queryKey: ["homepage"] });
     },
   });

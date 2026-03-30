@@ -1,4 +1,4 @@
-import { inferChannel } from "../versioning";
+import { inferChannel, isPreRelease } from "../versioning";
 import type { SourceParser, ParserOutput, ParsedRelease, ParsedArtifact } from "./types";
 
 /**
@@ -97,7 +97,7 @@ function parseSparkleItem(xml: string): ParsedRelease | null {
     versionRaw: version,
     buildNumber: buildNumber !== version ? (buildNumber ?? undefined) : undefined,
     channel: inferChannel(version),
-    isPrerelease: /alpha|beta|rc|dev|canary|nightly/i.test(version),
+    isPrerelease: isPreRelease(version),
     publishedAt: publishedAt ?? undefined,
     releaseNotesUrl: releaseNotesUrl ?? undefined,
     releaseNotesBody: releaseNotesBody ?? undefined,

@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "exports": {
+    "./logger": "./src/logger.ts",
     "./cache": "./src/cache/index.ts",
     "./identity": "./src/identity/index.ts",
     "./parsers": "./src/parsers/index.ts",

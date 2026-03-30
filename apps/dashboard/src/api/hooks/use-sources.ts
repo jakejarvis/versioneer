@@ -153,6 +153,8 @@ export function useReparse(sourceId: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["sources", sourceId, "fetches"] });
       void qc.invalidateQueries({ queryKey: ["source-fetches"] });
+      void qc.invalidateQueries({ queryKey: ["releases"] });
+      void qc.invalidateQueries({ queryKey: ["apps"] });
     },
   });
 }

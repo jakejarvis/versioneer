@@ -16,7 +16,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 
 import { useDiscoveredApp } from "@/api/hooks/use-discovered-apps";
@@ -358,6 +358,7 @@ function OnboardingFormContent({
   }, [resolvedCaskToken]);
 
   const confidenceScore = discoveredApp.confidenceScore ?? 0;
+  const slugManuallyEdited = useRef(false);
 
   const canonicalName = useStore(form.store, (s) => s.values.canonicalName);
   const canSubmit =
@@ -448,8 +449,10 @@ function OnboardingFormContent({
                         value={field.state.value}
                         onChange={(e) => {
                           field.handleChange(e.target.value);
-                          const newSlug = slugify(e.target.value);
-                          form.setFieldValue("slug", newSlug);
+                          if (!slugManuallyEdited.current) {
+                            const newSlug = slugify(e.target.value);
+                            form.setFieldValue("slug", newSlug);
+                          }
                         }}
                         className="h-8 text-sm"
                       />
@@ -473,6 +476,7 @@ function OnboardingFormContent({
                       <Input
                         value={field.state.value}
                         onChange={(e) => {
+                          slugManuallyEdited.current = true;
                           field.handleChange(e.target.value);
                         }}
                         className="h-8 font-mono text-sm"
@@ -669,7 +673,12 @@ function OnboardingFormContent({
                             source={source}
                             onRemove={() => {
                               sourcesField.removeValue(i);
-                              form.setFieldValue("sourceValidated", false);
+                              // Only reset validation if all sources are removed;
+                              // remaining sources were already validated as part of
+                              // the previous set and don't need re-validation.
+                              if (sourcesField.state.value.length <= 1) {
+                                form.setFieldValue("sourceValidated", false);
+                              }
                             }}
                             onValidated={() => form.setFieldValue("sourceValidated", true)}
                           />

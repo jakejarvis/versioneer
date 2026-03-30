@@ -3,7 +3,6 @@ import type { AliasRecord } from "@versioneer/core/identity";
 import { inventoryCheckRequestSchema, toGitHubApiReleasesUrl } from "@versioneer/core/validation";
 import type { AppDecision } from "@versioneer/core/validation";
 import { normalizeVersion } from "@versioneer/core/versioning";
-import { compareVersionStrings } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -875,9 +874,11 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
 
             if (latestVersion) {
               if (installedApp.version) {
+                // Compare already-normalized strings directly — they are zero-padded
+                // for lexicographic ordering.  Re-parsing via compareVersionStrings()
+                // would mangle pre-release suffixes (e.g. "-0.001.…" → extra segments).
                 const installedNormalized = normalizeVersion(installedApp.version);
-                const cmp = compareVersionStrings(installedNormalized, latestVersion);
-                if (cmp >= 0) {
+                if (installedNormalized >= latestVersion) {
                   decision = "up_to_date";
                 } else {
                   decision = "update_available";

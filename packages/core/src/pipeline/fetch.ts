@@ -2,6 +2,7 @@ import { createDb } from "@versioneer/db";
 import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/db";
 import { desc, eq } from "drizzle-orm";
 
+import { createLogger } from "../logger";
 import { readResponseTextLimited } from "./response-body";
 import { githubApiHeaders } from "./types";
 import type { Env, FetchStepResult, SourceFetchJob } from "./types";
@@ -20,6 +21,7 @@ async function fetchGitHubReleases(
 
 export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<FetchStepResult> {
   const db = createDb(env.DB);
+  const log = createLogger({ fn: "handleSourceFetch", sourceId: job.sourceId });
   const now = new Date().toISOString();
 
   // Load source
@@ -29,6 +31,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
   }
 
   if (source.status === "disabled" && !job.force) {
+    log.info("source disabled, skipping");
     return { sourceFetchId: null, shouldParse: false, appId: source.appId };
   }
 
@@ -74,6 +77,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
           : await fetch(source.baseUrl!, { headers: conditionalHeaders });
 
     if (response.status === 304) {
+      log.info("not modified", { fetchId });
       await db.insert(sourceFetches).values({
         id: fetchId,
         sourceId: source.id,
@@ -94,6 +98,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
 
     if (!response.ok) {
       const errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+      log.warn("fetch returned error status", { fetchId, httpStatus: response.status });
       await db.insert(sourceFetches).values({
         id: fetchId,
         sourceId: source.id,
@@ -163,8 +168,10 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
       })
       .where(eq(sources.id, source.id));
 
+    log.info("fetch completed", { fetchId, httpStatus: response.status, contentLength: bytesRead });
     return { sourceFetchId: fetchId, shouldParse: true, appId: source.appId };
   } catch (error) {
+    log.error("fetch failed", { fetchId, error });
     const errorMsg = error instanceof Error ? error.message : String(error);
 
     await db.insert(sourceFetches).values({

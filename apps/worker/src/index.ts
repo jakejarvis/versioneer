@@ -1,3 +1,4 @@
+import { createLogger } from "@versioneer/core/logger";
 import {
   handleSourceParse,
   handleRecomputeLatest,
@@ -58,6 +59,7 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
   async scheduled(_event: ScheduledEvent): Promise<void> {
     const db = createDb(this.env.DB);
     const { sources } = await import("@versioneer/db");
+    const log = createLogger({ handler: "scheduled" });
 
     const now = new Date();
 
@@ -86,10 +88,11 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
               });
               queued++;
             } catch (error) {
-              console.error(`Failed to create pipeline for source ${source.id}:`, error);
+              log.error("failed to queue source pipeline", { sourceId: source.id, error });
             }
           }
         }
+        log.info("poll sources completed", { queued, total: activeSources.length });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "poll_sources",
@@ -101,7 +104,7 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
           completedAt: new Date().toISOString(),
         });
       } catch (error) {
-        console.error("Poll sources scheduled job failed:", error);
+        log.error("poll sources job failed", { error });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "poll_sources",
@@ -132,7 +135,7 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
           });
         }
       } catch (error) {
-        console.error("Cask index sync scheduled job failed:", error);
+        log.error("cask index sync failed", { error });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "cask_index_sync",
@@ -176,9 +179,7 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
           await enrichDiscoveredApp({
             discoveredAppId: candidate.id,
             db,
-            githubToken: (this.env as unknown as Record<string, unknown>).GITHUB_TOKEN as
-              | string
-              | undefined,
+            githubToken: this.env.GITHUB_TOKEN,
             assetsBucket: this.env.RAW_BUCKET,
             configKv: this.env.CONFIG_KV,
           });
@@ -188,10 +189,10 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
         }
 
         if (enriched > 0) {
-          console.log(`Discovered app enrichment processed ${enriched} item(s)`);
+          log.info("enrichment batch completed", { enriched, candidates: candidates.length });
         }
       } catch (error) {
-        console.error("Discovered app enrichment scheduled job failed:", error);
+        log.error("enrichment batch failed", { error });
       }
     }
   }

@@ -2,6 +2,7 @@ import { createDb } from "@versioneer/db";
 import { appAliases, discoveredApps, generateId, idPrefixes } from "@versioneer/db";
 import { eq, and, isNotNull, or } from "drizzle-orm";
 
+import { createLogger } from "../logger";
 import type { Env } from "./types";
 
 const CASK_INDEX_URL = "https://formulae.brew.sh/api/cask.json";
@@ -134,6 +135,7 @@ function extractAppcastUrl(cask: CaskIndexEntry): string | undefined {
 
 export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Promise<void> {
   const db = createDb(env.DB);
+  const log = createLogger({ fn: "handleCaskIndexSync" });
   const now = new Date().toISOString();
 
   // Check if sync is needed (unless forced)
@@ -142,7 +144,7 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
     if (lastSync) {
       const elapsed = Date.now() - new Date(lastSync).getTime();
       if (elapsed < SYNC_INTERVAL_MS) {
-        console.log(`Cask index sync skipped: last sync ${Math.round(elapsed / 60000)}m ago`);
+        log.info("cask sync skipped", { lastSyncMinutesAgo: Math.round(elapsed / 60000) });
         return;
       }
     }
@@ -160,7 +162,7 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
   const response = await fetch(CASK_INDEX_URL, { headers });
 
   if (response.status === 304) {
-    console.log("Cask index not modified (304)");
+    log.info("cask index not modified");
     await env.CONFIG_KV.put(LAST_SYNC_KV_KEY, now);
     return;
   }
@@ -176,7 +178,7 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
   }
 
   const casks = (await response.json()) as CaskIndexEntry[];
-  console.log(`Fetched ${casks.length} casks from index`);
+  log.info("cask index fetched", { caskCount: casks.length });
 
   // Build a map of cask bundle IDs -> cask entries
   const casksByBundleId = new Map<string, CaskIndexEntry>();
@@ -262,7 +264,7 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
         });
         bundleIdMatches++;
       } catch (e) {
-        console.error(`Failed to create cask alias for ${cask.token}:`, e);
+        log.error("cask alias creation failed", { caskToken: cask.token, error: e });
         errors++;
       }
     }
@@ -291,7 +293,7 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
       bundleIdMatches++;
       matchedCaskTokens.add(cask.token);
     } catch (e) {
-      console.error(`Failed to update discovered app ${dapp.id}:`, e);
+      log.error("discovered app update failed", { discoveredAppId: dapp.id, error: e });
       errors++;
     }
   }
@@ -308,7 +310,7 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
     }),
   );
 
-  console.log(`Cask index sync complete: ${bundleIdMatches} bundle ID matches, ${errors} errors`);
+  log.info("cask sync completed", { bundleIdMatches, errors });
 }
 
 /**

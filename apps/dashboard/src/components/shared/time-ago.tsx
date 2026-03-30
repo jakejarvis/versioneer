@@ -11,6 +11,8 @@ export function TimeAgo({ date, className }: TimeAgoProps) {
   if (!date) return <span className="text-muted-foreground">--</span>;
 
   const d = new Date(date);
+  if (isNaN(d.getTime())) return <span className="text-muted-foreground">--</span>;
+
   const relative = formatDistanceToNow(d, { addSuffix: true });
   const absolute = format(d, "PPpp");
 

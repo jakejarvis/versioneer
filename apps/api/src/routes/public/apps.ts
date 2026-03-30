@@ -1,6 +1,6 @@
 import { createDb } from "@versioneer/db";
 import { apps, releases } from "@versioneer/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 
@@ -23,11 +23,16 @@ export const appsRoutes = new Hono<{ Bindings: Env }>()
     const appId = c.req.param("appId");
     const db = createDb(c.env.DB);
 
-    const appReleases = await db.select().from(releases).where(eq(releases.appId, appId)).all();
     const app = await db.select().from(apps).where(eq(apps.id, appId)).get();
     if (!app || app.status !== "public") {
       throw new HTTPException(404, { message: "App not found" });
     }
+
+    const appReleases = await db
+      .select()
+      .from(releases)
+      .where(and(eq(releases.appId, appId), eq(releases.status, "active")))
+      .all();
 
     return c.json({ releases: appReleases });
   })
@@ -44,13 +49,14 @@ export const appsRoutes = new Hono<{ Bindings: Env }>()
         releaseNotesHtml: releases.releaseNotesHtml,
         releaseNotesUrl: releases.releaseNotesUrl,
         appDefaultReleaseNotesUrl: apps.defaultReleaseNotesUrl,
+        appStatus: apps.status,
       })
       .from(releases)
       .innerJoin(apps, eq(apps.id, releases.appId))
       .where(eq(releases.id, releaseId))
       .get();
 
-    if (!release) {
+    if (!release || release.appStatus !== "public") {
       throw new HTTPException(404, { message: "Release not found" });
     }
 

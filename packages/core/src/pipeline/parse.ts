@@ -12,6 +12,7 @@ import {
 } from "@versioneer/db";
 import { and, desc, eq } from "drizzle-orm";
 
+import { createLogger } from "../logger";
 import { getParser } from "../parsers";
 import { normalizeVersion, inferChannel } from "../versioning";
 import { normalizeReleaseNotes } from "./release-notes";
@@ -27,6 +28,7 @@ function toISODate(dateStr: string | undefined | null): string | null {
 
 export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<ParseStepResult> {
   const db = createDb(env.DB);
+  const log = createLogger({ fn: "handleSourceParse", sourceFetchId: job.sourceFetchId });
   const now = new Date().toISOString();
 
   // Load fetch metadata
@@ -116,6 +118,14 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
       startedAt: now,
       finishedAt: new Date().toISOString(),
     });
+
+    if (output.errors.length > 0) {
+      log.warn("parse had errors", {
+        parserKey: source.parserKey,
+        releaseCount: output.releases.length,
+        errors: output.errors,
+      });
+    }
 
     // Process each parsed release
     for (const parsedRelease of output.releases) {
@@ -260,11 +270,17 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
             updatedAt: new Date().toISOString(),
           })
           .where(eq(apps.id, source.appId));
+        log.info("app promoted to public", { appId: source.appId });
       }
     }
 
+    log.info("parse completed", {
+      parserKey: source.parserKey,
+      releaseCount: output.releases.length,
+    });
     return { appId: source.appId, releaseCount: output.releases.length };
   } catch (error) {
+    log.error("parse failed", { parserKey: source.parserKey, error });
     const errorMsg = error instanceof Error ? error.message : String(error);
 
     await db.insert(parserRuns).values({
