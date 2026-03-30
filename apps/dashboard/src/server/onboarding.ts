@@ -70,7 +70,6 @@ const onboardDiscoveredAppSchema = z.object({
     notes: z.string().max(5000).optional(),
   }),
   aliases: z.array(aliasInputSchema),
-  source: sourceInputSchema.optional(),
   sources: z.array(sourceInputSchema).optional(),
   sourceValidated: z.boolean().default(false),
   enrichmentHasReleases: z.boolean().default(false),
@@ -88,7 +87,7 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     const db = createDb(env.DB);
     const now = new Date().toISOString();
     const appId = generateId(idPrefixes.app);
-    const allSources = data.sources ?? (data.source ? [data.source] : []);
+    const allSources = data.sources ?? [];
 
     // 0. Validate discovered app exists and hasn't been onboarded already
     const discoveredAppRow = await db

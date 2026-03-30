@@ -17,6 +17,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect } from "react";
+import { toast } from "sonner";
 
 import { useDiscoveredApp } from "@/api/hooks/use-discovered-apps";
 import {
@@ -187,6 +188,9 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
             onOpenChange(false);
             onSuccess?.(data.id);
           },
+          onError: (err) => {
+            toast.error(err.message || "Failed to onboard app");
+          },
         },
       );
     },
@@ -201,6 +205,15 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
 
   // Resolved cask token: from discovered app or on-demand lookup
   const resolvedCaskToken = discoveredApp?.homebrewCaskToken ?? caskLookup.data?.caskToken ?? null;
+
+  // Reset form to empty state when drawer closes
+  useEffect(() => {
+    if (!open) {
+      form.reset(EMPTY_FORM);
+      onboard.reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on open change
+  }, [open]);
 
   // Reset form when discovered app data loads
   useEffect(() => {
@@ -283,9 +296,11 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset runs only when the underlying data changes
   }, [discoveredApp]);
 
-  // Add cask alias and source once resolved
+  // Add cask alias and source once resolved — guard with discoveredAppId to
+  // prevent stale cask lookups from a previous app leaking into the form.
   useEffect(() => {
     if (!resolvedCaskToken || !discoveredApp) return;
+    if (discoveredApp.id !== discoveredAppId) return;
 
     const currentAliases = form.getFieldValue("aliases");
     if (!currentAliases.some((a) => a.aliasType === "homebrew_cask")) {
@@ -307,7 +322,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedCaskToken, discoveredApp]);
+  }, [resolvedCaskToken, discoveredApp, discoveredAppId]);
 
   const confidenceScore = discoveredApp?.confidenceScore ?? 0;
   const enrichmentHasReleases = (discoveredApp?.enrichedReleaseCount ?? 0) > 0;
