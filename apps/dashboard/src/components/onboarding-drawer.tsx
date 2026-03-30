@@ -673,7 +673,10 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                                   form={form}
                                   index={i}
                                   source={source}
-                                  onRemove={() => sourcesField.removeValue(i)}
+                                  onRemove={() => {
+                                    sourcesField.removeValue(i);
+                                    form.setFieldValue("sourceValidated", false);
+                                  }}
                                   onValidated={() => form.setFieldValue("sourceValidated", true)}
                                 />
                               </SortableSourceWrapper>
@@ -802,6 +805,7 @@ function SourceCard({
                   `sources[${index}].pollIntervalMinutes`,
                   SOURCE_TYPE_DEFAULTS[newType].pollIntervalMinutes,
                 );
+                form.setFieldValue("sourceValidated", false);
               }}
               className={`h-6 shrink-0 cursor-pointer appearance-none rounded border px-1.5 text-[10px] font-medium ${SOURCE_TYPES[field.state.value as SourceType].color}`}
             >
@@ -817,7 +821,10 @@ function SourceCard({
           {(field: { state: { value: string }; handleChange: (v: string) => void }) => (
             <input
               value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
+              onChange={(e) => {
+                field.handleChange(e.target.value);
+                form.setFieldValue("sourceValidated", false);
+              }}
               className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-muted-foreground outline-none placeholder:text-muted-foreground/40"
               placeholder={SOURCE_TYPES[source.sourceType].input.placeholder}
             />

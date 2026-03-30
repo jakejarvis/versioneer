@@ -94,7 +94,7 @@
           "name": "versioneer-source-pipeline-production",
           "binding": "SOURCE_PIPELINE",
           "class_name": "SourcePipelineWorkflow",
-          "script_name": "versioneer-worker"
+          "script_name": "versioneer-worker-production"
         }
       ],
       "observability": {
