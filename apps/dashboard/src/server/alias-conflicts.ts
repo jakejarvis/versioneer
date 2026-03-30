@@ -3,11 +3,10 @@ import {
   isGloballyUniqueExactAliasType,
   normalizeAliasValue,
 } from "@versioneer/core/identity";
-import { createDb } from "@versioneer/db";
 import { appAliases } from "@versioneer/db";
 import { and, eq, ne } from "drizzle-orm";
 
-type Db = ReturnType<typeof createDb>;
+import type { DbExecutor } from "./db-types";
 
 export class AliasConflictError extends Error {
   readonly aliasId: string;
@@ -27,7 +26,7 @@ export class AliasConflictError extends Error {
 }
 
 export async function findConflictingExactAlias(
-  db: Db,
+  db: DbExecutor,
   params: {
     aliasType: AppAliasType;
     value: string;
@@ -73,7 +72,7 @@ export async function findConflictingExactAlias(
 }
 
 export async function assertNoConflictingExactAlias(
-  db: Db,
+  db: DbExecutor,
   params: {
     aliasType: AppAliasType;
     value: string;

@@ -15,10 +15,11 @@ import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { sourcePipeline } from "@/lib/pipeline";
 import { defaultRoleForSourceType, defaultRuntimeStatusForSourceType } from "@/lib/source-types";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import type { DbExecutor } from "./db-types";
+import { scheduleSourceFetch } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
 import { normalizeSourceBaseUrl, syncSourceDerivedAliases } from "./source-derived-aliases";
 
@@ -35,7 +36,7 @@ export const checkSlugAvailable = createServerFn({ method: "GET" })
   });
 
 // ──────────────────────────────────────────────────────────
-// Atomic onboard from discovered app
+// Onboard from discovered app
 // ──────────────────────────────────────────────────────────
 
 const aliasInputSchema = z.object({
@@ -93,8 +94,8 @@ const onboardDiscoveredAppSchema = z.object({
 });
 
 /**
- * Atomic onboard: directly creates app + aliases + approved sources,
- * transfers icon, links discovery, and queues initial source fetches.
+ * Onboards a discovered app by committing all local catalog writes together,
+ * then best-effort scheduling initial source fetches after the transaction.
  * Creates zero review-queue items.
  */
 export const onboardDiscoveredApp = createServerFn({ method: "POST" })
@@ -149,137 +150,130 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
       }
     }
 
-    // 1. Create app — public if source validated, draft otherwise
-    // Icons live in a flat `icons/` directory keyed by content hash,
-    // so the catalog app simply reuses the same R2 key.
     const catalogIconR2Key = discoveredAppRow.iconR2Key;
-
     const appStatus = data.sourceValidated ? "public" : "draft";
 
-    await db.insert(apps).values({
-      id: appId,
-      slug: data.app.slug,
-      canonicalName: data.app.canonicalName,
-      vendorName: data.app.vendorName ?? null,
-      homepageUrl: data.app.homepageUrl ?? null,
-      notes: data.app.notes ?? null,
-      iconR2Key: catalogIconR2Key,
-      status: appStatus,
-      publicTrackedAt: appStatus === "public" ? now : null,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    // 2. Create aliases
-    for (const alias of data.aliases) {
-      try {
-        await assertNoConflictingExactAlias(db, {
-          aliasType: alias.aliasType,
-          value: alias.value,
-          appId,
-        });
-      } catch (error) {
-        if (error instanceof AliasConflictError) {
-          throw new Error(
-            `Conflicting ${alias.aliasType.replaceAll("_", " ")} already belongs to app ${error.appId}`,
-            { cause: error },
-          );
-        }
-        throw error;
-      }
-
-      await ensureOnboardingAlias({
-        db,
-        appId,
-        aliasType: alias.aliasType,
-        value: alias.value,
-        source: "onboarding",
-        now,
-      });
-    }
-
-    // 3. Create approved sources directly — source array order determines primary
-    const sourceIds: string[] = [];
-    for (let i = 0; i < allSources.length; i++) {
-      const src = allSources[i]!;
-      const normalizedBaseUrl = normalizeSourceBaseUrl(src.sourceType, src.baseUrl);
-      const sourceId = generateId(idPrefixes.source);
-      const isPrimary = i === 0;
-      const defaultRole = defaultRoleForSourceType(src.sourceType);
-      const role = isPrimary
-        ? defaultRole
-        : defaultRole === "authority"
-          ? "corroborating"
-          : defaultRole;
-      const runtimeStatus = defaultRuntimeStatusForSourceType(src.sourceType);
-
-      await db.insert(sources).values({
-        id: sourceId,
-        appId,
-        sourceType: src.sourceType,
-        label: src.label ?? null,
-        baseUrl: normalizedBaseUrl,
-        configJson: null,
-        parserKey: src.parserKey,
-        channel: null,
-        pollIntervalMinutes: src.pollIntervalMinutes,
-        reviewStatus: "approved",
-        role,
-        ordinal: i,
-        status: runtimeStatus,
-        approvedAt: now,
-        reviewedAt: now,
-        reviewedBy: context.user.email,
+    const sourceIds = await db.transaction(async (tx) => {
+      await tx.insert(apps).values({
+        id: appId,
+        slug: data.app.slug,
+        canonicalName: data.app.canonicalName,
+        vendorName: data.app.vendorName ?? null,
+        homepageUrl: data.app.homepageUrl ?? null,
+        notes: data.app.notes ?? null,
+        iconR2Key: catalogIconR2Key,
+        status: appStatus,
+        publicTrackedAt: appStatus === "public" ? now : null,
         createdAt: now,
         updatedAt: now,
       });
 
-      await syncSourceDerivedAliases({
-        db,
-        appId,
-        sourceId,
-        sourceType: src.sourceType,
-        baseUrl: normalizedBaseUrl,
-        now,
+      for (const alias of data.aliases) {
+        try {
+          await assertNoConflictingExactAlias(tx, {
+            aliasType: alias.aliasType,
+            value: alias.value,
+            appId,
+          });
+        } catch (error) {
+          if (error instanceof AliasConflictError) {
+            throw new Error(
+              `Conflicting ${alias.aliasType.replaceAll("_", " ")} already belongs to app ${error.appId}`,
+              { cause: error },
+            );
+          }
+          throw error;
+        }
+
+        await ensureOnboardingAlias({
+          db: tx,
+          appId,
+          aliasType: alias.aliasType,
+          value: alias.value,
+          source: "onboarding",
+          now,
+        });
+      }
+
+      const createdSourceIds: string[] = [];
+      for (let i = 0; i < allSources.length; i++) {
+        const src = allSources[i]!;
+        const normalizedBaseUrl = normalizeSourceBaseUrl(src.sourceType, src.baseUrl);
+        const sourceId = generateId(idPrefixes.source);
+        const isPrimary = i === 0;
+        const defaultRole = defaultRoleForSourceType(src.sourceType);
+        const role = isPrimary
+          ? defaultRole
+          : defaultRole === "authority"
+            ? "corroborating"
+            : defaultRole;
+        const runtimeStatus = defaultRuntimeStatusForSourceType(src.sourceType);
+
+        await tx.insert(sources).values({
+          id: sourceId,
+          appId,
+          sourceType: src.sourceType,
+          label: src.label ?? null,
+          baseUrl: normalizedBaseUrl,
+          configJson: null,
+          parserKey: src.parserKey,
+          channel: null,
+          pollIntervalMinutes: src.pollIntervalMinutes,
+          reviewStatus: "approved",
+          role,
+          ordinal: i,
+          status: runtimeStatus,
+          approvedAt: now,
+          reviewedAt: now,
+          reviewedBy: context.user.email,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        await syncSourceDerivedAliases({
+          db: tx,
+          appId,
+          sourceId,
+          sourceType: src.sourceType,
+          baseUrl: normalizedBaseUrl,
+          now,
+        });
+
+        createdSourceIds.push(sourceId);
+      }
+
+      await tx
+        .update(discoveredApps)
+        .set({
+          status: "linked",
+          linkedAppId: appId,
+          primarySuggestionId: null,
+          updatedAt: now,
+        })
+        .where(eq(discoveredApps.id, data.discoveredAppId));
+
+      await tx.insert(auditLog).values({
+        id: generateId(idPrefixes.auditLog),
+        eventType: "app_onboarded",
+        actorType: "admin",
+        actorId: context.user.email,
+        targetType: "app",
+        targetId: appId,
+        payloadJson: JSON.stringify({
+          discoveredAppId: data.discoveredAppId,
+          aliases: data.aliases.length,
+          sources: createdSourceIds.length,
+          sourceValidated: data.sourceValidated,
+          status: appStatus,
+        }),
+        createdAt: now,
       });
 
-      sourceIds.push(sourceId);
-    }
-
-    // 4. Link discovered app
-    await db
-      .update(discoveredApps)
-      .set({
-        status: "linked",
-        linkedAppId: appId,
-        primarySuggestionId: null,
-        updatedAt: now,
-      })
-      .where(eq(discoveredApps.id, data.discoveredAppId));
-
-    // 5. Audit log
-    await db.insert(auditLog).values({
-      id: generateId(idPrefixes.auditLog),
-      eventType: "app_onboarded",
-      actorType: "admin",
-      actorId: context.user.email,
-      targetType: "app",
-      targetId: appId,
-      payloadJson: JSON.stringify({
-        discoveredAppId: data.discoveredAppId,
-        aliases: data.aliases.length,
-        sources: sourceIds.length,
-        sourceValidated: data.sourceValidated,
-        status: appStatus,
-      }),
-      createdAt: now,
+      return createdSourceIds;
     });
 
-    // 6. Queue initial source fetches
     for (const sourceId of sourceIds) {
-      await sourcePipeline.create({
-        params: { sourceId, reason: "onboarding", force: true },
-      });
+      await scheduleSourceFetch({ db, sourceId, reason: "onboarding", force: true });
     }
 
     return { id: appId, status: appStatus };
@@ -297,7 +291,7 @@ export const lookupCaskToken = createServerFn({ method: "GET" })
   });
 
 async function ensureOnboardingAlias(params: {
-  db: ReturnType<typeof createDb>;
+  db: DbExecutor;
   appId: string;
   aliasType: z.infer<typeof aliasInputSchema>["aliasType"];
   value: string;

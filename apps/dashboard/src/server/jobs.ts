@@ -6,8 +6,7 @@ import { env } from "cloudflare:workers";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { sourcePipeline } from "@/lib/pipeline";
-
+import { scheduleSourceFetch } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
@@ -91,27 +90,53 @@ export const triggerPollSources = createServerFn({ method: "POST" })
             return !lastFetched || now.getTime() - lastFetched.getTime() >= intervalMs;
           });
 
+      const queuedSourceIds: string[] = [];
+      const failedSources: Array<{ sourceId: string; errorMessage: string | null }> = [];
       for (const source of dueSources) {
-        await sourcePipeline.create({
-          params: { sourceId: source.id, reason: "manual", force },
+        const result = await scheduleSourceFetch({
+          db,
+          sourceId: source.id,
+          reason: "manual",
+          force,
         });
+        if (result.ok) {
+          queuedSourceIds.push(source.id);
+        } else {
+          failedSources.push({
+            sourceId: source.id,
+            errorMessage: result.errorMessage ?? null,
+          });
+        }
       }
+
+      const status = failedSources.length > 0 ? "failed" : "completed";
+      const completedAt = new Date().toISOString();
+      const resultJson = JSON.stringify({
+        queuedSourceIds,
+        failedSources,
+      });
 
       await db
         .update(cronJobRuns)
         .set({
-          status: "completed",
-          itemsQueued: dueSources.length,
+          status,
+          itemsQueued: queuedSourceIds.length,
           itemsTotal: activeSources.length,
-          completedAt: new Date().toISOString(),
+          resultJson,
+          errorMessage:
+            failedSources.length > 0
+              ? `${failedSources.length} source enqueue${failedSources.length === 1 ? "" : "s"} failed`
+              : null,
+          completedAt,
         })
         .where(eq(cronJobRuns.id, runId));
 
       return {
         id: runId,
-        status: "completed" as const,
-        itemsQueued: dueSources.length,
+        status,
+        itemsQueued: queuedSourceIds.length,
         itemsTotal: activeSources.length,
+        failedCount: failedSources.length,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

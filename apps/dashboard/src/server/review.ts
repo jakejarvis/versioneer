@@ -17,7 +17,6 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { pipelineWorker, sourcePipeline } from "@/lib/pipeline";
 import {
   defaultLabelForSourceType,
   defaultParserKeyForSourceType,
@@ -27,6 +26,7 @@ import {
 
 import { assertNoConflictingExactAlias } from "./alias-conflicts";
 import { loadAppsByIds, loadSourcesByIds, toAppSummary, toSourceSummary } from "./entity-summaries";
+import { scheduleRecomputeLatest, scheduleSourceFetch } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
 import { normalizeSourceBaseUrl, syncSourceDerivedAliases } from "./source-derived-aliases";
 
@@ -413,8 +413,11 @@ async function approveNewSourceSuggestion(params: {
   }
 
   if (sourceId && runtimeStatus === "active") {
-    await sourcePipeline.create({
-      params: { sourceId, reason: "catalog-review", force: true },
+    await scheduleSourceFetch({
+      db,
+      sourceId,
+      reason: "catalog-review",
+      force: true,
     });
   }
 
@@ -529,8 +532,11 @@ async function approveAuthorityHandoffSuggestion(params: {
     })
     .where(eq(sources.id, payload.toSourceId));
 
-  await sourcePipeline.create({
-    params: { sourceId: payload.toSourceId, reason: "authority-handoff", force: true },
+  await scheduleSourceFetch({
+    db,
+    sourceId: payload.toSourceId,
+    reason: "authority-handoff",
+    force: true,
   });
 }
 
@@ -609,12 +615,19 @@ async function approveReleaseDiscrepancySuggestion(params: {
     createdAt: params.now,
   });
 
-  await pipelineWorker.recomputeLatest({ appId: release.appId, channel: release.channel });
+  await scheduleRecomputeLatest({
+    db: params.db,
+    appId: release.appId,
+    channel: release.channel,
+  });
 
   const sourceId = payload?.sourceId ?? release.publishedBySourceId ?? null;
   if (sourceId) {
-    await sourcePipeline.create({
-      params: { sourceId, reason: "release-discrepancy", force: true },
+    await scheduleSourceFetch({
+      db: params.db,
+      sourceId,
+      reason: "release-discrepancy",
+      force: true,
     });
   }
 }

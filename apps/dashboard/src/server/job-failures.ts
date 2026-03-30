@@ -5,9 +5,12 @@ import { env } from "cloudflare:workers";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { pipelineWorker, sourcePipeline } from "@/lib/pipeline";
-
 import { loadEntityRefsByIds } from "./entity-summaries";
+import {
+  scheduleRecomputeLatest,
+  scheduleSourceFetch,
+  scheduleSourceReparse,
+} from "./followup-jobs";
 import { authMiddleware } from "./middleware";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
@@ -26,6 +29,57 @@ function jobFailureOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
     default:
       return [desc(jobFailures.createdAt)];
   }
+}
+
+async function retryFailure(
+  db: ReturnType<typeof createDb>,
+  failure: typeof jobFailures.$inferSelect,
+): Promise<boolean> {
+  let result: { ok: boolean } | null = null;
+
+  switch (failure.jobType) {
+    case "source-fetch":
+      if (!failure.relatedId) return false;
+      result = await scheduleSourceFetch({
+        db,
+        sourceId: failure.relatedId,
+        reason: "retry",
+        force: true,
+        resolveFailureOnSuccess: false,
+      });
+      break;
+    case "source-parse":
+      if (!failure.relatedId) return false;
+      result = await scheduleSourceReparse({
+        db,
+        sourceFetchId: failure.relatedId,
+        resolveFailureOnSuccess: false,
+      });
+      break;
+    case "recompute-latest":
+      if (!failure.relatedId) return false;
+      result = await scheduleRecomputeLatest({
+        db,
+        appId: failure.relatedId,
+        channel: failure.jobKey ?? undefined,
+        resolveFailureOnSuccess: false,
+      });
+      break;
+    default:
+      return false;
+  }
+
+  if (!result.ok) return false;
+
+  await db
+    .update(jobFailures)
+    .set({
+      status: "retrying",
+      retryCount: sql`${jobFailures.retryCount} + 1`,
+      resolvedAt: null,
+    })
+    .where(eq(jobFailures.id, failure.id));
+  return true;
 }
 
 // GET /job-failures - list with pagination, default status="open"
@@ -117,30 +171,8 @@ export const retryJobFailure = createServerFn({ method: "POST" })
     const failure = await db.select().from(jobFailures).where(eq(jobFailures.id, id)).get();
     if (!failure) throw new Error("Not found");
 
-    // Re-enqueue based on job type
-    switch (failure.jobType) {
-      case "source-fetch":
-        if (failure.relatedId) {
-          await sourcePipeline.create({
-            params: { sourceId: failure.relatedId, reason: "retry", force: true },
-          });
-        }
-        break;
-      case "source-parse":
-        if (failure.relatedId) {
-          await pipelineWorker.reparse({ sourceFetchId: failure.relatedId });
-        }
-        break;
-      case "recompute-latest":
-        if (failure.relatedId) {
-          await pipelineWorker.recomputeLatest({ appId: failure.relatedId });
-        }
-        break;
-    }
-
-    await db.update(jobFailures).set({ status: "retrying" }).where(eq(jobFailures.id, id));
-
-    return { status: "retrying" };
+    const retried = await retryFailure(db, failure);
+    return { status: retried ? "retrying" : failure.status, count: retried ? 1 : 0 };
   });
 
 // POST /job-failures/retry-all - re-enqueue all open failures
@@ -163,35 +195,19 @@ export const retryAllJobFailures = createServerFn({ method: "POST" })
 
     const matching = jobType ? failures.filter((f) => f.jobType === jobType) : failures;
     let retried = 0;
+    let failed = 0;
 
     for (const failure of matching) {
-      switch (failure.jobType) {
-        case "source-fetch":
-          if (failure.relatedId) {
-            await sourcePipeline.create({
-              params: { sourceId: failure.relatedId, reason: "retry", force: true },
-            });
-            retried++;
-          }
-          break;
-        case "source-parse":
-          if (failure.relatedId) {
-            await pipelineWorker.reparse({ sourceFetchId: failure.relatedId });
-            retried++;
-          }
-          break;
-        case "recompute-latest":
-          if (failure.relatedId) {
-            await pipelineWorker.recomputeLatest({ appId: failure.relatedId });
-            retried++;
-          }
-          break;
+      if (await retryFailure(db, failure)) {
+        retried++;
+      } else {
+        failed++;
       }
-      await db
-        .update(jobFailures)
-        .set({ status: "retrying" })
-        .where(eq(jobFailures.id, failure.id));
     }
 
-    return { status: "retrying", count: retried };
+    return {
+      status: failed > 0 ? "partial" : "retrying",
+      count: retried,
+      failedCount: failed,
+    };
   });

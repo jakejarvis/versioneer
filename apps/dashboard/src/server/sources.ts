@@ -15,11 +15,12 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { pipelineWorker, sourcePipeline } from "@/lib/pipeline";
 import { defaultRoleForSourceType, defaultRuntimeStatusForSourceType } from "@/lib/source-types";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import type { DbExecutor } from "./db-types";
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
+import { scheduleSourceFetch, scheduleSourceReparse } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
 import { normalizeSourceBaseUrl, syncSourceDerivedAliases } from "./source-derived-aliases";
 
@@ -64,7 +65,7 @@ function sourceFetchOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
 }
 
 async function createAuthorityHandoffSuggestion(params: {
-  db: ReturnType<typeof createDb>;
+  db: DbExecutor;
   appId: string;
   channel: string | null;
   fromSourceId: string;
@@ -266,73 +267,73 @@ export const createSource = createServerFn({ method: "POST" })
       .where(eq(sources.appId, data.appId));
     const nextOrdinal = (maxOrdinalResult?.maxOrd ?? -1) + 1;
 
-    await db.insert(sources).values({
-      id,
-      appId: data.appId,
-      sourceType: data.sourceType,
-      label: data.label ?? null,
-      baseUrl: normalizedBaseUrl,
-      configJson: data.configJson ?? null,
-      parserKey: data.parserKey,
-      channel: data.channel ?? null,
-      pollIntervalMinutes: data.pollIntervalMinutes,
-      reviewStatus: data.reviewStatus,
-      role: persistedRole,
-      ordinal: nextOrdinal,
-      status: runtimeStatus,
-      approvedAt: data.reviewStatus === "approved" ? now : null,
-      reviewedAt: data.reviewStatus === "approved" ? now : null,
-      reviewedBy: data.reviewStatus === "approved" ? context.user.email : null,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    if (data.reviewStatus === "approved") {
-      await syncSourceDerivedAliases({
-        db,
+    const shouldQueueFetch = data.reviewStatus === "approved" && runtimeStatus === "active";
+    await db.transaction(async (tx) => {
+      await tx.insert(sources).values({
+        id,
         appId: data.appId,
-        sourceId: id,
         sourceType: data.sourceType,
+        label: data.label ?? null,
         baseUrl: normalizedBaseUrl,
-        now,
+        configJson: data.configJson ?? null,
+        parserKey: data.parserKey,
+        channel: data.channel ?? null,
+        pollIntervalMinutes: data.pollIntervalMinutes,
+        reviewStatus: data.reviewStatus,
+        role: persistedRole,
+        ordinal: nextOrdinal,
+        status: runtimeStatus,
+        approvedAt: data.reviewStatus === "approved" ? now : null,
+        reviewedAt: data.reviewStatus === "approved" ? now : null,
+        reviewedBy: data.reviewStatus === "approved" ? context.user.email : null,
+        createdAt: now,
+        updatedAt: now,
       });
-    }
 
-    if (conflictingAuthority) {
-      // Only create review suggestions for public apps
-      const appRow = await db
-        .select({ status: apps.status })
-        .from(apps)
-        .where(eq(apps.id, data.appId))
-        .get();
-      if (appRow?.status === "public") {
-        await createAuthorityHandoffSuggestion({
-          db,
+      if (data.reviewStatus === "approved") {
+        await syncSourceDerivedAliases({
+          db: tx,
           appId: data.appId,
-          channel: data.channel ?? null,
-          fromSourceId: conflictingAuthority.id,
-          toSourceId: id,
+          sourceId: id,
+          sourceType: data.sourceType,
+          baseUrl: normalizedBaseUrl,
           now,
         });
       }
-    }
 
-    if (data.reviewStatus === "approved" && runtimeStatus === "active") {
-      await sourcePipeline.create({
-        params: { sourceId: id, reason: "source-create", force: true },
+      if (conflictingAuthority) {
+        const appRow = await tx
+          .select({ status: apps.status })
+          .from(apps)
+          .where(eq(apps.id, data.appId))
+          .get();
+        if (appRow?.status === "public") {
+          await createAuthorityHandoffSuggestion({
+            db: tx,
+            appId: data.appId,
+            channel: data.channel ?? null,
+            fromSourceId: conflictingAuthority.id,
+            toSourceId: id,
+            now,
+          });
+        }
+      }
+
+      await tx.insert(auditLog).values({
+        id: generateId(idPrefixes.auditLog),
+        eventType: "source_created",
+        actorType: "admin",
+        actorId: context.user.email,
+        targetType: "source",
+        targetId: id,
+        payloadJson: JSON.stringify(data),
+        createdAt: now,
       });
-    }
-
-    await db.insert(auditLog).values({
-      id: generateId(idPrefixes.auditLog),
-      eventType: "source_created",
-      actorType: "admin",
-      actorId: context.user.email,
-      targetType: "source",
-      targetId: id,
-      payloadJson: JSON.stringify(data),
-      createdAt: now,
     });
+
+    if (shouldQueueFetch) {
+      await scheduleSourceFetch({ db, sourceId: id, reason: "source-create", force: true });
+    }
 
     return { id, status: "created" };
   });
@@ -432,36 +433,6 @@ export const updateSource = createServerFn({ method: "POST" })
       }
     }
 
-    await db.update(sources).set(updates).where(eq(sources.id, id));
-
-    await syncSourceDerivedAliases({
-      db,
-      appId: existing.appId,
-      sourceId: existing.id,
-      sourceType: existing.sourceType,
-      baseUrl: nextReviewStatus === "approved" ? nextBaseUrl : null,
-      now,
-    });
-
-    if (conflictingAuthority) {
-      // Only create review suggestions for public apps
-      const appRow = await db
-        .select({ status: apps.status })
-        .from(apps)
-        .where(eq(apps.id, existing.appId))
-        .get();
-      if (appRow?.status === "public") {
-        await createAuthorityHandoffSuggestion({
-          db,
-          appId: existing.appId,
-          channel: nextChannel ?? null,
-          fromSourceId: conflictingAuthority.id,
-          toSourceId: existing.id,
-          now,
-        });
-      }
-    }
-
     const shouldQueueFetch =
       nextReviewStatus === "approved" &&
       nextStatus === "active" &&
@@ -470,22 +441,56 @@ export const updateSource = createServerFn({ method: "POST" })
         fields.configJson !== undefined ||
         fields.parserKey !== undefined ||
         (fields.status === "active" && existing.status !== "active"));
+    await db.transaction(async (tx) => {
+      await tx.update(sources).set(updates).where(eq(sources.id, id));
+
+      await syncSourceDerivedAliases({
+        db: tx,
+        appId: existing.appId,
+        sourceId: existing.id,
+        sourceType: existing.sourceType,
+        baseUrl: nextReviewStatus === "approved" ? nextBaseUrl : null,
+        now,
+      });
+
+      if (conflictingAuthority) {
+        const appRow = await tx
+          .select({ status: apps.status })
+          .from(apps)
+          .where(eq(apps.id, existing.appId))
+          .get();
+        if (appRow?.status === "public") {
+          await createAuthorityHandoffSuggestion({
+            db: tx,
+            appId: existing.appId,
+            channel: nextChannel ?? null,
+            fromSourceId: conflictingAuthority.id,
+            toSourceId: existing.id,
+            now,
+          });
+        }
+      }
+
+      await tx.insert(auditLog).values({
+        id: generateId(idPrefixes.auditLog),
+        eventType: "source_updated",
+        actorType: "admin",
+        actorId: context.user.email,
+        targetType: "source",
+        targetId: id,
+        payloadJson: JSON.stringify(fields),
+        createdAt: now,
+      });
+    });
+
     if (shouldQueueFetch) {
-      await sourcePipeline.create({
-        params: { sourceId: existing.id, reason: "source-update", force: true },
+      await scheduleSourceFetch({
+        db,
+        sourceId: existing.id,
+        reason: "source-update",
+        force: true,
       });
     }
-
-    await db.insert(auditLog).values({
-      id: generateId(idPrefixes.auditLog),
-      eventType: "source_updated",
-      actorType: "admin",
-      actorId: context.user.email,
-      targetType: "source",
-      targetId: id,
-      payloadJson: JSON.stringify(fields),
-      createdAt: now,
-    });
 
     return { status: "updated" };
   });
@@ -505,8 +510,12 @@ export const triggerFetch = createServerFn({ method: "POST" })
     const source = await db.select().from(sources).where(eq(sources.id, sourceId)).get();
     if (!source) throw new Error("Not found");
 
-    await sourcePipeline.create({ params: { sourceId, reason, force } });
-    return { status: "queued", sourceId };
+    const result = await scheduleSourceFetch({ db, sourceId, reason, force });
+    return {
+      status: result.ok ? "queued" : "failed",
+      sourceId,
+      errorMessage: result.errorMessage ?? null,
+    };
   });
 
 // GET /sources/:id/fetches - paginated fetch history
@@ -554,8 +563,15 @@ export const reparse = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ sourceFetchId: z.string().min(1) }))
   .handler(async ({ data: { sourceFetchId } }) => {
-    await pipelineWorker.reparse({ sourceFetchId });
-    return { status: "queued", sourceFetchId };
+    const result = await scheduleSourceReparse({
+      db: createDb(env.DB),
+      sourceFetchId,
+    });
+    return {
+      status: result.ok ? "queued" : "failed",
+      sourceFetchId,
+      errorMessage: result.errorMessage ?? null,
+    };
   });
 
 // POST /sources/reorder - reorder sources for an app

@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 
 import { parseGitHubRepoUrl } from "../validation/github-url";
+import { readResponseTextLimited } from "./response-body";
 
 export type CheerioDoc = cheerio.CheerioAPI;
 export interface HomepageSourceCandidate {
@@ -10,6 +11,8 @@ export interface HomepageSourceCandidate {
   parserKey: string;
   reason: string;
 }
+
+const MAX_HTML_BODY_BYTES = 2 * 1024 * 1024;
 
 /**
  * Fetches a URL and returns a parsed cheerio document.
@@ -30,7 +33,7 @@ export async function fetchAndParse(
       },
     });
     if (!response.ok) return null;
-    const html = await response.text();
+    const { text: html } = await readResponseTextLimited(response, MAX_HTML_BODY_BYTES);
     return cheerio.load(html);
   } catch {
     return null;

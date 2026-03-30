@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 
 import { sparkleParser, githubReleasesParser } from "../parsers";
 import { toGitHubApiReleasesUrl } from "../validation";
+import { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
 import { fetchAndParse, extractIconUrl } from "./scrape-html";
 import { githubApiHeaders } from "./types";
 
@@ -22,6 +23,7 @@ export interface EnrichmentResult {
 
 /** Maximum age in ms before enrichment is considered stale and re-runs. */
 export const ENRICHMENT_STALE_MS = 24 * 60 * 60 * 1000;
+const MAX_ENRICHMENT_BODY_BYTES = 2 * 1024 * 1024;
 
 /**
  * Returns true if the discovered app should be (re-)enriched.
@@ -217,7 +219,16 @@ async function enrichFromSparkleFeed(url: string, result: EnrichmentResult): Pro
     return;
   }
 
-  const body = await response.text();
+  let body: string;
+  try {
+    ({ text: body } = await readResponseTextLimited(response, MAX_ENRICHMENT_BODY_BYTES));
+  } catch (error) {
+    if (error instanceof ResponseBodyTooLargeError) {
+      result.sourceValidationStatus = "invalid";
+      return;
+    }
+    throw error;
+  }
 
   // Extract channel-level RSS metadata (not handled by the release parser)
   result.enrichedFeedTitle = extractRssTag(body, "title");
@@ -275,7 +286,16 @@ async function enrichFromGitHubReleases(
     return;
   }
 
-  const body = await response.text();
+  let body: string;
+  try {
+    ({ text: body } = await readResponseTextLimited(response, MAX_ENRICHMENT_BODY_BYTES));
+  } catch (error) {
+    if (error instanceof ResponseBodyTooLargeError) {
+      result.sourceValidationStatus = "invalid";
+      return;
+    }
+    throw error;
+  }
   const parsed = githubReleasesParser.parse(body);
 
   if (parsed.releases.length === 0) {

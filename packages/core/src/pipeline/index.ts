@@ -12,6 +12,7 @@ export { handleSourceParse } from "./parse";
 export { handleRecomputeLatest } from "./recompute";
 export { normalizeReleaseNotes, renderReleaseNotesDocument } from "./release-notes";
 export { sanitizeHtml } from "./sanitize-html";
+export { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
 export {
   enrichDiscoveredApp,
   shouldEnrich,

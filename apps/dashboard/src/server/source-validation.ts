@@ -6,9 +6,15 @@ import {
   macAppStoreParser,
   electronGenericParser,
 } from "@versioneer/core/parsers";
-import { githubApiHeaders } from "@versioneer/core/pipeline";
+import {
+  githubApiHeaders,
+  readResponseTextLimited,
+  ResponseBodyTooLargeError,
+} from "@versioneer/core/pipeline";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
+
+const MAX_VALIDATION_BODY_BYTES = 2 * 1024 * 1024;
 
 export const validateSource = createServerFn({ method: "POST" })
   .inputValidator(
@@ -58,7 +64,22 @@ export const validateSource = createServerFn({ method: "POST" })
       };
     }
 
-    const body = await response.text();
+    let body: string;
+    try {
+      ({ text: body } = await readResponseTextLimited(response, MAX_VALIDATION_BODY_BYTES));
+    } catch (error) {
+      if (error instanceof ResponseBodyTooLargeError) {
+        return {
+          status: "invalid" as const,
+          releaseCount: 0,
+          latestVersion: null,
+          latestPublishedAt: null,
+          errors: [error.message],
+          releases: [],
+        };
+      }
+      throw error;
+    }
     const parser =
       sourceType === "sparkle"
         ? sparkleParser

@@ -2,8 +2,11 @@ import { createDb } from "@versioneer/db";
 import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/db";
 import { desc, eq } from "drizzle-orm";
 
+import { readResponseTextLimited } from "./response-body";
 import { githubApiHeaders } from "./types";
 import type { Env, FetchStepResult, SourceFetchJob } from "./types";
+
+const MAX_SOURCE_FETCH_BODY_BYTES = 5 * 1024 * 1024;
 
 async function fetchGitHubReleases(
   baseUrl: string,
@@ -109,7 +112,10 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
     }
 
     // Store raw body in R2
-    const body = await response.text();
+    const { text: body, bytesRead } = await readResponseTextLimited(
+      response,
+      MAX_SOURCE_FETCH_BODY_BYTES,
+    );
     const dateObj = new Date(now);
     const yyyy = dateObj.getUTCFullYear();
     const mm = String(dateObj.getUTCMonth() + 1).padStart(2, "0");
@@ -141,7 +147,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
       etag: response.headers.get("etag"),
       lastModified: response.headers.get("last-modified"),
       contentType: response.headers.get("content-type"),
-      contentLength: body.length,
+      contentLength: bytesRead,
       contentHash,
       r2Key,
       fetchedAt: now,

@@ -2,12 +2,15 @@ import {
   handleSourceParse,
   handleRecomputeLatest,
   handleCaskIndexSync,
+  enrichDiscoveredApp,
   isCaskSyncDue,
+  shouldEnrich,
 } from "@versioneer/core/pipeline";
 import type { SourceParseJob, RecomputeLatestJob } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
-import { cronJobRuns, generateId, idPrefixes } from "@versioneer/db";
+import { cronJobRuns, discoveredApps, generateId, idPrefixes } from "@versioneer/db";
 import { WorkerEntrypoint } from "cloudflare:workers";
+import { desc, eq, or } from "drizzle-orm";
 // Import parsers to trigger auto-registration
 import "@versioneer/core/parsers";
 
@@ -32,7 +35,6 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
     // Also recompute after reparse, since that's the pipeline contract
     const db = createDb(this.env.DB);
     const { sourceFetches, sources } = await import("@versioneer/db");
-    const { eq } = await import("drizzle-orm");
     const fetch = await db
       .select({ sourceId: sourceFetches.sourceId })
       .from(sourceFetches)
@@ -56,7 +58,6 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
   async scheduled(_event: ScheduledEvent): Promise<void> {
     const db = createDb(this.env.DB);
     const { sources } = await import("@versioneer/db");
-    const { eq } = await import("drizzle-orm");
 
     const now = new Date();
 
@@ -141,6 +142,44 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
           startedAt,
           completedAt: new Date().toISOString(),
         });
+      }
+    }
+
+    // --- Discovered App Enrichment (bounded best-effort batch) ---
+    {
+      const maxBatchSize = 10;
+      try {
+        const candidates = await db
+          .select({
+            id: discoveredApps.id,
+            enrichmentStatus: discoveredApps.enrichmentStatus,
+            enrichedAt: discoveredApps.enrichedAt,
+          })
+          .from(discoveredApps)
+          .where(or(eq(discoveredApps.status, "pending"), eq(discoveredApps.status, "linked")))
+          .orderBy(desc(discoveredApps.lastSeenAt))
+          .limit(50)
+          .all();
+
+        let enriched = 0;
+        for (const candidate of candidates) {
+          if (candidate.enrichmentStatus === "in_progress" || !shouldEnrich(candidate)) continue;
+
+          await enrichDiscoveredApp({
+            discoveredAppId: candidate.id,
+            db,
+            configKv: this.env.CONFIG_KV,
+          });
+
+          enriched++;
+          if (enriched >= maxBatchSize) break;
+        }
+
+        if (enriched > 0) {
+          console.log(`Discovered app enrichment processed ${enriched} item(s)`);
+        }
+      } catch (error) {
+        console.error("Discovered app enrichment scheduled job failed:", error);
       }
     }
   }

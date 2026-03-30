@@ -1,12 +1,12 @@
 import { normalizeAliasValue } from "@versioneer/core/identity";
 import { toGitHubApiReleasesUrl } from "@versioneer/core/validation";
-import { createDb } from "@versioneer/db";
 import { appAliases, generateId, idPrefixes, sources } from "@versioneer/db";
 import { and, eq, ne } from "drizzle-orm";
 
-type Db = ReturnType<typeof createDb>;
 type SourceType = (typeof sources.$inferSelect)["sourceType"];
 type DerivedAliasType = "sparkle_feed" | "github_repo";
+
+import type { DbExecutor } from "./db-types";
 
 function sourceAliasTag(sourceId: string, aliasType: DerivedAliasType): string {
   return `source:${sourceId}:${aliasType}`;
@@ -58,7 +58,7 @@ export function normalizeSourceBaseUrl(
 }
 
 export async function syncSourceDerivedAliases(params: {
-  db: Db;
+  db: DbExecutor;
   appId: string;
   sourceId: string;
   sourceType: SourceType;

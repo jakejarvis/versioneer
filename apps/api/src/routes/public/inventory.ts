@@ -1,6 +1,5 @@
 import { matchApp, normalizeAliasValue } from "@versioneer/core/identity";
 import type { AliasRecord } from "@versioneer/core/identity";
-import { enrichDiscoveredApp, shouldEnrich } from "@versioneer/core/pipeline";
 import { inventoryCheckRequestSchema, toGitHubApiReleasesUrl } from "@versioneer/core/validation";
 import type { AppDecision } from "@versioneer/core/validation";
 import { normalizeVersion } from "@versioneer/core/versioning";
@@ -20,7 +19,7 @@ import {
   suggestionEvidence,
   trustAssertions,
 } from "@versioneer/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
@@ -34,6 +33,178 @@ function computeLookupKey(appName: string, bundleId?: string | null): string {
     .toLowerCase()
     .trim()
     .replace(/\.app$/, "")}`;
+}
+
+type InventoryRequestApp = z.infer<typeof inventoryCheckRequestSchema>["apps"][number];
+
+type DiscoveryCandidate = {
+  appName: string;
+  bundleId?: string | null;
+  teamId?: string | null;
+  version?: string | null;
+  sparkleFeedUrl?: string | null;
+  sparklePublicKey?: string | null;
+  isSparkleApp?: boolean | null;
+  isMasApp?: boolean | null;
+  isElectronApp?: boolean | null;
+  electronUpdateProvider?: string | null;
+  electronUpdateUrl?: string | null;
+  codeSigningAuthority?: string | null;
+  appCategory?: string | null;
+  minMacOSVersion?: string | null;
+  iconBase64?: string | null;
+  homebrewCaskToken?: string | null;
+};
+
+type PersistedDiscovery = {
+  id: string;
+  iconR2Key: string | null;
+};
+
+function collectUnmatchedApps(
+  installedApps: InventoryRequestApp[],
+  resultByLookupKey: ReadonlyMap<string, AppDecision>,
+): Map<string, DiscoveryCandidate> {
+  const unmatchedByKey = new Map<string, DiscoveryCandidate>();
+
+  for (const installedApp of installedApps) {
+    const key = computeLookupKey(installedApp.appName, installedApp.bundleId);
+    const result = resultByLookupKey.get(key);
+    if (result?.trackingState === "public" || unmatchedByKey.has(key)) continue;
+
+    unmatchedByKey.set(key, {
+      appName: installedApp.appName,
+      bundleId: installedApp.bundleId,
+      teamId: installedApp.teamId,
+      version: installedApp.version,
+      sparkleFeedUrl: installedApp.sparkleFeedUrl,
+      sparklePublicKey: installedApp.sparklePublicKey,
+      isSparkleApp: installedApp.isSparkleApp,
+      isMasApp: installedApp.isMasApp,
+      isElectronApp: installedApp.isElectronApp,
+      electronUpdateProvider: installedApp.electronUpdateProvider,
+      electronUpdateUrl: installedApp.electronUpdateUrl,
+      codeSigningAuthority: installedApp.codeSigningAuthority,
+      appCategory: installedApp.appCategory,
+      minMacOSVersion: installedApp.minMacOSVersion,
+      iconBase64: installedApp.iconBase64,
+      homebrewCaskToken: installedApp.homebrewCaskToken,
+    });
+  }
+
+  return unmatchedByKey;
+}
+
+async function upsertDiscoveredApps(params: {
+  db: ReturnType<typeof createDb>;
+  unmatchedByKey: Map<string, DiscoveryCandidate>;
+  now: string;
+}): Promise<Map<string, PersistedDiscovery>> {
+  const { db, unmatchedByKey, now } = params;
+  const persistedByKey = new Map<string, PersistedDiscovery>();
+  if (unmatchedByKey.size === 0) return persistedByKey;
+
+  const existingRows = await db
+    .select({
+      id: discoveredApps.id,
+      lookupKey: discoveredApps.lookupKey,
+      appName: discoveredApps.appName,
+      bundleId: discoveredApps.bundleId,
+      teamId: discoveredApps.teamId,
+      sampleVersions: discoveredApps.sampleVersions,
+      sparkleFeedUrl: discoveredApps.sparkleFeedUrl,
+      sparklePublicKey: discoveredApps.sparklePublicKey,
+      isSparkleApp: discoveredApps.isSparkleApp,
+      isMasApp: discoveredApps.isMasApp,
+      isElectronApp: discoveredApps.isElectronApp,
+      electronUpdateProvider: discoveredApps.electronUpdateProvider,
+      electronUpdateUrl: discoveredApps.electronUpdateUrl,
+      codeSigningAuthority: discoveredApps.codeSigningAuthority,
+      appCategory: discoveredApps.appCategory,
+      minMacOSVersion: discoveredApps.minMacOSVersion,
+      homebrewCaskToken: discoveredApps.homebrewCaskToken,
+      iconR2Key: discoveredApps.iconR2Key,
+    })
+    .from(discoveredApps)
+    .where(inArray(discoveredApps.lookupKey, [...unmatchedByKey.keys()]))
+    .all();
+
+  const existingByKey = new Map(existingRows.map((row) => [row.lookupKey, row] as const));
+
+  for (const [key, app] of unmatchedByKey) {
+    const existing = existingByKey.get(key);
+
+    if (existing) {
+      let sampleVersions: string[] = [];
+      try {
+        sampleVersions = existing.sampleVersions ? JSON.parse(existing.sampleVersions) : [];
+      } catch {
+        // ignore malformed JSON
+      }
+      if (app.version && !sampleVersions.includes(app.version)) {
+        sampleVersions = [...sampleVersions, app.version].slice(-5);
+      }
+
+      await db
+        .update(discoveredApps)
+        .set({
+          sightingCount: sql`${discoveredApps.sightingCount} + 1`,
+          lastSeenAt: now,
+          updatedAt: now,
+          appName: app.bundleId && !existing.bundleId ? app.appName : existing.appName,
+          bundleId: app.bundleId ?? existing.bundleId,
+          teamId: app.teamId ?? existing.teamId,
+          sampleVersions: JSON.stringify(sampleVersions),
+          sparkleFeedUrl: app.sparkleFeedUrl ?? existing.sparkleFeedUrl,
+          sparklePublicKey: app.sparklePublicKey ?? existing.sparklePublicKey,
+          isSparkleApp: app.isSparkleApp ?? existing.isSparkleApp,
+          isMasApp: app.isMasApp ?? existing.isMasApp,
+          isElectronApp: app.isElectronApp ?? existing.isElectronApp,
+          electronUpdateProvider: app.electronUpdateProvider ?? existing.electronUpdateProvider,
+          electronUpdateUrl: app.electronUpdateUrl ?? existing.electronUpdateUrl,
+          codeSigningAuthority: app.codeSigningAuthority ?? existing.codeSigningAuthority,
+          appCategory: app.appCategory ?? existing.appCategory,
+          minMacOSVersion: app.minMacOSVersion ?? existing.minMacOSVersion,
+          homebrewCaskToken: app.homebrewCaskToken ?? existing.homebrewCaskToken,
+        })
+        .where(eq(discoveredApps.id, existing.id));
+
+      persistedByKey.set(key, { id: existing.id, iconR2Key: existing.iconR2Key });
+      continue;
+    }
+
+    const newId = generateId(idPrefixes.discoveredApp);
+    await db.insert(discoveredApps).values({
+      id: newId,
+      lookupKey: key,
+      appName: app.appName,
+      bundleId: app.bundleId ?? null,
+      teamId: app.teamId ?? null,
+      sightingCount: 1,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      status: "pending",
+      linkedAppId: null,
+      sampleVersions: JSON.stringify(app.version ? [app.version] : []),
+      sparkleFeedUrl: app.sparkleFeedUrl ?? null,
+      sparklePublicKey: app.sparklePublicKey ?? null,
+      isSparkleApp: app.isSparkleApp ?? null,
+      isMasApp: app.isMasApp ?? null,
+      isElectronApp: app.isElectronApp ?? null,
+      electronUpdateProvider: app.electronUpdateProvider ?? null,
+      electronUpdateUrl: app.electronUpdateUrl ?? null,
+      codeSigningAuthority: app.codeSigningAuthority ?? null,
+      appCategory: app.appCategory ?? null,
+      minMacOSVersion: app.minMacOSVersion ?? null,
+      homebrewCaskToken: app.homebrewCaskToken ?? null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    persistedByKey.set(key, { id: newId, iconR2Key: null });
+  }
+
+  return persistedByKey;
 }
 
 async function upsertSuggestion(params: {
@@ -832,192 +1003,39 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       });
     }
 
-    // Track unmatched apps as discovered apps (runs after response)
+    const resultByLookupKey = new Map(
+      results.map((result) => [computeLookupKey(result.appName, result.bundleId), result] as const),
+    );
+    const unmatchedByKey = collectUnmatchedApps(request.apps, resultByLookupKey);
+    const persistedDiscoveries = await upsertDiscoveredApps({
+      db,
+      unmatchedByKey,
+      now,
+    });
+
+    // Non-critical follow-up work runs after the response. The discovered app rows
+    // themselves are already persisted above so the dashboard cannot show a partial batch.
     c.executionCtx.waitUntil(
       (async () => {
-        // Collect unmatched apps, deduplicate by lookupKey within this batch
-        const unmatchedByKey = new Map<
-          string,
-          {
-            appName: string;
-            matchedAppId?: string | null;
-            bundleId?: string | null;
-            teamId?: string | null;
-            version?: string | null;
-            sparkleFeedUrl?: string | null;
-            sparklePublicKey?: string | null;
-            isSparkleApp?: boolean | null;
-            isMasApp?: boolean | null;
-            isElectronApp?: boolean | null;
-            electronUpdateProvider?: string | null;
-            electronUpdateUrl?: string | null;
-            codeSigningAuthority?: string | null;
-            appCategory?: string | null;
-            minMacOSVersion?: string | null;
-            iconBase64?: string | null;
-            homebrewCaskToken?: string | null;
-          }
-        >();
-        for (const installedApp of request.apps) {
-          const result = results.find(
-            (r) =>
-              r.appName === installedApp.appName && r.bundleId === (installedApp.bundleId ?? null),
-          );
-          if (result?.trackingState === "public") continue;
-
-          const key = computeLookupKey(installedApp.appName, installedApp.bundleId);
-          if (!unmatchedByKey.has(key)) {
-            unmatchedByKey.set(key, {
-              appName: installedApp.appName,
-              matchedAppId: result?.matchedAppId ?? null,
-              bundleId: installedApp.bundleId,
-              teamId: installedApp.teamId,
-              version: installedApp.version,
-              sparkleFeedUrl: installedApp.sparkleFeedUrl,
-              sparklePublicKey: installedApp.sparklePublicKey,
-              isSparkleApp: installedApp.isSparkleApp,
-              isMasApp: installedApp.isMasApp,
-              isElectronApp: installedApp.isElectronApp,
-              electronUpdateProvider: installedApp.electronUpdateProvider,
-              electronUpdateUrl: installedApp.electronUpdateUrl,
-              codeSigningAuthority: installedApp.codeSigningAuthority,
-              appCategory: installedApp.appCategory,
-              minMacOSVersion: installedApp.minMacOSVersion,
-              iconBase64: installedApp.iconBase64,
-              homebrewCaskToken: installedApp.homebrewCaskToken,
-            });
-          }
-        }
-
-        if (unmatchedByKey.size === 0) return;
-
         for (const [key, app] of unmatchedByKey) {
-          const existing = await db
-            .select()
-            .from(discoveredApps)
-            .where(eq(discoveredApps.lookupKey, key))
-            .get();
+          if (!app.iconBase64) continue;
+          const persisted = persistedDiscoveries.get(key);
+          if (!persisted || persisted.iconR2Key) continue;
 
-          if (existing) {
-            // Update sighting count and metadata — no draft app or suggestions created
-            let sampleVersions: string[] = [];
-            try {
-              sampleVersions = existing.sampleVersions ? JSON.parse(existing.sampleVersions) : [];
-            } catch {
-              // ignore malformed JSON
-            }
-            if (app.version && !sampleVersions.includes(app.version)) {
-              sampleVersions = [...sampleVersions, app.version].slice(-5);
-            }
-
+          const iconKey = await storeIcon(c.env.ASSETS_BUCKET, app.iconBase64);
+          if (iconKey) {
             await db
               .update(discoveredApps)
-              .set({
-                sightingCount: sql`${discoveredApps.sightingCount} + 1`,
-                lastSeenAt: now,
-                updatedAt: now,
-                appName: app.bundleId && !existing.bundleId ? app.appName : existing.appName,
-                bundleId: app.bundleId ?? existing.bundleId,
-                teamId: app.teamId ?? existing.teamId,
-                sampleVersions: JSON.stringify(sampleVersions),
-                sparkleFeedUrl: app.sparkleFeedUrl ?? existing.sparkleFeedUrl,
-                sparklePublicKey: app.sparklePublicKey ?? existing.sparklePublicKey,
-                isSparkleApp: app.isSparkleApp ?? existing.isSparkleApp,
-                isMasApp: app.isMasApp ?? existing.isMasApp,
-                isElectronApp: app.isElectronApp ?? existing.isElectronApp,
-                electronUpdateProvider:
-                  app.electronUpdateProvider ?? existing.electronUpdateProvider,
-                electronUpdateUrl: app.electronUpdateUrl ?? existing.electronUpdateUrl,
-                codeSigningAuthority: app.codeSigningAuthority ?? existing.codeSigningAuthority,
-                appCategory: app.appCategory ?? existing.appCategory,
-                minMacOSVersion: app.minMacOSVersion ?? existing.minMacOSVersion,
-                homebrewCaskToken: app.homebrewCaskToken ?? existing.homebrewCaskToken,
-              })
-              .where(eq(discoveredApps.id, existing.id));
-
-            // Store icon if not yet present
-            if (!existing.iconR2Key && app.iconBase64) {
-              const iconKey = await storeIcon(c.env.ASSETS_BUCKET, app.iconBase64);
-              if (iconKey) {
-                await db
-                  .update(discoveredApps)
-                  .set({ iconR2Key: iconKey })
-                  .where(eq(discoveredApps.id, existing.id));
-              }
-            }
-
-            // Enrich if stale or never enriched
-            if (shouldEnrich(existing)) {
-              await enrichDiscoveredApp({
-                discoveredAppId: existing.id,
-                db,
-                githubToken: c.env.GITHUB_TOKEN,
-                assetsBucket: c.env.ASSETS_BUCKET,
-                configKv: c.env.CONFIG_KV,
-              });
-            }
-          } else {
-            // New discovery — create as pending, no draft app or suggestions
-            const sampleVersions = app.version ? [app.version] : [];
-            const newId = generateId(idPrefixes.discoveredApp);
-            await db.insert(discoveredApps).values({
-              id: newId,
-              lookupKey: key,
-              appName: app.appName,
-              bundleId: app.bundleId ?? null,
-              teamId: app.teamId ?? null,
-              sightingCount: 1,
-              firstSeenAt: now,
-              lastSeenAt: now,
-              status: "pending",
-              linkedAppId: null,
-              sampleVersions: JSON.stringify(sampleVersions),
-              sparkleFeedUrl: app.sparkleFeedUrl ?? null,
-              sparklePublicKey: app.sparklePublicKey ?? null,
-              isSparkleApp: app.isSparkleApp ?? null,
-              isMasApp: app.isMasApp ?? null,
-              isElectronApp: app.isElectronApp ?? null,
-              electronUpdateProvider: app.electronUpdateProvider ?? null,
-              electronUpdateUrl: app.electronUpdateUrl ?? null,
-              codeSigningAuthority: app.codeSigningAuthority ?? null,
-              appCategory: app.appCategory ?? null,
-              minMacOSVersion: app.minMacOSVersion ?? null,
-              homebrewCaskToken: app.homebrewCaskToken ?? null,
-              createdAt: now,
-              updatedAt: now,
-            });
-
-            // Store icon if provided
-            if (app.iconBase64) {
-              const iconKey = await storeIcon(c.env.ASSETS_BUCKET, app.iconBase64);
-              if (iconKey) {
-                await db
-                  .update(discoveredApps)
-                  .set({ iconR2Key: iconKey })
-                  .where(eq(discoveredApps.id, newId));
-              }
-            }
-
-            // Enrich if we have feed URLs
-            if (app.sparkleFeedUrl || app.electronUpdateUrl || (app.isMasApp && app.bundleId)) {
-              await enrichDiscoveredApp({
-                discoveredAppId: newId,
-                db,
-                githubToken: c.env.GITHUB_TOKEN,
-                assetsBucket: c.env.ASSETS_BUCKET,
-                configKv: c.env.CONFIG_KV,
-              });
-            }
+              .set({ iconR2Key: iconKey })
+              .where(eq(discoveredApps.id, persisted.id));
           }
         }
 
         // Backfill icons for matched catalog apps that are missing them
         for (const installedApp of request.apps) {
           if (!installedApp.iconBase64) continue;
-          const result = results.find(
-            (r) =>
-              r.appName === installedApp.appName && r.bundleId === (installedApp.bundleId ?? null),
-          );
+          const key = computeLookupKey(installedApp.appName, installedApp.bundleId);
+          const result = resultByLookupKey.get(key);
           if (!result?.matchedAppId) continue;
 
           // Re-check from DB to avoid races with concurrent requests
@@ -1043,11 +1061,8 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
 
         // Keep approved apps accruing alias, source, and trust suggestions instead of icons only
         for (const installedApp of request.apps) {
-          const result = results.find(
-            (row) =>
-              row.appName === installedApp.appName &&
-              row.bundleId === (installedApp.bundleId ?? null),
-          );
+          const lookupKey = computeLookupKey(installedApp.appName, installedApp.bundleId);
+          const result = resultByLookupKey.get(lookupKey);
           if (!result?.matchedAppId || result.trackingState !== "public") continue;
 
           const appRow = await db
@@ -1063,7 +1078,6 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
             .get();
           if (!appRow) continue;
 
-          const lookupKey = computeLookupKey(installedApp.appName, installedApp.bundleId);
           const canonicalSnapshotJson = JSON.stringify({
             canonicalName: appRow.canonicalName,
             vendorName: appRow.vendorName,

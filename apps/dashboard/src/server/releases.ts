@@ -15,9 +15,8 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { pipelineWorker } from "@/lib/pipeline";
-
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
+import { scheduleRecomputeLatest } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
@@ -146,35 +145,36 @@ export const createRelease = createServerFn({ method: "POST" })
     const versionNormalized = normalizeVersion(data.versionRaw);
     const channel = data.channel || inferChannel(data.versionRaw);
 
-    await db.insert(releases).values({
-      id,
-      appId: data.appId,
-      versionRaw: data.versionRaw,
-      versionNormalized,
-      buildNumber: data.buildNumber ?? null,
-      channel,
-      releasedAt: data.releasedAt ?? now,
-      isPrerelease: isPreRelease(data.versionRaw),
-      status: "active",
-      releaseNotesHtml: data.releaseNotesHtml ?? null,
-      releaseNotesUrl: data.releaseNotesUrl ?? null,
-      createdAt: now,
-      updatedAt: now,
+    await db.transaction(async (tx) => {
+      await tx.insert(releases).values({
+        id,
+        appId: data.appId,
+        versionRaw: data.versionRaw,
+        versionNormalized,
+        buildNumber: data.buildNumber ?? null,
+        channel,
+        releasedAt: data.releasedAt ?? now,
+        isPrerelease: isPreRelease(data.versionRaw),
+        status: "active",
+        releaseNotesHtml: data.releaseNotesHtml ?? null,
+        releaseNotesUrl: data.releaseNotesUrl ?? null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await tx.insert(auditLog).values({
+        id: generateId(idPrefixes.auditLog),
+        eventType: "release_created",
+        actorType: "admin",
+        actorId: context.user.email,
+        targetType: "release",
+        targetId: id,
+        payloadJson: JSON.stringify({ appId: data.appId, versionRaw: data.versionRaw, channel }),
+        createdAt: now,
+      });
     });
 
-    await db.insert(auditLog).values({
-      id: generateId(idPrefixes.auditLog),
-      eventType: "release_created",
-      actorType: "admin",
-      actorId: context.user.email,
-      targetType: "release",
-      targetId: id,
-      payloadJson: JSON.stringify({ appId: data.appId, versionRaw: data.versionRaw, channel }),
-      createdAt: now,
-    });
-
-    // Trigger recompute latest for this app/channel
-    await pipelineWorker.recomputeLatest({ appId: data.appId, channel });
+    await scheduleRecomputeLatest({ db, appId: data.appId, channel });
 
     return { id, status: "created" };
   });
@@ -197,18 +197,29 @@ export const updateRelease = createServerFn({ method: "POST" })
     if (fields.releaseNotesHtml !== undefined) updates.releaseNotesHtml = fields.releaseNotesHtml;
     if (fields.releaseNotesUrl !== undefined) updates.releaseNotesUrl = fields.releaseNotesUrl;
 
-    await db.update(releases).set(updates).where(eq(releases.id, id));
+    await db.transaction(async (tx) => {
+      await tx.update(releases).set(updates).where(eq(releases.id, id));
 
-    await db.insert(auditLog).values({
-      id: generateId(idPrefixes.auditLog),
-      eventType: "release_updated",
-      actorType: "admin",
-      actorId: context.user.email,
-      targetType: "release",
-      targetId: id,
-      payloadJson: JSON.stringify(fields),
-      createdAt: now,
+      await tx.insert(auditLog).values({
+        id: generateId(idPrefixes.auditLog),
+        eventType: "release_updated",
+        actorType: "admin",
+        actorId: context.user.email,
+        targetType: "release",
+        targetId: id,
+        payloadJson: JSON.stringify(fields),
+        createdAt: now,
+      });
     });
+
+    const recomputeChannels = new Set<string>();
+    if (fields.status !== undefined || fields.channel !== undefined) {
+      recomputeChannels.add(existing.channel);
+      recomputeChannels.add(fields.channel ?? existing.channel);
+    }
+    for (const channel of recomputeChannels) {
+      await scheduleRecomputeLatest({ db, appId: existing.appId, channel });
+    }
 
     return { status: "updated" };
   });
@@ -248,7 +259,7 @@ export const pinRelease = createServerFn({ method: "POST" })
         ),
       );
 
-    await pipelineWorker.recomputeLatest({ appId: release.appId, channel: release.channel });
+    await scheduleRecomputeLatest({ db, appId: release.appId, channel: release.channel });
 
     return { status: "pinned" };
   });
@@ -276,7 +287,7 @@ export const unpinRelease = createServerFn({ method: "POST" })
         ),
       );
 
-    await pipelineWorker.recomputeLatest({ appId: release.appId, channel: release.channel });
+    await scheduleRecomputeLatest({ db, appId: release.appId, channel: release.channel });
 
     return { status: "unpinned" };
   });
