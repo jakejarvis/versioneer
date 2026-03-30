@@ -2,7 +2,7 @@ import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -263,6 +263,12 @@ function CreateAppDialog({
       );
     },
   });
+
+  // Clear form when dialog closes so stale partial input doesn't persist.
+  useEffect(() => {
+    if (!open) form.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on close
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

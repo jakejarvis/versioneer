@@ -16,7 +16,7 @@ import {
   Upload,
   Zap,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -471,6 +471,12 @@ function CreateAliasDialog({
       );
     },
   });
+
+  // Clear form when dialog closes so stale partial input doesn't persist.
+  useEffect(() => {
+    if (!open) form.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on close
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -1,4 +1,5 @@
 import { useForm } from "@tanstack/react-form";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { useUpdateApp } from "@/api/hooks/use-apps";
@@ -62,6 +63,22 @@ export function EditAppDialog({ app, open, onOpenChange }: EditAppDialogProps) {
       );
     },
   });
+
+  // Reset form to current app data when dialog opens (discards stale edits
+  // from a previous open) and when the app prop updates underneath us.
+  useEffect(() => {
+    if (!open) return;
+    form.reset({
+      canonicalName: app.canonicalName,
+      vendorName: app.vendorName ?? "",
+      homepageUrl: app.homepageUrl ?? "",
+      status: app.status,
+      mergedIntoAppId: app.mergedIntoAppId ?? "",
+      notes: app.notes ?? "",
+      defaultReleaseNotesUrl: app.defaultReleaseNotesUrl ?? "",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on open or when app prop changes
+  }, [open, app]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

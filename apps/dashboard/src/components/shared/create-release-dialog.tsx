@@ -1,4 +1,5 @@
 import { useForm } from "@tanstack/react-form";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { useCreateRelease } from "@/api/hooks/use-releases";
@@ -62,6 +63,12 @@ export function CreateReleaseDialog({ appId, open, onOpenChange }: CreateRelease
       );
     },
   });
+
+  // Clear form when dialog closes so stale partial input doesn't persist.
+  useEffect(() => {
+    if (!open) form.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on close
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
