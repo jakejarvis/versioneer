@@ -113,6 +113,22 @@ nonisolated enum BundleMetadataReader {
       }
     }
 
+    // Sparkle persists the feed URL to the app's user defaults after first use.
+    // This catches apps that set the URL programmatically rather than in Info.plist.
+    if let bundleId,
+      let defaults = UserDefaults(suiteName: bundleId),
+      let raw = defaults.string(forKey: "SUFeedURL"),
+      !raw.isEmpty
+    {
+      let trimmed = raw.trimmingCharacters(in: .whitespaces)
+      let unquoted =
+        trimmed
+        .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+      if !unquoted.isEmpty {
+        return unquoted
+      }
+    }
+
     // DevMate fallback: apps using DevMateKit have feeds at a predictable URL
     if let bundleId, devMateFrameworkExists(in: bundle) {
       return "https://updates.devmate.com/\(bundleId).xml"

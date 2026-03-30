@@ -1124,31 +1124,31 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
             });
           }
 
-          if (installedApp.sparklePublicKey) {
-            const sparkleSource = installedApp.sparkleFeedUrl
-              ? await findExistingSource({
-                  db,
-                  appId: appRow.id,
-                  sourceType: "sparkle",
-                  baseUrl: installedApp.sparkleFeedUrl,
-                })
-              : null;
-            await createTrustAssertionSuggestion({
+          if (installedApp.sparklePublicKey && installedApp.sparkleFeedUrl) {
+            const sparkleSource = await findExistingSource({
               db,
               appId: appRow.id,
-              appName: appRow.canonicalName,
-              lookupKey,
-              sourceId: sparkleSource?.id ?? null,
-              assertionType: "sparkle_public_key",
-              value: installedApp.sparklePublicKey,
-              canonicalSnapshotJson,
-              evidenceFingerprint: `public-sparkle-key:${lookupKey}:${installedApp.sparklePublicKey}`,
-              evidencePayloadJson: JSON.stringify({
-                sparkleFeedUrl: installedApp.sparkleFeedUrl ?? null,
-                sparklePublicKey: installedApp.sparklePublicKey,
-              }),
-              now,
+              sourceType: "sparkle",
+              baseUrl: installedApp.sparkleFeedUrl,
             });
+            if (sparkleSource) {
+              await createTrustAssertionSuggestion({
+                db,
+                appId: appRow.id,
+                appName: appRow.canonicalName,
+                lookupKey,
+                sourceId: sparkleSource.id,
+                assertionType: "sparkle_public_key",
+                value: installedApp.sparklePublicKey,
+                canonicalSnapshotJson,
+                evidenceFingerprint: `public-sparkle-key:${lookupKey}:${installedApp.sparklePublicKey}`,
+                evidencePayloadJson: JSON.stringify({
+                  sparkleFeedUrl: installedApp.sparkleFeedUrl,
+                  sparklePublicKey: installedApp.sparklePublicKey,
+                }),
+                now,
+              });
+            }
           }
         }
       })(),
