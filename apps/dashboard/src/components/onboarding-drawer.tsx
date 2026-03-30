@@ -193,7 +193,7 @@ interface Props {
   discoveredAppId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: (appId: string) => void;
+  onSuccess?: (appId: string, status: "draft" | "public") => void;
 }
 
 export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSuccess }: Props) {
@@ -264,7 +264,7 @@ function OnboardingFormContent({
   discoveredApp: any;
   discoveredAppId: string;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: (appId: string) => void;
+  onSuccess?: (appId: string, status: "draft" | "public") => void;
 }) {
   const onboard = useOnboardDiscoveredApp();
 
@@ -308,7 +308,7 @@ function OnboardingFormContent({
         {
           onSuccess: (data) => {
             onOpenChange(false);
-            onSuccess?.(data.id);
+            onSuccess?.(data.id, data.status);
           },
           onError: (err) => {
             toast.error(err.message || "Failed to onboard app");
@@ -755,16 +755,24 @@ function SourceCard({
   onRemove: () => void;
   onValidated: () => void;
 }) {
+  // Subscribe directly to current field values so the test button and handler
+  // stay in sync as the user types (the `source` prop from the parent array
+  // field does not re-render on nested field changes).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentSourceType: SourceType = useStore(form.store, (s: any) => s.values.sources[index]?.sourceType) ?? source.sourceType;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentIdentifier: string = useStore(form.store, (s: any) => s.values.sources[index]?.identifier) ?? source.identifier;
+
   const validateMutation = useValidateSource();
 
   const handleTestFeed = useCallback(() => {
-    if (!SOURCE_TYPE_DEFAULTS[source.sourceType].validatable) return;
-    const url = resolveSourceUrl(source.sourceType, source.identifier);
+    if (!SOURCE_TYPE_DEFAULTS[currentSourceType].validatable) return;
+    const url = resolveSourceUrl(currentSourceType, currentIdentifier);
     if (!url) return;
     validateMutation.mutate(
       {
         url,
-        sourceType: source.sourceType as
+        sourceType: currentSourceType as
           | "sparkle"
           | "github_releases"
           | "homebrew_cask"
@@ -778,7 +786,7 @@ function SourceCard({
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source.sourceType, source.identifier]);
+  }, [currentSourceType, currentIdentifier]);
 
   return (
     <div className="space-y-2 rounded-md border border-border/40 bg-muted/20 p-2.5">
@@ -816,7 +824,7 @@ function SourceCard({
                 form.setFieldValue("sourceValidated", false);
               }}
               className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-muted-foreground outline-none placeholder:text-muted-foreground/40"
-              placeholder={SOURCE_TYPES[source.sourceType].input.placeholder}
+              placeholder={SOURCE_TYPES[currentSourceType].input.placeholder}
             />
           )}
         </form.Field>
@@ -831,7 +839,7 @@ function SourceCard({
         </Button>
       </div>
 
-      {source.sourceType !== "manual" && source.identifier && (
+      {currentSourceType !== "manual" && currentIdentifier && (
         <div className="flex items-center gap-2">
           <Button
             type="button"

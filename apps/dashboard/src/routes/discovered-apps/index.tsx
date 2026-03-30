@@ -123,8 +123,12 @@ function DiscoveredAppsPage() {
     setDrawerOpen(true);
   };
 
-  const handleOnboardSuccess = (appId: string) => {
-    toast.success("Draft created and submitted for review");
+  const handleOnboardSuccess = (appId: string, status: "draft" | "public") => {
+    toast.success(
+      status === "public"
+        ? "App onboarded and published"
+        : "Draft created — source validation needed before publishing",
+    );
     void navigate({ to: "/apps/$appId", params: { appId } });
   };
 
