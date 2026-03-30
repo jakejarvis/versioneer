@@ -16,6 +16,7 @@ nonisolated enum PrivilegedOperationType: String, Codable, Sendable {
   case replaceApp = "replace_app"
   case installPackage = "install_package"
   case brewUpgrade = "brew_upgrade"
+  case masUpgrade = "mas_upgrade"
 }
 
 /// Manifest written into the per-execution staging directory before elevation.
@@ -29,6 +30,8 @@ nonisolated struct PreparedPrivilegedOperation: Codable, Sendable {
   let backupRelativePath: String?
   let installTarget: String?
   let caskToken: String?
+  let masAppId: String?
+  let masCliPath: String?
 
   static func manifestURL(in stagingDirectory: URL) -> URL {
     stagingDirectory.appendingPathComponent(manifestFilename)

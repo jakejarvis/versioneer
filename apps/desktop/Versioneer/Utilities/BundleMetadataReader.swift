@@ -36,6 +36,7 @@ nonisolated enum BundleMetadataReader {
       sparklePublicKey: sparkleInfo.publicKey,
       isSparkleApp: sparkleInfo.hasSparkle,
       isMasApp: isMasApp,
+      masAppId: nil,
       isElectronApp: electronInfo.isElectron,
       electronUpdateProvider: electronInfo.provider,
       electronUpdateUrl: electronInfo.updateUrl,

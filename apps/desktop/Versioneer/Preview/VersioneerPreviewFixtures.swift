@@ -211,6 +211,7 @@
         sparklePublicKey: nil,
         isSparkleApp: false,
         isMasApp: false,
+        masAppId: nil,
         isElectronApp: false,
         electronUpdateProvider: nil,
         electronUpdateUrl: nil,

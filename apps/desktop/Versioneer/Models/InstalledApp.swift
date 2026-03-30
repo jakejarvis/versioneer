@@ -19,6 +19,7 @@ nonisolated struct InstalledApp: Identifiable, Codable, Sendable {
 
   // Mac App Store
   let isMasApp: Bool
+  let masAppId: String?
 
   // Electron auto-updater
   let isElectronApp: Bool
@@ -33,4 +34,30 @@ nonisolated struct InstalledApp: Identifiable, Codable, Sendable {
   // Homebrew Cask
   let isHomebrewInstalled: Bool
   let homebrewCaskToken: String?
+
+  /// Returns a copy with the MAS app ID populated.
+  func withMasAppId(_ masAppId: String?) -> InstalledApp {
+    InstalledApp(
+      name: name,
+      bundleId: bundleId,
+      version: version,
+      buildNumber: buildNumber,
+      teamId: teamId,
+      path: path,
+      architecture: architecture,
+      sparkleFeedUrl: sparkleFeedUrl,
+      sparklePublicKey: sparklePublicKey,
+      isSparkleApp: isSparkleApp,
+      isMasApp: isMasApp,
+      masAppId: masAppId,
+      isElectronApp: isElectronApp,
+      electronUpdateProvider: electronUpdateProvider,
+      electronUpdateUrl: electronUpdateUrl,
+      codeSigningAuthority: codeSigningAuthority,
+      appCategory: appCategory,
+      minMacOSVersion: minMacOSVersion,
+      isHomebrewInstalled: isHomebrewInstalled,
+      homebrewCaskToken: homebrewCaskToken
+    )
+  }
 }

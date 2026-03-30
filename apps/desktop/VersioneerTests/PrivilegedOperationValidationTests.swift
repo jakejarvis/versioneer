@@ -68,7 +68,9 @@ struct PrivilegedOperationValidationTests {
       destinationPath: symlinkedAppsDirectory.appendingPathComponent("Test.app").path,
       backupRelativePath: "backup/Test.app",
       installTarget: nil,
-      caskToken: nil
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 
@@ -100,7 +102,9 @@ struct PrivilegedOperationValidationTests {
       destinationPath: "/",
       backupRelativePath: nil,
       installTarget: "/",
-      caskToken: nil
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 
@@ -136,7 +140,9 @@ struct PrivilegedOperationValidationTests {
       destinationPath: sandbox.root.appendingPathComponent("Applications/Test.app").path,
       backupRelativePath: "backup/Test.app",
       installTarget: nil,
-      caskToken: nil
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 
@@ -166,7 +172,9 @@ struct PrivilegedOperationValidationTests {
       destinationPath: destinationParent.appendingPathComponent("Test").path,
       backupRelativePath: "backup/Test.app",
       installTarget: nil,
-      caskToken: nil
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 
@@ -195,7 +203,9 @@ struct PrivilegedOperationValidationTests {
       destinationPath: "/",
       backupRelativePath: nil,
       installTarget: "/",
-      caskToken: nil
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 
@@ -223,7 +233,9 @@ struct PrivilegedOperationValidationTests {
       destinationPath: "/Applications",
       backupRelativePath: nil,
       installTarget: "/Applications",
-      caskToken: nil
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
     )
     try sandbox.writeManifest(manifest, to: context.stagingDirectory)
 
@@ -238,6 +250,37 @@ struct PrivilegedOperationValidationTests {
     } catch {
       Issue.record("Unexpected error: \(error.localizedDescription)")
     }
+  }
+  @Test func masUpgradeManifestPassesValidation() throws {
+    let sandbox = try TestSandbox()
+    let stagingDirectory = sandbox.allowedStagingRoot.appendingPathComponent(
+      "exec_mas", isDirectory: true)
+    try sandbox.createDirectory(at: stagingDirectory)
+
+    let manifest = PreparedPrivilegedOperation(
+      executionId: "exec_mas",
+      operationType: .masUpgrade,
+      sourceRelativePath: ".",
+      destinationPath: "",
+      backupRelativePath: nil,
+      installTarget: nil,
+      caskToken: nil,
+      masAppId: "497799835",
+      masCliPath: "/opt/homebrew/bin/mas"
+    )
+    try sandbox.writeManifest(manifest, to: stagingDirectory)
+
+    let request = PrivilegedOperationRequest(
+      executionId: "exec_mas",
+      stagingDirectoryPath: stagingDirectory.path
+    )
+
+    let validated = try sandbox.validator.validate(request: request)
+    #expect(validated.manifest.operationType == .masUpgrade)
+    #expect(validated.manifest.masAppId == "497799835")
+    #expect(validated.manifest.masCliPath == "/opt/homebrew/bin/mas")
+    #expect(validated.destinationURL == nil)
+    #expect(validated.backupURL == nil)
   }
 }
 

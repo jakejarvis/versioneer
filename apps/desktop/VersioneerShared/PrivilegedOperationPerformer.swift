@@ -125,6 +125,46 @@ nonisolated enum PrivilegedOperationPerformer {
     )
   }
 
+  static func masUpgrade(
+    masAppId: String,
+    masCliPath: String
+  ) throws -> PrivilegedOperationExecutionResult {
+    // Validate the mas binary exists
+    guard FileManager.default.isExecutableFile(atPath: masCliPath) else {
+      throw PrivilegedOperationExecutionError.commandFailed(
+        command: "mas upgrade \(masAppId)",
+        status: 1,
+        output: "mas-cli is not installed at \(masCliPath)."
+      )
+    }
+
+    // Validate app ID is purely numeric to prevent injection
+    let numericRegex = try! NSRegularExpression(pattern: #"^\d+$"#)
+    guard
+      numericRegex.firstMatch(
+        in: masAppId, range: NSRange(masAppId.startIndex..., in: masAppId)) != nil
+    else {
+      throw PrivilegedOperationExecutionError.commandFailed(
+        command: "mas upgrade \(masAppId)",
+        status: 1,
+        output: "Invalid MAS app ID: \(masAppId). Expected a numeric identifier."
+      )
+    }
+
+    let output = try runSuccessful(
+      masCliPath,
+      arguments: ["upgrade", masAppId]
+    )
+
+    return PrivilegedOperationExecutionResult(
+      detail: "Upgraded Mac App Store app \(masAppId) via mas.",
+      usedRollback: false,
+      output: [output.stdout, output.stderr]
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n")
+    )
+  }
+
   private struct ProcessOutput {
     let stdout: String
     let stderr: String

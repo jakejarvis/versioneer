@@ -27,6 +27,7 @@ final class InstallCoordinator {
     case privilegedReplace = "privileged_replace"
     case privilegedPackage = "privileged_package"
     case brewUpgrade = "brew_upgrade"
+    case masUpgrade = "mas_upgrade"
   }
 
   nonisolated enum Phase: String, Sendable {
@@ -275,7 +276,7 @@ final class InstallCoordinator {
             stagingDirectory: stagingDir
           )
 
-        case .sparkle, .privilegedPackage, .brewUpgrade:
+        case .sparkle, .privilegedPackage, .brewUpgrade, .masUpgrade:
           throw InstallError.unsupportedStrategy
         }
 
@@ -532,7 +533,9 @@ final class InstallCoordinator {
         destinationPath: "",
         backupRelativePath: nil,
         installTarget: nil,
-        caskToken: caskToken
+        caskToken: caskToken,
+        masAppId: nil,
+        masCliPath: nil
       )
       try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
 
@@ -562,6 +565,102 @@ final class InstallCoordinator {
         errorMessage: error.localizedDescription,
         installedVersion: nil,
         recoveryAction: nil
+      )
+      return false
+    }
+  }
+
+  /// Runs `mas upgrade {appId}` through the privileged helper.
+  /// Returns true if the upgrade completed successfully.
+  @discardableResult
+  func startMasUpgrade(
+    result: AppDecision,
+    masAppId: String,
+    masCliPath: String,
+    installedApp: InstalledApp
+  ) async -> Bool {
+    let operationKey = result.id
+    let appDisplayName = result.matchedAppName ?? result.appName
+
+    if state(for: result).isRunning { return false }
+
+    do {
+      updateState(
+        for: operationKey,
+        appDisplayName: appDisplayName,
+        phase: .preparing,
+        detail: "Preparing Mac App Store upgrade…",
+        executionId: nil,
+        errorMessage: nil,
+        installedVersion: nil,
+        recoveryAction: nil,
+        helperStatus: .notNeeded
+      )
+
+      try await ensureTargetAppIsClosed(installedApp: installedApp)
+
+      let executionId = UUID().uuidString
+      let stagingDirectory = try makeStagingDirectory(executionId: executionId)
+
+      updateState(
+        for: operationKey,
+        phase: .installing,
+        detail: "Running mas upgrade \(masAppId)…",
+        executionId: executionId,
+        errorMessage: nil,
+        installedVersion: nil,
+        recoveryAction: nil,
+        helperStatus: .preparing
+      )
+
+      let manifest = PreparedPrivilegedOperation(
+        executionId: executionId,
+        operationType: .masUpgrade,
+        sourceRelativePath: ".",
+        destinationPath: "",
+        backupRelativePath: nil,
+        installTarget: nil,
+        caskToken: nil,
+        masAppId: masAppId,
+        masCliPath: masCliPath
+      )
+      try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
+
+      _ = try await privilegedHelperClient.performOperation(
+        executionId: executionId,
+        stagingDirectory: stagingDirectory
+      )
+
+      cleanupStagingDirectory(stagingDirectory)
+
+      updateState(
+        for: operationKey,
+        phase: .completed,
+        detail: "Upgraded via Mac App Store.",
+        executionId: executionId,
+        errorMessage: nil,
+        installedVersion: nil,
+        recoveryAction: nil,
+        helperStatus: .ready
+      )
+      return true
+    } catch {
+      let errorDetail =
+        if let installError = error as? InstallError, case .cancelled = installError {
+          "Upgrade cancelled."
+        } else {
+          "Mac App Store upgrade failed."
+        }
+
+      updateState(
+        for: operationKey,
+        phase: .failed,
+        detail: errorDetail,
+        executionId: nil,
+        errorMessage: error.localizedDescription,
+        installedVersion: nil,
+        recoveryAction: recoveryAction(for: error),
+        helperStatus: helperSetupState(for: error) ?? .notNeeded
       )
       return false
     }
@@ -889,7 +988,9 @@ final class InstallCoordinator {
       destinationPath: destinationAppURL.path,
       backupRelativePath: "helper-backups/\(destinationAppURL.lastPathComponent)",
       installTarget: nil,
-      caskToken: nil
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
     )
     try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
     _ = try await privilegedHelperClient.performOperation(
@@ -910,7 +1011,9 @@ final class InstallCoordinator {
       destinationPath: "/",
       backupRelativePath: nil,
       installTarget: "/",
-      caskToken: nil
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
     )
     try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
     _ = try await privilegedHelperClient.performOperation(

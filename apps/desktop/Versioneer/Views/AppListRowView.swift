@@ -143,7 +143,9 @@ struct AppListRowView: View {
     } else if row.canInstall && row.isUpdateAvailable {
       Button {
         guard let result else { return }
-        if appState.isHomebrewInstalled(for: result) {
+        if appState.isMasUpgradeable(for: result) {
+          Task { await appState.masUpgrade(result) }
+        } else if appState.isHomebrewInstalled(for: result) {
           Task { await appState.brewUpgrade(result) }
         } else {
           Task { await appState.install(result) }
@@ -188,10 +190,16 @@ struct AppListRowView: View {
     Divider()
 
     if !isUserIgnored && row.isUpdateAvailable && row.canInstall {
-      Button(appState.isHomebrewInstalled(for: result) ? "Update via Homebrew" : "Update") {
-        if appState.isHomebrewInstalled(for: result) {
+      if appState.isMasUpgradeable(for: result) {
+        Button("Update via Mac App Store") {
+          Task { await appState.masUpgrade(result) }
+        }
+      } else if appState.isHomebrewInstalled(for: result) {
+        Button("Update via Homebrew") {
           Task { await appState.brewUpgrade(result) }
-        } else {
+        }
+      } else {
+        Button("Update") {
           Task { await appState.install(result) }
         }
       }

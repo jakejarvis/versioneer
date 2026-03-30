@@ -14,6 +14,7 @@ final class SettingsStore {
     static let defaultChannel = "versioneer_default_channel"
     static let perAppChannels = "versioneer_per_app_channels"
     static let extraScanRoots = "versioneer_extra_scan_roots"
+    static let masCliPath = "versioneer_mas_cli_path"
   }
 
   static let defaultBaseURL = URL(string: "https://api.versioneer.app")!
@@ -165,6 +166,36 @@ final class SettingsStore {
       }
     }
     return urls
+  }
+
+  // MARK: - mas-cli
+
+  /// User-provided override for the mas-cli binary path. When nil, auto-detection is used.
+  var masCliPathOverride: String? {
+    get { defaults.string(forKey: Keys.masCliPath) }
+    set {
+      if let newValue, !newValue.isEmpty {
+        defaults.set(newValue, forKey: Keys.masCliPath)
+      } else {
+        defaults.removeObject(forKey: Keys.masCliPath)
+      }
+    }
+  }
+
+  /// Resolved path to the mas binary: user override first, then well-known locations.
+  var resolvedMasCliPath: String? {
+    if let override = masCliPathOverride,
+      FileManager.default.isExecutableFile(atPath: override)
+    {
+      return override
+    }
+    let candidates = ["/opt/homebrew/bin/mas", "/usr/local/bin/mas"]
+    return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+  }
+
+  /// Whether mas-cli is available at any resolved path.
+  var isMasCliAvailable: Bool {
+    resolvedMasCliPath != nil
   }
 
   /// Resets the base URL to the default value.

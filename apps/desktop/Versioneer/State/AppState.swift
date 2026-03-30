@@ -19,6 +19,7 @@ final class AppState {
   let scanner = AppScanner()
   let sparkleChecker = SparkleChecker()
   let electronChecker = ElectronChecker()
+  let masChecker = MasChecker()
   let installCoordinator = InstallCoordinator()
   private let cacheStore: ScanCacheStore
 
@@ -439,10 +440,22 @@ final class AppState {
     )
     async let sparkleTask = sparkleChecker.checkAll(apps: apps)
     async let electronTask = electronChecker.checkAll(apps: apps)
+    async let masTask = masChecker.checkAll(apps: apps, masCliPath: settings.resolvedMasCliPath)
 
     let sparkleResults = await sparkleTask
     let electronResults = await electronTask
-    let localResults = buildLocalVersionMap(sparkle: sparkleResults, electron: electronResults)
+    let masResults = await masTask
+
+    // Enrich installed apps with MAS app IDs from mas list
+    for (index, app) in installedApps.enumerated() {
+      if let masInfo = masResults[app.id] {
+        installedApps[index] = app.withMasAppId(masInfo.masAppId)
+      }
+    }
+    rebuildLookupTables()
+
+    let localResults = buildLocalVersionMap(
+      sparkle: sparkleResults, electron: electronResults, mas: masResults)
 
     do {
       let response = try await backendTask
@@ -485,10 +498,11 @@ final class AppState {
     let publishedAt: String?
   }
 
-  /// Combines Sparkle and Electron results into a single lookup by app ID.
+  /// Combines Sparkle, Electron, and MAS results into a single lookup by app ID.
   private func buildLocalVersionMap(
     sparkle: [String: SparkleChecker.SparkleResult],
-    electron: [String: ElectronChecker.ElectronResult]
+    electron: [String: ElectronChecker.ElectronResult],
+    mas: [String: MasChecker.MasAppInfo]
   ) -> [String: LocalVersionInfo] {
     var map: [String: LocalVersionInfo] = [:]
     for (id, result) in sparkle {
@@ -498,6 +512,11 @@ final class AppState {
     for (id, result) in electron where map[id] == nil {
       map[id] = LocalVersionInfo(
         latestVersion: result.latestVersion, publishedAt: result.publishedAt)
+    }
+    for (id, info) in mas where map[id] == nil {
+      if let latestVersion = info.latestVersion {
+        map[id] = LocalVersionInfo(latestVersion: latestVersion, publishedAt: nil)
+      }
     }
     return map
   }
@@ -740,6 +759,30 @@ final class AppState {
   /// Returns the Homebrew cask token for the given result, from local detection or server.
   func homebrewCaskToken(for result: AppDecision) -> String? {
     installedApp(for: result)?.homebrewCaskToken ?? result.homebrewCaskToken
+  }
+
+  /// Triggers a mas-cli upgrade for the given app decision.
+  func masUpgrade(_ result: AppDecision) async {
+    guard let installedApp = installedApp(for: result) else { return }
+    guard let masAppId = installedApp.masAppId, !masAppId.isEmpty else { return }
+    guard let masCliPath = settings.resolvedMasCliPath else { return }
+
+    let didUpgrade = await installCoordinator.startMasUpgrade(
+      result: result,
+      masAppId: masAppId,
+      masCliPath: masCliPath,
+      installedApp: installedApp
+    )
+
+    if didUpgrade {
+      await scanAndSubmit()
+    }
+  }
+
+  /// Returns true if the given result can be upgraded via mas-cli.
+  func isMasUpgradeable(for result: AppDecision) -> Bool {
+    guard let app = installedApp(for: result) else { return false }
+    return app.isMasApp && app.masAppId != nil && settings.isMasCliAvailable
   }
 
   func refreshDisplayedResults(preservingSelectionID selectionID: String? = nil) {

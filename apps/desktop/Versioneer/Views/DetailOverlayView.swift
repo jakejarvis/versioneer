@@ -184,10 +184,16 @@ struct DetailPaneView: View {
     appState.isHomebrewInstalled(for: result)
   }
 
+  private var isMasUpgradeable: Bool {
+    appState.isMasUpgradeable(for: result)
+  }
+
   @ViewBuilder
   private var primaryActionSection: some View {
     if isUserIgnored {
       ignoredActionSection
+    } else if isMasUpgradeable && result.decision == .updateAvailable {
+      masUpgradeActionSection
     } else if isBrewApp && result.decision == .updateAvailable {
       brewUpgradeActionSection
     } else if result.canInstall {
@@ -218,6 +224,58 @@ struct DetailPaneView: View {
       }
       .buttonStyle(.glassProminent)
       .controlSize(.large)
+    }
+    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
+  }
+
+  private var masUpgradeActionSection: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      if installState.isRunning {
+        if let progress = installPresentation.progress {
+          InstallProgressView(progress: progress)
+        }
+        if let statusDetail = installPresentation.statusDetail, !statusDetail.isEmpty {
+          Text(statusDetail)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+      }
+
+      if installState.phase == .completed {
+        Label("Updated via Mac App Store", systemImage: "checkmark.circle.fill")
+          .font(.callout.weight(.semibold))
+          .foregroundStyle(.green)
+      } else if installState.phase == .failed {
+        VStack(alignment: .leading, spacing: 4) {
+          Label("Mac App Store upgrade failed", systemImage: "xmark.circle.fill")
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(.red)
+          if let error = installState.errorMessage {
+            Text(error)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .textSelection(.enabled)
+          }
+        }
+      }
+
+      Button {
+        Task { await appState.masUpgrade(result) }
+      } label: {
+        Label("Update via Mac App Store", systemImage: "apple.logo")
+          .font(.body.weight(.semibold))
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.glassProminent)
+      .controlSize(.large)
+      .disabled(installState.isRunning)
+
+      Label(
+        "This app was installed from the Mac App Store. Updating through mas keeps the App Store in sync.",
+        systemImage: "info.circle"
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
     }
     .glassCard(interactive: true, cornerRadius: 22, padding: 18)
   }

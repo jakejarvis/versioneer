@@ -9,4 +9,5 @@ extension Logger {
   nonisolated static let sparkle = Logger(label: "com.jakejarvis.versioneer.Sparkle")
   nonisolated static let electron = Logger(label: "com.jakejarvis.versioneer.Electron")
   nonisolated static let install = Logger(label: "com.jakejarvis.versioneer.Install")
+  nonisolated static let mas = Logger(label: "com.jakejarvis.versioneer.MAS")
 }

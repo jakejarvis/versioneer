@@ -72,6 +72,7 @@ struct SettingsStoreTests {
       sparklePublicKey: nil,
       isSparkleApp: false,
       isMasApp: false,
+      masAppId: nil,
       isElectronApp: false,
       electronUpdateProvider: nil,
       electronUpdateUrl: nil,
@@ -87,6 +88,24 @@ struct SettingsStoreTests {
 
     #expect(settings.isIgnored(firefox))
     #expect(settings.isIgnored(pathOnlyApp))
+  }
+
+  @Test func masCliPathOverridePersistsAndClears() throws {
+    let (settings, suiteName) = try makeSettings()
+    defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+
+    #expect(settings.masCliPathOverride == nil)
+
+    settings.masCliPathOverride = "/usr/local/bin/mas"
+    #expect(settings.masCliPathOverride == "/usr/local/bin/mas")
+
+    settings.masCliPathOverride = nil
+    #expect(settings.masCliPathOverride == nil)
+
+    // Setting empty string also clears
+    settings.masCliPathOverride = "/some/path"
+    settings.masCliPathOverride = ""
+    #expect(settings.masCliPathOverride == nil)
   }
 
   private func makeSettings() throws -> (SettingsStore, String) {

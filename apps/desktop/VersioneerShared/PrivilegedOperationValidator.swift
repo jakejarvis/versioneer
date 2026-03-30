@@ -107,7 +107,7 @@ nonisolated struct PrivilegedOperationValidator {
         expectedExtension: manifest.operationType == .replaceApp ? "app" : "pkg",
         errorBuilder: PrivilegedOperationValidationError.sourcePathInvalid
       )
-    case .brewUpgrade:
+    case .brewUpgrade, .masUpgrade:
       sourceURL = stagingDirectory
     }
 
@@ -124,7 +124,7 @@ nonisolated struct PrivilegedOperationValidator {
           manifest.installTarget ?? manifest.destinationPath)
       }
       destinationURL = URL(fileURLWithPath: "/")
-    case .brewUpgrade:
+    case .brewUpgrade, .masUpgrade:
       destinationURL = nil
     }
 
@@ -157,7 +157,7 @@ nonisolated struct PrivilegedOperationValidator {
           manifest.installTarget ?? "")
       }
       backupURL = nil
-    case .brewUpgrade:
+    case .brewUpgrade, .masUpgrade:
       backupURL = nil
     }
 

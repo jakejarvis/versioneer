@@ -461,6 +461,7 @@ private struct AdvancedSettingsTab: View {
 
   @State private var urlString = ""
   @State private var newScanRoot = ""
+  @State private var masPathOverride = ""
 
   private var trimmedURLString: String {
     urlString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -568,6 +569,63 @@ private struct AdvancedSettingsTab: View {
       Section {
         HStack(alignment: .top, spacing: 12) {
           StatusChip(
+            title: masStatusTitle,
+            tint: masStatusTint,
+            systemImage: masStatusSymbol
+          )
+
+          Text(masStatusDescription)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+
+        if let detectedPath = appState.settings.resolvedMasCliPath,
+          appState.settings.masCliPathOverride == nil
+        {
+          LabeledContent("Detected Path") {
+            Text(detectedPath)
+              .font(.body.monospaced())
+              .foregroundStyle(.secondary)
+              .textSelection(.enabled)
+          }
+        }
+
+        HStack {
+          TextField("Custom mas path (optional)", text: $masPathOverride)
+            .font(.body.monospaced())
+            .textFieldStyle(.roundedBorder)
+          Button("Apply") {
+            applyMasPath()
+          }
+          .disabled(
+            masPathOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              || masPathOverride == (appState.settings.masCliPathOverride ?? ""))
+          Button("Clear") {
+            appState.settings.masCliPathOverride = nil
+            masPathOverride = ""
+          }
+          .disabled(appState.settings.masCliPathOverride == nil)
+        }
+
+        if !masPathOverride.isEmpty,
+          !FileManager.default.isExecutableFile(
+            atPath: masPathOverride.trimmingCharacters(in: .whitespacesAndNewlines))
+        {
+          Label("No executable found at this path.", systemImage: "exclamationmark.triangle.fill")
+            .foregroundStyle(.orange)
+        }
+      } header: {
+        Text("Mac App Store CLI (mas)")
+      } footer: {
+        Text(
+          "When mas-cli is available, Versioneer can upgrade Mac App Store apps automatically instead of opening the App Store. Install via: brew install mas"
+        )
+      }
+
+      Section {
+        HStack(alignment: .top, spacing: 12) {
+          StatusChip(
             title: helperStateTitle,
             tint: helperTint,
             systemImage: helperSymbol
@@ -595,6 +653,7 @@ private struct AdvancedSettingsTab: View {
     .formStyle(.grouped)
     .onAppear {
       urlString = appState.settings.baseURL.absoluteString
+      masPathOverride = appState.settings.masCliPathOverride ?? ""
     }
   }
 
@@ -651,5 +710,34 @@ private struct AdvancedSettingsTab: View {
     guard let parsedURL else { return }
     appState.settings.baseURL = parsedURL
     urlString = parsedURL.absoluteString
+  }
+
+  private func applyMasPath() {
+    let trimmed = masPathOverride.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return }
+    appState.settings.masCliPathOverride = trimmed
+    masPathOverride = trimmed
+  }
+
+  private var masStatusTitle: String {
+    if appState.settings.masCliPathOverride != nil {
+      return "Custom Path"
+    }
+    return appState.settings.isMasCliAvailable ? "Detected" : "Not Found"
+  }
+
+  private var masStatusTint: Color {
+    appState.settings.isMasCliAvailable ? .green : .secondary
+  }
+
+  private var masStatusSymbol: String {
+    appState.settings.isMasCliAvailable ? "checkmark.circle.fill" : "magnifyingglass"
+  }
+
+  private var masStatusDescription: String {
+    if appState.settings.isMasCliAvailable {
+      return "mas-cli is available. Versioneer will offer automatic upgrades for Mac App Store apps."
+    }
+    return "mas-cli was not found. Install it with `brew install mas` to enable automatic Mac App Store upgrades."
   }
 }

@@ -67,6 +67,22 @@ final class PrivilegedHelperService: NSObject, PrivilegedInstallerXPCProtocol {
         )
       }
       return try PrivilegedOperationPerformer.brewUpgrade(caskToken: caskToken)
+
+    case .masUpgrade:
+      guard let masAppId = validatedOperation.manifest.masAppId, !masAppId.isEmpty else {
+        throw PrivilegedOperationValidationError.sourcePathInvalid(
+          "MAS upgrade requires an app ID."
+        )
+      }
+      guard let masCliPath = validatedOperation.manifest.masCliPath, !masCliPath.isEmpty else {
+        throw PrivilegedOperationValidationError.sourcePathInvalid(
+          "MAS upgrade requires a path to the mas binary."
+        )
+      }
+      return try PrivilegedOperationPerformer.masUpgrade(
+        masAppId: masAppId,
+        masCliPath: masCliPath
+      )
     }
   }
 }
