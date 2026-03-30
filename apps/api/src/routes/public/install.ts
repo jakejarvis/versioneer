@@ -95,16 +95,11 @@ async function upsertSuggestion(params: {
   evidencePayloadJson: string;
   now: string;
 }) {
-  let suggestion = await params.db
-    .select()
-    .from(catalogSuggestions)
-    .where(eq(catalogSuggestions.dedupeKey, params.dedupeKey))
-    .get();
-
-  if (!suggestion) {
-    const suggestionId = generateId(idPrefixes.catalogSuggestion);
-    await params.db.insert(catalogSuggestions).values({
-      id: suggestionId,
+  // Atomic upsert — avoids TOCTOU race on the dedupeKey unique index
+  await params.db
+    .insert(catalogSuggestions)
+    .values({
+      id: generateId(idPrefixes.catalogSuggestion),
       queueType: params.queueType,
       status: "pending",
       appId: params.appId,
@@ -120,50 +115,40 @@ async function upsertSuggestion(params: {
       lastSeenAt: params.now,
       createdAt: params.now,
       updatedAt: params.now,
-    });
-    suggestion = await params.db
-      .select()
-      .from(catalogSuggestions)
-      .where(eq(catalogSuggestions.id, suggestionId))
-      .get();
-  } else {
-    await params.db
-      .update(catalogSuggestions)
-      .set({
-        canonicalSnapshotJson: params.canonicalSnapshotJson ?? suggestion.canonicalSnapshotJson,
+    })
+    .onConflictDoUpdate({
+      target: catalogSuggestions.dedupeKey,
+      set: {
+        canonicalSnapshotJson: sql`coalesce(${params.canonicalSnapshotJson ?? null}, ${catalogSuggestions.canonicalSnapshotJson})`,
         evidenceSummaryJson: params.evidencePayloadJson,
         lastSeenAt: params.now,
         updatedAt: params.now,
         evidenceCount: sql`${catalogSuggestions.evidenceCount} + 1`,
-      })
-      .where(eq(catalogSuggestions.id, suggestion.id));
-  }
+      },
+    });
 
+  const suggestion = await params.db
+    .select()
+    .from(catalogSuggestions)
+    .where(eq(catalogSuggestions.dedupeKey, params.dedupeKey))
+    .get();
   if (!suggestion) return;
 
-  const existingEvidence = await params.db
-    .select({ id: suggestionEvidence.id })
-    .from(suggestionEvidence)
-    .where(
-      and(
-        eq(suggestionEvidence.suggestionId, suggestion.id),
-        eq(suggestionEvidence.fingerprint, params.evidenceFingerprint),
-      ),
-    )
-    .get();
-  if (existingEvidence) return;
-
-  await params.db.insert(suggestionEvidence).values({
-    id: generateId(idPrefixes.suggestionEvidence),
-    suggestionId: suggestion.id,
-    appId: params.appId,
-    sourceId: params.sourceId ?? null,
-    evidenceType: "install_verify",
-    fingerprint: params.evidenceFingerprint,
-    payloadJson: params.evidencePayloadJson,
-    observedAt: params.now,
-    createdAt: params.now,
-  });
+  // Atomic evidence insert — avoids TOCTOU race on the fingerprint unique index
+  await params.db
+    .insert(suggestionEvidence)
+    .values({
+      id: generateId(idPrefixes.suggestionEvidence),
+      suggestionId: suggestion.id,
+      appId: params.appId,
+      sourceId: params.sourceId ?? null,
+      evidenceType: "install_verify",
+      fingerprint: params.evidenceFingerprint,
+      payloadJson: params.evidencePayloadJson,
+      observedAt: params.now,
+      createdAt: params.now,
+    })
+    .onConflictDoNothing();
 }
 
 async function createTrustSuggestion(params: {

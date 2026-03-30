@@ -250,16 +250,11 @@ async function upsertSuggestion(params: {
     now,
   } = params;
 
-  let suggestion = await db
-    .select()
-    .from(catalogSuggestions)
-    .where(eq(catalogSuggestions.dedupeKey, dedupeKey))
-    .get();
-
-  if (!suggestion) {
-    const suggestionId = generateId(idPrefixes.catalogSuggestion);
-    await db.insert(catalogSuggestions).values({
-      id: suggestionId,
+  // Atomic upsert — avoids TOCTOU race on the dedupeKey unique index
+  await db
+    .insert(catalogSuggestions)
+    .values({
+      id: generateId(idPrefixes.catalogSuggestion),
       queueType,
       status: "pending",
       appId: appId ?? null,
@@ -275,54 +270,44 @@ async function upsertSuggestion(params: {
       lastSeenAt: now,
       createdAt: now,
       updatedAt: now,
-    });
-    suggestion = await db
-      .select()
-      .from(catalogSuggestions)
-      .where(eq(catalogSuggestions.id, suggestionId))
-      .get();
-  } else {
-    await db
-      .update(catalogSuggestions)
-      .set({
-        appId: appId ?? suggestion.appId,
-        sourceId: sourceId ?? suggestion.sourceId,
+    })
+    .onConflictDoUpdate({
+      target: catalogSuggestions.dedupeKey,
+      set: {
+        appId: sql`coalesce(${appId ?? null}, ${catalogSuggestions.appId})`,
+        sourceId: sql`coalesce(${sourceId ?? null}, ${catalogSuggestions.sourceId})`,
         title,
-        canonicalSnapshotJson: canonicalSnapshotJson ?? suggestion.canonicalSnapshotJson,
+        canonicalSnapshotJson: sql`coalesce(${canonicalSnapshotJson ?? null}, ${catalogSuggestions.canonicalSnapshotJson})`,
         proposedChangeJson,
         evidenceSummaryJson: evidencePayloadJson,
         evidenceCount: sql`${catalogSuggestions.evidenceCount} + 1`,
         lastSeenAt: now,
         updatedAt: now,
-      })
-      .where(eq(catalogSuggestions.id, suggestion.id));
-  }
+      },
+    });
 
+  const suggestion = await db
+    .select()
+    .from(catalogSuggestions)
+    .where(eq(catalogSuggestions.dedupeKey, dedupeKey))
+    .get();
   if (!suggestion) return;
 
-  const existingEvidence = await db
-    .select({ id: suggestionEvidence.id })
-    .from(suggestionEvidence)
-    .where(
-      and(
-        eq(suggestionEvidence.suggestionId, suggestion.id),
-        eq(suggestionEvidence.fingerprint, evidenceFingerprint),
-      ),
-    )
-    .get();
-  if (existingEvidence) return;
-
-  await db.insert(suggestionEvidence).values({
-    id: generateId(idPrefixes.suggestionEvidence),
-    suggestionId: suggestion.id,
-    appId: appId ?? null,
-    sourceId: sourceId ?? null,
-    evidenceType,
-    fingerprint: evidenceFingerprint,
-    payloadJson: evidencePayloadJson,
-    observedAt: now,
-    createdAt: now,
-  });
+  // Atomic evidence insert — avoids TOCTOU race on the fingerprint unique index
+  await db
+    .insert(suggestionEvidence)
+    .values({
+      id: generateId(idPrefixes.suggestionEvidence),
+      suggestionId: suggestion.id,
+      appId: appId ?? null,
+      sourceId: sourceId ?? null,
+      evidenceType,
+      fingerprint: evidenceFingerprint,
+      payloadJson: evidencePayloadJson,
+      observedAt: now,
+      createdAt: now,
+    })
+    .onConflictDoNothing();
 }
 
 function normalizeSuggestedSourceUrl(sourceType: SourceType, url: string): string {
@@ -623,6 +608,7 @@ const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next) => {
 
 export const inventoryRoutes = new Hono<InventoryEnv>()
   // POST /v1/inventory/check
+  // TODO: Pre-compute inventory snapshot in KV, rebuilt on catalog changes, to avoid full-table loads
   .post("/inventory/check", gzipJsonMiddleware, async (c) => {
     const request = c.get("inventoryRequest");
     const db = createDb(c.env.DB);
@@ -640,6 +626,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       })
       .from(appAliases)
       .where(eq(appAliases.isActive, true))
+      .limit(10_000)
       .all();
 
     // Load app details
@@ -659,6 +646,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         status: apps.status,
       })
       .from(apps)
+      .limit(10_000)
       .all();
     for (const a of allApps) {
       appMap.set(a.id, {
@@ -680,7 +668,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
     const caskTokenByApp = pickPreferredAliasMap(allAliases, "homebrew_cask");
 
     // Load all latest releases, indexed by appId → channel → release
-    const latestReleases = await db.select().from(appLatestReleases).all();
+    const latestReleases = await db.select().from(appLatestReleases).limit(10_000).all();
     const latestByAppChannel = new Map<string, Map<string, (typeof latestReleases)[number]>>();
     for (const lr of latestReleases) {
       let channelMap = latestByAppChannel.get(lr.appId);
@@ -707,6 +695,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           eq(sources.role, "authority"),
         ),
       )
+      .limit(10_000)
       .all();
     const latestSourceSuccessByApp = new Map<string, string | null>();
     for (const s of allSources) {
@@ -824,6 +813,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                   ),
                 )
                 .orderBy(desc(releases.versionNormalized))
+                .limit(100)
                 .all();
 
               const found = olderCompatible.find(

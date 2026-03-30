@@ -10,7 +10,7 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
 import { getParser } from "../parsers";
 import { normalizeVersion, inferChannel } from "../versioning";
@@ -172,31 +172,47 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
         createdAt: now,
       });
 
-      // Upsert artifacts
-      for (const parsedArtifact of parsedRelease.artifacts) {
-        // Check if artifact URL already exists for this release
-        const existingArtifacts = await db
-          .select()
-          .from(artifacts)
-          .where(eq(artifacts.releaseId, releaseId))
-          .all();
+      // Upsert artifacts — query once, then insert only new URLs
+      const existingArtifacts = await db
+        .select({ id: artifacts.id, url: artifacts.url })
+        .from(artifacts)
+        .where(eq(artifacts.releaseId, releaseId))
+        .all();
+      const existingUrls = new Set(existingArtifacts.map((a) => a.url));
 
-        const existing = existingArtifacts.find((a) => a.url === parsedArtifact.url);
-        if (!existing) {
-          const artifactId = generateId(idPrefixes.artifact);
-          await db.insert(artifacts).values({
-            id: artifactId,
-            releaseId,
-            artifactType: parsedArtifact.type,
-            url: parsedArtifact.url,
-            sha256: parsedArtifact.sha256 ?? null,
-            sizeBytes: parsedArtifact.sizeBytes ?? null,
-            architecture: parsedArtifact.architecture ?? null,
-            minOsVersion: parsedArtifact.minOsVersion ?? null,
-            isPrimary: parsedRelease.artifacts.indexOf(parsedArtifact) === 0,
-            createdAt: now,
-          });
-        }
+      for (const parsedArtifact of parsedRelease.artifacts) {
+        if (existingUrls.has(parsedArtifact.url)) continue;
+        await db.insert(artifacts).values({
+          id: generateId(idPrefixes.artifact),
+          releaseId,
+          artifactType: parsedArtifact.type,
+          url: parsedArtifact.url,
+          sha256: parsedArtifact.sha256 ?? null,
+          sizeBytes: parsedArtifact.sizeBytes ?? null,
+          architecture: parsedArtifact.architecture ?? null,
+          minOsVersion: parsedArtifact.minOsVersion ?? null,
+          isPrimary: false,
+          createdAt: now,
+        });
+      }
+
+      // Ensure exactly one primary artifact per release
+      const allReleaseArtifacts = await db
+        .select({ id: artifacts.id })
+        .from(artifacts)
+        .where(eq(artifacts.releaseId, releaseId))
+        .orderBy(asc(artifacts.createdAt))
+        .all();
+      const firstArtifact = allReleaseArtifacts[0];
+      if (firstArtifact) {
+        await db
+          .update(artifacts)
+          .set({ isPrimary: false })
+          .where(eq(artifacts.releaseId, releaseId));
+        await db
+          .update(artifacts)
+          .set({ isPrimary: true })
+          .where(eq(artifacts.id, firstArtifact.id));
       }
     }
 
