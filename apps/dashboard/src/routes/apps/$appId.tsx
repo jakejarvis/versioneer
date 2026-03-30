@@ -1,5 +1,5 @@
 import { DragDropProvider } from "@dnd-kit/react";
-import { useSortable } from "@dnd-kit/react/sortable";
+import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
@@ -634,19 +634,18 @@ function SourcesTab({ appId }: { appId: string }) {
     [triggerFetch],
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDragEnd = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (event: any) => {
-      const source = event.operation.source;
-      const target = event.operation.target;
-      if (!source || !target || source.id === target.id) return;
+      if (event.canceled) return;
+      const { source } = event.operation;
+      if (!source || !isSortable(source)) return;
 
-      const oldIndex = sortedSources.findIndex((s) => s.id === source.id);
-      const newIndex = sortedSources.findIndex((s) => s.id === target.id);
-      if (oldIndex === -1 || newIndex === -1) return;
+      const { initialIndex, index: newIndex } = source.sortable;
+      if (initialIndex === newIndex) return;
 
       const reordered = [...sortedSources];
-      const [moved] = reordered.splice(oldIndex, 1);
+      const [moved] = reordered.splice(initialIndex, 1);
       reordered.splice(newIndex, 0, moved!);
 
       reorderMutation.mutate(

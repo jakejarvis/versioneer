@@ -1,5 +1,5 @@
 import { DragDropProvider } from "@dnd-kit/react";
-import { useSortable } from "@dnd-kit/react/sortable";
+import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useForm, useStore } from "@tanstack/react-form";
 import { parseGitHubRepoUrl, resolveSourceUrl } from "@versioneer/core/validation";
 import type { SourceType } from "@versioneer/schemas/sources";
@@ -646,16 +646,15 @@ function OnboardingFormContent({
                 sourcesField.state.value.length > 0 ? (
                   <DragDropProvider
                     onDragEnd={(event: any) => {
-                      const src = event.operation.source;
-                      const tgt = event.operation.target;
-                      if (!src || !tgt || src.id === tgt.id) return;
+                      if (event.canceled) return;
+                      const { source } = event.operation;
+                      if (!source || !isSortable(source)) return;
+                      const { initialIndex, index: newIndex } = source.sortable;
+                      if (initialIndex === newIndex) return;
                       const items = sourcesField.state.value;
-                      const oldIdx = items.findIndex((s: SourceEntry) => s.key === src.id);
-                      const newIdx = items.findIndex((s: SourceEntry) => s.key === tgt.id);
-                      if (oldIdx === -1 || newIdx === -1) return;
                       const reordered = [...items];
-                      const [moved] = reordered.splice(oldIdx, 1);
-                      reordered.splice(newIdx, 0, moved!);
+                      const [moved] = reordered.splice(initialIndex, 1);
+                      reordered.splice(newIndex, 0, moved!);
                       form.setFieldValue("sources", reordered);
                     }}
                   >
