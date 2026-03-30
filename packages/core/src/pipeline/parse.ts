@@ -17,6 +17,14 @@ import { normalizeVersion, inferChannel } from "../versioning";
 import { normalizeReleaseNotes } from "./release-notes";
 import type { Env, ParseStepResult, SourceParseJob } from "./types";
 
+/** Convert any parseable date string (RFC 2822, ISO 8601, etc.) to ISO 8601. */
+function toISODate(dateStr: string | undefined | null): string | null {
+  if (!dateStr) return null;
+  const ms = new Date(dateStr).getTime();
+  if (Number.isNaN(ms)) return null;
+  return new Date(ms).toISOString();
+}
+
 export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<ParseStepResult> {
   const db = createDb(env.DB);
   const now = new Date().toISOString();
@@ -121,7 +129,7 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
         await db
           .update(releases)
           .set({
-            releasedAt: parsedRelease.publishedAt ?? matchingRelease.releasedAt,
+            releasedAt: toISODate(parsedRelease.publishedAt) ?? matchingRelease.releasedAt,
             sourceConfidence: output.confidence,
             releaseNotesHtml: updatedNotesHtml,
             releaseNotesUrl: parsedRelease.releaseNotesUrl ?? matchingRelease.releaseNotesUrl,
@@ -137,7 +145,7 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
           versionNormalized,
           buildNumber: parsedRelease.buildNumber ?? null,
           channel,
-          releasedAt: parsedRelease.publishedAt ?? null,
+          releasedAt: toISODate(parsedRelease.publishedAt),
           isPrerelease: parsedRelease.isPrerelease,
           sourceConfidence: output.confidence,
           publishedBySourceId: source.id,
@@ -164,7 +172,7 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
         observedVersionNormalized: versionNormalized,
         observedBuildNumber: parsedRelease.buildNumber ?? null,
         observedChannel: channel,
-        observedPublishedAt: parsedRelease.publishedAt ?? null,
+        observedPublishedAt: toISODate(parsedRelease.publishedAt),
         observedReleaseNotesUrl: parsedRelease.releaseNotesUrl ?? null,
         observedDownloadUrl: parsedRelease.downloadUrl ?? null,
         confidence: output.confidence,
