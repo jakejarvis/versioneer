@@ -24,6 +24,21 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { SOURCE_TYPES } from "@/lib/source-types";
 
+const configPlaceholders: Partial<Record<SourceType, string>> = {
+  web_page: '{\n  "versionSelector": "",\n  "downloadSelector": ""\n}',
+  regex:
+    '{\n  "versionPattern": "(\\\\d+\\\\.\\\\d+\\\\.\\\\d+)",\n  "downloadPattern": "",\n  "flags": "i"\n}',
+  json: '{\n  "versionPath": "$.version",\n  "downloadPath": "$.download_url"\n}',
+  xml: '{\n  "versionXPath": "//key[text()=\'Version\']/following-sibling::string[1]",\n  "downloadXPath": ""\n}',
+};
+
+const configDescriptions: Partial<Record<SourceType, string>> = {
+  web_page: "CSS selectors to extract version and download URLs.",
+  regex: "Regex patterns to extract version (and optionally download URL) from the response body.",
+  json: "JSONPath expressions to extract version and download URL from JSON.",
+  xml: "XPath expressions to extract version and download URL from XML.",
+};
+
 interface CreateSourceDialogProps {
   appId?: string;
   open: boolean;
@@ -185,20 +200,20 @@ function CreateSourceForm({
 
         <form.Subscribe selector={(state) => state.values.sourceType}>
           {(sourceType) =>
-            sourceType === "web_page" ? (
+            configPlaceholders[sourceType] ? (
               <form.Field name="configJson">
                 {(field) => (
                   <FormField
-                    label="Selector Config (JSON)"
+                    label="Parser Config (JSON)"
                     name={field.name}
                     meta={field.state.meta}
-                    description="CSS selectors to extract version and download URLs."
+                    description={configDescriptions[sourceType]}
                   >
                     <Textarea
                       id={field.name}
                       rows={5}
                       className="font-mono text-xs"
-                      placeholder={'{\n  "versionSelector": "",\n  "downloadSelector": ""\n}'}
+                      placeholder={configPlaceholders[sourceType]}
                       value={field.state.value}
                       onChange={(e) => field.handleChange(e.target.value)}
                       onBlur={field.handleBlur}

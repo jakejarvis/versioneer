@@ -47,6 +47,21 @@ export const SOURCE_TYPES = {
     color: "border-teal-500/30 bg-teal-500/10 text-teal-400",
     input: { label: "Page URL", placeholder: "https://example.com/downloads" },
   },
+  regex: {
+    label: "Regex",
+    color: "border-pink-500/30 bg-pink-500/10 text-pink-400",
+    input: { label: "Page URL", placeholder: "https://example.com/update-feed.plist" },
+  },
+  json: {
+    label: "JSON",
+    color: "border-sky-500/30 bg-sky-500/10 text-sky-400",
+    input: { label: "JSON URL", placeholder: "https://example.com/api/version.json" },
+  },
+  xml: {
+    label: "XML",
+    color: "border-indigo-500/30 bg-indigo-500/10 text-indigo-400",
+    input: { label: "XML URL", placeholder: "https://example.com/update-feed.xml" },
+  },
   manual: {
     label: "Manual",
     color: "border-cyan-500/30 bg-cyan-500/10 text-cyan-400",

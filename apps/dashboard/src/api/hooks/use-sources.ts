@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { SourceType } from "@versioneer/schemas/sources";
 
 import {
   listSources,
@@ -15,16 +16,7 @@ import {
 
 interface UseSourcesParams {
   status?: "active" | "paused" | "disabled" | "error" | "at_risk";
-  sourceType?:
-    | "sparkle"
-    | "github_releases"
-    | "manual"
-    | "homebrew_cask"
-    | "mac_app_store"
-    | "electron_generic"
-    | "rss_feed"
-    | "json_feed"
-    | "web_page";
+  sourceType?: SourceType;
   appId?: string;
   limit?: number;
   offset?: number;
@@ -52,16 +44,7 @@ export function useCreateSource() {
   return useMutation({
     mutationFn: (input: {
       appId: string;
-      sourceType:
-        | "sparkle"
-        | "github_releases"
-        | "manual"
-        | "homebrew_cask"
-        | "mac_app_store"
-        | "electron_generic"
-        | "rss_feed"
-        | "json_feed"
-        | "web_page";
+      sourceType: SourceType;
       label?: string;
       baseUrl?: string;
       configJson?: string;

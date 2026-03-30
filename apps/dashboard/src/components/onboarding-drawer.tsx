@@ -758,9 +758,11 @@ function SourceCard({
   // stay in sync as the user types (the `source` prop from the parent array
   // field does not re-render on nested field changes).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const currentSourceType: SourceType = useStore(form.store, (s: any) => s.values.sources[index]?.sourceType) ?? source.sourceType;
+  const currentSourceType: SourceType =
+    useStore(form.store, (s: any) => s.values.sources[index]?.sourceType) ?? source.sourceType;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const currentIdentifier: string = useStore(form.store, (s: any) => s.values.sources[index]?.identifier) ?? source.identifier;
+  const currentIdentifier: string =
+    useStore(form.store, (s: any) => s.values.sources[index]?.identifier) ?? source.identifier;
 
   const validateMutation = useValidateSource();
 
@@ -771,12 +773,7 @@ function SourceCard({
     validateMutation.mutate(
       {
         url,
-        sourceType: currentSourceType as
-          | "sparkle"
-          | "github_releases"
-          | "homebrew_cask"
-          | "mac_app_store"
-          | "electron_generic",
+        sourceType: currentSourceType,
       },
       {
         onSuccess: (data) => {

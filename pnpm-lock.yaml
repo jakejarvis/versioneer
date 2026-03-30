@@ -303,6 +303,9 @@ importers:
       '@versioneer/schemas':
         specifier: workspace:*
         version: link:../schemas
+      '@xmldom/xmldom':
+        specifier: ^0.9.9
+        version: 0.9.9
       cheerio:
         specifier: ^1.2.0
         version: 1.2.0
@@ -321,9 +324,15 @@ importers:
       htmlparser2:
         specifier: ^12.0.0
         version: 12.0.0
+      jsonpath-plus:
+        specifier: ^10.4.0
+        version: 10.4.0
       marked:
         specifier: ^17.0.5
         version: 17.0.5
+      xpath:
+        specifier: ^0.0.34
+        version: 0.0.34
       zod:
         specifier: 'catalog:'
         version: 4.3.6
@@ -1610,6 +1619,18 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
+
+  '@jsep-plugin/assignment@1.3.0':
+    resolution: {integrity: sha512-VVgV+CXrhbMI3aSusQyclHkenWSAm95WaiKrMxRFam3JSUiIaQjoMIw2sEs/OX4XifnqeQUN4DYbJjlA8EfktQ==}
+    engines: {node: '>= 10.16.0'}
+    peerDependencies:
+      jsep: ^0.4.0||^1.0.0
+
+  '@jsep-plugin/regex@1.0.4':
+    resolution: {integrity: sha512-q7qL4Mgjs1vByCaTnDFcBnV9HS7GVPJX5vyVoCgZHNSC9rjwIlmbXG5sUuorR5ndfHAIlJ8pVStxvjXHbNvtUg==}
+    engines: {node: '>= 10.16.0'}
+    peerDependencies:
+      jsep: ^0.4.0||^1.0.0
 
   '@modelcontextprotocol/sdk@1.28.0':
     resolution: {integrity: sha512-gmloF+i+flI8ouQK7MWW4mOwuMh4RePBuPFAEPC6+pdqyWOUMDOixb6qZ69owLJpz6XmyllCouc4t8YWO+E2Nw==}
@@ -3168,6 +3189,10 @@ packages:
   '@vitest/utils@4.1.2':
     resolution: {integrity: sha512-xw2/TiX82lQHA06cgbqRKFb5lCAy3axQ4H4SoUFhUsg+wztiet+co86IAMDtF6Vm1hc7J6j09oh/rgDn+JdKIQ==}
 
+  '@xmldom/xmldom@0.9.9':
+    resolution: {integrity: sha512-qycIHAucxy/LXAYIjmLmtQ8q9GPnMbnjG1KXhWm9o5sCr6pOYDATkMPiTNa6/v8eELyqOQ2FsEqeoFYmgv/gJg==}
+    engines: {node: '>=14.6'}
+
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
@@ -4181,6 +4206,10 @@ packages:
       canvas:
         optional: true
 
+  jsep@1.4.0:
+    resolution: {integrity: sha512-B7qPcEVE3NVkmSJbaYxvv4cHkVW7DQsZz13pUMrfS8z8Q/BuShN+gcTXrUlPiGqM2/t/EEaI030bpxMqY8gMlw==}
+    engines: {node: '>= 10.16.0'}
+
   jsesc@3.1.0:
     resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
     engines: {node: '>=6'}
@@ -4202,6 +4231,11 @@ packages:
 
   jsonfile@6.2.0:
     resolution: {integrity: sha512-FGuPw30AdOIUTRMC2OMRtQV+jkVj2cfPqSeWXv1NEAJ1qZ5zb1X6z1mFhbfOB/iy3ssJCD+3KuZ8r8C3uVFlAg==}
+
+  jsonpath-plus@10.4.0:
+    resolution: {integrity: sha512-T92WWatJXmhBbKsgH/0hl+jxjdXrifi5IKeMY02DWggRxX0UElcbVzPlmgLTbvsPeW1PasQ6xE2Q75stkhGbsA==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
 
   kleur@3.0.3:
     resolution: {integrity: sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w==}
@@ -5262,6 +5296,10 @@ packages:
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
+  xpath@0.0.34:
+    resolution: {integrity: sha512-FxF6+rkr1rNSQrhUNYrAFJpRXNzlDoMxeXN5qI84939ylEv3qqPFKa85Oxr6tDaJKqwW6KKyo2v26TSv3k6LeA==}
+    engines: {node: '>=0.6.0'}
+
   y18n@5.0.8:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
     engines: {node: '>=10'}
@@ -6210,6 +6248,14 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@jsep-plugin/assignment@1.3.0(jsep@1.4.0)':
+    dependencies:
+      jsep: 1.4.0
+
+  '@jsep-plugin/regex@1.0.4(jsep@1.4.0)':
+    dependencies:
+      jsep: 1.4.0
 
   '@modelcontextprotocol/sdk@1.28.0(zod@3.25.76)':
     dependencies:
@@ -7682,6 +7728,8 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
+  '@xmldom/xmldom@0.9.9': {}
+
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.2
@@ -8635,6 +8683,8 @@ snapshots:
     transitivePeerDependencies:
       - '@noble/hashes'
 
+  jsep@1.4.0: {}
+
   jsesc@3.1.0: {}
 
   json-parse-even-better-errors@2.3.1: {}
@@ -8650,6 +8700,12 @@ snapshots:
       universalify: 2.0.1
     optionalDependencies:
       graceful-fs: 4.2.11
+
+  jsonpath-plus@10.4.0:
+    dependencies:
+      '@jsep-plugin/assignment': 1.3.0(jsep@1.4.0)
+      '@jsep-plugin/regex': 1.0.4(jsep@1.4.0)
+      jsep: 1.4.0
 
   kleur@3.0.3: {}
 
@@ -9731,6 +9787,8 @@ snapshots:
       js-yaml: 4.1.1
 
   xmlchars@2.2.0: {}
+
+  xpath@0.0.34: {}
 
   y18n@5.0.8: {}
 

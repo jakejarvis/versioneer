@@ -1,37 +1,63 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { SourceParser } from "@versioneer/core/parsers";
 import {
   sparkleParser,
   githubReleasesParser,
   homebrewCaskParser,
   macAppStoreParser,
   electronGenericParser,
+  webPageParser,
+  regexParser,
+  jsonParser,
+  xmlParser,
 } from "@versioneer/core/parsers";
 import {
   githubApiHeaders,
   readResponseTextLimited,
   ResponseBodyTooLargeError,
 } from "@versioneer/core/pipeline";
+import type { SourceType } from "@versioneer/schemas/sources";
+import { sourceTypeSchema } from "@versioneer/schemas/sources";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 const MAX_VALIDATION_BODY_BYTES = 2 * 1024 * 1024;
 
+const validatableParsers: Partial<Record<SourceType, SourceParser>> = {
+  sparkle: sparkleParser,
+  github_releases: githubReleasesParser,
+  homebrew_cask: homebrewCaskParser,
+  mac_app_store: macAppStoreParser,
+  electron_generic: electronGenericParser,
+  web_page: webPageParser,
+  regex: regexParser,
+  json: jsonParser,
+  xml: xmlParser,
+};
+
 export const validateSource = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       url: z.string().url(),
-      sourceType: z.enum([
-        "sparkle",
-        "github_releases",
-        "homebrew_cask",
-        "mac_app_store",
-        "electron_generic",
-        "web_page",
-      ]),
+      sourceType: sourceTypeSchema,
+      configJson: z.string().max(10_000).optional(),
     }),
   )
   .handler(async ({ data }) => {
     const { url, sourceType } = data;
+
+    const parser = validatableParsers[sourceType];
+    if (!parser) {
+      return {
+        status: "invalid" as const,
+        releaseCount: 0,
+        latestVersion: null,
+        latestPublishedAt: null,
+        errors: [`Source type "${sourceType}" does not support validation`],
+        releases: [],
+      };
+    }
+
     const fetchUrl = sourceType === "electron_generic" ? resolveElectronFeedUrl(url) : url;
 
     let response: Response;
@@ -80,20 +106,25 @@ export const validateSource = createServerFn({ method: "POST" })
       }
       throw error;
     }
-    const parser =
-      sourceType === "sparkle"
-        ? sparkleParser
-        : sourceType === "homebrew_cask"
-          ? homebrewCaskParser
-          : sourceType === "mac_app_store"
-            ? macAppStoreParser
-            : sourceType === "electron_generic"
-              ? electronGenericParser
-              : githubReleasesParser;
-    const parsed = parser.parse(
-      body,
-      sourceType === "electron_generic" ? { sourceBaseUrl: url } : undefined,
-    );
+
+    let config: Record<string, unknown> = { sourceBaseUrl: url };
+    if (data.configJson) {
+      try {
+        const parsed = JSON.parse(data.configJson) as Record<string, unknown>;
+        config = { ...parsed, sourceBaseUrl: url };
+      } catch {
+        return {
+          status: "invalid" as const,
+          releaseCount: 0,
+          latestVersion: null,
+          latestPublishedAt: null,
+          errors: ["Invalid configJson — must be valid JSON"],
+          releases: [],
+        };
+      }
+    }
+
+    const parsed = parser.parse(body, config);
 
     if (parsed.releases.length === 0) {
       return {

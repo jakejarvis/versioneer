@@ -73,13 +73,16 @@ describe("webPageParser", () => {
     expect(result.errors[0]).toContain("versionSelector");
   });
 
-  it("returns error when downloadSelector is missing", () => {
+  it("returns a release with lower confidence when downloadSelector is missing", () => {
     const result = webPageParser.parse(SAMPLE_PAGE, {
       versionSelector: ".version",
+      versionPattern: "([\\d.]+)",
     });
-    expect(result.releases).toHaveLength(0);
-    expect(result.confidence).toBe(0);
-    expect(result.errors[0]).toContain("downloadSelector");
+    expect(result.releases).toHaveLength(1);
+    expect(result.releases[0]!.versionRaw).toBe("3.2.1");
+    expect(result.releases[0]!.artifacts).toHaveLength(0);
+    expect(result.confidence).toBe(50);
+    expect(result.errors).toHaveLength(0);
   });
 
   it("returns error when version element is not found", () => {

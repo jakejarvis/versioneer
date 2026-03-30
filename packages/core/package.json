@@ -23,13 +23,16 @@
   "dependencies": {
     "@versioneer/db": "workspace:*",
     "@versioneer/schemas": "workspace:*",
+    "@xmldom/xmldom": "^0.9.9",
     "cheerio": "^1.2.0",
     "dom-serializer": "^3.0.0",
     "domhandler": "^6.0.1",
     "domutils": "^4.0.2",
     "drizzle-orm": "catalog:",
     "htmlparser2": "^12.0.0",
+    "jsonpath-plus": "^10.4.0",
     "marked": "^17.0.5",
+    "xpath": "^0.0.34",
     "zod": "catalog:"
   },
   "devDependencies": {

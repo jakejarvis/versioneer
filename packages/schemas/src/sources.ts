@@ -12,6 +12,9 @@ export const sourceTypeValues = [
   "rss_feed",
   "json_feed",
   "web_page",
+  "regex",
+  "json",
+  "xml",
 ] as const;
 export const sourceTypeSchema = z.enum(sourceTypeValues);
 export type SourceType = z.infer<typeof sourceTypeSchema>;
@@ -111,7 +114,28 @@ export const SOURCE_TYPE_DEFAULTS: Record<SourceType, SourceTypeDefaults> = {
     defaultRole: "authority",
     defaultRuntimeStatus: "active",
     pollIntervalMinutes: 1440,
-    validatable: false,
+    validatable: true,
+  },
+  regex: {
+    parserKey: "regex",
+    defaultRole: "corroborating",
+    defaultRuntimeStatus: "active",
+    pollIntervalMinutes: 1440,
+    validatable: true,
+  },
+  json: {
+    parserKey: "json",
+    defaultRole: "authority",
+    defaultRuntimeStatus: "active",
+    pollIntervalMinutes: 1440,
+    validatable: true,
+  },
+  xml: {
+    parserKey: "xml",
+    defaultRole: "authority",
+    defaultRuntimeStatus: "active",
+    pollIntervalMinutes: 1440,
+    validatable: true,
   },
   manual: {
     parserKey: "manual",

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { SourceType } from "@versioneer/schemas/sources";
 
 import { onboardDiscoveredApp, checkSlugAvailable, lookupCaskToken } from "@/server/onboarding";
 import { validateSource } from "@/server/source-validation";
@@ -14,15 +15,8 @@ export function useCheckSlugAvailable(slug: string) {
 
 export function useValidateSource() {
   return useMutation({
-    mutationFn: (input: {
-      url: string;
-      sourceType:
-        | "sparkle"
-        | "github_releases"
-        | "homebrew_cask"
-        | "mac_app_store"
-        | "electron_generic";
-    }) => validateSource({ data: input }),
+    mutationFn: (input: { url: string; sourceType: SourceType; configJson?: string }) =>
+      validateSource({ data: input }),
   });
 }
 
@@ -51,16 +45,7 @@ export function useOnboardDiscoveredApp() {
         value: string;
       }[];
       sources?: {
-        sourceType:
-          | "sparkle"
-          | "github_releases"
-          | "manual"
-          | "homebrew_cask"
-          | "mac_app_store"
-          | "electron_generic"
-          | "rss_feed"
-          | "json_feed"
-          | "web_page";
+        sourceType: SourceType;
         baseUrl: string;
         parserKey: string;
         pollIntervalMinutes?: number;
