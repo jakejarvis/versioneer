@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { formatDuration } from "@/lib/format-duration";
 
 export const Route = createFileRoute("/sources/$sourceId")({
   component: SourceDetailPage,
@@ -625,17 +626,7 @@ function ParserRunsPanel({ fetchId, sourceId }: { fetchId: string; sourceId: str
         id: "duration",
         meta: { label: "Duration" },
         enableSorting: false,
-        cell: ({ row }) => {
-          if (!row.original.finishedAt) {
-            return "--";
-          }
-
-          const durationMs =
-            new Date(row.original.finishedAt).getTime() -
-            new Date(row.original.startedAt).getTime();
-
-          return `${Math.max(0, durationMs)}ms`;
-        },
+        cell: ({ row }) => formatDuration(row.original.startedAt, row.original.finishedAt),
       },
       {
         accessorKey: "errorMessage",

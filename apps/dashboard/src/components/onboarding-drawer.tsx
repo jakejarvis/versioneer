@@ -4,6 +4,7 @@ import { useForm, useStore } from "@tanstack/react-form";
 import { parseGitHubRepoUrl, resolveSourceUrl } from "@versioneer/core/validation";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { SOURCE_TYPE_DEFAULTS } from "@versioneer/schemas/sources";
+import { format } from "date-fns";
 import {
   Check,
   CircleAlert,
@@ -97,15 +98,9 @@ function slugify(name: string): string {
 
 function formatDate(iso: string | null): string | null {
   if (!iso) return null;
-  try {
-    return new Date(iso).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return iso.split("T")[0] ?? null;
-  }
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return format(d, "MMM d, yyyy");
 }
 
 interface OnboardingFormData {

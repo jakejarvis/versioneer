@@ -27,13 +27,15 @@ export function isArchCompatible(
   return artifactArch === clientArch;
 }
 
+import { msElapsedSince } from "@versioneer/core/dates";
+
 const STALENESS_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 /** Returns ISO date string if the source is stale (>30 days since last success), null otherwise. */
 export function computeStaleSince(lastSuccessAt: string | null): string | null {
   if (!lastSuccessAt) return null;
-  const elapsed = Date.now() - new Date(lastSuccessAt).getTime();
-  if (elapsed >= STALENESS_THRESHOLD_MS) {
+  const elapsed = msElapsedSince(lastSuccessAt);
+  if (elapsed !== null && elapsed >= STALENESS_THRESHOLD_MS) {
     return lastSuccessAt;
   }
   return null;

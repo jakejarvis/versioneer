@@ -253,6 +253,7 @@ export const pinRelease = createServerFn({ method: "POST" })
         pinnedReleaseId: id,
         pinnedAt: now,
         pinnedBy: context.user.email,
+        updatedAt: now,
       })
       .where(
         and(
@@ -281,6 +282,7 @@ export const unpinRelease = createServerFn({ method: "POST" })
         pinnedReleaseId: null,
         pinnedAt: null,
         pinnedBy: null,
+        updatedAt: new Date().toISOString(),
       })
       .where(
         and(

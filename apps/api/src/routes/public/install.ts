@@ -321,7 +321,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
       }
 
       const verificationJson = data.verification ? JSON.stringify(data.verification) : null;
-      const completedAt = data.status === "started" ? (existing?.completedAt ?? null) : now;
+      const completedAt = data.status === "started" ? null : now;
 
       if (existing) {
         await db

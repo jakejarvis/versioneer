@@ -3,6 +3,7 @@ import {
   setCachedRecentReleases,
   type CachedRecentRelease,
 } from "@versioneer/core/cache";
+import { compareDatesDesc } from "@versioneer/core/dates";
 import { createDb } from "@versioneer/db";
 import { apps, appLatestReleases } from "@versioneer/db";
 import { and, eq, isNotNull } from "drizzle-orm";
@@ -41,7 +42,7 @@ export const recentReleasesRoutes = new Hono<{ Bindings: Env }>()
       )
       .all();
 
-    rows.sort((a, b) => new Date(b.releasedAt!).getTime() - new Date(a.releasedAt!).getTime());
+    rows.sort((a, b) => compareDatesDesc(a.releasedAt, b.releasedAt));
 
     const items: CachedRecentRelease[] = rows.slice(0, 8).map((row) => ({
       appId: row.appId,

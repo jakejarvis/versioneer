@@ -2,6 +2,7 @@ import { createDb } from "@versioneer/db";
 import { discoveredApps } from "@versioneer/db";
 import { eq } from "drizzle-orm";
 
+import { msElapsedSince } from "../dates";
 import { sparkleParser, githubReleasesParser } from "../parsers";
 import { toGitHubApiReleasesUrl } from "../validation";
 import { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
@@ -34,7 +35,7 @@ export function shouldEnrich(row: {
 }): boolean {
   if (row.enrichmentStatus === "pending") return true;
   if (!row.enrichedAt) return true;
-  const age = Date.now() - new Date(row.enrichedAt).getTime();
+  const age = msElapsedSince(row.enrichedAt) ?? Infinity;
   return age > ENRICHMENT_STALE_MS;
 }
 

@@ -38,6 +38,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDuration } from "@/lib/format-duration";
 import { cn } from "@/lib/utils";
 
 const reviewSearch = { page: 1, pageSize: 25, status: "pending", queueType: "all" } as const;
@@ -793,7 +794,7 @@ function RunRow({ item }: { item: HomepageRunItem }) {
           )}
         </div>
         <div className="mt-2 text-xs text-muted-foreground">
-          duration {formatRunDuration(item.startedAt, item.completedAt)}
+          duration {formatDuration(item.startedAt, item.completedAt)}
           {item.actorId ? ` · ${item.actorId}` : " · system"}
         </div>
         {item.errorMessage ? (
@@ -967,17 +968,6 @@ function formatOverdue(overdueMinutes: number | null) {
   }
 
   return `${(hours / 24).toFixed(1)}d`;
-}
-
-function formatRunDuration(startedAt: string, completedAt: string | null) {
-  if (!completedAt) {
-    return "--";
-  }
-
-  const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${(ms / 60_000).toFixed(1)}m`;
 }
 
 const viewAllClassName =

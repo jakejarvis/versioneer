@@ -2,6 +2,7 @@ import { createDb } from "@versioneer/db";
 import { appAliases, discoveredApps, generateId, idPrefixes } from "@versioneer/db";
 import { eq, and, isNotNull, or } from "drizzle-orm";
 
+import { msElapsedSince } from "../dates";
 import { createLogger } from "../logger";
 import type { Env } from "./types";
 
@@ -142,8 +143,8 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
   if (!job.force) {
     const lastSync = await env.CONFIG_KV.get(LAST_SYNC_KV_KEY);
     if (lastSync) {
-      const elapsed = Date.now() - new Date(lastSync).getTime();
-      if (elapsed < SYNC_INTERVAL_MS) {
+      const elapsed = msElapsedSince(lastSync);
+      if (elapsed !== null && elapsed < SYNC_INTERVAL_MS) {
         log.info("cask sync skipped", { lastSyncMinutesAgo: Math.round(elapsed / 60000) });
         return;
       }
@@ -319,5 +320,6 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
 export async function isCaskSyncDue(env: Env): Promise<boolean> {
   const lastSync = await env.CONFIG_KV.get(LAST_SYNC_KV_KEY);
   if (!lastSync) return true;
-  return Date.now() - new Date(lastSync).getTime() >= SYNC_INTERVAL_MS;
+  const elapsed = msElapsedSince(lastSync);
+  return elapsed === null || elapsed >= SYNC_INTERVAL_MS;
 }

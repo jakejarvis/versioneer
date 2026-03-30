@@ -12,19 +12,12 @@ import {
 } from "@versioneer/db";
 import { and, desc, eq } from "drizzle-orm";
 
+import { toISODate } from "../dates";
 import { createLogger } from "../logger";
 import { getParser } from "../parsers";
 import { normalizeVersion, inferChannel } from "../versioning";
 import { normalizeReleaseNotes } from "./release-notes";
 import type { Env, ParseStepResult, SourceParseJob } from "./types";
-
-/** Convert any parseable date string (RFC 2822, ISO 8601, etc.) to ISO 8601. */
-function toISODate(dateStr: string | undefined | null): string | null {
-  if (!dateStr) return null;
-  const ms = new Date(dateStr).getTime();
-  if (Number.isNaN(ms)) return null;
-  return new Date(ms).toISOString();
-}
 
 export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<ParseStepResult> {
   const db = createDb(env.DB);

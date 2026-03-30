@@ -5,6 +5,7 @@
   "exports": {
     "./logger": "./src/logger.ts",
     "./cache": "./src/cache/index.ts",
+    "./dates": "./src/dates/index.ts",
     "./identity": "./src/identity/index.ts",
     "./parsers": "./src/parsers/index.ts",
     "./pipeline": "./src/pipeline/index.ts",

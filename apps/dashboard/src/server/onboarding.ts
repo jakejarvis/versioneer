@@ -49,7 +49,7 @@ const aliasInputSchema = z.object({
 
 const sourceInputSchema = z.object({
   sourceType: sourceTypeSchema,
-  baseUrl: z.string().url(),
+  baseUrl: z.string().url().max(2000),
   parserKey: z.string().min(1),
   pollIntervalMinutes: z.number().int().min(5).max(10080).default(60),
   label: z.string().optional(),

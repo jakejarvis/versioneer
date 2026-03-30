@@ -16,6 +16,7 @@ interface RecentRelease {
 function formatRelativeTime(dateStr: string): string {
   const now = Date.now();
   const then = new Date(dateStr).getTime();
+  if (Number.isNaN(then)) return "";
   const diffSeconds = Math.round((now - then) / 1000);
 
   const units: [Intl.RelativeTimeFormatUnit, number][] = [

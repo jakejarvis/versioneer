@@ -1,3 +1,4 @@
+import { msElapsedSince } from "@versioneer/core/dates";
 import { createLogger } from "@versioneer/core/logger";
 import {
   handleSourceParse,
@@ -75,9 +76,9 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
           .all();
         let queued = 0;
         for (const source of activeSources) {
-          const lastFetched = source.lastFetchedAt ? new Date(source.lastFetchedAt) : null;
+          const elapsed = msElapsedSince(source.lastFetchedAt, now.getTime());
           const intervalMs = source.pollIntervalMinutes * 60 * 1000;
-          if (!lastFetched || now.getTime() - lastFetched.getTime() >= intervalMs) {
+          if (elapsed === null || elapsed >= intervalMs) {
             try {
               await this.env.SOURCE_PIPELINE.create({
                 params: {
@@ -170,8 +171,8 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
         for (const candidate of candidates) {
           // Skip in_progress unless stuck for >15 minutes (crash recovery)
           if (candidate.enrichmentStatus === "in_progress") {
-            const age = Date.now() - new Date(candidate.updatedAt).getTime();
-            if (age < ENRICHMENT_STUCK_MS) continue;
+            const age = msElapsedSince(candidate.updatedAt);
+            if (age !== null && age < ENRICHMENT_STUCK_MS) continue;
           } else if (!shouldEnrich(candidate)) {
             continue;
           }

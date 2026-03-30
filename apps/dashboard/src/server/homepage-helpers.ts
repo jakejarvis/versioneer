@@ -1,3 +1,5 @@
+import { toEpochMs } from "@versioneer/core/dates";
+
 import type { AppSummary, AtRiskSourceItem, Source } from "@/api/types";
 
 export interface AtRiskSourceCandidate {
@@ -61,8 +63,8 @@ export function buildAtRiskSources(
       }
 
       if (left.risk === "error" && right.risk === "error") {
-        const leftFailure = left.lastFailureAt ? new Date(left.lastFailureAt).getTime() : 0;
-        const rightFailure = right.lastFailureAt ? new Date(right.lastFailureAt).getTime() : 0;
+        const leftFailure = toEpochMs(left.lastFailureAt) ?? 0;
+        const rightFailure = toEpochMs(right.lastFailureAt) ?? 0;
         return rightFailure - leftFailure;
       }
 
