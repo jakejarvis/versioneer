@@ -8,6 +8,7 @@ export function useCheckSlugAvailable(slug: string) {
     queryKey: ["slug-check", slug],
     queryFn: () => checkSlugAvailable({ data: { slug } }),
     enabled: slug.length >= 2,
+    staleTime: 0,
   });
 }
 
@@ -72,6 +73,7 @@ export function useOnboardDiscoveredApp() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["apps"] });
       void qc.invalidateQueries({ queryKey: ["discovered-apps"] });
+      void qc.invalidateQueries({ queryKey: ["discovered-app"] });
       void qc.invalidateQueries({ queryKey: ["catalog-suggestions"] });
       void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });

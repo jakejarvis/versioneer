@@ -18,14 +18,13 @@ import {
   sourceTypeSchema,
 } from "@versioneer/schemas/sources";
 import { env } from "cloudflare:workers";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
-import type { DbExecutor } from "./db-types";
 import { scheduleSourceFetch } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
-import { normalizeSourceBaseUrl, syncSourceDerivedAliases } from "./source-derived-aliases";
+import { buildSourceDerivedAliasInserts, normalizeSourceBaseUrl } from "./source-derived-aliases";
 
 // ──────────────────────────────────────────────────────────
 // Slug availability check
@@ -137,8 +136,14 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     const catalogIconR2Key = discoveredAppRow.iconR2Key;
     const appStatus = data.sourceValidated ? "public" : "draft";
 
-    const sourceIds = await db.transaction(async (tx) => {
-      await tx.insert(apps).values({
+    // Build all writes up-front, then execute atomically via db.batch().
+    // D1 does not support BEGIN/COMMIT as prepared statements, so
+    // db.transaction() cannot be used.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const writes: any[] = [];
+
+    writes.push(
+      db.insert(apps).values({
         id: appId,
         slug: data.app.slug,
         canonicalName: data.app.canonicalName,
@@ -150,50 +155,44 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
         publicTrackedAt: appStatus === "public" ? now : null,
         createdAt: now,
         updatedAt: now,
-      });
+      }),
+    );
 
-      for (const alias of data.aliases) {
-        try {
-          await assertNoConflictingExactAlias(tx, {
-            aliasType: alias.aliasType,
-            value: alias.value,
-            appId,
-          });
-        } catch (error) {
-          if (error instanceof AliasConflictError) {
-            throw new Error(
-              `Conflicting ${alias.aliasType.replaceAll("_", " ")} already belongs to app ${error.appId}`,
-              { cause: error },
-            );
-          }
-          throw error;
-        }
-
-        await ensureOnboardingAlias({
-          db: tx,
+    for (const alias of data.aliases) {
+      const normalizedValue = normalizeAliasValue(alias.aliasType, alias.value);
+      writes.push(
+        db.insert(appAliases).values({
+          id: generateId(idPrefixes.alias),
           appId,
           aliasType: alias.aliasType,
           value: alias.value,
+          normalizedValue,
+          isExact: true,
+          priority: 0,
+          confidenceWeight: 100,
           source: "onboarding",
-          now,
-        });
-      }
+          isActive: true,
+          createdAt: now,
+        }),
+      );
+    }
 
-      const createdSourceIds: string[] = [];
-      for (let i = 0; i < allSources.length; i++) {
-        const src = allSources[i]!;
-        const normalizedBaseUrl = normalizeSourceBaseUrl(src.sourceType, src.baseUrl);
-        const sourceId = generateId(idPrefixes.source);
-        const isPrimary = i === 0;
-        const defaultRole = defaultRoleForSourceType(src.sourceType);
-        const role = isPrimary
-          ? defaultRole
-          : defaultRole === "authority"
-            ? "corroborating"
-            : defaultRole;
-        const runtimeStatus = defaultRuntimeStatusForSourceType(src.sourceType);
+    const sourceIds: string[] = [];
+    for (let i = 0; i < allSources.length; i++) {
+      const src = allSources[i]!;
+      const normalizedBaseUrl = normalizeSourceBaseUrl(src.sourceType, src.baseUrl);
+      const sourceId = generateId(idPrefixes.source);
+      const isPrimary = i === 0;
+      const defaultRole = defaultRoleForSourceType(src.sourceType);
+      const role = isPrimary
+        ? defaultRole
+        : defaultRole === "authority"
+          ? "corroborating"
+          : defaultRole;
+      const runtimeStatus = defaultRuntimeStatusForSourceType(src.sourceType);
 
-        await tx.insert(sources).values({
+      writes.push(
+        db.insert(sources).values({
           id: sourceId,
           appId,
           sourceType: src.sourceType,
@@ -212,21 +211,24 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
           reviewedBy: context.user.email,
           createdAt: now,
           updatedAt: now,
-        });
+        }),
+      );
 
-        await syncSourceDerivedAliases({
-          db: tx,
+      writes.push(
+        ...buildSourceDerivedAliasInserts(db, {
           appId,
           sourceId,
           sourceType: src.sourceType,
           baseUrl: normalizedBaseUrl,
           now,
-        });
+        }),
+      );
 
-        createdSourceIds.push(sourceId);
-      }
+      sourceIds.push(sourceId);
+    }
 
-      await tx
+    writes.push(
+      db
         .update(discoveredApps)
         .set({
           status: "linked",
@@ -234,9 +236,11 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
           primarySuggestionId: null,
           updatedAt: now,
         })
-        .where(eq(discoveredApps.id, data.discoveredAppId));
+        .where(eq(discoveredApps.id, data.discoveredAppId)),
+    );
 
-      await tx.insert(auditLog).values({
+    writes.push(
+      db.insert(auditLog).values({
         id: generateId(idPrefixes.auditLog),
         eventType: "app_onboarded",
         actorType: "admin",
@@ -246,15 +250,15 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
         payloadJson: JSON.stringify({
           discoveredAppId: data.discoveredAppId,
           aliases: data.aliases.length,
-          sources: createdSourceIds.length,
+          sources: sourceIds.length,
           sourceValidated: data.sourceValidated,
           status: appStatus,
         }),
         createdAt: now,
-      });
+      }),
+    );
 
-      return createdSourceIds;
-    });
+    await db.batch(writes as [(typeof writes)[0], ...typeof writes]);
 
     for (const sourceId of sourceIds) {
       await scheduleSourceFetch({ db, sourceId, reason: "onboarding", force: true });
@@ -273,40 +277,3 @@ export const lookupCaskToken = createServerFn({ method: "GET" })
     const token = await lookupCaskTokenByBundleId(env.CONFIG_KV, bundleId);
     return { caskToken: token };
   });
-
-async function ensureOnboardingAlias(params: {
-  db: DbExecutor;
-  appId: string;
-  aliasType: z.infer<typeof aliasInputSchema>["aliasType"];
-  value: string;
-  source: string;
-  now: string;
-}) {
-  const normalizedValue = normalizeAliasValue(params.aliasType, params.value);
-  const existing = await params.db
-    .select({ id: appAliases.id })
-    .from(appAliases)
-    .where(
-      and(
-        eq(appAliases.appId, params.appId),
-        eq(appAliases.aliasType, params.aliasType),
-        eq(appAliases.normalizedValue, normalizedValue),
-      ),
-    )
-    .get();
-  if (existing) return;
-
-  await params.db.insert(appAliases).values({
-    id: generateId(idPrefixes.alias),
-    appId: params.appId,
-    aliasType: params.aliasType,
-    value: params.value,
-    normalizedValue,
-    isExact: true,
-    priority: 0,
-    confidenceWeight: 100,
-    source: params.source,
-    isActive: true,
-    createdAt: params.now,
-  });
-}

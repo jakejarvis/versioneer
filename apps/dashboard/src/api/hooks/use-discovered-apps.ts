@@ -36,6 +36,7 @@ export function useDismissDiscoveredApp() {
     mutationFn: (id: string) => dismissDiscoveredApp({ data: { id } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["discovered-apps"] });
+      void qc.invalidateQueries({ queryKey: ["discovered-app"] });
       void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },

@@ -145,8 +145,8 @@ export const createRelease = createServerFn({ method: "POST" })
     const versionNormalized = normalizeVersion(data.versionRaw);
     const channel = data.channel || inferChannel(data.versionRaw);
 
-    await db.transaction(async (tx) => {
-      await tx.insert(releases).values({
+    await db.batch([
+      db.insert(releases).values({
         id,
         appId: data.appId,
         versionRaw: data.versionRaw,
@@ -160,9 +160,8 @@ export const createRelease = createServerFn({ method: "POST" })
         releaseNotesUrl: data.releaseNotesUrl ?? null,
         createdAt: now,
         updatedAt: now,
-      });
-
-      await tx.insert(auditLog).values({
+      }),
+      db.insert(auditLog).values({
         id: generateId(idPrefixes.auditLog),
         eventType: "release_created",
         actorType: "admin",
@@ -171,8 +170,8 @@ export const createRelease = createServerFn({ method: "POST" })
         targetId: id,
         payloadJson: JSON.stringify({ appId: data.appId, versionRaw: data.versionRaw, channel }),
         createdAt: now,
-      });
-    });
+      }),
+    ]);
 
     await scheduleRecomputeLatest({ db, appId: data.appId, channel });
 
@@ -197,10 +196,9 @@ export const updateRelease = createServerFn({ method: "POST" })
     if (fields.releaseNotesHtml !== undefined) updates.releaseNotesHtml = fields.releaseNotesHtml;
     if (fields.releaseNotesUrl !== undefined) updates.releaseNotesUrl = fields.releaseNotesUrl;
 
-    await db.transaction(async (tx) => {
-      await tx.update(releases).set(updates).where(eq(releases.id, id));
-
-      await tx.insert(auditLog).values({
+    await db.batch([
+      db.update(releases).set(updates).where(eq(releases.id, id)),
+      db.insert(auditLog).values({
         id: generateId(idPrefixes.auditLog),
         eventType: "release_updated",
         actorType: "admin",
@@ -209,8 +207,8 @@ export const updateRelease = createServerFn({ method: "POST" })
         targetId: id,
         payloadJson: JSON.stringify(fields),
         createdAt: now,
-      });
-    });
+      }),
+    ]);
 
     const recomputeChannels = new Set<string>();
     if (fields.status !== undefined || fields.channel !== undefined) {

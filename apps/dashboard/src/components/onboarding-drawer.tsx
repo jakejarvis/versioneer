@@ -1,6 +1,6 @@
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
-import { useForm } from "@tanstack/react-form";
+import { useForm, useStore } from "@tanstack/react-form";
 import { parseGitHubRepoUrl, resolveSourceUrl } from "@versioneer/core/validation";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { SOURCE_TYPE_DEFAULTS } from "@versioneer/schemas/sources";
@@ -16,7 +16,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 
 import { useDiscoveredApp } from "@/api/hooks/use-discovered-apps";
 import {
@@ -192,7 +192,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
     },
   });
 
-  const [slug, setSlug] = useState("");
+  const slug = useStore(form.store, (s) => s.values.slug);
   const slugCheck = useCheckSlugAvailable(slug);
 
   // On-demand cask token lookup when discovered app has bundleId but no cask token
@@ -270,7 +270,6 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
     }
 
     const newSlug = slugify(discoveredApp.appName);
-    setSlug(newSlug);
     form.reset({
       canonicalName: discoveredApp.appName,
       slug: newSlug,
@@ -313,8 +312,9 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
   const confidenceScore = discoveredApp?.confidenceScore ?? 0;
   const enrichmentHasReleases = (discoveredApp?.enrichedReleaseCount ?? 0) > 0;
 
+  const canonicalName = useStore(form.store, (s) => s.values.canonicalName);
   const canSubmit =
-    slug.length > 0 && form.getFieldValue("canonicalName").length > 0 && slugCheck.data?.available;
+    slug.length > 0 && canonicalName.length > 0 && slugCheck.data?.available !== false;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -439,7 +439,6 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                                 field.handleChange(e.target.value);
                                 const newSlug = slugify(e.target.value);
                                 form.setFieldValue("slug", newSlug);
-                                setSlug(newSlug);
                               }}
                               className="h-8 text-sm"
                             />
@@ -464,7 +463,6 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
                               value={field.state.value}
                               onChange={(e) => {
                                 field.handleChange(e.target.value);
-                                setSlug(e.target.value);
                               }}
                               className="h-8 font-mono text-sm"
                             />

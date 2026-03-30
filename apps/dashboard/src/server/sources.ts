@@ -21,11 +21,14 @@ import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
-import type { DbExecutor } from "./db-types";
+import type { Db } from "./db-types";
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { scheduleSourceFetch, scheduleSourceReparse } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
-import { normalizeSourceBaseUrl, syncSourceDerivedAliases } from "./source-derived-aliases";
+import {
+  normalizeSourceBaseUrl,
+  prepareSyncSourceDerivedAliasWrites,
+} from "./source-derived-aliases";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
 
@@ -67,23 +70,23 @@ function sourceFetchOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
   }
 }
 
-async function createAuthorityHandoffSuggestion(params: {
-  db: DbExecutor;
+async function prepareAuthorityHandoffInsert(params: {
+  db: Db;
   appId: string;
   channel: string | null;
   fromSourceId: string;
   toSourceId: string;
   now: string;
-}): Promise<void> {
+}) {
   const dedupeKey = `authority_handoff:${params.appId}:${params.channel ?? "stable"}:${params.fromSourceId}:${params.toSourceId}`;
   const existing = await params.db
     .select({ id: catalogSuggestions.id })
     .from(catalogSuggestions)
     .where(eq(catalogSuggestions.dedupeKey, dedupeKey))
     .get();
-  if (existing) return;
+  if (existing) return null;
 
-  await params.db.insert(catalogSuggestions).values({
+  return params.db.insert(catalogSuggestions).values({
     id: generateId(idPrefixes.catalogSuggestion),
     queueType: "authority_handoff",
     status: "pending",
@@ -259,8 +262,41 @@ export const createSource = createServerFn({ method: "POST" })
     const nextOrdinal = (maxOrdinalResult?.maxOrd ?? -1) + 1;
 
     const shouldQueueFetch = data.reviewStatus === "approved" && runtimeStatus === "active";
-    await db.transaction(async (tx) => {
-      await tx.insert(sources).values({
+
+    // Pre-batch reads
+    const derivedAliasWrites =
+      data.reviewStatus === "approved"
+        ? await prepareSyncSourceDerivedAliasWrites(db, {
+            appId: data.appId,
+            sourceId: id,
+            sourceType: data.sourceType,
+            baseUrl: normalizedBaseUrl,
+            now,
+          })
+        : [];
+
+    let handoffInsert: Awaited<ReturnType<typeof prepareAuthorityHandoffInsert>> = null;
+    if (conflictingAuthority) {
+      const appRow = await db
+        .select({ status: apps.status })
+        .from(apps)
+        .where(eq(apps.id, data.appId))
+        .get();
+      if (appRow?.status === "public") {
+        handoffInsert = await prepareAuthorityHandoffInsert({
+          db,
+          appId: data.appId,
+          channel: data.channel ?? null,
+          fromSourceId: conflictingAuthority.id,
+          toSourceId: id,
+          now,
+        });
+      }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const writes: any[] = [
+      db.insert(sources).values({
         id,
         appId: data.appId,
         sourceType: data.sourceType,
@@ -279,38 +315,10 @@ export const createSource = createServerFn({ method: "POST" })
         reviewedBy: data.reviewStatus === "approved" ? context.user.email : null,
         createdAt: now,
         updatedAt: now,
-      });
-
-      if (data.reviewStatus === "approved") {
-        await syncSourceDerivedAliases({
-          db: tx,
-          appId: data.appId,
-          sourceId: id,
-          sourceType: data.sourceType,
-          baseUrl: normalizedBaseUrl,
-          now,
-        });
-      }
-
-      if (conflictingAuthority) {
-        const appRow = await tx
-          .select({ status: apps.status })
-          .from(apps)
-          .where(eq(apps.id, data.appId))
-          .get();
-        if (appRow?.status === "public") {
-          await createAuthorityHandoffSuggestion({
-            db: tx,
-            appId: data.appId,
-            channel: data.channel ?? null,
-            fromSourceId: conflictingAuthority.id,
-            toSourceId: id,
-            now,
-          });
-        }
-      }
-
-      await tx.insert(auditLog).values({
+      }),
+      ...derivedAliasWrites,
+      ...(handoffInsert ? [handoffInsert] : []),
+      db.insert(auditLog).values({
         id: generateId(idPrefixes.auditLog),
         eventType: "source_created",
         actorType: "admin",
@@ -319,8 +327,9 @@ export const createSource = createServerFn({ method: "POST" })
         targetId: id,
         payloadJson: JSON.stringify(data),
         createdAt: now,
-      });
-    });
+      }),
+    ];
+    await db.batch(writes as [(typeof writes)[0], ...typeof writes]);
 
     if (shouldQueueFetch) {
       await scheduleSourceFetch({ db, sourceId: id, reason: "source-create", force: true });
@@ -432,37 +441,40 @@ export const updateSource = createServerFn({ method: "POST" })
         fields.configJson !== undefined ||
         fields.parserKey !== undefined ||
         (fields.status === "active" && existing.status !== "active"));
-    await db.transaction(async (tx) => {
-      await tx.update(sources).set(updates).where(eq(sources.id, id));
+    // Pre-batch reads
+    const derivedAliasWrites = await prepareSyncSourceDerivedAliasWrites(db, {
+      appId: existing.appId,
+      sourceId: existing.id,
+      sourceType: existing.sourceType,
+      baseUrl: nextReviewStatus === "approved" ? nextBaseUrl : null,
+      now,
+    });
 
-      await syncSourceDerivedAliases({
-        db: tx,
-        appId: existing.appId,
-        sourceId: existing.id,
-        sourceType: existing.sourceType,
-        baseUrl: nextReviewStatus === "approved" ? nextBaseUrl : null,
-        now,
-      });
-
-      if (conflictingAuthority) {
-        const appRow = await tx
-          .select({ status: apps.status })
-          .from(apps)
-          .where(eq(apps.id, existing.appId))
-          .get();
-        if (appRow?.status === "public") {
-          await createAuthorityHandoffSuggestion({
-            db: tx,
-            appId: existing.appId,
-            channel: nextChannel ?? null,
-            fromSourceId: conflictingAuthority.id,
-            toSourceId: existing.id,
-            now,
-          });
-        }
+    let handoffInsert: Awaited<ReturnType<typeof prepareAuthorityHandoffInsert>> = null;
+    if (conflictingAuthority) {
+      const appRow = await db
+        .select({ status: apps.status })
+        .from(apps)
+        .where(eq(apps.id, existing.appId))
+        .get();
+      if (appRow?.status === "public") {
+        handoffInsert = await prepareAuthorityHandoffInsert({
+          db,
+          appId: existing.appId,
+          channel: nextChannel ?? null,
+          fromSourceId: conflictingAuthority.id,
+          toSourceId: existing.id,
+          now,
+        });
       }
+    }
 
-      await tx.insert(auditLog).values({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const writes: any[] = [
+      db.update(sources).set(updates).where(eq(sources.id, id)),
+      ...derivedAliasWrites,
+      ...(handoffInsert ? [handoffInsert] : []),
+      db.insert(auditLog).values({
         id: generateId(idPrefixes.auditLog),
         eventType: "source_updated",
         actorType: "admin",
@@ -471,8 +483,9 @@ export const updateSource = createServerFn({ method: "POST" })
         targetId: id,
         payloadJson: JSON.stringify(fields),
         createdAt: now,
-      });
-    });
+      }),
+    ];
+    await db.batch(writes as [(typeof writes)[0], ...typeof writes]);
 
     if (shouldQueueFetch) {
       await scheduleSourceFetch({
