@@ -338,7 +338,7 @@ final class InstallCoordinator {
         if let urlString = installPlan.artifact?.downloadUrl,
           let url = URL(string: urlString)
         {
-          await NSWorkspace.shared.open(url)
+          NSWorkspace.shared.open(url)
         }
         verificationSummary = InstallVerificationSummary(
           strategy: installPlan.strategy.rawValue,

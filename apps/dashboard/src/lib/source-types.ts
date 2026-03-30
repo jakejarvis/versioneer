@@ -135,18 +135,28 @@ export const SOURCE_CONFIG_FIELDS: Partial<Record<SourceType, SourceConfigSchema
     description: "JSONPath expressions to extract values from JSON responses.",
     fields: [
       {
+        key: "releasesPath",
+        label: "Releases Path",
+        placeholder: "$.releases[*]",
+        required: false,
+        description:
+          "JSONPath to array of release objects. Leave empty for single-release feeds.",
+      },
+      {
         key: "versionPath",
         label: "Version Path",
         placeholder: "$.version",
         required: true,
-        description: "JSONPath expression for the version value",
+        description:
+          "JSONPath for the version value. Relative to each release when Releases Path is set.",
       },
       {
         key: "downloadPath",
         label: "Download Path",
         placeholder: "$.download_url",
         required: false,
-        description: "JSONPath expression for the download URL",
+        description:
+          "JSONPath for the download URL. Relative to each release when Releases Path is set.",
       },
     ],
   },
@@ -154,18 +164,28 @@ export const SOURCE_CONFIG_FIELDS: Partial<Record<SourceType, SourceConfigSchema
     description: "XPath expressions to extract values from XML responses.",
     fields: [
       {
+        key: "releasesXPath",
+        label: "Releases XPath",
+        placeholder: "//release",
+        required: false,
+        description:
+          "XPath to repeating release elements. Leave empty for single-release feeds.",
+      },
+      {
         key: "versionXPath",
         label: "Version XPath",
         placeholder: "//version/text()",
         required: true,
-        description: "XPath expression for the version value",
+        description:
+          "XPath for the version value. Use ./ prefix for relative paths when Releases XPath is set.",
       },
       {
         key: "downloadXPath",
         label: "Download XPath",
         placeholder: "//download/@url",
         required: false,
-        description: "XPath expression for the download URL",
+        description:
+          "XPath for the download URL. Use ./ prefix when Releases XPath is set.",
       },
     ],
   },

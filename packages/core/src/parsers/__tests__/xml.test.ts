@@ -129,4 +129,90 @@ describe("xmlParser", () => {
     expect(result.releases[0]!.downloadUrl).toBeUndefined();
     expect(result.confidence).toBe(50);
   });
+
+  describe("multi-release via releasesXPath", () => {
+    const MULTI_XML = `<?xml version="1.0"?>
+<releases>
+  <release>
+    <version>2.0.0</version>
+    <download url="https://example.com/app-2.0.0.dmg"/>
+  </release>
+  <release>
+    <version>2.1.0-beta1</version>
+    <download url="https://example.com/app-2.1.0-beta1.dmg"/>
+  </release>
+  <release>
+    <version>3.0.0</version>
+    <download url="https://example.com/app-3.0.0.dmg"/>
+  </release>
+</releases>`;
+
+    it("extracts multiple releases", () => {
+      const result = xmlParser.parse(MULTI_XML, {
+        releasesXPath: "//release",
+        versionXPath: "./version/text()",
+        downloadXPath: "./download/@url",
+      });
+      expect(result.releases).toHaveLength(3);
+      expect(result.releases[0]!.versionRaw).toBe("2.0.0");
+      expect(result.releases[0]!.downloadUrl).toBe("https://example.com/app-2.0.0.dmg");
+      expect(result.releases[1]!.versionRaw).toBe("2.1.0-beta1");
+      expect(result.releases[2]!.versionRaw).toBe("3.0.0");
+      expect(result.confidence).toBe(70);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("infers channels and prerelease flags per release", () => {
+      const result = xmlParser.parse(MULTI_XML, {
+        releasesXPath: "//release",
+        versionXPath: "./version/text()",
+      });
+      expect(result.releases[0]!.channel).toBe("stable");
+      expect(result.releases[0]!.isPrerelease).toBe(false);
+      expect(result.releases[1]!.channel).toBe("beta");
+      expect(result.releases[1]!.isPrerelease).toBe(true);
+    });
+
+    it("returns error when releasesXPath matches nothing", () => {
+      const result = xmlParser.parse(MULTI_XML, {
+        releasesXPath: "//nonexistent",
+        versionXPath: "./version/text()",
+      });
+      expect(result.releases).toHaveLength(0);
+      expect(result.errors[0]).toContain("matched no elements");
+    });
+
+    it("skips elements with missing version", () => {
+      const xml = `<?xml version="1.0"?>
+<releases>
+  <release><version>1.0.0</version></release>
+  <release><notes>no version here</notes></release>
+  <release><version>2.0.0</version></release>
+</releases>`;
+      const result = xmlParser.parse(xml, {
+        releasesXPath: "//release",
+        versionXPath: "./version/text()",
+      });
+      expect(result.releases).toHaveLength(2);
+      expect(result.releases[0]!.versionRaw).toBe("1.0.0");
+      expect(result.releases[1]!.versionRaw).toBe("2.0.0");
+      expect(result.errors.length).toBeGreaterThan(0);
+    });
+
+    it("stores releasesXPath in metadata", () => {
+      const result = xmlParser.parse(MULTI_XML, {
+        releasesXPath: "//release",
+        versionXPath: "./version/text()",
+      });
+      expect(result.releases[0]!.metadata!.releasesXPath).toBe("//release");
+    });
+
+    it("confidence is 50 without download artifacts", () => {
+      const result = xmlParser.parse(MULTI_XML, {
+        releasesXPath: "//release",
+        versionXPath: "./version/text()",
+      });
+      expect(result.confidence).toBe(50);
+    });
+  });
 });
