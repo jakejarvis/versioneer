@@ -1,6 +1,7 @@
 import { ArrowUpRightIcon, HardDriveDownloadIcon } from "lucide-react";
 
 import { RecentReleases } from "./components/recent-releases";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 
 export function App() {
   return (
@@ -40,27 +41,41 @@ export function App() {
         </div>
       </header>
 
-      <main className="space-y-8">
-        <p className="leading-relaxed">
-          A modern replacement for MacUpdater <span className="text-muted-foreground">(RIP)</span>{" "}
-          focused on widespread app compatibility, privacy-friendly data crowdsourcing, and safe
-          one-click installs, all behind a beautiful, fast, and native UI.
+      <main className="space-y-6">
+        <p className="leading-relaxed text-sm">
+          A modern replacement for{" "}
+          <a
+            href="https://www.corecode.io/macupdater/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground hover:text-foreground/80 underline-offset-4 underline"
+          >
+            MacUpdater
+          </a>{" "}
+          <span className="text-muted-foreground">(RIP)</span> focused on widespread app
+          compatibility, privacy-friendly data crowdsourcing, and safe one-click installs, all
+          behind a beautiful, fast, and native UI.
         </p>
 
         <div className="flex items-center gap-1">
-          <a
-            href="https://dl.versioneer.app/latest/Versioneer.zip"
-            className="text-foreground hover:text-foreground/80 inline-flex items-center gap-2 underline-offset-4 underline text-sm"
-          >
-            <HardDriveDownloadIcon className="size-3 text-foreground" />
-            Download
-          </a>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                // href="https://dl.versioneer.app/latest/Versioneer.zip"
+                className="cursor-not-allowed text-foreground hover:text-foreground/80 inline-flex items-center gap-2 underline-offset-4 underline text-sm"
+              >
+                <HardDriveDownloadIcon className="size-3 text-foreground" />
+                Download
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Coming soon™</TooltipContent>
+          </Tooltip>
         </div>
 
         <RecentReleases />
       </main>
 
-      <footer className="mt-12 text-sm text-muted-foreground border-t border-foreground/10 pt-6">
+      <footer className="mt-8 text-sm text-muted-foreground border-t border-foreground/10 pt-6">
         <p>
           <span className="text-muted-foreground">
             Created by{" "}

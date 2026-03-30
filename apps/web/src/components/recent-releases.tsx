@@ -101,7 +101,7 @@ export function RecentReleases() {
   }
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-5 mt-8">
       <h2 className="text-sm font-medium text-muted-foreground">Latest Updates</h2>
       <div className="relative">
         {loading ? (
@@ -109,10 +109,13 @@ export function RecentReleases() {
         ) : (
           <ul className="space-y-3">
             {items.map((item) => (
-              <li key={item.releaseId} className="flex items-center gap-3 text-sm">
+              <li
+                key={item.releaseId}
+                className="flex items-center gap-2.5 text-[13px] select-none"
+              >
                 <AppIcon name={item.appName} iconUrl={item.iconUrl} />
                 <span className="text-foreground truncate">{item.appName}</span>
-                <span className="text-muted-foreground font-mono text-xs">{item.version}</span>
+                <span className="text-muted-foreground font-mono text-[11px]">{item.version}</span>
                 <span className="ml-auto text-muted-foreground/60 text-xs whitespace-nowrap">
                   {formatRelativeTime(item.releasedAt)}
                 </span>
@@ -121,7 +124,7 @@ export function RecentReleases() {
           </ul>
         )}
         <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-28"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-48"
           style={{
             background: "linear-gradient(to bottom, transparent, var(--background))",
           }}
