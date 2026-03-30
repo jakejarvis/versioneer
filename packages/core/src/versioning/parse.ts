@@ -59,10 +59,20 @@ export function parseVersion(raw: string): ParsedVersion {
     }
   }
 
-  // Parse numeric segments
+  // Reject consecutive dots (e.g. "1..2")
+  if (/\.{2,}/.test(working)) {
+    return emptyVersion(raw);
+  }
+
+  // Strip trailing dots (e.g. "1.2.3." → "1.2.3")
+  working = working.replace(/\.+$/, "");
+
+  // Parse numeric segments, clamping to valid range
+  const MAX_SEGMENT = 9999999999; // 10 digits — must fit zero-padded normalization
   const segments = working.split(".").map((s) => {
     const n = parseInt(s, 10);
-    return isNaN(n) ? 0 : n;
+    if (isNaN(n)) return 0;
+    return Math.min(Math.max(n, 0), MAX_SEGMENT);
   });
 
   if (segments.length === 0 || (segments.length === 1 && segments[0] === 0 && working !== "0")) {

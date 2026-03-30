@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import { compareVersionStrings, isNewer, sortVersions, latestVersion } from "../compare";
+import { normalizeVersion } from "../normalize";
 
 describe("compareVersionStrings", () => {
   it("1.0.0 < 1.0.1", () => {
@@ -49,5 +50,24 @@ describe("latestVersion", () => {
 
   it("returns null for empty array", () => {
     expect(latestVersion([])).toBeNull();
+  });
+});
+
+describe("normalized string comparison", () => {
+  it("normalized release sorts after pre-release via direct comparison", () => {
+    const release = normalizeVersion("1.0.0");
+    const beta = normalizeVersion("1.0.0-beta1");
+    // Normalized strings are designed for direct lexicographic comparison.
+    // Do NOT re-parse them via compareVersionStrings — that would mangle
+    // the internal "-0.001.…" pre-release suffix format.
+    expect(release > beta).toBe(true);
+  });
+
+  it("normalized pre-release ordering preserved via direct comparison", () => {
+    const alpha = normalizeVersion("1.0.0-alpha1");
+    const beta = normalizeVersion("1.0.0-beta1");
+    const rc = normalizeVersion("1.0.0-rc1");
+    expect(alpha < beta).toBe(true);
+    expect(beta < rc).toBe(true);
   });
 });

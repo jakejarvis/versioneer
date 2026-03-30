@@ -13,7 +13,6 @@ import { eq, and } from "drizzle-orm";
 
 import { setCachedLatest, recentReleasesKey } from "../cache";
 import type { CacheKV } from "../cache";
-import { compareVersionStrings } from "../versioning";
 import type { Env, RecomputeLatestJob } from "./types";
 
 /**
@@ -125,9 +124,14 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
 
     if (!winningRelease) {
       // Sort by normalized version descending, pick highest
-      candidateReleases.sort((a, b) =>
-        compareVersionStrings(b.versionNormalized, a.versionNormalized),
-      );
+      // Compare normalized strings directly — they are zero-padded for
+      // lexicographic ordering.  Do NOT re-parse via compareVersionStrings()
+      // as that would mangle the internal format (e.g. "-0.001.…" suffixes).
+      candidateReleases.sort((a, b) => {
+        if (b.versionNormalized > a.versionNormalized) return 1;
+        if (b.versionNormalized < a.versionNormalized) return -1;
+        return 0;
+      });
       winningRelease = candidateReleases[0]!;
     }
 

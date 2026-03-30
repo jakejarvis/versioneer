@@ -77,4 +77,44 @@ describe("parseVersion", () => {
     expect(v.preReleaseTag).toBe("alpha");
     expect(v.preReleaseNumber).toBe(1);
   });
+
+  it("parses single-segment version", () => {
+    const v = parseVersion("5");
+    expect(v.valid).toBe(true);
+    expect(v.major).toBe(5);
+    expect(v.minor).toBe(0);
+    expect(v.patch).toBe(0);
+  });
+
+  it("parses zero as valid version", () => {
+    const v = parseVersion("0");
+    expect(v.valid).toBe(true);
+    expect(v.major).toBe(0);
+  });
+
+  it("rejects trailing dot", () => {
+    const v = parseVersion("1.2.3.");
+    expect(v.valid).toBe(true);
+    expect(v.major).toBe(1);
+    expect(v.minor).toBe(2);
+    expect(v.patch).toBe(3);
+    expect(v.extra).toEqual([]);
+  });
+
+  it("rejects consecutive dots", () => {
+    const v = parseVersion("1..2");
+    expect(v.valid).toBe(false);
+  });
+
+  it("clamps negative segments to zero", () => {
+    const v = parseVersion("-1.0.0");
+    expect(v.valid).toBe(true);
+    expect(v.major).toBe(0);
+  });
+
+  it("clamps segments exceeding 10-digit limit", () => {
+    const v = parseVersion("99999999999.0.0");
+    expect(v.valid).toBe(true);
+    expect(v.major).toBe(9999999999);
+  });
 });

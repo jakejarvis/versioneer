@@ -757,6 +757,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       let localReasonCode: AppDecision["localReasonCode"] = "not_found";
       let latestVersion: string | null = null;
       let latestVersionRaw: string | null = null;
+      let latestVersionNormalized: string | null = null;
       let releasedAt: string | null = null;
       let latestReleaseId: string | null = null;
       let matchedArtifact: AppDecision["artifact"] = null;
@@ -800,8 +801,9 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
             );
 
             if (compatibleArtifact || releaseArtifacts.length === 0) {
-              latestVersion = latest.versionNormalized;
+              latestVersion = latest.versionRaw;
               latestVersionRaw = latest.versionRaw;
+              latestVersionNormalized = latest.versionNormalized;
               releasedAt = latest.releasedAt;
               latestReleaseId = latest.releaseId;
               installStrategy = latest.installStrategy;
@@ -854,8 +856,9 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
               );
 
               if (found) {
-                latestVersion = found.versionNormalized;
+                latestVersion = found.versionRaw;
                 latestVersionRaw = found.versionRaw;
+                latestVersionNormalized = found.versionNormalized;
                 releasedAt = found.releasedAt;
                 latestReleaseId = found.releaseId;
                 installStrategy = latest.installStrategy;
@@ -874,11 +877,11 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
 
             if (latestVersion) {
               if (installedApp.version) {
-                // Compare already-normalized strings directly — they are zero-padded
+                // Compare normalized strings directly — they are zero-padded
                 // for lexicographic ordering.  Re-parsing via compareVersionStrings()
                 // would mangle pre-release suffixes (e.g. "-0.001.…" → extra segments).
                 const installedNormalized = normalizeVersion(installedApp.version);
-                if (installedNormalized >= latestVersion) {
+                if (latestVersionNormalized && installedNormalized >= latestVersionNormalized) {
                   decision = "up_to_date";
                 } else {
                   decision = "update_available";
