@@ -1,6 +1,8 @@
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
+import { extractSourceIdentifier, resolveSourceUrl } from "@versioneer/core/validation";
+import type { SourceType } from "@versioneer/schemas/sources";
 import { ArrowLeft, Ban, Inbox, RefreshCw, RotateCcw, Save, Zap } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -35,6 +37,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDuration } from "@/lib/format-duration";
+import { SOURCE_TYPES } from "@/lib/source-types";
 
 export const Route = createFileRoute("/sources/$sourceId")({
   component: SourceDetailPage,
@@ -209,7 +212,11 @@ function SourceDetailPage() {
         </div>
       ) : null}
 
-      <SourceEditForm sourceId={sourceId} source={source} />
+      <SourceEditForm
+        sourceId={sourceId}
+        sourceType={source.sourceType as SourceType}
+        source={source}
+      />
 
       <ConfirmDialog
         open={disableConfirmOpen}
@@ -267,9 +274,11 @@ function SourceDetailPage() {
 
 function SourceEditForm({
   sourceId,
+  sourceType,
   source,
 }: {
   sourceId: string;
+  sourceType: SourceType;
   source: {
     label: string | null;
     baseUrl: string | null;
@@ -281,20 +290,22 @@ function SourceEditForm({
   };
 }) {
   const updateSource = useUpdateSource(sourceId);
+  const typeConfig = SOURCE_TYPES[sourceType];
 
   const form = useForm({
     defaultValues: {
       label: source.label ?? "",
-      baseUrl: source.baseUrl ?? "",
+      identifier: extractSourceIdentifier(sourceType, source.baseUrl),
       parserKey: source.parserKey,
       pollIntervalMinutes: source.pollIntervalMinutes,
       configJson: source.configJson ?? "",
     },
     onSubmit: async ({ value }) => {
+      const baseUrl = resolveSourceUrl(sourceType, value.identifier);
       updateSource.mutate(
         {
           label: value.label || null,
-          baseUrl: value.baseUrl || null,
+          baseUrl: baseUrl || null,
           parserKey: value.parserKey,
           pollIntervalMinutes: value.pollIntervalMinutes,
           configJson: value.configJson || null,
@@ -340,19 +351,25 @@ function SourceEditForm({
             </FormField>
           )}
         </form.Field>
-        <form.Field name="baseUrl">
-          {(field) => (
-            <FormField label="Base URL" name={field.name} meta={field.state.meta}>
-              <Input
-                id={field.name}
-                placeholder="https://..."
-                value={field.state.value}
-                onChange={(e) => field.handleChange(e.target.value)}
-                onBlur={field.handleBlur}
-              />
-            </FormField>
-          )}
-        </form.Field>
+        {sourceType !== "manual" ? (
+          <form.Field name="identifier">
+            {(field) => (
+              <FormField
+                label={typeConfig.input.label || "URL"}
+                name={field.name}
+                meta={field.state.meta}
+              >
+                <Input
+                  id={field.name}
+                  placeholder={typeConfig.input.placeholder}
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                />
+              </FormField>
+            )}
+          </form.Field>
+        ) : null}
         <form.Field
           name="parserKey"
           validators={{

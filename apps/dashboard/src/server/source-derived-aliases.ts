@@ -1,5 +1,5 @@
 import { normalizeAliasValue } from "@versioneer/core/identity";
-import { toGitHubApiReleasesUrl } from "@versioneer/core/validation";
+import { resolveSourceUrl } from "@versioneer/core/validation";
 import { appAliases, generateId, idPrefixes } from "@versioneer/db";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { and, eq, ne } from "drizzle-orm";
@@ -51,10 +51,9 @@ export function normalizeSourceBaseUrl(
   baseUrl: string | null,
 ): string | null {
   if (!baseUrl) return null;
-  if (sourceType === "github_releases") {
-    return toGitHubApiReleasesUrl(baseUrl) ?? baseUrl;
-  }
-  return baseUrl;
+  // resolveSourceUrl handles identifier → URL for all types
+  // (e.g. "owner/repo" → GitHub API URL, "firefox" → Homebrew API URL)
+  return resolveSourceUrl(sourceType, baseUrl) ?? baseUrl;
 }
 
 export async function syncSourceDerivedAliases(params: {

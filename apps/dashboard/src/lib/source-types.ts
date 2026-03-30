@@ -72,3 +72,28 @@ export const SOURCE_TYPES = {
 export function defaultLabelForSourceType(sourceType: SourceType) {
   return SOURCE_TYPES[sourceType].label;
 }
+
+/** Source types that require a configJson field (and their placeholder / description). */
+export const SOURCE_CONFIG_FIELDS: Partial<
+  Record<SourceType, { placeholder: string; description: string }>
+> = {
+  web_page: {
+    placeholder: '{\n  "versionSelector": "",\n  "downloadSelector": ""\n}',
+    description: "CSS selectors to extract version and download URLs.",
+  },
+  regex: {
+    placeholder:
+      '{\n  "versionPattern": "(\\\\d+\\\\.\\\\d+\\\\.\\\\d+)",\n  "downloadPattern": "",\n  "flags": "i"\n}',
+    description:
+      "Regex patterns to extract version (and optionally download URL) from the response body.",
+  },
+  json: {
+    placeholder: '{\n  "versionPath": "$.version",\n  "downloadPath": "$.download_url"\n}',
+    description: "JSONPath expressions to extract version and download URL from JSON.",
+  },
+  xml: {
+    placeholder:
+      '{\n  "versionXPath": "//key[text()=\'Version\']/following-sibling::string[1]",\n  "downloadXPath": ""\n}',
+    description: "XPath expressions to extract version and download URL from XML.",
+  },
+};

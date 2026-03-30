@@ -51,6 +51,7 @@ export function useOnboardDiscoveredApp() {
         pollIntervalMinutes?: number;
         label?: string;
         status?: "active" | "paused";
+        configJson?: string;
       }[];
       sourceValidated?: boolean;
       enrichmentHasReleases?: boolean;

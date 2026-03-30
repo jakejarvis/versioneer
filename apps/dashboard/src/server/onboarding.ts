@@ -54,6 +54,7 @@ const sourceInputSchema = z.object({
   pollIntervalMinutes: z.number().int().min(5).max(10080).default(60),
   label: z.string().optional(),
   status: z.enum(["active", "paused"]).default("active"),
+  configJson: z.string().max(10_000).optional(),
 });
 
 const onboardDiscoveredAppSchema = z.object({
@@ -197,7 +198,7 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
           sourceType: src.sourceType,
           label: src.label ?? null,
           baseUrl: normalizedBaseUrl,
-          configJson: null,
+          configJson: src.configJson ?? null,
           parserKey: src.parserKey,
           channel: null,
           pollIntervalMinutes: src.pollIntervalMinutes,

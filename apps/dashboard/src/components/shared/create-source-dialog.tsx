@@ -1,6 +1,10 @@
 import { useForm } from "@tanstack/react-form";
+import { resolveSourceUrl } from "@versioneer/core/validation";
 import type { SourceType } from "@versioneer/schemas/sources";
-import { defaultParserKeyForSourceType } from "@versioneer/schemas/sources";
+import {
+  defaultParserKeyForSourceType,
+  defaultPollIntervalForSourceType,
+} from "@versioneer/schemas/sources";
 import { toast } from "sonner";
 
 import { useCreateSource } from "@/api/hooks/use-sources";
@@ -22,22 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { SOURCE_TYPES } from "@/lib/source-types";
-
-const configPlaceholders: Partial<Record<SourceType, string>> = {
-  web_page: '{\n  "versionSelector": "",\n  "downloadSelector": ""\n}',
-  regex:
-    '{\n  "versionPattern": "(\\\\d+\\\\.\\\\d+\\\\.\\\\d+)",\n  "downloadPattern": "",\n  "flags": "i"\n}',
-  json: '{\n  "versionPath": "$.version",\n  "downloadPath": "$.download_url"\n}',
-  xml: '{\n  "versionXPath": "//key[text()=\'Version\']/following-sibling::string[1]",\n  "downloadXPath": ""\n}',
-};
-
-const configDescriptions: Partial<Record<SourceType, string>> = {
-  web_page: "CSS selectors to extract version and download URLs.",
-  regex: "Regex patterns to extract version (and optionally download URL) from the response body.",
-  json: "JSONPath expressions to extract version and download URL from JSON.",
-  xml: "XPath expressions to extract version and download URL from XML.",
-};
+import { SOURCE_CONFIG_FIELDS, SOURCE_TYPES } from "@/lib/source-types";
 
 interface CreateSourceDialogProps {
   appId?: string;
@@ -69,19 +58,20 @@ function CreateSourceForm({
       appId: appId ?? "",
       sourceType: "sparkle" as SourceType,
       label: "",
-      baseUrl: "",
+      identifier: "",
       parserKey: "sparkle",
       channel: "",
       pollIntervalMinutes: 60,
       configJson: "",
     },
     onSubmit: async ({ value }) => {
+      const baseUrl = resolveSourceUrl(value.sourceType, value.identifier) ?? undefined;
       createSource.mutate(
         {
           appId: value.appId,
           sourceType: value.sourceType,
           label: value.label || undefined,
-          baseUrl: value.baseUrl || undefined,
+          baseUrl,
           parserKey: value.parserKey,
           channel: value.channel || undefined,
           configJson: value.configJson || undefined,
@@ -140,6 +130,12 @@ function CreateSourceForm({
                   const sourceType = v as SourceType;
                   field.handleChange(sourceType);
                   form.setFieldValue("parserKey", defaultParserKeyForSourceType(sourceType));
+                  form.setFieldValue(
+                    "pollIntervalMinutes",
+                    defaultPollIntervalForSourceType(sourceType),
+                  );
+                  form.setFieldValue("identifier", "");
+                  form.setFieldValue("configJson", "");
                 }}
               >
                 <SelectTrigger id={field.name}>
@@ -174,16 +170,16 @@ function CreateSourceForm({
         <form.Subscribe selector={(state) => state.values.sourceType}>
           {(sourceType) =>
             sourceType !== "manual" ? (
-              <form.Field name="baseUrl">
+              <form.Field name="identifier">
                 {(field) => (
-                  <FormField label="Base URL" name={field.name} meta={field.state.meta}>
+                  <FormField
+                    label={SOURCE_TYPES[sourceType].input.label || "URL"}
+                    name={field.name}
+                    meta={field.state.meta}
+                  >
                     <Input
                       id={field.name}
-                      placeholder={
-                        sourceType === "github_releases"
-                          ? "https://api.github.com/repos/owner/repo/releases"
-                          : "https://example.com/appcast.xml"
-                      }
+                      placeholder={SOURCE_TYPES[sourceType].input.placeholder}
                       value={field.state.value}
                       onChange={(e) => field.handleChange(e.target.value)}
                       onBlur={field.handleBlur}
@@ -200,20 +196,20 @@ function CreateSourceForm({
 
         <form.Subscribe selector={(state) => state.values.sourceType}>
           {(sourceType) =>
-            configPlaceholders[sourceType] ? (
+            SOURCE_CONFIG_FIELDS[sourceType] ? (
               <form.Field name="configJson">
                 {(field) => (
                   <FormField
                     label="Parser Config (JSON)"
                     name={field.name}
                     meta={field.state.meta}
-                    description={configDescriptions[sourceType]}
+                    description={SOURCE_CONFIG_FIELDS[sourceType]!.description}
                   >
                     <Textarea
                       id={field.name}
                       rows={5}
                       className="font-mono text-xs"
-                      placeholder={configPlaceholders[sourceType]}
+                      placeholder={SOURCE_CONFIG_FIELDS[sourceType]!.placeholder}
                       value={field.state.value}
                       onChange={(e) => field.handleChange(e.target.value)}
                       onBlur={field.handleBlur}

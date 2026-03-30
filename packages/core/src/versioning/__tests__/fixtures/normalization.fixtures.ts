@@ -48,6 +48,10 @@ export const normalizationOrderFixtures: NormalizationOrderFixture[] = [
   { lower: "1.0.0-rc1", higher: "1.0.0", description: "pre-release < release" },
   { lower: "1.0.0-beta.1", higher: "1.0.0-beta.2", description: "pre-release number ordering" },
   { lower: "0.9.9", higher: "1.0.0", description: "version rollover" },
-  { lower: "9999999999.0.0", higher: "9999999999.0.1", description: "max-width segments still order" },
+  {
+    lower: "9999999999.0.0",
+    higher: "9999999999.0.1",
+    description: "max-width segments still order",
+  },
   { lower: "5", higher: "5.0.1", description: "single segment vs multi-segment" },
 ];

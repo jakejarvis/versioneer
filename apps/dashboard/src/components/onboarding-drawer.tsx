@@ -42,7 +42,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { SOURCE_TYPES } from "@/lib/source-types";
+import { SOURCE_CONFIG_FIELDS, SOURCE_TYPES } from "@/lib/source-types";
 
 // ──────────────────────────────────────────────────────────
 // Alias types — identity matchers only
@@ -83,6 +83,7 @@ interface SourceEntry {
   pollIntervalMinutes: number;
   label?: string;
   status?: "active" | "paused";
+  configJson?: string;
 }
 
 // ──────────────────────────────────────────────────────────
@@ -299,6 +300,7 @@ function OnboardingFormContent({
                 pollIntervalMinutes: s.pollIntervalMinutes,
                 label: s.label,
                 status: s.status,
+                configJson: s.configJson,
               };
             })
             .filter((s) => s.baseUrl),
@@ -634,6 +636,7 @@ function OnboardingFormContent({
                     identifier: "",
                     pollIntervalMinutes: 60,
                     status: "active",
+                    configJson: "",
                   })
                 }
               >
@@ -763,7 +766,11 @@ function SourceCard({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const currentIdentifier: string =
     useStore(form.store, (s: any) => s.values.sources[index]?.identifier) ?? source.identifier;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentConfigJson: string =
+    useStore(form.store, (s: any) => s.values.sources[index]?.configJson) ?? "";
 
+  const configField = SOURCE_CONFIG_FIELDS[currentSourceType];
   const validateMutation = useValidateSource();
 
   const handleTestFeed = useCallback(() => {
@@ -774,6 +781,7 @@ function SourceCard({
       {
         url,
         sourceType: currentSourceType,
+        configJson: currentConfigJson || undefined,
       },
       {
         onSuccess: (data) => {
@@ -782,7 +790,7 @@ function SourceCard({
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSourceType, currentIdentifier]);
+  }, [currentSourceType, currentIdentifier, currentConfigJson]);
 
   return (
     <div className="space-y-2 rounded-md border border-border/40 bg-muted/20 p-2.5">
@@ -795,6 +803,7 @@ function SourceCard({
                 const newType = e.target.value as SourceType;
                 field.handleChange(newType);
                 form.setFieldValue(`sources[${index}].identifier`, "");
+                form.setFieldValue(`sources[${index}].configJson`, "");
                 form.setFieldValue(
                   `sources[${index}].pollIntervalMinutes`,
                   SOURCE_TYPE_DEFAULTS[newType].pollIntervalMinutes,
@@ -834,6 +843,28 @@ function SourceCard({
           <X className="h-3 w-3" />
         </Button>
       </div>
+
+      {configField && (
+        <form.Field name={`sources[${index}].configJson`}>
+          {(field: { state: { value: string }; handleChange: (v: string) => void }) => (
+            <div className="px-0.5">
+              <textarea
+                value={field.state.value ?? ""}
+                onChange={(e) => {
+                  field.handleChange(e.target.value);
+                  form.setFieldValue("sourceValidated", false);
+                }}
+                rows={3}
+                className="w-full rounded border border-border/40 bg-muted/30 px-2 py-1.5 font-mono text-[10px] text-muted-foreground outline-none placeholder:text-muted-foreground/40"
+                placeholder={configField.placeholder}
+              />
+              <p className="mt-0.5 text-[9px] text-muted-foreground/60">
+                {configField.description}
+              </p>
+            </div>
+          )}
+        </form.Field>
+      )}
 
       {currentSourceType !== "manual" && currentIdentifier && (
         <div className="flex items-center gap-2">
