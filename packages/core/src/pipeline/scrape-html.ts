@@ -176,21 +176,21 @@ export function discoverHomepageSourceCandidates(
       pathname.endsWith(".atom")
     ) {
       addCandidate({
-        sourceType: "rss_feed",
+        sourceType: "xml",
         url,
-        role: "reference",
-        parserKey: "rss_reference",
-        reason: "homepage alternate feed link",
+        role: "corroborating",
+        parserKey: "xml",
+        reason: "homepage alternate feed link (RSS/Atom)",
       });
       return;
     }
 
     if (type.includes("json") || pathname.endsWith(".json")) {
       addCandidate({
-        sourceType: "json_feed",
+        sourceType: "json",
         url,
-        role: "reference",
-        parserKey: "json_reference",
+        role: "corroborating",
+        parserKey: "json",
         reason: "homepage alternate JSON feed",
       });
     }
@@ -252,10 +252,10 @@ export function discoverHomepageSourceCandidates(
       pathname.endsWith("/atom.xml")
     ) {
       addCandidate({
-        sourceType: "rss_feed",
+        sourceType: "xml",
         url,
-        role: "reference",
-        parserKey: "rss_reference",
+        role: "corroborating",
+        parserKey: "xml",
         reason: "homepage RSS or Atom feed link",
       });
       return;
@@ -266,10 +266,10 @@ export function discoverHomepageSourceCandidates(
       /(release|releases|update|updates|feed|downloads?)/.test(pathname)
     ) {
       addCandidate({
-        sourceType: "json_feed",
+        sourceType: "json",
         url,
-        role: "reference",
-        parserKey: "json_reference",
+        role: "corroborating",
+        parserKey: "json",
         reason: "homepage JSON update link",
       });
     }

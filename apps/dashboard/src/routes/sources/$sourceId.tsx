@@ -8,11 +8,6 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
-  parseConfigJson,
-  serializeConfig,
-  SourceConfigFields,
-} from "@/components/shared/source-config-fields";
-import {
   useParserRuns,
   useReparse,
   useSource,
@@ -27,6 +22,11 @@ import { DataTableColumnHeader } from "@/components/shared/data-table-column-hea
 import { AppEntityLink } from "@/components/shared/entity-link";
 import { FormField } from "@/components/shared/form-field";
 import { IdDisplay } from "@/components/shared/id-display";
+import {
+  parseConfigJson,
+  serializeConfig,
+  SourceConfigFields,
+} from "@/components/shared/source-config-fields";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";

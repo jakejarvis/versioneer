@@ -20,8 +20,6 @@ export function resolveSourceUrl(sourceType: SourceType, identifier: string): st
   switch (sourceType) {
     case "sparkle":
     case "electron_generic":
-    case "rss_feed":
-    case "json_feed":
     case "web_page":
     case "regex":
     case "json":
@@ -86,8 +84,6 @@ export function extractSourceIdentifier(sourceType: SourceType, baseUrl: string 
     }
 
     case "electron_generic":
-    case "rss_feed":
-    case "json_feed":
     case "web_page":
     case "regex":
     case "json":

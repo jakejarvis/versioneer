@@ -28,6 +28,7 @@ import {
   useValidateSource,
 } from "@/api/hooks/use-onboarding";
 import { AppIcon } from "@/components/shared/app-icon";
+import { serializeConfig, SourceConfigFields } from "@/components/shared/source-config-fields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +43,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { serializeConfig, SourceConfigFields } from "@/components/shared/source-config-fields";
 import { SOURCE_CONFIG_FIELDS, SOURCE_TYPES } from "@/lib/source-types";
 
 // ──────────────────────────────────────────────────────────

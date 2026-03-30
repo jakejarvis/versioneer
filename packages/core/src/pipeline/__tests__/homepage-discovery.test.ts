@@ -41,14 +41,14 @@ describe("discoverHomepageSourceCandidates", () => {
           role: "authority",
         }),
         expect.objectContaining({
-          sourceType: "rss_feed",
+          sourceType: "xml",
           url: "https://example.com/feeds/releases.xml",
-          role: "reference",
+          role: "corroborating",
         }),
         expect.objectContaining({
-          sourceType: "json_feed",
+          sourceType: "json",
           url: "https://example.com/updates/releases.json",
-          role: "reference",
+          role: "corroborating",
         }),
       ]),
     );
