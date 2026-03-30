@@ -42,6 +42,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { serializeConfig, SourceConfigFields } from "@/components/shared/source-config-fields";
 import { SOURCE_CONFIG_FIELDS, SOURCE_TYPES } from "@/lib/source-types";
 
 // ──────────────────────────────────────────────────────────
@@ -83,7 +84,7 @@ interface SourceEntry {
   pollIntervalMinutes: number;
   label?: string;
   status?: "active" | "paused";
-  configJson?: string;
+  config: Record<string, string>;
 }
 
 // ──────────────────────────────────────────────────────────
@@ -142,6 +143,7 @@ function buildInitialValues(discoveredApp: any): OnboardingFormData {
       identifier: discoveredApp.sparkleFeedUrl,
       pollIntervalMinutes: 60,
       status: "active",
+      config: {},
     });
   }
   if (discoveredApp.electronUpdateUrl) {
@@ -153,6 +155,7 @@ function buildInitialValues(discoveredApp: any): OnboardingFormData {
         identifier: `${parsed.owner}/${parsed.repo}`,
         pollIntervalMinutes: 60,
         status: "active",
+        config: {},
       });
     } else {
       sources.push({
@@ -161,6 +164,7 @@ function buildInitialValues(discoveredApp: any): OnboardingFormData {
         identifier: discoveredApp.electronUpdateUrl,
         pollIntervalMinutes: 60,
         status: "active",
+        config: {},
       });
     }
   }
@@ -171,6 +175,7 @@ function buildInitialValues(discoveredApp: any): OnboardingFormData {
       identifier: discoveredApp.bundleId,
       pollIntervalMinutes: 1440,
       status: "active",
+      config: {},
     });
   }
 
@@ -300,7 +305,7 @@ function OnboardingFormContent({
                 pollIntervalMinutes: s.pollIntervalMinutes,
                 label: s.label,
                 status: s.status,
-                configJson: s.configJson,
+                configJson: serializeConfig(s.config),
               };
             })
             .filter((s) => s.baseUrl),
@@ -349,6 +354,7 @@ function OnboardingFormContent({
         identifier: resolvedCaskToken,
         pollIntervalMinutes: 360,
         status: "active",
+        config: {},
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -636,7 +642,7 @@ function OnboardingFormContent({
                     identifier: "",
                     pollIntervalMinutes: 60,
                     status: "active",
-                    configJson: "",
+                    config: {},
                   })
                 }
               >
@@ -767,10 +773,9 @@ function SourceCard({
   const currentIdentifier: string =
     useStore(form.store, (s: any) => s.values.sources[index]?.identifier) ?? source.identifier;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const currentConfigJson: string =
-    useStore(form.store, (s: any) => s.values.sources[index]?.configJson) ?? "";
+  const currentConfig: Record<string, string> =
+    useStore(form.store, (s: any) => s.values.sources[index]?.config) ?? {};
 
-  const configField = SOURCE_CONFIG_FIELDS[currentSourceType];
   const validateMutation = useValidateSource();
 
   const handleTestFeed = useCallback(() => {
@@ -781,7 +786,7 @@ function SourceCard({
       {
         url,
         sourceType: currentSourceType,
-        configJson: currentConfigJson || undefined,
+        configJson: serializeConfig(currentConfig),
       },
       {
         onSuccess: (data) => {
@@ -790,7 +795,7 @@ function SourceCard({
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSourceType, currentIdentifier, currentConfigJson]);
+  }, [currentSourceType, currentIdentifier, currentConfig]);
 
   return (
     <div className="space-y-2 rounded-md border border-border/40 bg-muted/20 p-2.5">
@@ -803,7 +808,7 @@ function SourceCard({
                 const newType = e.target.value as SourceType;
                 field.handleChange(newType);
                 form.setFieldValue(`sources[${index}].identifier`, "");
-                form.setFieldValue(`sources[${index}].configJson`, "");
+                form.setFieldValue(`sources[${index}].config`, {});
                 form.setFieldValue(
                   `sources[${index}].pollIntervalMinutes`,
                   SOURCE_TYPE_DEFAULTS[newType].pollIntervalMinutes,
@@ -844,24 +849,21 @@ function SourceCard({
         </Button>
       </div>
 
-      {configField && (
-        <form.Field name={`sources[${index}].configJson`}>
-          {(field: { state: { value: string }; handleChange: (v: string) => void }) => (
-            <div className="px-0.5">
-              <textarea
-                value={field.state.value ?? ""}
-                onChange={(e) => {
-                  field.handleChange(e.target.value);
-                  form.setFieldValue("sourceValidated", false);
-                }}
-                rows={3}
-                className="w-full rounded border border-border/40 bg-muted/30 px-2 py-1.5 font-mono text-[10px] text-muted-foreground outline-none placeholder:text-muted-foreground/40"
-                placeholder={configField.placeholder}
-              />
-              <p className="mt-0.5 text-[9px] text-muted-foreground/60">
-                {configField.description}
-              </p>
-            </div>
+      {SOURCE_CONFIG_FIELDS[currentSourceType] && (
+        <form.Field name={`sources[${index}].config`}>
+          {(field: {
+            state: { value: Record<string, string> };
+            handleChange: (v: Record<string, string>) => void;
+          }) => (
+            <SourceConfigFields
+              sourceType={currentSourceType}
+              value={field.state.value ?? {}}
+              onChange={(v) => {
+                field.handleChange(v);
+                form.setFieldValue("sourceValidated", false);
+              }}
+              compact
+            />
           )}
         </form.Field>
       )}

@@ -73,27 +73,49 @@ export function defaultLabelForSourceType(sourceType: SourceType) {
   return SOURCE_TYPES[sourceType].label;
 }
 
-/** Source types that require a configJson field (and their placeholder / description). */
-export const SOURCE_CONFIG_FIELDS: Partial<
-  Record<SourceType, { placeholder: string; description: string }>
-> = {
+export interface SourceConfigFieldDef {
+  key: string;
+  label: string;
+  placeholder: string;
+  required: boolean;
+  description?: string;
+  short?: boolean;
+}
+
+export interface SourceConfigSchema {
+  description: string;
+  fields: SourceConfigFieldDef[];
+}
+
+export const SOURCE_CONFIG_FIELDS: Partial<Record<SourceType, SourceConfigSchema>> = {
   web_page: {
-    placeholder: '{\n  "versionSelector": "",\n  "downloadSelector": ""\n}',
-    description: "CSS selectors to extract version and download URLs.",
+    description: "CSS selectors to extract version and download URLs from HTML.",
+    fields: [
+      { key: "versionSelector", label: "Version Selector", placeholder: ".version", required: true, description: "CSS selector for the element containing the version" },
+      { key: "downloadSelector", label: "Download Selector", placeholder: "a.download", required: false, description: "CSS selector for download link elements" },
+      { key: "versionPattern", label: "Version Pattern", placeholder: "([\\d.]+)", required: false, description: "Optional regex to extract version from the selected text" },
+    ],
   },
   regex: {
-    placeholder:
-      '{\n  "versionPattern": "(\\\\d+\\\\.\\\\d+\\\\.\\\\d+)",\n  "downloadPattern": "",\n  "flags": "i"\n}',
-    description:
-      "Regex patterns to extract version (and optionally download URL) from the response body.",
+    description: "Regex patterns applied to the raw response body.",
+    fields: [
+      { key: "versionPattern", label: "Version Pattern", placeholder: "(\\d+\\.\\d+\\.\\d+)", required: true, description: "Regex with capture group 1 for the version" },
+      { key: "downloadPattern", label: "Download Pattern", placeholder: "(https://[^\\s]+\\.dmg)", required: false, description: "Regex with capture group 1 for the download URL" },
+      { key: "flags", label: "Flags", placeholder: "i", required: false, description: "Regex flags (e.g. i for case-insensitive)", short: true },
+    ],
   },
   json: {
-    placeholder: '{\n  "versionPath": "$.version",\n  "downloadPath": "$.download_url"\n}',
-    description: "JSONPath expressions to extract version and download URL from JSON.",
+    description: "JSONPath expressions to extract values from JSON responses.",
+    fields: [
+      { key: "versionPath", label: "Version Path", placeholder: "$.version", required: true, description: "JSONPath expression for the version value" },
+      { key: "downloadPath", label: "Download Path", placeholder: "$.download_url", required: false, description: "JSONPath expression for the download URL" },
+    ],
   },
   xml: {
-    placeholder:
-      '{\n  "versionXPath": "//key[text()=\'Version\']/following-sibling::string[1]",\n  "downloadXPath": ""\n}',
-    description: "XPath expressions to extract version and download URL from XML.",
+    description: "XPath expressions to extract values from XML responses.",
+    fields: [
+      { key: "versionXPath", label: "Version XPath", placeholder: "//version/text()", required: true, description: "XPath expression for the version value" },
+      { key: "downloadXPath", label: "Download XPath", placeholder: "//download/@url", required: false, description: "XPath expression for the download URL" },
+    ],
   },
 };

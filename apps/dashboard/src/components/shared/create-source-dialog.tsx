@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import { useCreateSource } from "@/api/hooks/use-sources";
 import { FormField } from "@/components/shared/form-field";
+import { serializeConfig, SourceConfigFields } from "@/components/shared/source-config-fields";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,8 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { SOURCE_CONFIG_FIELDS, SOURCE_TYPES } from "@/lib/source-types";
+import { SOURCE_TYPES } from "@/lib/source-types";
 
 interface CreateSourceDialogProps {
   appId?: string;
@@ -62,7 +62,7 @@ function CreateSourceForm({
       parserKey: "sparkle",
       channel: "",
       pollIntervalMinutes: 60,
-      configJson: "",
+      config: {} as Record<string, string>,
     },
     onSubmit: async ({ value }) => {
       const baseUrl = resolveSourceUrl(value.sourceType, value.identifier) ?? undefined;
@@ -74,7 +74,7 @@ function CreateSourceForm({
           baseUrl,
           parserKey: value.parserKey,
           channel: value.channel || undefined,
-          configJson: value.configJson || undefined,
+          configJson: serializeConfig(value.config),
           pollIntervalMinutes: value.pollIntervalMinutes,
         },
         {
@@ -135,7 +135,7 @@ function CreateSourceForm({
                     defaultPollIntervalForSourceType(sourceType),
                   );
                   form.setFieldValue("identifier", "");
-                  form.setFieldValue("configJson", "");
+                  form.setFieldValue("config", {});
                 }}
               >
                 <SelectTrigger id={field.name}>
@@ -195,30 +195,17 @@ function CreateSourceForm({
         </form.Subscribe>
 
         <form.Subscribe selector={(state) => state.values.sourceType}>
-          {(sourceType) =>
-            SOURCE_CONFIG_FIELDS[sourceType] ? (
-              <form.Field name="configJson">
-                {(field) => (
-                  <FormField
-                    label="Parser Config (JSON)"
-                    name={field.name}
-                    meta={field.state.meta}
-                    description={SOURCE_CONFIG_FIELDS[sourceType]!.description}
-                  >
-                    <Textarea
-                      id={field.name}
-                      rows={5}
-                      className="font-mono text-xs"
-                      placeholder={SOURCE_CONFIG_FIELDS[sourceType]!.placeholder}
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      onBlur={field.handleBlur}
-                    />
-                  </FormField>
-                )}
-              </form.Field>
-            ) : null
-          }
+          {(sourceType) => (
+            <form.Field name="config">
+              {(field) => (
+                <SourceConfigFields
+                  sourceType={sourceType}
+                  value={field.state.value}
+                  onChange={(v) => field.handleChange(v)}
+                />
+              )}
+            </form.Field>
+          )}
         </form.Subscribe>
 
         <form.Field

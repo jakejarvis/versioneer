@@ -8,6 +8,11 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
+  parseConfigJson,
+  serializeConfig,
+  SourceConfigFields,
+} from "@/components/shared/source-config-fields";
+import {
   useParserRuns,
   useReparse,
   useSource,
@@ -35,7 +40,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import { formatDuration } from "@/lib/format-duration";
 import { SOURCE_TYPES } from "@/lib/source-types";
 
@@ -298,7 +302,7 @@ function SourceEditForm({
       identifier: extractSourceIdentifier(sourceType, source.baseUrl),
       parserKey: source.parserKey,
       pollIntervalMinutes: source.pollIntervalMinutes,
-      configJson: source.configJson ?? "",
+      config: parseConfigJson(source.configJson),
     },
     onSubmit: async ({ value }) => {
       const baseUrl = resolveSourceUrl(sourceType, value.identifier);
@@ -308,7 +312,7 @@ function SourceEditForm({
           baseUrl: baseUrl || null,
           parserKey: value.parserKey,
           pollIntervalMinutes: value.pollIntervalMinutes,
-          configJson: value.configJson || null,
+          configJson: serializeConfig(value.config) ?? null,
         },
         {
           onSuccess: () => toast.success("Source updated"),
@@ -409,24 +413,13 @@ function SourceEditForm({
           )}
         </form.Field>
         <div className="sm:col-span-2">
-          <form.Field name="configJson">
+          <form.Field name="config">
             {(field) => (
-              <FormField
-                label="Config JSON"
-                name={field.name}
-                meta={field.state.meta}
-                description="Optional JSON configuration for the parser."
-              >
-                <Textarea
-                  id={field.name}
-                  placeholder="{}"
-                  rows={3}
-                  className="font-mono text-xs"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                />
-              </FormField>
+              <SourceConfigFields
+                sourceType={sourceType}
+                value={field.state.value}
+                onChange={(v) => field.handleChange(v)}
+              />
             )}
           </form.Field>
         </div>
