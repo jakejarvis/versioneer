@@ -27,6 +27,14 @@ export function parseVersion(raw: string): ParsedVersion {
   // Strip leading 'v' or 'V'
   let working = trimmed.replace(/^[vV]/, "");
 
+  // Strip leading name prefix (e.g. "release-3.5.7", "XQuartz-2.8.6_beta4").
+  // Only strip when the prefix is NOT a known pre-release tag — otherwise
+  // "beta-1.0" would lose its pre-release meaning.
+  const namePrefixMatch = working.match(/^([a-zA-Z]+)[-_](?=\d)/);
+  if (namePrefixMatch && !(namePrefixMatch[1]!.toLowerCase() in PRE_RELEASE_TAGS)) {
+    working = working.slice(namePrefixMatch[0]!.length);
+  }
+
   // Extract build metadata after '+'
   let buildMetadata: string | null = null;
   const plusIndex = working.indexOf("+");

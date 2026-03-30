@@ -117,4 +117,30 @@ describe("parseVersion", () => {
     expect(v.valid).toBe(true);
     expect(v.major).toBe(9999999999);
   });
+
+  it("strips name prefix like release-3.5.7-beta3", () => {
+    const v = parseVersion("release-3.5.7-beta3");
+    expect(v.valid).toBe(true);
+    expect(v.major).toBe(3);
+    expect(v.minor).toBe(5);
+    expect(v.patch).toBe(7);
+    expect(v.preReleaseTag).toBe("beta");
+    expect(v.preReleaseNumber).toBe(3);
+  });
+
+  it("strips name prefix like XQuartz-2.8.6_beta4", () => {
+    const v = parseVersion("XQuartz-2.8.6_beta4");
+    expect(v.valid).toBe(true);
+    expect(v.major).toBe(2);
+    expect(v.minor).toBe(8);
+    expect(v.patch).toBe(6);
+    expect(v.preReleaseTag).toBe("beta");
+    expect(v.preReleaseNumber).toBe(4);
+  });
+
+  it("does not strip pre-release tag prefix like beta-1.0", () => {
+    // "beta" is a known pre-release tag, not a name prefix
+    const v = parseVersion("beta-1.0");
+    expect(v.major).toBe(0);
+  });
 });
