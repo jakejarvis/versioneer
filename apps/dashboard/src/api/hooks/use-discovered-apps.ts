@@ -9,6 +9,7 @@ import {
 
 interface UseDiscoveredAppsParams {
   status?: "pending" | "linked" | "dismissed" | "support_only";
+  enrichmentStatus?: "pending" | "in_progress" | "success" | "failed" | "skipped";
   limit?: number;
   offset?: number;
   sortBy?: string;

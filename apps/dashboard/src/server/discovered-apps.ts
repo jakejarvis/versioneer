@@ -3,7 +3,7 @@ import { enrichDiscoveredApp } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
 import { discoveredApps, auditLog, generateId, idPrefixes } from "@versioneer/db";
 import { env } from "cloudflare:workers";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { authMiddleware } from "./middleware";
@@ -34,22 +34,31 @@ export const listDiscoveredApps = createServerFn({ method: "GET" })
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
       status: z.enum(["pending", "linked", "dismissed", "support_only"]).default("pending"),
+      enrichmentStatus: z
+        .enum(["pending", "in_progress", "success", "failed", "skipped"])
+        .optional(),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
-    const { limit, offset, status, sortBy, sortDir } = data;
+    const { limit, offset, status, enrichmentStatus, sortBy, sortDir } = data;
     const db = createDb(env.DB);
+
+    const conditions = [eq(discoveredApps.status, status)];
+    if (enrichmentStatus) {
+      conditions.push(eq(discoveredApps.enrichmentStatus, enrichmentStatus));
+    }
+    const where = and(...conditions);
 
     const [countResult] = await db
       .select({ count: sql<number>`count(*)` })
       .from(discoveredApps)
-      .where(eq(discoveredApps.status, status));
+      .where(where);
     const items = await db
       .select()
       .from(discoveredApps)
-      .where(eq(discoveredApps.status, status))
+      .where(where)
       .orderBy(...discoveredAppOrderBy(sortBy, sortDir))
       .limit(limit)
       .offset(offset);

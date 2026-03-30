@@ -64,6 +64,7 @@ export const getHomepage = createServerFn({ method: "GET" }).handler(async () =>
     [pendingDiscoveredCount],
     [pendingSuggestionCount],
     [openFailureCount],
+    enrichmentHealthRows,
     suggestionRows,
     discoveryRows,
     feedbackRows,
@@ -109,6 +110,14 @@ export const getHomepage = createServerFn({ method: "GET" }).handler(async () =>
       .select({ count: sql<number>`count(*)` })
       .from(jobFailures)
       .where(eq(jobFailures.status, "open")),
+    db
+      .select({
+        status: discoveredApps.enrichmentStatus,
+        count: sql<number>`count(*)`,
+      })
+      .from(discoveredApps)
+      .where(sql`${discoveredApps.status} IN ('pending','linked')`)
+      .groupBy(discoveredApps.enrichmentStatus),
     db
       .select()
       .from(catalogSuggestions)
@@ -278,6 +287,10 @@ export const getHomepage = createServerFn({ method: "GET" }).handler(async () =>
     }),
   );
 
+  const enrichByStatus = Object.fromEntries(
+    enrichmentHealthRows.map((row) => [row.status, row.count]),
+  );
+
   return {
     overview: {
       needsAttention: {
@@ -295,6 +308,12 @@ export const getHomepage = createServerFn({ method: "GET" }).handler(async () =>
         publicApps: publicCount?.count ?? 0,
         totalApps: appCount?.count ?? 0,
         recentReleases: recentReleaseCount?.count ?? 0,
+      },
+      enrichmentHealth: {
+        pendingEnrichment: enrichByStatus.pending ?? 0,
+        enriched: enrichByStatus.success ?? 0,
+        failed: enrichByStatus.failed ?? 0,
+        inProgress: enrichByStatus.in_progress ?? 0,
       },
     },
     pendingSuggestions,

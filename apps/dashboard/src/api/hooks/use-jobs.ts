@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listCronJobRuns, triggerCaskSync, triggerPollSources } from "@/server/jobs";
 
 interface UseCronJobRunsParams {
-  jobType?: "poll_sources" | "cask_index_sync";
+  jobType?: "poll_sources" | "cask_index_sync" | "enrich_discovered_apps";
   limit?: number;
   offset?: number;
   sortBy?: string;

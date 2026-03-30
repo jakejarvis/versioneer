@@ -42,6 +42,9 @@ import {
 const discoveredAppsSearchSchema = z.object({
   ...paginatedSearchShape,
   status: z.enum(["pending", "linked", "dismissed", "support_only"]).catch("pending"),
+  enrichmentStatus: z
+    .enum(["all", "pending", "in_progress", "success", "failed", "skipped"])
+    .catch("all"),
 });
 
 export const Route = createFileRoute("/discovered-apps/")({
@@ -87,6 +90,8 @@ function DiscoveredAppsPage() {
 
   const { data, isLoading } = useDiscoveredApps({
     status: searchState.status,
+    enrichmentStatus:
+      searchState.enrichmentStatus === "all" ? undefined : searchState.enrichmentStatus,
     limit: pagination.pageSize,
     offset: pagination.pageIndex * pagination.pageSize,
     sortBy: searchState.sortBy,
@@ -356,6 +361,32 @@ function DiscoveredAppsPage() {
             <SelectItem value="linked">Linked</SelectItem>
             <SelectItem value="dismissed">Dismissed</SelectItem>
             <SelectItem value="support_only">Support Only</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={searchState.enrichmentStatus}
+          onValueChange={(value) =>
+            void navigate({
+              to: "/discovered-apps",
+              search: {
+                ...searchState,
+                page: 1,
+                enrichmentStatus: value as typeof searchState.enrichmentStatus,
+              },
+            })
+          }
+        >
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Enrichment</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="in_progress">In Progress</SelectItem>
+            <SelectItem value="success">Success</SelectItem>
+            <SelectItem value="failed">Failed</SelectItem>
+            <SelectItem value="skipped">Skipped</SelectItem>
           </SelectContent>
         </Select>
       </div>

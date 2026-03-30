@@ -4,7 +4,11 @@ export const jobFailureStatusValues = ["open", "retrying", "resolved", "abandone
 export const jobFailureStatusSchema = z.enum(jobFailureStatusValues);
 export type JobFailureStatus = z.infer<typeof jobFailureStatusSchema>;
 
-export const cronJobTypeValues = ["poll_sources", "cask_index_sync"] as const;
+export const cronJobTypeValues = [
+  "poll_sources",
+  "cask_index_sync",
+  "enrich_discovered_apps",
+] as const;
 export const cronJobTypeSchema = z.enum(cronJobTypeValues);
 export type CronJobType = z.infer<typeof cronJobTypeSchema>;
 

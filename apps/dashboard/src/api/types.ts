@@ -55,6 +55,13 @@ export interface DashboardCatalogContextSection {
   recentReleases: number;
 }
 
+export interface DashboardEnrichmentHealthSection {
+  pendingEnrichment: number;
+  enriched: number;
+  failed: number;
+  inProgress: number;
+}
+
 export interface HomepageDiscoveryItem {
   id: string;
   appName: string;
@@ -94,6 +101,7 @@ export interface DashboardHomepageData {
     needsAttention: DashboardOverviewSection;
     sourceHealth: DashboardSourceHealthSection;
     catalogContext: DashboardCatalogContextSection;
+    enrichmentHealth: DashboardEnrichmentHealthSection;
   };
   pendingSuggestions: CatalogSuggestion[];
   pendingDiscoveries: HomepageDiscoveryItem[];

@@ -6,13 +6,12 @@ import {
   handleCaskIndexSync,
   enrichDiscoveredApp,
   isCaskSyncDue,
-  shouldEnrich,
 } from "@versioneer/core/pipeline";
 import type { SourceParseJob, RecomputeLatestJob } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
 import { cronJobRuns, discoveredApps, generateId, idPrefixes } from "@versioneer/db";
 import { WorkerEntrypoint } from "cloudflare:workers";
-import { desc, eq, or } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 // Import parsers to trigger auto-registration
 import "@versioneer/core/parsers";
 
@@ -151,32 +150,40 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
 
     // --- Discovered App Enrichment (bounded best-effort batch) ---
     {
-      const maxBatchSize = 10;
+      const runId = generateId(idPrefixes.cronJobRun);
+      const startedAt = new Date().toISOString();
+      const maxBatchSize = 25;
       try {
-        const ENRICHMENT_STUCK_MS = 15 * 60 * 1000; // 15 minutes
+        // Push all eligibility checks into SQL so only actionable rows are returned.
+        // Priority: pending (never enriched) → failed (retry) → stuck in_progress → stale success.
         const candidates = await db
-          .select({
-            id: discoveredApps.id,
-            enrichmentStatus: discoveredApps.enrichmentStatus,
-            enrichedAt: discoveredApps.enrichedAt,
-            updatedAt: discoveredApps.updatedAt,
-          })
+          .select({ id: discoveredApps.id })
           .from(discoveredApps)
-          .where(or(eq(discoveredApps.status, "pending"), eq(discoveredApps.status, "linked")))
-          .orderBy(desc(discoveredApps.lastSeenAt))
-          .limit(50)
+          .where(
+            sql`(${discoveredApps.status} = 'pending' OR ${discoveredApps.status} = 'linked')
+              AND (
+                ${discoveredApps.enrichmentStatus} IN ('pending', 'failed')
+                OR (${discoveredApps.enrichmentStatus} = 'in_progress'
+                    AND datetime(${discoveredApps.updatedAt}, '+15 minutes') <= datetime('now'))
+                OR (${discoveredApps.enrichmentStatus} = 'success'
+                    AND datetime(${discoveredApps.enrichedAt}, '+24 hours') <= datetime('now'))
+              )`,
+          )
+          .orderBy(
+            sql`CASE ${discoveredApps.enrichmentStatus}
+              WHEN 'pending' THEN 0
+              WHEN 'failed'  THEN 1
+              WHEN 'in_progress' THEN 2
+              ELSE 3
+            END`,
+            sql`COALESCE(${discoveredApps.enrichedAt}, '1970-01-01') ASC`,
+            desc(discoveredApps.lastSeenAt),
+          )
+          .limit(maxBatchSize)
           .all();
 
         let enriched = 0;
         for (const candidate of candidates) {
-          // Skip in_progress unless stuck for >15 minutes (crash recovery)
-          if (candidate.enrichmentStatus === "in_progress") {
-            const age = msElapsedSince(candidate.updatedAt);
-            if (age !== null && age < ENRICHMENT_STUCK_MS) continue;
-          } else if (!shouldEnrich(candidate)) {
-            continue;
-          }
-
           await enrichDiscoveredApp({
             discoveredAppId: candidate.id,
             db,
@@ -184,16 +191,33 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
             assetsBucket: this.env.RAW_BUCKET,
             configKv: this.env.CONFIG_KV,
           });
-
           enriched++;
-          if (enriched >= maxBatchSize) break;
         }
 
-        if (enriched > 0) {
+        if (candidates.length > 0) {
           log.info("enrichment batch completed", { enriched, candidates: candidates.length });
+          await db.insert(cronJobRuns).values({
+            id: runId,
+            jobType: "enrich_discovered_apps",
+            trigger: "scheduled",
+            status: "completed",
+            itemsQueued: enriched,
+            itemsTotal: candidates.length,
+            startedAt,
+            completedAt: new Date().toISOString(),
+          });
         }
       } catch (error) {
         log.error("enrichment batch failed", { error });
+        await db.insert(cronJobRuns).values({
+          id: runId,
+          jobType: "enrich_discovered_apps",
+          trigger: "scheduled",
+          status: "failed",
+          errorMessage: error instanceof Error ? error.message : String(error),
+          startedAt,
+          completedAt: new Date().toISOString(),
+        });
       }
     }
   }

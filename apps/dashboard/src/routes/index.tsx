@@ -47,8 +47,17 @@ const discoveredSearch = {
   page: 1,
   pageSize: 25,
   status: "pending",
+  enrichmentStatus: "all",
   sortBy: "confidenceScore",
   sortDir: "desc",
+} as const;
+const pendingEnrichmentSearch = {
+  ...discoveredSearch,
+  enrichmentStatus: "pending",
+} as const;
+const failedEnrichmentSearch = {
+  ...discoveredSearch,
+  enrichmentStatus: "failed",
 } as const;
 const feedbackSearch = { page: 1, pageSize: 25, status: "new", type: "all" } as const;
 const failureSearch = {
@@ -93,6 +102,12 @@ const EMPTY_HOMEPAGE_DATA: DashboardHomepageData = {
       totalApps: 0,
       recentReleases: 0,
     },
+    enrichmentHealth: {
+      pendingEnrichment: 0,
+      enriched: 0,
+      failed: 0,
+      inProgress: 0,
+    },
   },
   pendingSuggestions: [],
   pendingDiscoveries: [],
@@ -106,6 +121,7 @@ const EMPTY_HOMEPAGE_DATA: DashboardHomepageData = {
 const jobTypeLabels: Record<HomepageRunItem["jobType"], string> = {
   poll_sources: "Poll Sources",
   cask_index_sync: "Cask Index Sync",
+  enrich_discovered_apps: "Enrich Discoveries",
 };
 
 export const Route = createFileRoute("/")({
@@ -164,6 +180,22 @@ function DashboardPage() {
           >
             <MetricLabel label="Discoveries" tone="amber" />
             <MetricValue value={homepage.overview.needsAttention.pendingDiscoveredApps} />
+          </Link>
+          <Link
+            to="/discovered-apps"
+            search={pendingEnrichmentSearch}
+            className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-border hover:bg-background/80"
+          >
+            <MetricLabel label="Pending enrichment" tone="slate" />
+            <MetricValue value={homepage.overview.enrichmentHealth.pendingEnrichment} />
+          </Link>
+          <Link
+            to="/discovered-apps"
+            search={failedEnrichmentSearch}
+            className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-border hover:bg-background/80"
+          >
+            <MetricLabel label="Failed enrichment" tone="red" />
+            <MetricValue value={homepage.overview.enrichmentHealth.failed} />
           </Link>
           <Link
             to="/feedback"

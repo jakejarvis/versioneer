@@ -47,7 +47,9 @@ import {
 const jobsSearchSchema = z.object({
   ...paginatedSearchShape,
   tab: z.enum(["runs", "failures"]).catch("runs"),
-  jobType: z.enum(["all", "poll_sources", "cask_index_sync"]).catch("all"),
+  jobType: z
+    .enum(["all", "poll_sources", "cask_index_sync", "enrich_discovered_apps"])
+    .catch("all"),
   failureStatus: z.enum(["open", "retrying", "resolved", "abandoned"]).catch("open"),
 });
 
@@ -62,7 +64,7 @@ export const Route = createFileRoute("/jobs/")({
 
 interface CronJobRun {
   id: string;
-  jobType: "poll_sources" | "cask_index_sync";
+  jobType: "poll_sources" | "cask_index_sync" | "enrich_discovered_apps";
   trigger: "manual" | "scheduled";
   status: "running" | "completed" | "failed";
   actorId: string | null;
@@ -77,6 +79,7 @@ interface CronJobRun {
 const jobTypeLabels: Record<string, string> = {
   poll_sources: "Poll Sources",
   cask_index_sync: "Cask Index Sync",
+  enrich_discovered_apps: "Enrich Discoveries",
 };
 
 import { formatDuration } from "@/lib/format-duration";
@@ -274,6 +277,7 @@ function RunsTab() {
               <SelectItem value="all">All Job Types</SelectItem>
               <SelectItem value="poll_sources">Poll Sources</SelectItem>
               <SelectItem value="cask_index_sync">Cask Index Sync</SelectItem>
+              <SelectItem value="enrich_discovered_apps">Enrich Discoveries</SelectItem>
             </SelectContent>
           </Select>
         </div>
