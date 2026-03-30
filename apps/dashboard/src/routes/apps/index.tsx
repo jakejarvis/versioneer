@@ -2,7 +2,7 @@ import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -233,6 +233,16 @@ function CreateAppDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <CreateAppForm onOpenChange={onOpenChange} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateAppForm({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
   const createApp = useCreateApp();
 
   const form = useForm({
@@ -256,7 +266,6 @@ function CreateAppDialog({
           onSuccess: () => {
             toast.success("App created");
             onOpenChange(false);
-            form.reset();
           },
           onError: (err) => toast.error(err.message),
         },
@@ -264,127 +273,119 @@ function CreateAppDialog({
     },
   });
 
-  // Clear form when dialog closes so stale partial input doesn't persist.
-  useEffect(() => {
-    if (!open) form.reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on close
-  }, [open]);
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Create App</DialogTitle>
-        </DialogHeader>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void form.handleSubmit();
+    <>
+      <DialogHeader>
+        <DialogTitle>Create App</DialogTitle>
+      </DialogHeader>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void form.handleSubmit();
+        }}
+        className="space-y-4"
+      >
+        <form.Field
+          name="slug"
+          validators={{
+            onBlur: ({ value }) => {
+              if (!value) return "Slug is required";
+              if (!/^[a-z0-9-]+$/.test(value))
+                return "Slug must be lowercase alphanumeric with hyphens";
+              return undefined;
+            },
           }}
-          className="space-y-4"
         >
-          <form.Field
-            name="slug"
-            validators={{
-              onBlur: ({ value }) => {
-                if (!value) return "Slug is required";
-                if (!/^[a-z0-9-]+$/.test(value))
-                  return "Slug must be lowercase alphanumeric with hyphens";
-                return undefined;
-              },
-            }}
-          >
-            {(field) => (
-              <FormField
-                label="Slug"
-                name={field.name}
-                meta={field.state.meta}
-                description="Lowercase, hyphens only. Must be unique."
-              >
-                <Input
-                  id={field.name}
-                  placeholder="my-app"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
-                />
-              </FormField>
+          {(field) => (
+            <FormField
+              label="Slug"
+              name={field.name}
+              meta={field.state.meta}
+              description="Lowercase, hyphens only. Must be unique."
+            >
+              <Input
+                id={field.name}
+                placeholder="my-app"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+              />
+            </FormField>
+          )}
+        </form.Field>
+        <form.Field
+          name="canonicalName"
+          validators={{
+            onBlur: ({ value }) => (!value ? "Name is required" : undefined),
+          }}
+        >
+          {(field) => (
+            <FormField label="Name" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                placeholder="My App"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+              />
+            </FormField>
+          )}
+        </form.Field>
+        <form.Field name="vendorName">
+          {(field) => (
+            <FormField label="Vendor" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                placeholder="Vendor Name"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+              />
+            </FormField>
+          )}
+        </form.Field>
+        <form.Field name="homepageUrl">
+          {(field) => (
+            <FormField label="Homepage URL" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                placeholder="https://example.com"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+              />
+            </FormField>
+          )}
+        </form.Field>
+        <form.Field name="notes">
+          {(field) => (
+            <FormField label="Notes" name={field.name} meta={field.state.meta}>
+              <Textarea
+                id={field.name}
+                placeholder="Optional notes..."
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+              />
+            </FormField>
+          )}
+        </form.Field>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
+            {([canSubmit, isSubmitting]) => (
+              <Button type="submit" disabled={!canSubmit || isSubmitting || createApp.isPending}>
+                {createApp.isPending ? "Creating..." : "Create"}
+              </Button>
             )}
-          </form.Field>
-          <form.Field
-            name="canonicalName"
-            validators={{
-              onBlur: ({ value }) => (!value ? "Name is required" : undefined),
-            }}
-          >
-            {(field) => (
-              <FormField label="Name" name={field.name} meta={field.state.meta}>
-                <Input
-                  id={field.name}
-                  placeholder="My App"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
-                />
-              </FormField>
-            )}
-          </form.Field>
-          <form.Field name="vendorName">
-            {(field) => (
-              <FormField label="Vendor" name={field.name} meta={field.state.meta}>
-                <Input
-                  id={field.name}
-                  placeholder="Vendor Name"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                />
-              </FormField>
-            )}
-          </form.Field>
-          <form.Field name="homepageUrl">
-            {(field) => (
-              <FormField label="Homepage URL" name={field.name} meta={field.state.meta}>
-                <Input
-                  id={field.name}
-                  placeholder="https://example.com"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
-                />
-              </FormField>
-            )}
-          </form.Field>
-          <form.Field name="notes">
-            {(field) => (
-              <FormField label="Notes" name={field.name} meta={field.state.meta}>
-                <Textarea
-                  id={field.name}
-                  placeholder="Optional notes..."
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                />
-              </FormField>
-            )}
-          </form.Field>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
-              {([canSubmit, isSubmitting]) => (
-                <Button type="submit" disabled={!canSubmit || isSubmitting || createApp.isPending}>
-                  {createApp.isPending ? "Creating..." : "Create"}
-                </Button>
-              )}
-            </form.Subscribe>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </form.Subscribe>
+        </DialogFooter>
+      </form>
+    </>
   );
 }

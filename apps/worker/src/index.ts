@@ -149,11 +149,13 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
     {
       const maxBatchSize = 10;
       try {
+        const ENRICHMENT_STUCK_MS = 15 * 60 * 1000; // 15 minutes
         const candidates = await db
           .select({
             id: discoveredApps.id,
             enrichmentStatus: discoveredApps.enrichmentStatus,
             enrichedAt: discoveredApps.enrichedAt,
+            updatedAt: discoveredApps.updatedAt,
           })
           .from(discoveredApps)
           .where(or(eq(discoveredApps.status, "pending"), eq(discoveredApps.status, "linked")))
@@ -163,11 +165,21 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
 
         let enriched = 0;
         for (const candidate of candidates) {
-          if (candidate.enrichmentStatus === "in_progress" || !shouldEnrich(candidate)) continue;
+          // Skip in_progress unless stuck for >15 minutes (crash recovery)
+          if (candidate.enrichmentStatus === "in_progress") {
+            const age = Date.now() - new Date(candidate.updatedAt).getTime();
+            if (age < ENRICHMENT_STUCK_MS) continue;
+          } else if (!shouldEnrich(candidate)) {
+            continue;
+          }
 
           await enrichDiscoveredApp({
             discoveredAppId: candidate.id,
             db,
+            githubToken: (this.env as unknown as Record<string, unknown>).GITHUB_TOKEN as
+              | string
+              | undefined,
+            assetsBucket: this.env.RAW_BUCKET,
             configKv: this.env.CONFIG_KV,
           });
 

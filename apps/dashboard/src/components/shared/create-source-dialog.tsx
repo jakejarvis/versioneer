@@ -1,7 +1,6 @@
 import { useForm } from "@tanstack/react-form";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { defaultParserKeyForSourceType } from "@versioneer/schemas/sources";
-import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { useCreateSource } from "@/api/hooks/use-sources";
@@ -32,6 +31,22 @@ interface CreateSourceDialogProps {
 }
 
 export function CreateSourceDialog({ appId, open, onOpenChange }: CreateSourceDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <CreateSourceForm appId={appId} onOpenChange={onOpenChange} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateSourceForm({
+  appId,
+  onOpenChange,
+}: {
+  appId?: string;
+  onOpenChange: (open: boolean) => void;
+}) {
   const createSource = useCreateSource();
 
   const form = useForm({
@@ -53,6 +68,7 @@ export function CreateSourceDialog({ appId, open, onOpenChange }: CreateSourceDi
           label: value.label || undefined,
           baseUrl: value.baseUrl || undefined,
           parserKey: value.parserKey,
+          channel: value.channel || undefined,
           configJson: value.configJson || undefined,
           pollIntervalMinutes: value.pollIntervalMinutes,
         },
@@ -60,7 +76,6 @@ export function CreateSourceDialog({ appId, open, onOpenChange }: CreateSourceDi
           onSuccess: () => {
             toast.success("Source created");
             onOpenChange(false);
-            form.reset();
           },
           onError: (err) => toast.error(err.message),
         },
@@ -68,218 +83,207 @@ export function CreateSourceDialog({ appId, open, onOpenChange }: CreateSourceDi
     },
   });
 
-  // Clear form when dialog closes so stale partial input doesn't persist.
-  useEffect(() => {
-    if (!open) form.reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on close
-  }, [open]);
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add Source</DialogTitle>
-        </DialogHeader>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void form.handleSubmit();
+    <>
+      <DialogHeader>
+        <DialogTitle>Add Source</DialogTitle>
+      </DialogHeader>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void form.handleSubmit();
+        }}
+        className="space-y-4"
+      >
+        <form.Field
+          name="appId"
+          validators={{
+            onBlur: ({ value }) => (!value ? "App ID is required" : undefined),
           }}
-          className="space-y-4"
         >
-          <form.Field
-            name="appId"
-            validators={{
-              onBlur: ({ value }) => (!value ? "App ID is required" : undefined),
-            }}
-          >
-            {(field) => (
-              <FormField label="App ID" name={field.name} meta={field.state.meta}>
-                <Input
-                  id={field.name}
-                  placeholder="app_xxx"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                  readOnly={!!appId}
-                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
-                />
-              </FormField>
-            )}
-          </form.Field>
+          {(field) => (
+            <FormField label="App ID" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                placeholder="app_xxx"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                readOnly={!!appId}
+                aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+              />
+            </FormField>
+          )}
+        </form.Field>
 
-          <form.Field name="sourceType">
-            {(field) => (
-              <FormField label="Source Type" name={field.name} meta={field.state.meta}>
-                <Select
-                  value={field.state.value}
-                  onValueChange={(v) => {
-                    const sourceType = v as SourceType;
-                    field.handleChange(sourceType);
-                    form.setFieldValue("parserKey", defaultParserKeyForSourceType(sourceType));
-                  }}
-                >
-                  <SelectTrigger id={field.name}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(SOURCE_TYPES).map(([value, cfg]) => (
-                      <SelectItem key={value} value={value}>
-                        {cfg.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormField>
-            )}
-          </form.Field>
-
-          <form.Field name="label">
-            {(field) => (
-              <FormField label="Label" name={field.name} meta={field.state.meta}>
-                <Input
-                  id={field.name}
-                  placeholder="Optional label"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                />
-              </FormField>
-            )}
-          </form.Field>
-
-          <form.Subscribe selector={(state) => state.values.sourceType}>
-            {(sourceType) =>
-              sourceType !== "manual" ? (
-                <form.Field name="baseUrl">
-                  {(field) => (
-                    <FormField label="Base URL" name={field.name} meta={field.state.meta}>
-                      <Input
-                        id={field.name}
-                        placeholder={
-                          sourceType === "github_releases"
-                            ? "https://api.github.com/repos/owner/repo/releases"
-                            : "https://example.com/appcast.xml"
-                        }
-                        value={field.state.value}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        onBlur={field.handleBlur}
-                        aria-invalid={
-                          field.state.meta.isTouched && field.state.meta.errors.length > 0
-                        }
-                      />
-                    </FormField>
-                  )}
-                </form.Field>
-              ) : null
-            }
-          </form.Subscribe>
-
-          <form.Subscribe selector={(state) => state.values.sourceType}>
-            {(sourceType) =>
-              sourceType === "web_page" ? (
-                <form.Field name="configJson">
-                  {(field) => (
-                    <FormField
-                      label="Selector Config (JSON)"
-                      name={field.name}
-                      meta={field.state.meta}
-                      description="CSS selectors to extract version and download URLs."
-                    >
-                      <Textarea
-                        id={field.name}
-                        rows={5}
-                        className="font-mono text-xs"
-                        placeholder={'{\n  "versionSelector": "",\n  "downloadSelector": ""\n}'}
-                        value={field.state.value}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        onBlur={field.handleBlur}
-                      />
-                    </FormField>
-                  )}
-                </form.Field>
-              ) : null
-            }
-          </form.Subscribe>
-
-          <form.Field
-            name="parserKey"
-            validators={{
-              onBlur: ({ value }) => (!value ? "Parser key is required" : undefined),
-            }}
-          >
-            {(field) => (
-              <FormField label="Parser Key" name={field.name} meta={field.state.meta}>
-                <Input
-                  id={field.name}
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
-                />
-              </FormField>
-            )}
-          </form.Field>
-
-          <form.Field name="channel">
-            {(field) => (
-              <FormField label="Channel" name={field.name} meta={field.state.meta}>
-                <Select
-                  value={field.state.value || "auto"}
-                  onValueChange={(v) => field.handleChange(v === "auto" ? "" : v)}
-                >
-                  <SelectTrigger id={field.name}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Auto-detect</SelectItem>
-                    <SelectItem value="stable">Stable</SelectItem>
-                    <SelectItem value="beta">Beta</SelectItem>
-                    <SelectItem value="nightly">Nightly</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormField>
-            )}
-          </form.Field>
-
-          <form.Field name="pollIntervalMinutes">
-            {(field) => (
-              <FormField
-                label="Poll Interval (minutes)"
-                name={field.name}
-                meta={field.state.meta}
-                description="Min 5, max 10080 (1 week)."
+        <form.Field name="sourceType">
+          {(field) => (
+            <FormField label="Source Type" name={field.name} meta={field.state.meta}>
+              <Select
+                value={field.state.value}
+                onValueChange={(v) => {
+                  const sourceType = v as SourceType;
+                  field.handleChange(sourceType);
+                  form.setFieldValue("parserKey", defaultParserKeyForSourceType(sourceType));
+                }}
               >
-                <Input
-                  id={field.name}
-                  type="number"
-                  min={5}
-                  max={10080}
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(Number(e.target.value))}
-                  onBlur={field.handleBlur}
-                />
-              </FormField>
-            )}
-          </form.Field>
+                <SelectTrigger id={field.name}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SOURCE_TYPES).map(([value, cfg]) => (
+                    <SelectItem key={value} value={value}>
+                      {cfg.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+          )}
+        </form.Field>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
-              {([canSubmit, isSubmitting]) => (
-                <Button
-                  type="submit"
-                  disabled={!canSubmit || isSubmitting || createSource.isPending}
-                >
-                  {createSource.isPending ? "Creating..." : "Create"}
-                </Button>
-              )}
-            </form.Subscribe>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <form.Field name="label">
+          {(field) => (
+            <FormField label="Label" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                placeholder="Optional label"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+              />
+            </FormField>
+          )}
+        </form.Field>
+
+        <form.Subscribe selector={(state) => state.values.sourceType}>
+          {(sourceType) =>
+            sourceType !== "manual" ? (
+              <form.Field name="baseUrl">
+                {(field) => (
+                  <FormField label="Base URL" name={field.name} meta={field.state.meta}>
+                    <Input
+                      id={field.name}
+                      placeholder={
+                        sourceType === "github_releases"
+                          ? "https://api.github.com/repos/owner/repo/releases"
+                          : "https://example.com/appcast.xml"
+                      }
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      aria-invalid={
+                        field.state.meta.isTouched && field.state.meta.errors.length > 0
+                      }
+                    />
+                  </FormField>
+                )}
+              </form.Field>
+            ) : null
+          }
+        </form.Subscribe>
+
+        <form.Subscribe selector={(state) => state.values.sourceType}>
+          {(sourceType) =>
+            sourceType === "web_page" ? (
+              <form.Field name="configJson">
+                {(field) => (
+                  <FormField
+                    label="Selector Config (JSON)"
+                    name={field.name}
+                    meta={field.state.meta}
+                    description="CSS selectors to extract version and download URLs."
+                  >
+                    <Textarea
+                      id={field.name}
+                      rows={5}
+                      className="font-mono text-xs"
+                      placeholder={'{\n  "versionSelector": "",\n  "downloadSelector": ""\n}'}
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                    />
+                  </FormField>
+                )}
+              </form.Field>
+            ) : null
+          }
+        </form.Subscribe>
+
+        <form.Field
+          name="parserKey"
+          validators={{
+            onBlur: ({ value }) => (!value ? "Parser key is required" : undefined),
+          }}
+        >
+          {(field) => (
+            <FormField label="Parser Key" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+              />
+            </FormField>
+          )}
+        </form.Field>
+
+        <form.Field name="channel">
+          {(field) => (
+            <FormField label="Channel" name={field.name} meta={field.state.meta}>
+              <Select
+                value={field.state.value || "auto"}
+                onValueChange={(v) => field.handleChange(v === "auto" ? "" : v)}
+              >
+                <SelectTrigger id={field.name}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto-detect</SelectItem>
+                  <SelectItem value="stable">Stable</SelectItem>
+                  <SelectItem value="beta">Beta</SelectItem>
+                  <SelectItem value="nightly">Nightly</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+          )}
+        </form.Field>
+
+        <form.Field name="pollIntervalMinutes">
+          {(field) => (
+            <FormField
+              label="Poll Interval (minutes)"
+              name={field.name}
+              meta={field.state.meta}
+              description="Min 5, max 10080 (1 week)."
+            >
+              <Input
+                id={field.name}
+                type="number"
+                min={5}
+                max={10080}
+                value={field.state.value}
+                onChange={(e) => field.handleChange(Number(e.target.value))}
+                onBlur={field.handleBlur}
+              />
+            </FormField>
+          )}
+        </form.Field>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
+            {([canSubmit, isSubmitting]) => (
+              <Button type="submit" disabled={!canSubmit || isSubmitting || createSource.isPending}>
+                {createSource.isPending ? "Creating..." : "Create"}
+              </Button>
+            )}
+          </form.Subscribe>
+        </DialogFooter>
+      </form>
+    </>
   );
 }

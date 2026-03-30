@@ -114,6 +114,13 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
 
     if (existingLatest?.pinnedReleaseId) {
       winningRelease = candidateReleases.find((r) => r.id === existingLatest.pinnedReleaseId);
+      // Clear stale pin if the pinned release is no longer an active candidate
+      if (!winningRelease) {
+        await db
+          .update(appLatestReleases)
+          .set({ pinnedReleaseId: null, updatedAt: now })
+          .where(eq(appLatestReleases.id, existingLatest.id));
+      }
     }
 
     if (!winningRelease) {

@@ -21,7 +21,8 @@ export function normalizeReleaseNotes(body: string, format: "html" | "markdown")
   html = sanitizeHtml(html);
 
   if (html.length > MAX_RELEASE_NOTES_LENGTH) {
-    html = html.slice(0, MAX_RELEASE_NOTES_LENGTH) + "<!-- truncated -->";
+    // Re-sanitize after truncation so htmlparser2 auto-closes any tags cut mid-way
+    html = sanitizeHtml(html.slice(0, MAX_RELEASE_NOTES_LENGTH)) + "<!-- truncated -->";
   }
 
   return html;

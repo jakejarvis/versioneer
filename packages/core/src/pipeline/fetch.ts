@@ -108,7 +108,7 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
         .set({ lastFetchedAt: now, lastFailureAt: now, updatedAt: now })
         .where(eq(sources.id, source.id));
 
-      return { sourceFetchId: null, shouldParse: false, appId: source.appId };
+      return { sourceFetchId: fetchId, shouldParse: false, appId: source.appId };
     }
 
     // Store raw body in R2

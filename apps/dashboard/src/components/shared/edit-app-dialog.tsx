@@ -1,5 +1,4 @@
 import { useForm } from "@tanstack/react-form";
-import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { useUpdateApp } from "@/api/hooks/use-apps";
@@ -30,6 +29,18 @@ interface EditAppDialogProps {
 }
 
 export function EditAppDialog({ app, open, onOpenChange }: EditAppDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <EditAppForm app={app} onOpenChange={onOpenChange} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Inner form — lives inside DialogContent so it unmounts/remounts with the
+// dialog. defaultValues is always correct from the first render.
+function EditAppForm({ app, onOpenChange }: { app: App; onOpenChange: (open: boolean) => void }) {
   const updateApp = useUpdateApp(app.id);
 
   const form = useForm({
@@ -64,177 +75,159 @@ export function EditAppDialog({ app, open, onOpenChange }: EditAppDialogProps) {
     },
   });
 
-  // Reset form to current app data when dialog opens (discards stale edits
-  // from a previous open) and when the app prop updates underneath us.
-  useEffect(() => {
-    if (!open) return;
-    form.reset({
-      canonicalName: app.canonicalName,
-      vendorName: app.vendorName ?? "",
-      homepageUrl: app.homepageUrl ?? "",
-      status: app.status,
-      mergedIntoAppId: app.mergedIntoAppId ?? "",
-      notes: app.notes ?? "",
-      defaultReleaseNotesUrl: app.defaultReleaseNotesUrl ?? "",
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on open or when app prop changes
-  }, [open, app]);
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Edit App</DialogTitle>
-        </DialogHeader>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void form.handleSubmit();
+    <>
+      <DialogHeader>
+        <DialogTitle>Edit App</DialogTitle>
+      </DialogHeader>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void form.handleSubmit();
+        }}
+        className="space-y-4"
+      >
+        <form.Field
+          name="canonicalName"
+          validators={{
+            onBlur: ({ value }) => (!value ? "Name is required" : undefined),
           }}
-          className="space-y-4"
         >
-          <form.Field
-            name="canonicalName"
-            validators={{
-              onBlur: ({ value }) => (!value ? "Name is required" : undefined),
-            }}
-          >
-            {(field) => (
-              <FormField label="Name" name={field.name} meta={field.state.meta}>
-                <Input
-                  id={field.name}
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
-                />
-              </FormField>
-            )}
-          </form.Field>
+          {(field) => (
+            <FormField label="Name" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+              />
+            </FormField>
+          )}
+        </form.Field>
 
-          <form.Field name="vendorName">
-            {(field) => (
-              <FormField label="Vendor" name={field.name} meta={field.state.meta}>
-                <Input
-                  id={field.name}
-                  placeholder="Vendor Name"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                />
-              </FormField>
-            )}
-          </form.Field>
+        <form.Field name="vendorName">
+          {(field) => (
+            <FormField label="Vendor" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                placeholder="Vendor Name"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+              />
+            </FormField>
+          )}
+        </form.Field>
 
-          <form.Field name="homepageUrl">
-            {(field) => (
-              <FormField label="Homepage URL" name={field.name} meta={field.state.meta}>
-                <Input
-                  id={field.name}
-                  placeholder="https://example.com"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
-                />
-              </FormField>
-            )}
-          </form.Field>
+        <form.Field name="homepageUrl">
+          {(field) => (
+            <FormField label="Homepage URL" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                placeholder="https://example.com"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+              />
+            </FormField>
+          )}
+        </form.Field>
 
-          <form.Field name="status">
-            {(field) => (
-              <FormField label="Status" name={field.name} meta={field.state.meta}>
-                <Select
-                  value={field.state.value}
-                  onValueChange={(v) => field.handleChange(v as typeof field.state.value)}
-                >
-                  <SelectTrigger id={field.name}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="public">Public</SelectItem>
-                    <SelectItem value="deprecated">Deprecated</SelectItem>
-                    <SelectItem value="merged">Merged</SelectItem>
-                    <SelectItem value="unlisted">Unlisted</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormField>
-            )}
-          </form.Field>
-
-          <form.Subscribe selector={(state) => state.values.status}>
-            {(status) =>
-              status === "merged" ? (
-                <form.Field name="mergedIntoAppId">
-                  {(field) => (
-                    <FormField
-                      label="Merged Into App ID"
-                      name={field.name}
-                      meta={field.state.meta}
-                      description="The app_xxx ID this app was merged into."
-                    >
-                      <Input
-                        id={field.name}
-                        placeholder="app_xxx"
-                        value={field.state.value}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        onBlur={field.handleBlur}
-                      />
-                    </FormField>
-                  )}
-                </form.Field>
-              ) : null
-            }
-          </form.Subscribe>
-
-          <form.Field name="defaultReleaseNotesUrl">
-            {(field) => (
-              <FormField
-                label="Default Release Notes URL"
-                name={field.name}
-                meta={field.state.meta}
-                description="Fallback URL for releases that don't have their own."
+        <form.Field name="status">
+          {(field) => (
+            <FormField label="Status" name={field.name} meta={field.state.meta}>
+              <Select
+                value={field.state.value}
+                onValueChange={(v) => field.handleChange(v as typeof field.state.value)}
               >
-                <Input
-                  id={field.name}
-                  placeholder="https://example.com/changelog"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                />
-              </FormField>
-            )}
-          </form.Field>
+                <SelectTrigger id={field.name}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="public">Public</SelectItem>
+                  <SelectItem value="deprecated">Deprecated</SelectItem>
+                  <SelectItem value="merged">Merged</SelectItem>
+                  <SelectItem value="unlisted">Unlisted</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+          )}
+        </form.Field>
 
-          <form.Field name="notes">
-            {(field) => (
-              <FormField label="Notes" name={field.name} meta={field.state.meta}>
-                <Textarea
-                  id={field.name}
-                  placeholder="Optional notes..."
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                />
-              </FormField>
-            )}
-          </form.Field>
+        <form.Subscribe selector={(state) => state.values.status}>
+          {(status) =>
+            status === "merged" ? (
+              <form.Field name="mergedIntoAppId">
+                {(field) => (
+                  <FormField
+                    label="Merged Into App ID"
+                    name={field.name}
+                    meta={field.state.meta}
+                    description="The app_xxx ID this app was merged into."
+                  >
+                    <Input
+                      id={field.name}
+                      placeholder="app_xxx"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                    />
+                  </FormField>
+                )}
+              </form.Field>
+            ) : null
+          }
+        </form.Subscribe>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
-              {([canSubmit, isSubmitting]) => (
-                <Button type="submit" disabled={!canSubmit || isSubmitting || updateApp.isPending}>
-                  {updateApp.isPending ? "Saving..." : "Save"}
-                </Button>
-              )}
-            </form.Subscribe>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <form.Field name="defaultReleaseNotesUrl">
+          {(field) => (
+            <FormField
+              label="Default Release Notes URL"
+              name={field.name}
+              meta={field.state.meta}
+              description="Fallback URL for releases that don't have their own."
+            >
+              <Input
+                id={field.name}
+                placeholder="https://example.com/changelog"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+              />
+            </FormField>
+          )}
+        </form.Field>
+
+        <form.Field name="notes">
+          {(field) => (
+            <FormField label="Notes" name={field.name} meta={field.state.meta}>
+              <Textarea
+                id={field.name}
+                placeholder="Optional notes..."
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+              />
+            </FormField>
+          )}
+        </form.Field>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
+            {([canSubmit, isSubmitting]) => (
+              <Button type="submit" disabled={!canSubmit || isSubmitting || updateApp.isPending}>
+                {updateApp.isPending ? "Saving..." : "Save"}
+              </Button>
+            )}
+          </form.Subscribe>
+        </DialogFooter>
+      </form>
+    </>
   );
 }

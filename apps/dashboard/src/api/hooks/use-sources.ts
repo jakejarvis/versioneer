@@ -66,6 +66,7 @@ export function useCreateSource() {
       baseUrl?: string;
       configJson?: string;
       parserKey: string;
+      channel?: string;
       pollIntervalMinutes?: number;
     }) => createSource({ data: input }),
     onSuccess: (_data, variables) => {

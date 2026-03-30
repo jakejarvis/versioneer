@@ -10,7 +10,7 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
-import { asc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { getParser } from "../parsers";
 import { normalizeVersion, inferChannel } from "../versioning";
@@ -71,7 +71,26 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
   const body = await r2Object.text();
 
   const parserRunId = generateId(idPrefixes.parserRun);
-  const config = source.configJson ? JSON.parse(source.configJson) : {};
+
+  let config: Record<string, unknown> = {};
+  if (source.configJson) {
+    try {
+      config = JSON.parse(source.configJson) as Record<string, unknown>;
+    } catch {
+      await db.insert(parserRuns).values({
+        id: parserRunId,
+        sourceFetchId: fetchRecord.id,
+        parserKey: source.parserKey,
+        parserVersion: parser.version,
+        runStatus: "error",
+        observationCount: 0,
+        errorMessage: `Invalid configJson: ${source.configJson.slice(0, 200)}`,
+        startedAt: now,
+        finishedAt: new Date().toISOString(),
+      });
+      return { appId: source.appId, releaseCount: 0 };
+    }
+  }
 
   try {
     const output = parser.parse(body, {
@@ -105,17 +124,19 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
       const channel =
         source.channel ?? parsedRelease.channel ?? inferChannel(parsedRelease.versionRaw);
 
-      // Upsert release: check if version already exists for this app
+      // Upsert release: check if version already exists for this app + channel
       let releaseId: string | undefined;
-      const existingRelease = await db
+      const matchingRelease = await db
         .select()
         .from(releases)
-        .where(eq(releases.appId, source.appId))
-        .all();
-
-      const matchingRelease = existingRelease.find(
-        (r) => r.versionNormalized === versionNormalized && r.channel === channel,
-      );
+        .where(
+          and(
+            eq(releases.appId, source.appId),
+            eq(releases.versionNormalized, versionNormalized),
+            eq(releases.channel, channel),
+          ),
+        )
+        .get();
 
       if (matchingRelease) {
         releaseId = matchingRelease.id;
@@ -204,12 +225,12 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
         });
       }
 
-      // Ensure exactly one primary artifact per release
+      // Ensure exactly one primary artifact per release (prefer newest)
       const allReleaseArtifacts = await db
         .select({ id: artifacts.id })
         .from(artifacts)
         .where(eq(artifacts.releaseId, releaseId))
-        .orderBy(asc(artifacts.createdAt))
+        .orderBy(desc(artifacts.createdAt))
         .all();
       const firstArtifact = allReleaseArtifacts[0];
       if (firstArtifact) {

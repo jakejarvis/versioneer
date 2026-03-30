@@ -74,12 +74,6 @@ export async function enrichDiscoveredApp(params: {
     };
   }
 
-  // Mark in-progress
-  await db
-    .update(discoveredApps)
-    .set({ enrichmentStatus: "in_progress", updatedAt: new Date().toISOString() })
-    .where(eq(discoveredApps.id, discoveredAppId));
-
   const result: EnrichmentResult = {
     enrichmentStatus: "success",
     enrichedVendorName: null,
@@ -93,6 +87,11 @@ export async function enrichDiscoveredApp(params: {
   };
 
   try {
+    // Mark in-progress inside try so a crash always hits the catch handler
+    await db
+      .update(discoveredApps)
+      .set({ enrichmentStatus: "in_progress", updatedAt: new Date().toISOString() })
+      .where(eq(discoveredApps.id, discoveredAppId));
     // Try Sparkle feed first
     if (row.sparkleFeedUrl) {
       await enrichFromSparkleFeed(row.sparkleFeedUrl, result);
@@ -148,11 +147,14 @@ export async function enrichDiscoveredApp(params: {
       hasHomebrewCask,
     });
 
-    // Scrape homepage for icon if none exists yet
+    // Scrape homepage for icon if none exists yet (15s budget)
     if (params.assetsBucket && !row.iconR2Key) {
       const homepage = result.enrichedHomepageUrl;
       if (homepage) {
-        const iconKey = await scrapeHomepageIcon(homepage, params.assetsBucket);
+        const iconKey = await Promise.race([
+          scrapeHomepageIcon(homepage, params.assetsBucket),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 15_000)),
+        ]);
         if (iconKey) {
           await db
             .update(discoveredApps)
@@ -407,9 +409,9 @@ function extractVendorFromSigningAuthority(authority: string): string | null {
   const match = authority.match(/:\s*(.+?)\s*\([A-Z0-9]+\)\s*$/);
   if (match?.[1]) return match[1].trim();
 
-  // Pattern: "Apple Development: Name (TEAMID)"
-  const devMatch = authority.match(/:\s*(.+?)\s*\([A-Z0-9]+\)\s*$/);
-  if (devMatch?.[1]) return devMatch[1].trim();
+  // Pattern without prefix: "Vendor Name (TEAMID)"
+  const bareMatch = authority.match(/^(.+?)\s*\([A-Z0-9]+\)\s*$/);
+  if (bareMatch?.[1]) return bareMatch[1].trim();
 
   return null;
 }

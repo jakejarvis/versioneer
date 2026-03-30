@@ -16,7 +16,7 @@ import {
   Upload,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -442,6 +442,22 @@ function CreateAliasDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <CreateAliasForm appId={appId} onOpenChange={onOpenChange} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateAliasForm({
+  appId,
+  onOpenChange,
+}: {
+  appId: string;
+  onOpenChange: (open: boolean) => void;
+}) {
   const createAlias = useCreateAlias(appId);
 
   const form = useForm({
@@ -464,7 +480,6 @@ function CreateAliasDialog({
           onSuccess: () => {
             toast.success("Alias created");
             onOpenChange(false);
-            form.reset();
           },
           onError: (error) => toast.error(error.message),
         },
@@ -472,86 +487,75 @@ function CreateAliasDialog({
     },
   });
 
-  // Clear form when dialog closes so stale partial input doesn't persist.
-  useEffect(() => {
-    if (!open) form.reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on close
-  }, [open]);
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add Alias</DialogTitle>
-        </DialogHeader>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void form.handleSubmit();
+    <>
+      <DialogHeader>
+        <DialogTitle>Add Alias</DialogTitle>
+      </DialogHeader>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void form.handleSubmit();
+        }}
+        className="flex flex-col gap-4"
+      >
+        <form.Field name="aliasType">
+          {(field) => (
+            <FormField label="Type" name={field.name} meta={field.state.meta}>
+              <Select
+                value={field.state.value}
+                onValueChange={(v) => field.handleChange(v as typeof field.state.value)}
+              >
+                <SelectTrigger id={field.name}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bundle_id">Bundle ID</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="team_id">Team ID</SelectItem>
+                  <SelectItem value="sparkle_feed">Sparkle Feed</SelectItem>
+                  <SelectItem value="homepage">Homepage</SelectItem>
+                  <SelectItem value="download_pattern">Download Pattern</SelectItem>
+                  <SelectItem value="github_repo">GitHub Repo</SelectItem>
+                  <SelectItem value="mas_app_id">App Store ID</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+          )}
+        </form.Field>
+        <form.Field
+          name="value"
+          validators={{
+            onBlur: ({ value }) => (!value ? "Value is required" : undefined),
           }}
-          className="flex flex-col gap-4"
         >
-          <form.Field name="aliasType">
-            {(field) => (
-              <FormField label="Type" name={field.name} meta={field.state.meta}>
-                <Select
-                  value={field.state.value}
-                  onValueChange={(v) => field.handleChange(v as typeof field.state.value)}
-                >
-                  <SelectTrigger id={field.name}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bundle_id">Bundle ID</SelectItem>
-                    <SelectItem value="name">Name</SelectItem>
-                    <SelectItem value="team_id">Team ID</SelectItem>
-                    <SelectItem value="sparkle_feed">Sparkle Feed</SelectItem>
-                    <SelectItem value="homepage">Homepage</SelectItem>
-                    <SelectItem value="download_pattern">Download Pattern</SelectItem>
-                    <SelectItem value="github_repo">GitHub Repo</SelectItem>
-                    <SelectItem value="mas_app_id">App Store ID</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormField>
+          {(field) => (
+            <FormField label="Value" name={field.name} meta={field.state.meta}>
+              <Input
+                id={field.name}
+                placeholder="com.example.app"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+              />
+            </FormField>
+          )}
+        </form.Field>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
+            {([canSubmit, isSubmitting]) => (
+              <Button type="submit" disabled={!canSubmit || isSubmitting || createAlias.isPending}>
+                {createAlias.isPending ? "Adding..." : "Add"}
+              </Button>
             )}
-          </form.Field>
-          <form.Field
-            name="value"
-            validators={{
-              onBlur: ({ value }) => (!value ? "Value is required" : undefined),
-            }}
-          >
-            {(field) => (
-              <FormField label="Value" name={field.name} meta={field.state.meta}>
-                <Input
-                  id={field.name}
-                  placeholder="com.example.app"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                  aria-invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
-                />
-              </FormField>
-            )}
-          </form.Field>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
-              {([canSubmit, isSubmitting]) => (
-                <Button
-                  type="submit"
-                  disabled={!canSubmit || isSubmitting || createAlias.isPending}
-                >
-                  {createAlias.isPending ? "Adding..." : "Add"}
-                </Button>
-              )}
-            </form.Subscribe>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </form.Subscribe>
+        </DialogFooter>
+      </form>
+    </>
   );
 }
 

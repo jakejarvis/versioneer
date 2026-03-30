@@ -41,9 +41,7 @@ export const recentReleasesRoutes = new Hono<{ Bindings: Env }>()
       )
       .all();
 
-    rows.sort(
-      (a, b) => new Date(b.releasedAt!).getTime() - new Date(a.releasedAt!).getTime(),
-    );
+    rows.sort((a, b) => new Date(b.releasedAt!).getTime() - new Date(a.releasedAt!).getTime());
 
     const items: CachedRecentRelease[] = rows.slice(0, 8).map((row) => ({
       appId: row.appId,
