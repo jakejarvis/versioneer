@@ -11,11 +11,14 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
+import {
+  defaultRoleForSourceType,
+  defaultRuntimeStatusForSourceType,
+  sourceTypeSchema,
+} from "@versioneer/schemas/sources";
 import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
-
-import { defaultRoleForSourceType, defaultRuntimeStatusForSourceType } from "@/lib/source-types";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
 import type { DbExecutor } from "./db-types";
@@ -115,19 +118,7 @@ export const listSources = createServerFn({ method: "GET" })
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
       status: z.enum(["active", "paused", "disabled", "error", "at_risk"]).optional(),
-      sourceType: z
-        .enum([
-          "sparkle",
-          "github_releases",
-          "manual",
-          "homebrew_cask",
-          "mac_app_store",
-          "electron_generic",
-          "rss_feed",
-          "json_feed",
-          "web_page",
-        ])
-        .optional(),
+      sourceType: sourceTypeSchema.optional(),
       appId: z.string().optional(),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,

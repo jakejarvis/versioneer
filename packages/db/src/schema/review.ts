@@ -1,3 +1,9 @@
+import {
+  assertionTypeValues,
+  evidenceTypeValues,
+  queueTypeValues,
+  suggestionStatusValues,
+} from "@versioneer/schemas/review";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import { apps } from "./catalog";
@@ -7,21 +13,8 @@ export const catalogSuggestions = sqliteTable(
   "catalog_suggestions",
   {
     id: text("id").primaryKey(),
-    queueType: text("queue_type", {
-      enum: [
-        "new_app",
-        "new_source",
-        "metadata_change",
-        "authority_handoff",
-        "merge_proposal",
-        "release_discrepancy",
-      ],
-    }).notNull(),
-    status: text("status", {
-      enum: ["pending", "approved", "rejected", "superseded"],
-    })
-      .notNull()
-      .default("pending"),
+    queueType: text("queue_type", { enum: queueTypeValues }).notNull(),
+    status: text("status", { enum: suggestionStatusValues }).notNull().default("pending"),
     appId: text("app_id").references(() => apps.id),
     sourceId: text("source_id").references(() => sources.id),
     bundleKey: text("bundle_key"),
@@ -57,9 +50,7 @@ export const suggestionEvidence = sqliteTable(
       .references(() => catalogSuggestions.id),
     appId: text("app_id").references(() => apps.id),
     sourceId: text("source_id").references(() => sources.id),
-    evidenceType: text("evidence_type", {
-      enum: ["scan", "crawl", "fetch_parse", "install_verify", "homebrew", "manual"],
-    }).notNull(),
+    evidenceType: text("evidence_type", { enum: evidenceTypeValues }).notNull(),
     fingerprint: text("fingerprint").notNull(),
     payloadJson: text("payload_json").notNull(),
     observedAt: text("observed_at").notNull(),
@@ -78,15 +69,7 @@ export const trustAssertions = sqliteTable(
     id: text("id").primaryKey(),
     appId: text("app_id").references(() => apps.id),
     sourceId: text("source_id").references(() => sources.id),
-    assertionType: text("assertion_type", {
-      enum: [
-        "sparkle_public_key",
-        "bundle_id",
-        "team_id",
-        "notarization_expectation",
-        "signature_requirement",
-      ],
-    }).notNull(),
+    assertionType: text("assertion_type", { enum: assertionTypeValues }).notNull(),
     value: text("value").notNull(),
     reviewedAt: text("reviewed_at"),
     reviewedBy: text("reviewed_by"),

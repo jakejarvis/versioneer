@@ -16,6 +16,7 @@
     "@hono/zod-validator": "^0.7.6",
     "@versioneer/core": "workspace:*",
     "@versioneer/db": "workspace:*",
+    "@versioneer/schemas": "workspace:*",
     "drizzle-orm": "catalog:",
     "hono": "^4.12.9",
     "zod": "catalog:"

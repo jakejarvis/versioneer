@@ -1,3 +1,8 @@
+import {
+  artifactTypeValues,
+  installStrategyValues,
+  releaseStatusValues,
+} from "@versioneer/schemas/releases";
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import { apps } from "./catalog";
@@ -18,9 +23,7 @@ export const releases = sqliteTable(
     isPrerelease: integer("is_prerelease", { mode: "boolean" }).notNull().default(false),
     sourceConfidence: integer("source_confidence"),
     publishedBySourceId: text("published_by_source_id").references(() => sources.id),
-    status: text("status", { enum: ["active", "superseded", "draft"] })
-      .notNull()
-      .default("active"),
+    status: text("status", { enum: releaseStatusValues }).notNull().default("active"),
     releaseNotesHtml: text("release_notes_html"),
     releaseNotesUrl: text("release_notes_url"),
     createdAt: text("created_at").notNull(),
@@ -70,9 +73,7 @@ export const artifacts = sqliteTable(
     releaseId: text("release_id")
       .notNull()
       .references(() => releases.id),
-    artifactType: text("artifact_type", {
-      enum: ["zip", "dmg", "pkg", "appcast_enclosure", "mac_app_store", "other"],
-    }).notNull(),
+    artifactType: text("artifact_type", { enum: artifactTypeValues }).notNull(),
     url: text("url").notNull(),
     urlHash: text("url_hash"),
     sha256: text("sha256"),
@@ -101,16 +102,7 @@ export const appLatestReleases = sqliteTable(
     versionNormalized: text("version_normalized").notNull(),
     versionRaw: text("version_raw").notNull(),
     releasedAt: text("released_at"),
-    installStrategy: text("install_strategy", {
-      enum: [
-        "sparkle",
-        "zip_replace",
-        "dmg_copy_replace",
-        "pkg_install",
-        "mac_app_store",
-        "manual_only",
-      ],
-    }),
+    installStrategy: text("install_strategy", { enum: installStrategyValues }),
     pinnedReleaseId: text("pinned_release_id"),
     pinnedAt: text("pinned_at"),
     pinnedBy: text("pinned_by"),

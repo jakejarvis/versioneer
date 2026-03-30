@@ -1,3 +1,5 @@
+import type { ArtifactType } from "@versioneer/schemas/releases";
+
 export interface ParsedRelease {
   versionRaw: string;
   buildNumber?: string;
@@ -14,7 +16,7 @@ export interface ParsedRelease {
 
 export interface ParsedArtifact {
   url: string;
-  type: "zip" | "dmg" | "pkg" | "appcast_enclosure" | "mac_app_store" | "other";
+  type: ArtifactType;
   sha256?: string;
   sizeBytes?: number;
   architecture?: string;

@@ -1,6 +1,21 @@
-import type { SourceType } from "@/lib/source-types";
-
-export type { SourceType };
+import type { AliasType, AppStatus } from "@versioneer/schemas/catalog";
+import type { FeedbackStatus, FeedbackType } from "@versioneer/schemas/feedback";
+import type {
+  CronJobType,
+  CronRunStatus,
+  CronTrigger,
+  JobFailureStatus,
+} from "@versioneer/schemas/ops";
+import type { ArtifactType, ReleaseStatus } from "@versioneer/schemas/releases";
+import type { EvidenceType, QueueType, SuggestionStatus } from "@versioneer/schemas/review";
+import type {
+  FetchStatus,
+  ReviewStatus,
+  RunStatus,
+  SourceRole,
+  SourceStatus,
+  SourceType,
+} from "@versioneer/schemas/sources";
 
 export interface PaginatedResponse<T> {
   items: T[];
@@ -58,9 +73,9 @@ export interface HomepageDiscoveryItem {
 
 export interface HomepageRunItem {
   id: string;
-  jobType: "poll_sources" | "cask_index_sync";
-  trigger: "manual" | "scheduled";
-  status: "running" | "completed" | "failed";
+  jobType: CronJobType;
+  trigger: CronTrigger;
+  status: CronRunStatus;
   actorId: string | null;
   itemsQueued: number | null;
   itemsTotal: number | null;
@@ -91,14 +106,8 @@ export interface DashboardHomepageData {
 
 export interface CatalogSuggestion {
   id: string;
-  queueType:
-    | "new_app"
-    | "new_source"
-    | "metadata_change"
-    | "authority_handoff"
-    | "merge_proposal"
-    | "release_discrepancy";
-  status: "pending" | "approved" | "rejected" | "superseded";
+  queueType: QueueType;
+  status: SuggestionStatus;
   appId: string | null;
   sourceId: string | null;
   bundleKey: string | null;
@@ -123,7 +132,7 @@ export interface SuggestionEvidence {
   suggestionId: string;
   appId: string | null;
   sourceId: string | null;
-  evidenceType: "scan" | "crawl" | "fetch_parse" | "install_verify" | "homebrew" | "manual";
+  evidenceType: EvidenceType;
   fingerprint: string;
   payloadJson: string;
   observedAt: string;
@@ -140,7 +149,7 @@ export interface App {
   canonicalName: string;
   vendorName: string | null;
   homepageUrl: string | null;
-  status: "draft" | "public" | "deprecated" | "merged" | "unlisted";
+  status: AppStatus;
   mergedIntoAppId: string | null;
   notes: string | null;
   defaultReleaseNotesUrl: string | null;
@@ -165,9 +174,9 @@ export interface SourceSummary {
   label: string | null;
   parserKey: string;
   channel: string | null;
-  reviewStatus: "pending" | "approved" | "rejected" | "disabled";
-  role: "authority" | "corroborating" | "reference" | null;
-  status: "active" | "paused" | "disabled" | "error";
+  reviewStatus: ReviewStatus;
+  role: SourceRole | null;
+  status: SourceStatus;
   app: AppSummary | null;
 }
 
@@ -175,7 +184,7 @@ export interface ReleaseSummary {
   id: string;
   versionRaw: string;
   channel: string;
-  status: "active" | "superseded" | "draft";
+  status: ReleaseStatus;
   isPrerelease: boolean;
   releasedAt: string | null;
   app: AppSummary | null;
@@ -196,16 +205,7 @@ export interface AppListItem extends App {
 export interface AppAlias {
   id: string;
   appId: string;
-  aliasType:
-    | "bundle_id"
-    | "name"
-    | "team_id"
-    | "sparkle_feed"
-    | "homepage"
-    | "download_pattern"
-    | "github_repo"
-    | "mas_app_id"
-    | "homebrew_cask";
+  aliasType: AliasType;
   value: string;
   normalizedValue: string;
   isExact: boolean;
@@ -226,10 +226,10 @@ export interface Source {
   parserKey: string;
   channel: string | null;
   pollIntervalMinutes: number;
-  reviewStatus: "pending" | "approved" | "rejected" | "disabled";
-  role: "authority" | "corroborating" | "reference" | null;
+  reviewStatus: ReviewStatus;
+  role: SourceRole | null;
   ordinal: number;
-  status: "active" | "paused" | "disabled" | "error";
+  status: SourceStatus;
   lastSuccessAt: string | null;
   lastFailureAt: string | null;
   lastFetchedAt: string | null;
@@ -248,7 +248,7 @@ export interface SourceDetail extends Source {
 export interface SourceFetch {
   id: string;
   sourceId: string;
-  fetchStatus: "success" | "not_modified" | "error" | "timeout";
+  fetchStatus: FetchStatus;
   httpStatus: number | null;
   etag: string | null;
   lastModified: string | null;
@@ -265,7 +265,7 @@ export interface ParserRun {
   sourceFetchId: string;
   parserKey: string;
   parserVersion: string | null;
-  runStatus: "success" | "partial" | "error";
+  runStatus: RunStatus;
   observationCount: number;
   confidence: number | null;
   errorMessage: string | null;
@@ -283,7 +283,7 @@ export interface Release {
   releasedAt: string | null;
   isPrerelease: boolean;
   sourceConfidence: number | null;
-  status: "active" | "superseded" | "draft";
+  status: ReleaseStatus;
   releaseNotesHtml: string | null;
   releaseNotesUrl: string | null;
   createdAt: string;
@@ -305,7 +305,7 @@ export interface ReleaseDetail extends Release {
 export interface Artifact {
   id: string;
   releaseId: string;
-  artifactType: "zip" | "dmg" | "pkg" | "appcast_enclosure" | "mac_app_store" | "other";
+  artifactType: ArtifactType;
   url: string;
   urlHash: string | null;
   sha256: string | null;
@@ -356,7 +356,7 @@ export interface JobFailure {
   relatedId: string | null;
   errorMessage: string | null;
   retryCount: number;
-  status: "open" | "retrying" | "resolved" | "abandoned";
+  status: JobFailureStatus;
   createdAt: string;
   resolvedAt: string | null;
 }
@@ -393,12 +393,12 @@ export interface MatchExplanation {
 
 export interface FeedbackItem {
   id: string;
-  feedbackType: "wrong_match" | "wrong_version" | "app_request" | "general";
+  feedbackType: FeedbackType;
   targetAppId: string | null;
   bundleId: string | null;
   appName: string | null;
   payloadJson: string | null;
-  status: "new" | "triaged" | "resolved" | "dismissed";
+  status: FeedbackStatus;
   resolvedAt: string | null;
   createdAt: string;
 }

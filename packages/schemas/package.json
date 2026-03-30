@@ -1,0 +1,28 @@
+{
+  "name": "@versioneer/schemas",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./catalog": "./src/catalog.ts",
+    "./sources": "./src/sources.ts",
+    "./releases": "./src/releases.ts",
+    "./discovery": "./src/discovery.ts",
+    "./review": "./src/review.ts",
+    "./feedback": "./src/feedback.ts",
+    "./ops": "./src/ops.ts"
+  },
+  "scripts": {
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt --config ../../.oxfmtrc.json",
+    "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@versioneer/tsconfig": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

@@ -1,9 +1,8 @@
 import { normalizeAliasValue } from "@versioneer/core/identity";
 import { toGitHubApiReleasesUrl } from "@versioneer/core/validation";
-import { appAliases, generateId, idPrefixes, sources } from "@versioneer/db";
+import { appAliases, generateId, idPrefixes } from "@versioneer/db";
+import type { SourceType } from "@versioneer/schemas/sources";
 import { and, eq, ne } from "drizzle-orm";
-
-type SourceType = (typeof sources.$inferSelect)["sourceType"];
 type DerivedAliasType = "sparkle_feed" | "github_repo";
 
 import type { DbExecutor } from "./db-types";

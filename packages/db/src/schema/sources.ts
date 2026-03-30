@@ -1,3 +1,11 @@
+import {
+  fetchStatusValues,
+  reviewStatusValues,
+  runStatusValues,
+  sourceRoleValues,
+  sourceStatusValues,
+  sourceTypeValues,
+} from "@versioneer/schemas/sources";
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
 import { apps } from "./catalog";
@@ -9,41 +17,21 @@ export const sources = sqliteTable(
     appId: text("app_id")
       .notNull()
       .references(() => apps.id),
-    sourceType: text("source_type", {
-      enum: [
-        "sparkle",
-        "github_releases",
-        "manual",
-        "homebrew_cask",
-        "mac_app_store",
-        "electron_generic",
-        "rss_feed",
-        "json_feed",
-        "web_page",
-      ],
-    }).notNull(),
+    sourceType: text("source_type", { enum: sourceTypeValues }).notNull(),
     label: text("label"),
     baseUrl: text("base_url"),
     configJson: text("config_json"),
     parserKey: text("parser_key").notNull(),
     channel: text("channel"),
     pollIntervalMinutes: integer("poll_interval_minutes").notNull().default(60),
-    reviewStatus: text("review_status", {
-      enum: ["pending", "approved", "rejected", "disabled"],
-    })
-      .notNull()
-      .default("pending"),
-    role: text("role", {
-      enum: ["authority", "corroborating", "reference"],
-    }),
+    reviewStatus: text("review_status", { enum: reviewStatusValues }).notNull().default("pending"),
+    role: text("role", { enum: sourceRoleValues }),
     ordinal: integer("ordinal").notNull().default(0),
     discoveredVia: text("discovered_via"),
     approvedAt: text("approved_at"),
     reviewedAt: text("reviewed_at"),
     reviewedBy: text("reviewed_by"),
-    status: text("status", { enum: ["active", "paused", "disabled", "error"] })
-      .notNull()
-      .default("disabled"),
+    status: text("status", { enum: sourceStatusValues }).notNull().default("disabled"),
     lastSuccessAt: text("last_success_at"),
     lastFailureAt: text("last_failure_at"),
     lastFetchedAt: text("last_fetched_at"),
@@ -66,9 +54,7 @@ export const sourceFetches = sqliteTable(
     sourceId: text("source_id")
       .notNull()
       .references(() => sources.id),
-    fetchStatus: text("fetch_status", {
-      enum: ["success", "not_modified", "error", "timeout"],
-    }).notNull(),
+    fetchStatus: text("fetch_status", { enum: fetchStatusValues }).notNull(),
     httpStatus: integer("http_status"),
     etag: text("etag"),
     lastModified: text("last_modified"),
@@ -94,7 +80,7 @@ export const parserRuns = sqliteTable(
       .references(() => sourceFetches.id),
     parserKey: text("parser_key").notNull(),
     parserVersion: text("parser_version").notNull(),
-    runStatus: text("run_status", { enum: ["success", "partial", "error"] }).notNull(),
+    runStatus: text("run_status", { enum: runStatusValues }).notNull(),
     observationCount: integer("observation_count").notNull().default(0),
     confidence: integer("confidence"),
     errorMessage: text("error_message"),

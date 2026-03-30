@@ -1,7 +1,8 @@
+import { feedbackStatusSchema, feedbackTypeSchema } from "@versioneer/schemas/feedback";
 import { z } from "zod";
 
 export const clientFeedbackSubmitSchema = z.object({
-  feedbackType: z.enum(["wrong_match", "wrong_version", "app_request", "general"]),
+  feedbackType: feedbackTypeSchema,
   bundleId: z.string().max(500).optional(),
   appName: z.string().max(500).optional(),
   matchedAppId: z.string().optional(),
@@ -11,7 +12,7 @@ export const clientFeedbackSubmitSchema = z.object({
 export type ClientFeedbackSubmitInput = z.infer<typeof clientFeedbackSubmitSchema>;
 
 export const feedbackUpdateSchema = z.object({
-  status: z.enum(["new", "triaged", "resolved", "dismissed"]),
+  status: feedbackStatusSchema,
 });
 
 export type FeedbackUpdateInput = z.infer<typeof feedbackUpdateSchema>;

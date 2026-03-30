@@ -8,6 +8,7 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
+import type { InstallStrategy } from "@versioneer/schemas/releases";
 import { eq, and } from "drizzle-orm";
 
 import { setCachedLatest, recentReleasesKey } from "../cache";
@@ -22,13 +23,7 @@ import type { Env, RecomputeLatestJob } from "./types";
 function inferInstallStrategy(
   sourceType: string | null,
   artifactType: string | null,
-):
-  | "sparkle"
-  | "zip_replace"
-  | "dmg_copy_replace"
-  | "pkg_install"
-  | "mac_app_store"
-  | "manual_only" {
+): InstallStrategy {
   if (sourceType === "sparkle") return "sparkle";
   if (sourceType === "mac_app_store") return "mac_app_store";
   if (artifactType === "dmg") return "dmg_copy_replace";

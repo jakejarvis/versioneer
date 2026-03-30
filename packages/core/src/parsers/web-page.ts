@@ -4,7 +4,7 @@ import { inferChannel, isPreRelease } from "../versioning";
 import type { ParsedArtifact, ParsedRelease, ParserOutput, SourceParser } from "./types";
 
 export const webPageParser: SourceParser = {
-  key: "web-page",
+  key: "web_page",
   version: "1.0.0",
 
   parse(body: string, config?: Record<string, unknown>): ParserOutput {

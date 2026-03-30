@@ -1,3 +1,5 @@
+import type { SourceType } from "@versioneer/schemas/sources";
+
 import { parseGitHubRepoUrl } from "./github-url";
 
 /**
@@ -11,7 +13,7 @@ import { parseGitHubRepoUrl } from "./github-url";
  * | mac_app_store      | com.tinyspeck.slackmacgap        | https://itunes.apple.com/lookup?bundleId=...&country=us   |
  * | manual             | —                                | null                                                      |
  */
-export function resolveSourceUrl(sourceType: string, identifier: string): string | null {
+export function resolveSourceUrl(sourceType: SourceType, identifier: string): string | null {
   const trimmed = identifier.trim();
   if (!trimmed) return null;
 
@@ -58,7 +60,7 @@ export function resolveSourceUrl(sourceType: string, identifier: string): string
  * Inverse of {@link resolveSourceUrl} — used to populate the input field
  * when editing an existing source.
  */
-export function extractSourceIdentifier(sourceType: string, baseUrl: string | null): string {
+export function extractSourceIdentifier(sourceType: SourceType, baseUrl: string | null): string {
   if (!baseUrl) return "";
 
   switch (sourceType) {

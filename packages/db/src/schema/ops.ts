@@ -1,3 +1,12 @@
+import {
+  cronJobTypeValues,
+  cronRunStatusValues,
+  cronTriggerValues,
+  executionRouteValues,
+  installExecutionStatusValues,
+  jobFailureStatusValues,
+} from "@versioneer/schemas/ops";
+import { installStrategyValues } from "@versioneer/schemas/releases";
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
 import { apps } from "./catalog";
@@ -12,9 +21,7 @@ export const jobFailures = sqliteTable(
     relatedId: text("related_id"),
     errorMessage: text("error_message"),
     retryCount: integer("retry_count").notNull().default(0),
-    status: text("status", { enum: ["open", "retrying", "resolved", "abandoned"] })
-      .notNull()
-      .default("open"),
+    status: text("status", { enum: jobFailureStatusValues }).notNull().default("open"),
     createdAt: text("created_at").notNull(),
     resolvedAt: text("resolved_at"),
   },
@@ -46,15 +53,9 @@ export const cronJobRuns = sqliteTable(
   "cron_job_runs",
   {
     id: text("id").primaryKey(),
-    jobType: text("job_type", {
-      enum: ["poll_sources", "cask_index_sync"],
-    }).notNull(),
-    trigger: text("trigger", { enum: ["manual", "scheduled"] }).notNull(),
-    status: text("status", {
-      enum: ["running", "completed", "failed"],
-    })
-      .notNull()
-      .default("running"),
+    jobType: text("job_type", { enum: cronJobTypeValues }).notNull(),
+    trigger: text("trigger", { enum: cronTriggerValues }).notNull(),
+    status: text("status", { enum: cronRunStatusValues }).notNull().default("running"),
     actorId: text("actor_id"),
     itemsQueued: integer("items_queued"),
     itemsTotal: integer("items_total"),
@@ -85,24 +86,9 @@ export const installExecutions = sqliteTable(
     clientOsVersion: text("client_os_version"),
     clientSystemArchitecture: text("client_system_architecture"),
     channel: text("channel"),
-    installStrategy: text("install_strategy", {
-      enum: [
-        "sparkle",
-        "zip_replace",
-        "dmg_copy_replace",
-        "pkg_install",
-        "mac_app_store",
-        "manual_only",
-      ],
-    }).notNull(),
-    executionRoute: text("execution_route", {
-      enum: ["sparkle", "local_replace", "privileged_replace", "privileged_package"],
-    }),
-    status: text("status", {
-      enum: ["prepared", "started", "succeeded", "failed", "cancelled"],
-    })
-      .notNull()
-      .default("prepared"),
+    installStrategy: text("install_strategy", { enum: installStrategyValues }).notNull(),
+    executionRoute: text("execution_route", { enum: executionRouteValues }),
+    status: text("status", { enum: installExecutionStatusValues }).notNull().default("prepared"),
     expectedBundleId: text("expected_bundle_id"),
     expectedTeamId: text("expected_team_id"),
     previousVersion: text("previous_version"),

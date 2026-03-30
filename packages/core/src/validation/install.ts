@@ -1,13 +1,11 @@
+import {
+  executionRouteSchema as installExecutionRouteSchema,
+  type ExecutionRoute as InstallExecutionRoute,
+  installExecutionStatusSchema,
+  type InstallExecutionStatus,
+} from "@versioneer/schemas/ops";
+import { installStrategySchema, type InstallStrategy } from "@versioneer/schemas/releases";
 import { z } from "zod";
-
-export const installStrategySchema = z.enum([
-  "sparkle",
-  "zip_replace",
-  "dmg_copy_replace",
-  "pkg_install",
-  "mac_app_store",
-  "manual_only",
-]);
 
 export const appArtifactSchema = z.object({
   id: z.string().nullable(),
@@ -19,20 +17,7 @@ export const appArtifactSchema = z.object({
   sha256: z.string().nullable(),
 });
 
-export const installExecutionRouteSchema = z.enum([
-  "sparkle",
-  "local_replace",
-  "privileged_replace",
-  "privileged_package",
-]);
-
-export const installExecutionStatusSchema = z.enum([
-  "prepared",
-  "started",
-  "succeeded",
-  "failed",
-  "cancelled",
-]);
+export { installExecutionRouteSchema, installExecutionStatusSchema, installStrategySchema };
 
 export const installExecutionClientSchema = z.object({
   platform: z.string().default("macos"),
@@ -87,10 +72,8 @@ export const installExecutionStatusResponseSchema = z.object({
   status: z.literal("recorded"),
 });
 
-export type InstallStrategy = z.infer<typeof installStrategySchema>;
+export type { InstallStrategy, InstallExecutionRoute, InstallExecutionStatus };
 export type AppArtifact = z.infer<typeof appArtifactSchema>;
-export type InstallExecutionRoute = z.infer<typeof installExecutionRouteSchema>;
-export type InstallExecutionStatus = z.infer<typeof installExecutionStatusSchema>;
 export type InstallExecutionClient = z.infer<typeof installExecutionClientSchema>;
 export type InstallVerificationSummary = z.infer<typeof installVerificationSummarySchema>;
 export type InstallPrepareRequest = z.infer<typeof installPrepareRequestSchema>;

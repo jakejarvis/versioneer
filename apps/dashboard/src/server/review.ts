@@ -13,16 +13,16 @@ import {
   suggestionEvidence,
   trustAssertions,
 } from "@versioneer/db";
+import {
+  defaultParserKeyForSourceType,
+  defaultRoleForSourceType,
+  defaultRuntimeStatusForSourceType,
+} from "@versioneer/schemas/sources";
 import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import {
-  defaultLabelForSourceType,
-  defaultParserKeyForSourceType,
-  defaultRoleForSourceType,
-  defaultRuntimeStatusForSourceType,
-} from "@/lib/source-types";
+import { defaultLabelForSourceType } from "@/lib/source-types";
 
 import { assertNoConflictingExactAlias } from "./alias-conflicts";
 import { loadAppsByIds, loadSourcesByIds, toAppSummary, toSourceSummary } from "./entity-summaries";

@@ -11,11 +11,15 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
+import { aliasTypeSchema } from "@versioneer/schemas/catalog";
+import {
+  defaultRoleForSourceType,
+  defaultRuntimeStatusForSourceType,
+  sourceTypeSchema,
+} from "@versioneer/schemas/sources";
 import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-
-import { defaultRoleForSourceType, defaultRuntimeStatusForSourceType } from "@/lib/source-types";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
 import type { DbExecutor } from "./db-types";
@@ -40,32 +44,12 @@ export const checkSlugAvailable = createServerFn({ method: "GET" })
 // ──────────────────────────────────────────────────────────
 
 const aliasInputSchema = z.object({
-  aliasType: z.enum([
-    "bundle_id",
-    "name",
-    "team_id",
-    "sparkle_feed",
-    "homepage",
-    "download_pattern",
-    "github_repo",
-    "mas_app_id",
-    "homebrew_cask",
-  ]),
+  aliasType: aliasTypeSchema,
   value: z.string().min(1),
 });
 
 const sourceInputSchema = z.object({
-  sourceType: z.enum([
-    "sparkle",
-    "github_releases",
-    "manual",
-    "homebrew_cask",
-    "mac_app_store",
-    "electron_generic",
-    "rss_feed",
-    "json_feed",
-    "web_page",
-  ]),
+  sourceType: sourceTypeSchema,
   baseUrl: z.string().url(),
   parserKey: z.string().min(1),
   pollIntervalMinutes: z.number().int().min(5).max(10080).default(60),

@@ -16,6 +16,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply versioneer-db-production --remote --env=production"
   },
   "dependencies": {
+    "@versioneer/schemas": "workspace:*",
     "drizzle-orm": "catalog:",
     "nanoid": "^5.1.7"
   },

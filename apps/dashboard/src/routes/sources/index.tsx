@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
+import { sourceTypeValues } from "@versioneer/schemas/sources";
 import { Plus, Zap } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -33,20 +34,7 @@ import { SOURCE_TYPES } from "@/lib/source-types";
 const sourcesSearchSchema = z.object({
   ...paginatedSearchShape,
   status: z.enum(["all", "active", "paused", "disabled", "error", "at_risk"]).catch("all"),
-  type: z
-    .enum([
-      "all",
-      "sparkle",
-      "github_releases",
-      "manual",
-      "homebrew_cask",
-      "mac_app_store",
-      "electron_generic",
-      "rss_feed",
-      "json_feed",
-      "web_page",
-    ])
-    .catch("all"),
+  type: z.enum(["all", ...sourceTypeValues]).catch("all"),
 });
 
 export const Route = createFileRoute("/sources/")({

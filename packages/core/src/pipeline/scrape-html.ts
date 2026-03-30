@@ -1,3 +1,4 @@
+import type { SourceRole, SourceType } from "@versioneer/schemas/sources";
 import * as cheerio from "cheerio";
 
 import { parseGitHubRepoUrl } from "../validation/github-url";
@@ -5,9 +6,9 @@ import { readResponseTextLimited } from "./response-body";
 
 export type CheerioDoc = cheerio.CheerioAPI;
 export interface HomepageSourceCandidate {
-  sourceType: "sparkle" | "github_releases" | "electron_generic" | "rss_feed" | "json_feed";
+  sourceType: SourceType;
   url: string;
-  role: "authority" | "reference";
+  role: SourceRole;
   parserKey: string;
   reason: string;
 }
@@ -178,7 +179,7 @@ export function discoverHomepageSourceCandidates(
         sourceType: "rss_feed",
         url,
         role: "reference",
-        parserKey: "rss-reference",
+        parserKey: "rss_reference",
         reason: "homepage alternate feed link",
       });
       return;
@@ -189,7 +190,7 @@ export function discoverHomepageSourceCandidates(
         sourceType: "json_feed",
         url,
         role: "reference",
-        parserKey: "json-reference",
+        parserKey: "json_reference",
         reason: "homepage alternate JSON feed",
       });
     }
@@ -211,7 +212,7 @@ export function discoverHomepageSourceCandidates(
         sourceType: "github_releases",
         url: `https://github.com/${ghParsed.owner}/${ghParsed.repo}`,
         role: "authority",
-        parserKey: "github-releases",
+        parserKey: "github_releases",
         reason: "homepage GitHub repository link",
       });
       return;
@@ -224,7 +225,7 @@ export function discoverHomepageSourceCandidates(
         sourceType: "electron_generic",
         url,
         role: "authority",
-        parserKey: "electron-generic",
+        parserKey: "electron_generic",
         reason: "homepage Electron update manifest",
       });
       return;
@@ -254,7 +255,7 @@ export function discoverHomepageSourceCandidates(
         sourceType: "rss_feed",
         url,
         role: "reference",
-        parserKey: "rss-reference",
+        parserKey: "rss_reference",
         reason: "homepage RSS or Atom feed link",
       });
       return;
@@ -268,7 +269,7 @@ export function discoverHomepageSourceCandidates(
         sourceType: "json_feed",
         url,
         role: "reference",
-        parserKey: "json-reference",
+        parserKey: "json_reference",
         reason: "homepage JSON update link",
       });
     }

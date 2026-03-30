@@ -19,6 +19,12 @@ import {
   suggestionEvidence,
   trustAssertions,
 } from "@versioneer/db";
+import type { AliasType } from "@versioneer/schemas/catalog";
+import type { SourceType, SourceRole } from "@versioneer/schemas/sources";
+import {
+  defaultParserKeyForSourceType,
+  defaultRoleForSourceType,
+} from "@versioneer/schemas/sources";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
@@ -319,71 +325,7 @@ async function upsertSuggestion(params: {
   });
 }
 
-function defaultSuggestedRoleForSourceType(
-  sourceType:
-    | "sparkle"
-    | "github_releases"
-    | "manual"
-    | "homebrew_cask"
-    | "mac_app_store"
-    | "electron_generic"
-    | "rss_feed"
-    | "json_feed"
-    | "web_page",
-): "authority" | "corroborating" | "reference" {
-  if (sourceType === "homebrew_cask") return "corroborating";
-  if (sourceType === "rss_feed" || sourceType === "json_feed") return "reference";
-  return "authority";
-}
-
-function defaultSuggestedParserKeyForSourceType(
-  sourceType:
-    | "sparkle"
-    | "github_releases"
-    | "manual"
-    | "homebrew_cask"
-    | "mac_app_store"
-    | "electron_generic"
-    | "rss_feed"
-    | "json_feed"
-    | "web_page",
-): string {
-  switch (sourceType) {
-    case "sparkle":
-      return "sparkle";
-    case "github_releases":
-      return "github-releases";
-    case "homebrew_cask":
-      return "homebrew-cask";
-    case "mac_app_store":
-      return "mac-app-store";
-    case "electron_generic":
-      return "electron-generic";
-    case "rss_feed":
-      return "rss-reference";
-    case "json_feed":
-      return "json-reference";
-    case "web_page":
-      return "web-page";
-    case "manual":
-    default:
-      return "manual";
-  }
-}
-
-function normalizeSuggestedSourceUrl(
-  sourceType:
-    | "sparkle"
-    | "github_releases"
-    | "manual"
-    | "homebrew_cask"
-    | "mac_app_store"
-    | "electron_generic"
-    | "rss_feed"
-    | "json_feed"
-    | "web_page",
-  url: string,
-): string {
+function normalizeSuggestedSourceUrl(sourceType: SourceType, url: string): string {
   if (sourceType === "github_releases") {
     return toGitHubApiReleasesUrl(url) ?? url;
   }
@@ -397,16 +339,7 @@ function macAppStoreLookupUrl(bundleId: string): string {
 async function findExistingAlias(params: {
   db: ReturnType<typeof createDb>;
   appId: string;
-  aliasType:
-    | "bundle_id"
-    | "name"
-    | "team_id"
-    | "sparkle_feed"
-    | "homepage"
-    | "download_pattern"
-    | "github_repo"
-    | "mas_app_id"
-    | "homebrew_cask";
+  aliasType: AliasType;
   value: string;
 }) {
   return params.db
@@ -425,15 +358,7 @@ async function findExistingAlias(params: {
 async function findExistingSource(params: {
   db: ReturnType<typeof createDb>;
   appId: string;
-  sourceType:
-    | "sparkle"
-    | "github_releases"
-    | "manual"
-    | "homebrew_cask"
-    | "mac_app_store"
-    | "electron_generic"
-    | "rss_feed"
-    | "json_feed";
+  sourceType: SourceType;
   baseUrl: string;
 }) {
   const normalizedUrl = normalizeSuggestedSourceUrl(params.sourceType, params.baseUrl);
@@ -462,17 +387,9 @@ async function createSourceSuggestion(params: {
   appId: string;
   appName: string;
   lookupKey: string;
-  sourceType:
-    | "sparkle"
-    | "github_releases"
-    | "manual"
-    | "homebrew_cask"
-    | "mac_app_store"
-    | "electron_generic"
-    | "rss_feed"
-    | "json_feed";
+  sourceType: SourceType;
   baseUrl: string;
-  role?: "authority" | "corroborating" | "reference";
+  role?: SourceRole;
   title?: string;
   canonicalSnapshotJson?: string | null;
   evidenceType: "scan" | "crawl" | "fetch_parse" | "install_verify" | "homebrew" | "manual";
@@ -501,8 +418,8 @@ async function createSourceSuggestion(params: {
       appId: params.appId,
       sourceType: params.sourceType,
       baseUrl: normalizedUrl,
-      role: params.role ?? defaultSuggestedRoleForSourceType(params.sourceType),
-      parserKey: defaultSuggestedParserKeyForSourceType(params.sourceType),
+      role: params.role ?? defaultRoleForSourceType(params.sourceType),
+      parserKey: defaultParserKeyForSourceType(params.sourceType),
     }),
     appId: params.appId,
     bundleKey: params.lookupKey,
@@ -518,16 +435,7 @@ async function createAliasSuggestion(params: {
   appId: string;
   appName: string;
   lookupKey: string;
-  aliasType:
-    | "bundle_id"
-    | "name"
-    | "team_id"
-    | "sparkle_feed"
-    | "homepage"
-    | "download_pattern"
-    | "github_repo"
-    | "mas_app_id"
-    | "homebrew_cask";
+  aliasType: AliasType;
   value: string;
   canonicalSnapshotJson?: string | null;
   evidenceType: "scan" | "crawl" | "fetch_parse" | "install_verify" | "homebrew" | "manual";

@@ -1,4 +1,4 @@
-export type { AppAliasType } from "./aliases";
+export type { AliasType } from "@versioneer/schemas/catalog";
 export { normalizeAliasValue, isGloballyUniqueExactAliasType } from "./aliases";
 export type {
   MatchInput,

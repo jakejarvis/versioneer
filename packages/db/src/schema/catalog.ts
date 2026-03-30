@@ -1,3 +1,4 @@
+import { aliasTypeValues, appStatusValues } from "@versioneer/schemas/catalog";
 import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -9,9 +10,7 @@ export const apps = sqliteTable(
     canonicalName: text("canonical_name").notNull(),
     vendorName: text("vendor_name"),
     homepageUrl: text("homepage_url"),
-    status: text("status", { enum: ["draft", "public", "merged", "deprecated", "unlisted"] })
-      .notNull()
-      .default("draft"),
+    status: text("status", { enum: appStatusValues }).notNull().default("draft"),
     mergedIntoAppId: text("merged_into_app_id"),
     notes: text("notes"),
     defaultReleaseNotesUrl: text("default_release_notes_url"),
@@ -30,19 +29,7 @@ export const appAliases = sqliteTable(
     appId: text("app_id")
       .notNull()
       .references(() => apps.id),
-    aliasType: text("alias_type", {
-      enum: [
-        "bundle_id",
-        "name",
-        "team_id",
-        "sparkle_feed",
-        "homepage",
-        "download_pattern",
-        "github_repo",
-        "mas_app_id",
-        "homebrew_cask",
-      ],
-    }).notNull(),
+    aliasType: text("alias_type", { enum: aliasTypeValues }).notNull(),
     value: text("value").notNull(),
     normalizedValue: text("normalized_value").notNull(),
     isExact: integer("is_exact", { mode: "boolean" }).notNull().default(true),

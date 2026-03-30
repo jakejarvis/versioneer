@@ -1,3 +1,11 @@
+import { aliasTypeSchema, appStatusSchema } from "@versioneer/schemas/catalog";
+import { releaseStatusSchema } from "@versioneer/schemas/releases";
+import {
+  reviewStatusSchema,
+  sourceRoleSchema,
+  sourceStatusSchema,
+  sourceTypeSchema,
+} from "@versioneer/schemas/sources";
 import { z } from "zod";
 
 import { channelSchema } from "./common";
@@ -18,7 +26,7 @@ export const appUpdateSchema = z.object({
   canonicalName: z.string().min(1).max(500).optional(),
   vendorName: z.string().max(500).nullable().optional(),
   homepageUrl: z.string().url().max(2000).nullable().optional(),
-  status: z.enum(["draft", "public", "deprecated", "merged", "unlisted"]).optional(),
+  status: appStatusSchema.optional(),
   mergedIntoAppId: z.string().nullable().optional(),
   notes: z.string().max(5000).nullable().optional(),
   defaultReleaseNotesUrl: z.string().url().max(2000).nullable().optional(),
@@ -26,17 +34,7 @@ export const appUpdateSchema = z.object({
 });
 
 export const aliasCreateSchema = z.object({
-  aliasType: z.enum([
-    "bundle_id",
-    "name",
-    "team_id",
-    "sparkle_feed",
-    "homepage",
-    "download_pattern",
-    "github_repo",
-    "mas_app_id",
-    "homebrew_cask",
-  ]),
+  aliasType: aliasTypeSchema,
   value: z.string().min(1).max(2000),
   normalizedValue: z.string().min(1).max(2000).optional(),
   isExact: z.boolean().default(true),
@@ -53,25 +51,15 @@ export const aliasUpdateSchema = z.object({
 
 export const sourceCreateSchema = z.object({
   appId: z.string().min(1),
-  sourceType: z.enum([
-    "sparkle",
-    "github_releases",
-    "manual",
-    "homebrew_cask",
-    "mac_app_store",
-    "electron_generic",
-    "rss_feed",
-    "json_feed",
-    "web_page",
-  ]),
+  sourceType: sourceTypeSchema,
   label: z.string().max(500).optional(),
   baseUrl: z.string().url().max(2000).optional(),
   configJson: z.string().max(10000).optional(),
   parserKey: z.string().min(1).max(200),
   channel: channelSchema.nullable().optional(),
   pollIntervalMinutes: z.number().int().min(5).max(10080).default(60),
-  reviewStatus: z.enum(["pending", "approved", "rejected", "disabled"]).default("pending"),
-  role: z.enum(["authority", "corroborating", "reference"]).nullable().optional(),
+  reviewStatus: reviewStatusSchema.default("pending"),
+  role: sourceRoleSchema.nullable().optional(),
 });
 
 export const sourceUpdateSchema = z.object({
@@ -81,9 +69,9 @@ export const sourceUpdateSchema = z.object({
   parserKey: z.string().min(1).max(200).optional(),
   channel: channelSchema.nullable().optional(),
   pollIntervalMinutes: z.number().int().min(5).max(10080).optional(),
-  reviewStatus: z.enum(["pending", "approved", "rejected", "disabled"]).optional(),
-  role: z.enum(["authority", "corroborating", "reference"]).nullable().optional(),
-  status: z.enum(["active", "paused", "disabled", "error"]).optional(),
+  reviewStatus: reviewStatusSchema.optional(),
+  role: sourceRoleSchema.nullable().optional(),
+  status: sourceStatusSchema.optional(),
 });
 
 export const releaseCreateSchema = z.object({
@@ -97,7 +85,7 @@ export const releaseCreateSchema = z.object({
 });
 
 export const releaseUpdateSchema = z.object({
-  status: z.enum(["active", "superseded", "draft"]).optional(),
+  status: releaseStatusSchema.optional(),
   channel: channelSchema.optional(),
   releaseNotesHtml: z.string().max(500000).nullable().optional(),
   releaseNotesUrl: z.string().url().max(2000).nullable().optional(),

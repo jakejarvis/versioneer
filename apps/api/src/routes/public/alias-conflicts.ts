@@ -1,10 +1,7 @@
-import {
-  type AppAliasType,
-  isGloballyUniqueExactAliasType,
-  normalizeAliasValue,
-} from "@versioneer/core/identity";
+import { isGloballyUniqueExactAliasType, normalizeAliasValue } from "@versioneer/core/identity";
 import { createDb } from "@versioneer/db";
 import { appAliases } from "@versioneer/db";
+import type { AliasType } from "@versioneer/schemas/catalog";
 import { and, eq, ne } from "drizzle-orm";
 
 type Db = ReturnType<typeof createDb>;
@@ -12,7 +9,7 @@ type Db = ReturnType<typeof createDb>;
 export async function findConflictingExactAlias(
   db: Db,
   params: {
-    aliasType: AppAliasType;
+    aliasType: AliasType;
     value: string;
     appId?: string | null;
     excludeAliasId?: string | null;

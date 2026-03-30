@@ -1,5 +1,5 @@
 import {
-  type AppAliasType,
+  type AliasType,
   isGloballyUniqueExactAliasType,
   normalizeAliasValue,
 } from "@versioneer/core/identity";
@@ -11,10 +11,10 @@ import type { DbExecutor } from "./db-types";
 export class AliasConflictError extends Error {
   readonly aliasId: string;
   readonly appId: string;
-  readonly aliasType: AppAliasType;
+  readonly aliasType: AliasType;
   readonly value: string;
 
-  constructor(params: { aliasId: string; appId: string; aliasType: AppAliasType; value: string }) {
+  constructor(params: { aliasId: string; appId: string; aliasType: AliasType; value: string }) {
     super(
       `Conflicting ${params.aliasType.replaceAll("_", " ")} alias already belongs to another app`,
     );
@@ -28,7 +28,7 @@ export class AliasConflictError extends Error {
 export async function findConflictingExactAlias(
   db: DbExecutor,
   params: {
-    aliasType: AppAliasType;
+    aliasType: AliasType;
     value: string;
     appId?: string | null;
     excludeAliasId?: string | null;
@@ -74,7 +74,7 @@ export async function findConflictingExactAlias(
 export async function assertNoConflictingExactAlias(
   db: DbExecutor,
   params: {
-    aliasType: AppAliasType;
+    aliasType: AliasType;
     value: string;
     appId?: string | null;
     excludeAliasId?: string | null;

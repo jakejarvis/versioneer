@@ -2,6 +2,8 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { useForm } from "@tanstack/react-form";
 import { parseGitHubRepoUrl, resolveSourceUrl } from "@versioneer/core/validation";
+import type { SourceType } from "@versioneer/schemas/sources";
+import { SOURCE_TYPE_DEFAULTS } from "@versioneer/schemas/sources";
 import {
   Check,
   CircleAlert,
@@ -38,7 +40,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { SOURCE_TYPES, type SourceType } from "@/lib/source-types";
+import { SOURCE_TYPES } from "@/lib/source-types";
 
 // ──────────────────────────────────────────────────────────
 // Alias types — identity matchers only
@@ -750,7 +752,7 @@ function SourceCard({
   const validateMutation = useValidateSource();
 
   const handleTestFeed = useCallback(() => {
-    if (!SOURCE_TYPES[source.sourceType].validatable) return;
+    if (!SOURCE_TYPE_DEFAULTS[source.sourceType].validatable) return;
     const url = resolveSourceUrl(source.sourceType, source.identifier);
     if (!url) return;
     validateMutation.mutate(
@@ -785,7 +787,7 @@ function SourceCard({
                 form.setFieldValue(`sources[${index}].identifier`, "");
                 form.setFieldValue(
                   `sources[${index}].pollIntervalMinutes`,
-                  SOURCE_TYPES[newType].pollInterval,
+                  SOURCE_TYPE_DEFAULTS[newType].pollIntervalMinutes,
                 );
               }}
               className={`h-6 shrink-0 cursor-pointer appearance-none rounded border px-1.5 text-[10px] font-medium ${SOURCE_TYPES[field.state.value as SourceType].color}`}

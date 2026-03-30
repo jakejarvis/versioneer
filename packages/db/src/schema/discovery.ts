@@ -1,3 +1,8 @@
+import {
+  discoveredAppStatusValues,
+  enrichmentStatusValues,
+  sourceValidationStatusValues,
+} from "@versioneer/schemas/discovery";
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import { apps } from "./catalog";
@@ -13,9 +18,7 @@ export const discoveredApps = sqliteTable(
     sightingCount: integer("sighting_count").notNull().default(1),
     firstSeenAt: text("first_seen_at").notNull(),
     lastSeenAt: text("last_seen_at").notNull(),
-    status: text("status", { enum: ["pending", "linked", "dismissed", "support_only"] })
-      .notNull()
-      .default("pending"),
+    status: text("status", { enum: discoveredAppStatusValues }).notNull().default("pending"),
     linkedAppId: text("linked_app_id").references(() => apps.id),
     dismissedAt: text("dismissed_at"),
     dismissedBy: text("dismissed_by"),
@@ -41,9 +44,7 @@ export const discoveredApps = sqliteTable(
     homebrewCaskMatchedAt: text("homebrew_cask_matched_at"),
 
     // Enrichment fields
-    enrichmentStatus: text("enrichment_status", {
-      enum: ["pending", "in_progress", "success", "failed", "skipped"],
-    })
+    enrichmentStatus: text("enrichment_status", { enum: enrichmentStatusValues })
       .notNull()
       .default("pending"),
     enrichedAt: text("enriched_at"),
@@ -55,9 +56,7 @@ export const discoveredApps = sqliteTable(
     enrichedReleaseCount: integer("enriched_release_count"),
     enrichedFeedTitle: text("enriched_feed_title"),
     enrichedMetadataJson: text("enriched_metadata_json"),
-    sourceValidationStatus: text("source_validation_status", {
-      enum: ["untested", "valid", "invalid", "timeout"],
-    })
+    sourceValidationStatus: text("source_validation_status", { enum: sourceValidationStatusValues })
       .notNull()
       .default("untested"),
     latestReasonCode: text("latest_reason_code"),

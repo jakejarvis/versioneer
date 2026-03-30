@@ -1,4 +1,6 @@
 import { useForm } from "@tanstack/react-form";
+import type { SourceType } from "@versioneer/schemas/sources";
+import { defaultParserKeyForSourceType } from "@versioneer/schemas/sources";
 import { toast } from "sonner";
 
 import { useCreateSource } from "@/api/hooks/use-sources";
@@ -20,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { SOURCE_TYPES, type SourceType } from "@/lib/source-types";
+import { SOURCE_TYPES } from "@/lib/source-types";
 
 interface CreateSourceDialogProps {
   appId?: string;
@@ -107,7 +109,7 @@ export function CreateSourceDialog({ appId, open, onOpenChange }: CreateSourceDi
                   onValueChange={(v) => {
                     const sourceType = v as SourceType;
                     field.handleChange(sourceType);
-                    form.setFieldValue("parserKey", SOURCE_TYPES[sourceType].parserKey);
+                    form.setFieldValue("parserKey", defaultParserKeyForSourceType(sourceType));
                   }}
                 >
                   <SelectTrigger id={field.name}>
