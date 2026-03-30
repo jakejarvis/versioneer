@@ -110,6 +110,10 @@ async function upsertDiscoveredApps(params: {
   const persistedByKey = new Map<string, PersistedDiscovery>();
   if (unmatchedByKey.size === 0) return persistedByKey;
 
+  // D1 limits queries to 100 bound parameters — batch the lookup keys
+  const allKeys = [...unmatchedByKey.keys()];
+  const D1_PARAM_LIMIT = 100;
+  const firstChunk = allKeys.slice(0, D1_PARAM_LIMIT);
   const existingRows = await db
     .select({
       id: discoveredApps.id,
@@ -132,8 +136,36 @@ async function upsertDiscoveredApps(params: {
       iconR2Key: discoveredApps.iconR2Key,
     })
     .from(discoveredApps)
-    .where(inArray(discoveredApps.lookupKey, [...unmatchedByKey.keys()]))
+    .where(inArray(discoveredApps.lookupKey, firstChunk))
     .all();
+  for (let i = D1_PARAM_LIMIT; i < allKeys.length; i += D1_PARAM_LIMIT) {
+    const chunk = allKeys.slice(i, i + D1_PARAM_LIMIT);
+    const rows = await db
+      .select({
+        id: discoveredApps.id,
+        lookupKey: discoveredApps.lookupKey,
+        appName: discoveredApps.appName,
+        bundleId: discoveredApps.bundleId,
+        teamId: discoveredApps.teamId,
+        sampleVersions: discoveredApps.sampleVersions,
+        sparkleFeedUrl: discoveredApps.sparkleFeedUrl,
+        sparklePublicKey: discoveredApps.sparklePublicKey,
+        isSparkleApp: discoveredApps.isSparkleApp,
+        isMasApp: discoveredApps.isMasApp,
+        isElectronApp: discoveredApps.isElectronApp,
+        electronUpdateProvider: discoveredApps.electronUpdateProvider,
+        electronUpdateUrl: discoveredApps.electronUpdateUrl,
+        codeSigningAuthority: discoveredApps.codeSigningAuthority,
+        appCategory: discoveredApps.appCategory,
+        minMacOSVersion: discoveredApps.minMacOSVersion,
+        homebrewCaskToken: discoveredApps.homebrewCaskToken,
+        iconR2Key: discoveredApps.iconR2Key,
+      })
+      .from(discoveredApps)
+      .where(inArray(discoveredApps.lookupKey, chunk))
+      .all();
+    existingRows.push(...rows);
+  }
 
   const existingByKey = new Map(existingRows.map((row) => [row.lookupKey, row] as const));
 
