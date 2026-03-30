@@ -16,7 +16,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 import { useDiscoveredApp } from "@/api/hooks/use-discovered-apps";
@@ -206,18 +206,24 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
   // Resolved cask token: from discovered app or on-demand lookup
   const resolvedCaskToken = discoveredApp?.homebrewCaskToken ?? caskLookup.data?.caskToken ?? null;
 
-  // Reset form to empty state when drawer closes
+  // Track which discovered-app ID has been populated into the form so we
+  // don't re-populate on every TanStack Query background refetch.
+  const populatedForRef = useRef<string | null>(null);
+
+  // Single effect: reset form on close, populate on open when data is ready.
+  // Using both `open` and `discoveredApp` as dependencies ensures the effect
+  // fires when the drawer opens (even if discoveredApp is still the same
+  // undefined→undefined from a cache miss) and again when data arrives.
   useEffect(() => {
     if (!open) {
       form.reset(EMPTY_FORM);
       onboard.reset();
+      populatedForRef.current = null;
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on open change
-  }, [open]);
 
-  // Reset form when discovered app data loads
-  useEffect(() => {
     if (!discoveredApp) return;
+    if (populatedForRef.current === discoveredApp.id) return;
 
     // Build identity aliases
     const newAliases: AliasEntry[] = [];
@@ -293,8 +299,9 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
       sources: newSources,
       sourceValidated: discoveredApp.sourceValidationStatus === "valid",
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset runs only when the underlying data changes
-  }, [discoveredApp]);
+    populatedForRef.current = discoveredApp.id;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed on open + data arrival
+  }, [open, discoveredApp]);
 
   // Add cask alias and source once resolved — guard with discoveredAppId to
   // prevent stale cask lookups from a previous app leaking into the form.
