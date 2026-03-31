@@ -196,26 +196,21 @@ nonisolated struct Version: Sendable, Comparable, Equatable {
     if let localVersion, !localVersion.isEmpty {
       let localParsed = Version(localVersion)
       if localParsed.valid {
-        // Count significant segments (drop trailing zeros to match how "1.2" parses as [1,2])
         let remoteAll = [major, minor, patch] + extra
         let localAll = [localParsed.major, localParsed.minor, localParsed.patch]
           + localParsed.extra
 
-        func significantSegments(_ segments: [Int]) -> ArraySlice<Int> {
-          // Drop trailing zeros to get the meaningful segment count
-          var end = segments.endIndex
-          while end > 1 && segments[end - 1] == 0 { end -= 1 }
-          return segments[..<end]
-        }
+        // Count segments from the raw string to preserve intent ("1.0" = 2 segments,
+        // not 1 after trailing-zero stripping, which would lose the ".0").
+        let remoteSegmentCount = rawSegmentCount(raw)
+        let localSegmentCount = rawSegmentCount(localVersion)
 
-        let remoteSig = significantSegments(remoteAll)
-        let localSig = significantSegments(localAll)
-
-        // Check if remote has exactly one more significant segment and it matches the build number
-        if remoteSig.count == localSig.count + 1,
-          let lastRemote = remoteSig.last,
+        // Check if remote has exactly one more segment and it matches the build number
+        if remoteSegmentCount == localSegmentCount + 1,
+          remoteAll.count > localAll.count || remoteAll.last != 0,
+          let lastRemote = remoteAll[..<remoteSegmentCount].last,
           String(lastRemote) == localBuildNumber,
-          remoteSig.dropLast().elementsEqual(localSig)
+          remoteAll[..<(remoteSegmentCount - 1)].elementsEqual(localAll[..<localSegmentCount])
         {
           return Version(localVersion)
         }
@@ -230,6 +225,28 @@ nonisolated struct Version: Sendable, Comparable, Equatable {
     }
 
     return self
+  }
+
+  /// Counts the number of dot-separated numeric segments in a raw version string,
+  /// after stripping known prefixes/suffixes. Preserves the user's intent — "1.0" is 2 segments.
+  private func rawSegmentCount(_ versionString: String) -> Int {
+    var working = versionString.trimmingCharacters(in: .whitespaces)
+    // Strip leading v
+    if working.first == "v" || working.first == "V" { working = String(working.dropFirst()) }
+    // Strip pre-release suffix (everything after first dash/underscore followed by letters)
+    if let range = working.range(of: #"[_-][a-zA-Z]"#, options: .regularExpression) {
+      working = String(working[..<range.lowerBound])
+    }
+    // Strip inline pre-release (trailing letters+digits like "5.0b3" → "5.0")
+    if let range = working.range(of: #"[a-zA-Z]+\d*$"#, options: .regularExpression) {
+      working = String(working[..<range.lowerBound])
+    }
+    // Strip build metadata
+    if let plusIdx = working.firstIndex(of: "+") { working = String(working[..<plusIdx]) }
+    // Strip trailing dots
+    while working.hasSuffix(".") { working = String(working.dropLast()) }
+
+    return working.isEmpty ? 0 : working.split(separator: ".").count
   }
 
   /// Memberwise init for internal use only.

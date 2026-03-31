@@ -212,7 +212,14 @@ nonisolated struct PrivilegedHelperClient: PrivilegedHelperClientProtocol {
       }
       // Desync detected — try to recover via re-registration
       try? registrationController.unregister()
-      try registrationController.register()
+      do {
+        try registrationController.register()
+      } catch {
+        throw InstallError.privilegedHelperConnectionFailed(
+          "The privileged helper is registered but not responding, "
+            + "and re-registration failed: \(error.localizedDescription)"
+        )
+      }
       if await connectionProvider.checkLiveness() {
         return
       }

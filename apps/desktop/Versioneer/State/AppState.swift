@@ -22,7 +22,7 @@ final class AppState {
   let appStoreChecker = AppStoreChecker()
   let installCoordinator = InstallCoordinator()
   private let cacheStore: ScanCacheStore
-  private var directoryWatcher: DirectoryWatcher?
+  @ObservationIgnored private var directoryWatcher: DirectoryWatcher?
 
   var apiClient: InventoryAPIClient {
     InventoryAPIClient(baseURL: settings.baseURL)

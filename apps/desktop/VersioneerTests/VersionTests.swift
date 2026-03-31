@@ -233,6 +233,14 @@ struct VersionTests {
     #expect(sanitized == Version("5.3.2"))
   }
 
+  @Test func sanitizesAppendedBuildNumberWithTrailingZero() {
+    // Remote "1.0.40" where local is version "1.0" build "40"
+    // The ".0" in "1.0" must not be stripped — it's a meaningful segment
+    let remote = Version("1.0.40")
+    let sanitized = remote.sanitized(localVersion: "1.0", localBuildNumber: "40")
+    #expect(sanitized == Version("1.0"))
+  }
+
   @Test func doesNotSanitizeWhenBuildDoesNotMatch() {
     // Remote "1.2.3" where local is version "1.2" build "99" — no match
     let remote = Version("1.2.3")
