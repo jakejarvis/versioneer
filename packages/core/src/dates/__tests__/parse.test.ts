@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toISODate } from "../parse";
+import { inferReleasedAt, toISODate } from "../parse";
 
 describe("toISODate", () => {
   it("normalizes ISO 8601 with Z suffix", () => {
@@ -50,5 +50,32 @@ describe("toISODate", () => {
 
   it("returns null for partial date strings", () => {
     expect(toISODate("2024-13-45")).toBeNull();
+  });
+});
+
+describe("inferReleasedAt", () => {
+  const now = "2026-03-31T12:00:00.000Z";
+
+  it("uses parser-provided date regardless of initial fetch flag", () => {
+    expect(inferReleasedAt("2024-01-15T12:00:00Z", true, now)).toBe("2024-01-15T12:00:00.000Z");
+    expect(inferReleasedAt("2024-01-15T12:00:00Z", false, now)).toBe("2024-01-15T12:00:00.000Z");
+  });
+
+  it("returns null when no date and initial fetch (bootstrap)", () => {
+    expect(inferReleasedAt(null, true, now)).toBeNull();
+    expect(inferReleasedAt(undefined, true, now)).toBeNull();
+  });
+
+  it("infers now when no date and non-initial fetch", () => {
+    expect(inferReleasedAt(null, false, now)).toBe(now);
+    expect(inferReleasedAt(undefined, false, now)).toBe(now);
+  });
+
+  it("infers now when parser date is unparseable and non-initial fetch", () => {
+    expect(inferReleasedAt("not-a-date", false, now)).toBe(now);
+  });
+
+  it("returns null when parser date is unparseable and initial fetch", () => {
+    expect(inferReleasedAt("not-a-date", true, now)).toBeNull();
   });
 });

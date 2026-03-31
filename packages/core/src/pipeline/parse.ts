@@ -10,9 +10,9 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 
-import { toISODate } from "../dates";
+import { inferReleasedAt, toISODate } from "../dates";
 import { createLogger } from "../logger";
 import { getParser } from "../parsers";
 import { normalizeVersion, inferChannel } from "../versioning";
@@ -51,6 +51,21 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
   if (!source) {
     throw new Error(`Source not found: ${fetchRecord.sourceId}`);
   }
+
+  // Detect bootstrap: if this is the source's first fetch, don't infer
+  // release dates — those releases pre-date our tracking.
+  const priorFetch = await db
+    .select({ id: sourceFetches.id })
+    .from(sourceFetches)
+    .where(
+      and(
+        eq(sourceFetches.sourceId, source.id),
+        ne(sourceFetches.id, fetchRecord.id),
+      ),
+    )
+    .limit(1)
+    .get();
+  const isInitialFetch = !priorFetch;
 
   // Get parser
   const parser = getParser(source.parserKey);
@@ -169,7 +184,7 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
           versionNormalized,
           buildNumber: parsedRelease.buildNumber ?? null,
           channel,
-          releasedAt: toISODate(parsedRelease.publishedAt),
+          releasedAt: inferReleasedAt(parsedRelease.publishedAt, isInitialFetch, now),
           isPrerelease: parsedRelease.isPrerelease,
           sourceConfidence: output.confidence,
           publishedBySourceId: source.id,

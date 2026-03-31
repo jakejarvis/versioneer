@@ -1,2 +1,2 @@
-export { toISODate } from "./parse";
+export { toISODate, inferReleasedAt } from "./parse";
 export { toEpochMs, msElapsedSince, compareDatesDesc, durationMs } from "./compare";
