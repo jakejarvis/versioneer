@@ -69,13 +69,19 @@ actor AppStoreChecker {
     }
 
     // Strategy 2: Bundle ID lookup (when Spotlight didn't provide an Adam ID)
+    // Try desktopSoftware first (more accurate for native Mac apps), then fall back
+    // to macSoftware (broader — includes Catalyst and iOS-wrapped apps, but may
+    // return iPad metadata for some apps).
     if let bundleId = app.bundleId {
-      if let result = await lookupByBundleID(bundleId, storefront: userStorefront) {
-        return result
-      }
-      if userStorefront != "us" {
-        if let result = await lookupByBundleID(bundleId, storefront: "us") {
+      for entity in ["desktopSoftware", "macSoftware"] {
+        if let result = await lookupByBundleID(bundleId, entity: entity, storefront: userStorefront)
+        {
           return result
+        }
+        if userStorefront != "us" {
+          if let result = await lookupByBundleID(bundleId, entity: entity, storefront: "us") {
+            return result
+          }
         }
       }
     }
@@ -94,11 +100,11 @@ actor AppStoreChecker {
   }
 
   private func lookupByBundleID(
-    _ bundleId: String, storefront: String?
+    _ bundleId: String, entity: String, storefront: String?
   ) async -> AppStoreResult? {
     guard let encoded = bundleId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
     else { return nil }
-    var urlString = "https://itunes.apple.com/lookup?bundleId=\(encoded)&entity=desktopSoftware"
+    var urlString = "https://itunes.apple.com/lookup?bundleId=\(encoded)&entity=\(entity)"
     if let storefront { urlString += "&country=\(storefront)" }
     return await performLookup(urlString: urlString)
   }

@@ -22,6 +22,7 @@ final class AppState {
   let appStoreChecker = AppStoreChecker()
   let installCoordinator = InstallCoordinator()
   private let cacheStore: ScanCacheStore
+  private var directoryWatcher: DirectoryWatcher?
 
   var apiClient: InventoryAPIClient {
     InventoryAPIClient(baseURL: settings.baseURL)
@@ -135,6 +136,21 @@ final class AppState {
       rebuildLookupTables()
       refreshDisplayedResults()
     }
+
+    startDirectoryWatching()
+  }
+
+  /// Watches app directories for changes and triggers a rescan when apps are
+  /// installed, updated, or removed outside of Versioneer.
+  private func startDirectoryWatching() {
+    let watcher = DirectoryWatcher(urls: settings.allScanRootURLs) { [weak self] in
+      guard let self else { return }
+      // Only auto-rescan if we're idle (not mid-scan or mid-install)
+      guard self.loadState == .done || self.loadState == .idle else { return }
+      Task { await self.scanAndSubmit() }
+    }
+    watcher.start()
+    self.directoryWatcher = watcher
   }
 
   /// Whether we have cached inventory results to display while rescanning.

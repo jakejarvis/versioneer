@@ -2,12 +2,24 @@ import CoreServices
 import Foundation
 import Security
 
+/// Private CoreFoundation function that flushes NSBundle's cached properties.
+/// Without this, after an in-place app update (e.g., Sparkle), Bundle.infoDictionary
+/// returns stale version info from the pre-update binary.
+@_silgen_name("_CFBundleFlushBundleCaches")
+private nonisolated func _CFBundleFlushBundleCaches(_ bundle: CFBundle?) -> Void
+
 /// Extracts metadata from an app bundle on disk.
 nonisolated enum BundleMetadataReader {
   /// Reads an `InstalledApp` from a `.app` bundle URL.
   /// Returns `nil` if the bundle cannot be loaded or has no usable name.
   nonisolated static func readApp(at url: URL) -> InstalledApp? {
     guard let bundle = Bundle(url: url) else { return nil }
+
+    // Flush CoreFoundation's bundle cache to ensure we read current version info.
+    // NSBundle caches infoDictionary aggressively — stale after in-place updates.
+    let cfBundle = CFBundleCreate(kCFAllocatorDefault, bundle.bundleURL as CFURL)
+    _CFBundleFlushBundleCaches(cfBundle)
+
     let info = bundle.infoDictionary ?? [:]
 
     let name =

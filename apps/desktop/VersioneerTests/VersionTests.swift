@@ -216,4 +216,46 @@ struct VersionTests {
   @Test func twoInvalidVersionsAreEqual() {
     #expect(Version("") == Version("not-a-version"))
   }
+
+  // MARK: - Sanitization
+
+  @Test func sanitizesAppendedBuildNumber() {
+    // Remote "1.2.40" where local is version "1.2" build "40"
+    let remote = Version("1.2.40")
+    let sanitized = remote.sanitized(localVersion: "1.2", localBuildNumber: "40")
+    #expect(sanitized == Version("1.2"))
+  }
+
+  @Test func sanitizesThreeSegmentAppendedBuildNumber() {
+    // Remote "5.3.2.1234" where local is version "5.3.2" build "1234"
+    let remote = Version("5.3.2.1234")
+    let sanitized = remote.sanitized(localVersion: "5.3.2", localBuildNumber: "1234")
+    #expect(sanitized == Version("5.3.2"))
+  }
+
+  @Test func doesNotSanitizeWhenBuildDoesNotMatch() {
+    // Remote "1.2.3" where local is version "1.2" build "99" — no match
+    let remote = Version("1.2.3")
+    let sanitized = remote.sanitized(localVersion: "1.2", localBuildNumber: "99")
+    #expect(sanitized == Version("1.2.3"))
+  }
+
+  @Test func doesNotSanitizeWhenSegmentCountsMatch() {
+    // Remote "1.2.3" where local is version "1.2.3" build "40" — same segment count
+    let remote = Version("1.2.3")
+    let sanitized = remote.sanitized(localVersion: "1.2.3", localBuildNumber: "40")
+    #expect(sanitized == Version("1.2.3"))
+  }
+
+  @Test func sanitizeHandlesNilBuildNumber() {
+    let remote = Version("1.2.3")
+    let sanitized = remote.sanitized(localVersion: "1.2", localBuildNumber: nil)
+    #expect(sanitized == Version("1.2.3"))
+  }
+
+  @Test func sanitizeHandlesInvalidVersion() {
+    let remote = Version("")
+    let sanitized = remote.sanitized(localVersion: "1.0", localBuildNumber: "10")
+    #expect(!sanitized.valid)
+  }
 }

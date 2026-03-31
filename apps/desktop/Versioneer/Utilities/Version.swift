@@ -178,6 +178,60 @@ nonisolated struct Version: Sendable, Comparable, Equatable {
     )
   }
 
+  // MARK: - Sanitization
+
+  /// Returns a sanitized version for comparison against a local app's version/build.
+  /// Handles common mismatches where Sparkle appcasts report versions in a different
+  /// format than the local bundle (adopted from Latest's sanitize pattern).
+  ///
+  /// Cases handled:
+  /// 1. Remote `1.2.40` where local is version `1.2` build `40` → compares as `1.2`
+  /// 2. Remote `40` where local build is `40` → treats as equal (build-only comparison)
+  func sanitized(localVersion: String?, localBuildNumber: String?) -> Version {
+    guard valid, let localBuildNumber, !localBuildNumber.isEmpty else { return self }
+
+    // Case 1: The last segment of the remote version is actually the local build number.
+    // Example: remote "1.2.40", local version "1.2" build "40"
+    // We strip the trailing build segment to get a clean version comparison.
+    if let localVersion, !localVersion.isEmpty {
+      let localParsed = Version(localVersion)
+      if localParsed.valid {
+        // Count significant segments (drop trailing zeros to match how "1.2" parses as [1,2])
+        let remoteAll = [major, minor, patch] + extra
+        let localAll = [localParsed.major, localParsed.minor, localParsed.patch]
+          + localParsed.extra
+
+        func significantSegments(_ segments: [Int]) -> ArraySlice<Int> {
+          // Drop trailing zeros to get the meaningful segment count
+          var end = segments.endIndex
+          while end > 1 && segments[end - 1] == 0 { end -= 1 }
+          return segments[..<end]
+        }
+
+        let remoteSig = significantSegments(remoteAll)
+        let localSig = significantSegments(localAll)
+
+        // Check if remote has exactly one more significant segment and it matches the build number
+        if remoteSig.count == localSig.count + 1,
+          let lastRemote = remoteSig.last,
+          String(lastRemote) == localBuildNumber,
+          remoteSig.dropLast().elementsEqual(localSig)
+        {
+          return Version(localVersion)
+        }
+      }
+    }
+
+    // Case 2: The entire remote version string equals the local build number.
+    // Example: remote "40", local build "40"
+    // This means the feed reports build numbers, not display versions.
+    if raw.trimmingCharacters(in: .whitespaces) == localBuildNumber {
+      return self  // Already parsed; caller should compare build-to-build
+    }
+
+    return self
+  }
+
   /// Memberwise init for internal use only.
   private init(
     raw: String, normalized: String,

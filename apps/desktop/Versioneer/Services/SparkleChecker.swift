@@ -83,11 +83,32 @@ actor SparkleChecker {
     return await withTaskGroup(of: (String, SparkleResult?).self) { group in
       for app in sparkleApps {
         group.addTask {
-          let result = await self.check(
+          guard var result = await self.check(
             feedUrl: app.sparkleFeedUrl!,
             appName: app.name,
             installedVersion: app.version
-          )
+          ) else { return (app.id, nil) }
+
+          // Sanitize the remote version against the local version/build to handle
+          // format mismatches (e.g., remote "1.2.40" when local is "1.2" build "40").
+          if let latestVersion = result.latestVersion {
+            let sanitized = Version(latestVersion).sanitized(
+              localVersion: app.version,
+              localBuildNumber: app.buildNumber
+            )
+            if sanitized.raw != latestVersion, sanitized.valid {
+              result = SparkleResult(
+                feedUrl: result.feedUrl,
+                latestVersion: sanitized.raw,
+                latestBuildNumber: result.latestBuildNumber,
+                publishedAt: result.publishedAt,
+                releaseNotesUrl: result.releaseNotesUrl,
+                downloadUrl: result.downloadUrl,
+                minOsVersion: result.minOsVersion
+              )
+            }
+          }
+
           return (app.id, result)
         }
       }
