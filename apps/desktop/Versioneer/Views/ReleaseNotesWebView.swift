@@ -1,31 +1,59 @@
+import AppKit
 import SwiftUI
-import WebKit
 
 struct ReleaseNotesWebView: NSViewRepresentable {
   let html: String
 
-  func makeNSView(context: Context) -> WKWebView {
-    let configuration = WKWebViewConfiguration()
-    configuration.preferences.isElementFullscreenEnabled = false
-    let webView = WKWebView(frame: .zero, configuration: configuration)
-    webView.navigationDelegate = context.coordinator
-    webView.setValue(false, forKey: "drawsBackground")
-    loadHTML(in: webView)
-    context.coordinator.lastLoadedHTML = html
-    return webView
+  func makeNSView(context: Context) -> NSScrollView {
+    let scrollView = NSScrollView()
+    scrollView.drawsBackground = false
+    scrollView.borderType = .noBorder
+    scrollView.hasVerticalScroller = true
+    scrollView.autohidesScrollers = true
+
+    let textView = NSTextView(frame: .zero)
+    textView.isEditable = false
+    textView.isSelectable = true
+    textView.isRichText = true
+    textView.drawsBackground = false
+    textView.allowsUndo = false
+    textView.textContainerInset = NSSize(width: 12, height: 12)
+    textView.textContainer?.lineFragmentPadding = 0
+    textView.textContainer?.widthTracksTextView = true
+    textView.isHorizontallyResizable = false
+    textView.isVerticallyResizable = true
+    textView.minSize = .zero
+    textView.maxSize = NSSize(
+      width: CGFloat.greatestFiniteMagnitude,
+      height: CGFloat.greatestFiniteMagnitude
+    )
+    textView.delegate = context.coordinator
+    textView.linkTextAttributes = [
+      .foregroundColor: NSColor.linkColor,
+      .underlineStyle: NSUnderlineStyle.single.rawValue,
+    ]
+
+    scrollView.documentView = textView
+    updateTextView(textView, context: context)
+    return scrollView
   }
 
-  func updateNSView(_ webView: WKWebView, context: Context) {
-    guard html != context.coordinator.lastLoadedHTML else { return }
-    loadHTML(in: webView)
-    context.coordinator.lastLoadedHTML = html
+  func updateNSView(_ scrollView: NSScrollView, context: Context) {
+    guard let textView = scrollView.documentView as? NSTextView else { return }
+    updateTextView(textView, context: context)
   }
 
   func makeCoordinator() -> Coordinator {
     Coordinator()
   }
 
-  private func loadHTML(in webView: WKWebView) {
+  private func updateTextView(_ textView: NSTextView, context: Context) {
+    guard html != context.coordinator.lastLoadedHTML else { return }
+    textView.textStorage?.setAttributedString(makeAttributedString())
+    context.coordinator.lastLoadedHTML = html
+  }
+
+  private func makeAttributedString() -> NSAttributedString {
     let wrapped = """
       <!DOCTYPE html>
       <html>
@@ -76,25 +104,91 @@ struct ReleaseNotesWebView: NSViewRepresentable {
       <body>\(html)</body>
       </html>
       """
-    webView.loadHTMLString(wrapped, baseURL: nil)
+
+    guard let data = wrapped.data(using: .utf8) else {
+      return NSAttributedString(string: html)
+    }
+
+    let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+      .documentType: NSAttributedString.DocumentType.html,
+      .characterEncoding: String.Encoding.utf8.rawValue,
+    ]
+
+    guard
+      let attributedString = try? NSMutableAttributedString(
+        data: data,
+        options: options,
+        documentAttributes: nil
+      )
+    else {
+      return NSAttributedString(string: html)
+    }
+
+    sanitizeAttachments(in: attributedString)
+    sanitizeLinks(in: attributedString)
+    return attributedString
   }
 
-  final class Coordinator: NSObject, WKNavigationDelegate {
-    var lastLoadedHTML: String?
-    func webView(
-      _ webView: WKWebView,
-      decidePolicyFor navigationAction: WKNavigationAction,
-      decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
-    ) {
-      if navigationAction.navigationType == .linkActivated,
-        let url = navigationAction.request.url
-      {
-        NSWorkspace.shared.open(url)
-        decisionHandler(.cancel)
+  private func sanitizeAttachments(in attributedString: NSMutableAttributedString) {
+    let fullRange = NSRange(location: 0, length: attributedString.length)
+    var attachmentRanges: [NSRange] = []
+
+    attributedString.enumerateAttribute(.attachment, in: fullRange) { value, range, _ in
+      guard value != nil else { return }
+      attachmentRanges.append(range)
+    }
+
+    for range in attachmentRanges.reversed() {
+      attributedString.replaceCharacters(in: range, with: "")
+    }
+  }
+
+  private func sanitizeLinks(in attributedString: NSMutableAttributedString) {
+    let fullRange = NSRange(location: 0, length: attributedString.length)
+    attributedString.enumerateAttribute(.link, in: fullRange) { value, range, _ in
+      guard
+        let value,
+        let url = Self.normalizedURL(from: value),
+        Self.isSafeExternalURL(url)
+      else {
+        attributedString.removeAttribute(.link, range: range)
         return
       }
 
-      decisionHandler(.allow)
+      attributedString.addAttribute(.link, value: url, range: range)
+    }
+  }
+
+  private static func normalizedURL(from value: Any) -> URL? {
+    if let url = value as? URL {
+      return url
+    }
+
+    if let string = value as? String {
+      return URL(string: string)
+    }
+
+    return nil
+  }
+
+  private static func isSafeExternalURL(_ url: URL) -> Bool {
+    guard let scheme = url.scheme?.lowercased() else { return false }
+    return scheme == "http" || scheme == "https"
+  }
+
+  final class Coordinator: NSObject, NSTextViewDelegate {
+    var lastLoadedHTML: String?
+
+    func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+      guard
+        let url = ReleaseNotesWebView.normalizedURL(from: link),
+        ReleaseNotesWebView.isSafeExternalURL(url)
+      else {
+        return true
+      }
+
+      NSWorkspace.shared.open(url)
+      return true
     }
   }
 }

@@ -87,13 +87,10 @@ final class AppState {
   var searchText: String = ""
   var lastScanCompletedAt: Date?
 
-  /// Path lookup tables built after each scan, keyed by bundle ID or app name.
-  private var appPathsByBundleId: [String: String] = [:]
-  private var appPathsByName: [String: String] = [:]
-
   /// Installed app lookup tables for O(1) access.
+  private var installedAppsByID: [String: InstalledApp] = [:]
   private var installedAppsByBundleId: [String: InstalledApp] = [:]
-  private var installedAppsByName: [String: InstalledApp] = [:]
+  private var installedAppsByName: [String: [InstalledApp]] = [:]
 
   /// Inventory results indexed by ID for O(1) lookups.
   private(set) var inventoryResultsByID: [String: AppDecision] = [:]
@@ -308,19 +305,19 @@ final class AppState {
     syncSelectedAppIDToVisibleRows()
   }
 
-  /// Rebuilds path and installed-app lookup tables from the current `installedApps` array.
+  /// Rebuilds installed-app lookup tables from the current `installedApps` array.
   private func rebuildLookupTables() {
-    appPathsByBundleId = [:]
-    appPathsByName = [:]
+    installedAppsByID = [:]
     installedAppsByBundleId = [:]
     installedAppsByName = [:]
-    for app in installedApps {
+    for app in installedApps.sorted(by: { lhs, rhs in
+      lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
+    }) {
+      installedAppsByID[app.id] = app
       if let bundleId = app.bundleId {
-        appPathsByBundleId[bundleId] = app.path
         installedAppsByBundleId[bundleId] = app
       }
-      appPathsByName[app.name] = app.path
-      installedAppsByName[app.name] = app
+      installedAppsByName[app.name, default: []].append(app)
     }
   }
 
@@ -328,16 +325,9 @@ final class AppState {
   func appIcon(for result: AppDecision) -> NSImage {
     if let cached = iconCache[result.id] { return cached }
 
-    let path: String? =
-      if let bundleId = result.bundleId {
-        appPathsByBundleId[bundleId]
-      } else {
-        appPathsByName[result.appName]
-      }
-
     let icon: NSImage =
-      if let path {
-        NSWorkspace.shared.icon(forFile: path)
+      if let installedApp = installedApp(for: result) {
+        NSWorkspace.shared.icon(forFile: installedApp.path)
       } else {
         NSWorkspace.shared.icon(for: .applicationBundle)
       }
@@ -347,10 +337,19 @@ final class AppState {
   }
 
   func installedApp(for result: AppDecision) -> InstalledApp? {
+    if let localAppID = result.localAppID,
+      let installedApp = installedAppsByID[localAppID]
+    {
+      return installedApp
+    }
+
     if let bundleId = result.bundleId {
       return installedAppsByBundleId[bundleId]
     }
-    return installedAppsByName[result.appName]
+
+    let candidates = installedAppsByName[result.appName] ?? []
+    guard candidates.count == 1 else { return nil }
+    return candidates[0]
   }
 
   func bundleIdText(for result: AppDecision) -> String? {
@@ -545,7 +544,7 @@ final class AppState {
     local: [String: LocalVersionInfo],
     apps: [InstalledApp]
   ) -> [AppDecision] {
-    var results = backend
+    var results = bindInstalledApps(to: backend, apps: apps)
 
     for (index, decision) in results.enumerated() {
       let matchingApp = findInstalledApp(for: decision, in: apps)
@@ -577,7 +576,8 @@ final class AppState {
         staleSince: decision.staleSince,
         iconUrl: decision.iconUrl,
         artifact: decision.artifact,
-        installStrategy: decision.installStrategy
+        installStrategy: decision.installStrategy,
+        localAppID: decision.localAppID
       )
     }
 
@@ -624,18 +624,86 @@ final class AppState {
         staleSince: nil,
         iconUrl: nil,
         artifact: nil,
-        installStrategy: nil
+        installStrategy: nil,
+        localAppID: app.id
       )
+    }
+  }
+
+  private func bindInstalledApps(
+    to decisions: [AppDecision],
+    apps: [InstalledApp]
+  ) -> [AppDecision] {
+    var remainingAppIDs = Set(apps.map(\.id))
+    let appsByID = Dictionary(uniqueKeysWithValues: apps.map { ($0.id, $0) })
+    let appsByBundleId = Dictionary(grouping: apps.compactMap { app in
+      app.bundleId.map { ($0, app) }
+    }) { $0.0 }
+      .mapValues { pairs in pairs.map(\.1) }
+    let appsByName = Dictionary(grouping: apps) { $0.name }
+
+    func claimFirstMatching(
+      from candidates: [InstalledApp]
+    ) -> InstalledApp? {
+      for candidate in candidates.sorted(by: { lhs, rhs in
+        lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
+      }) where remainingAppIDs.contains(candidate.id) {
+        remainingAppIDs.remove(candidate.id)
+        return candidate
+      }
+      return nil
+    }
+
+    return decisions.map { decision in
+      if let localAppID = decision.localAppID,
+        let installedApp = appsByID[localAppID]
+      {
+        remainingAppIDs.remove(installedApp.id)
+        return decision.binding(to: installedApp)
+      }
+
+      if let bundleId = decision.bundleId,
+        let installedApp = claimFirstMatching(from: appsByBundleId[bundleId] ?? [])
+      {
+        return decision.binding(to: installedApp)
+      }
+
+      let nameCandidates = appsByName[decision.appName] ?? []
+      if let installedVersion = decision.installedVersion,
+        let installedApp = claimFirstMatching(
+          from: nameCandidates.filter { $0.version == installedVersion })
+      {
+        return decision.binding(to: installedApp)
+      }
+
+      if let installedApp = claimFirstMatching(from: nameCandidates) {
+        return decision.binding(to: installedApp)
+      }
+
+      return decision
     }
   }
 
   /// Finds the InstalledApp that corresponds to a backend AppDecision.
   private func findInstalledApp(for decision: AppDecision, in apps: [InstalledApp]) -> InstalledApp?
   {
+    if let localAppID = decision.localAppID {
+      return apps.first { $0.id == localAppID }
+    }
+
     if let bundleId = decision.bundleId {
       return apps.first { $0.bundleId == bundleId }
     }
-    return apps.first { $0.name == decision.appName }
+
+    let nameMatches = apps.filter { $0.name == decision.appName }
+    if let installedVersion = decision.installedVersion,
+      let exactVersionMatch = nameMatches.first(where: { $0.version == installedVersion })
+    {
+      return exactVersionMatch
+    }
+
+    guard nameMatches.count == 1 else { return nil }
+    return nameMatches[0]
   }
 
   /// Determines update decision by comparing version strings.
@@ -795,6 +863,7 @@ final class AppState {
   func refreshDisplayedResults(preservingSelectionID selectionID: String? = nil) {
     let preferredSelectionID = selectionID ?? selectedAppID
     rebuildLookupTables()
+    rawInventoryResults = bindInstalledApps(to: rawInventoryResults, apps: installedApps)
     userIgnoredResultIDs = Set(
       rawInventoryResults.compactMap { decision in
         guard let installedApp = self.installedApp(for: decision),

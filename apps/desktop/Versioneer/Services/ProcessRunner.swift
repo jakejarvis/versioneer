@@ -1,6 +1,10 @@
 import Foundation
 
-struct CommandResult: Sendable {
+private nonisolated final class ProcessPipeBuffer: @unchecked Sendable {
+  var data = Data()
+}
+
+nonisolated struct CommandResult: Sendable {
   let stdout: String
   let stderr: String
   let terminationStatus: Int32
@@ -27,33 +31,48 @@ enum ProcessRunner {
     currentDirectoryURL: URL? = nil
   ) async throws -> CommandResult {
     try await withCheckedThrowingContinuation { continuation in
-      let process = Process()
-      process.executableURL = URL(fileURLWithPath: launchPath)
-      process.arguments = arguments
-      process.currentDirectoryURL = currentDirectoryURL
+      DispatchQueue.global(qos: .userInitiated).async {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: launchPath)
+        process.arguments = arguments
+        process.currentDirectoryURL = currentDirectoryURL
 
-      let stdoutPipe = Pipe()
-      let stderrPipe = Pipe()
-      process.standardOutput = stdoutPipe
-      process.standardError = stderrPipe
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
 
-      process.terminationHandler = { process in
-        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
-        let stderr = String(data: stderrData, encoding: .utf8) ?? ""
-        continuation.resume(
-          returning: CommandResult(
-            stdout: stdout,
-            stderr: stderr,
-            terminationStatus: process.terminationStatus
-          ))
-      }
+        let stdoutBuffer = ProcessPipeBuffer()
+        let stderrBuffer = ProcessPipeBuffer()
+        let drainGroup = DispatchGroup()
 
-      do {
-        try process.run()
-      } catch {
-        continuation.resume(throwing: error)
+        func startDraining(_ pipe: Pipe, into buffer: ProcessPipeBuffer) {
+          drainGroup.enter()
+          DispatchQueue.global(qos: .userInitiated).async {
+            buffer.data = pipe.fileHandleForReading.readDataToEndOfFile()
+            drainGroup.leave()
+          }
+        }
+
+        do {
+          try process.run()
+          startDraining(stdoutPipe, into: stdoutBuffer)
+          startDraining(stderrPipe, into: stderrBuffer)
+
+          process.waitUntilExit()
+          drainGroup.wait()
+
+          let stdout = String(data: stdoutBuffer.data, encoding: .utf8) ?? ""
+          let stderr = String(data: stderrBuffer.data, encoding: .utf8) ?? ""
+          continuation.resume(
+            returning: CommandResult(
+              stdout: stdout,
+              stderr: stderr,
+              terminationStatus: process.terminationStatus
+            ))
+        } catch {
+          continuation.resume(throwing: error)
+        }
       }
     }
   }

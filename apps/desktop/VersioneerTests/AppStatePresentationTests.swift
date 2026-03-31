@@ -166,6 +166,111 @@ struct AppStatePresentationTests {
     #expect(reloadedState.filteredResults.isEmpty)
   }
 
+  @Test func bundlelessDuplicateNamesRetainDistinctInstalledAppTargets() {
+    let state = AppState()
+
+    let firstDecision = AppDecision(
+      appName: "Helper",
+      bundleId: nil,
+      installedVersion: "1.0",
+      matchedAppId: nil,
+      matchedAppName: nil,
+      matchConfidence: nil,
+      decision: .localOnly,
+      trackingState: .localOnly,
+      localReasonCode: .notFound,
+      latestVersion: nil,
+      latestVersionRaw: nil,
+      latestReleaseId: nil,
+      channel: nil,
+      availableChannels: nil,
+      homebrewCaskToken: nil,
+      releasedAt: nil,
+      staleSince: nil,
+      iconUrl: nil,
+      artifact: nil,
+      installStrategy: nil
+    )
+    let secondDecision = AppDecision(
+      appName: "Helper",
+      bundleId: nil,
+      installedVersion: "1.0",
+      matchedAppId: nil,
+      matchedAppName: nil,
+      matchConfidence: nil,
+      decision: .localOnly,
+      trackingState: .localOnly,
+      localReasonCode: .notFound,
+      latestVersion: nil,
+      latestVersionRaw: nil,
+      latestReleaseId: nil,
+      channel: nil,
+      availableChannels: nil,
+      homebrewCaskToken: nil,
+      releasedAt: nil,
+      staleSince: nil,
+      iconUrl: nil,
+      artifact: nil,
+      installStrategy: nil
+    )
+
+    let firstInstalledApp = InstalledApp(
+      name: "Helper",
+      bundleId: nil,
+      version: "1.0",
+      buildNumber: nil,
+      teamId: nil,
+      path: "/Applications/Helper.app",
+      architecture: nil,
+      sparkleFeedUrl: nil,
+      sparklePublicKey: nil,
+      isSparkleApp: false,
+      isMasApp: false,
+      masAppId: nil,
+      isElectronApp: false,
+      electronUpdateProvider: nil,
+      electronUpdateUrl: nil,
+      codeSigningAuthority: nil,
+      appCategory: nil,
+      minMacOSVersion: nil,
+      isHomebrewInstalled: false,
+      homebrewCaskToken: nil
+    )
+    let secondInstalledApp = InstalledApp(
+      name: "Helper",
+      bundleId: nil,
+      version: "1.0",
+      buildNumber: nil,
+      teamId: nil,
+      path: "/Users/test/Applications/Helper.app",
+      architecture: nil,
+      sparkleFeedUrl: nil,
+      sparklePublicKey: nil,
+      isSparkleApp: false,
+      isMasApp: false,
+      masAppId: nil,
+      isElectronApp: false,
+      electronUpdateProvider: nil,
+      electronUpdateUrl: nil,
+      codeSigningAuthority: nil,
+      appCategory: nil,
+      minMacOSVersion: nil,
+      isHomebrewInstalled: false,
+      homebrewCaskToken: nil
+    )
+
+    state.installedApps = [firstInstalledApp, secondInstalledApp]
+    state.rawInventoryResults = [firstDecision, secondDecision]
+    state.refreshDisplayedResults()
+
+    #expect(state.inventoryResults.count == 2)
+    #expect(Set(state.inventoryResults.map(\.id)).count == 2)
+    #expect(
+      Set(state.inventoryResults.compactMap { state.appPathText(for: $0) })
+        == Set([firstInstalledApp.path, secondInstalledApp.path])
+    )
+  }
+
   private func seed(_ state: AppState, with results: [AppDecision]) {
     state.installedApps = results.map(DesktopUITestFixtures.makeInstalledApp)
     state.rawInventoryResults = results

@@ -2,7 +2,6 @@ import Foundation
 
 /// A single backend decision about an installed app.
 nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
-  let id: String
   let appName: String
   let bundleId: String?
   let installedVersion: String?
@@ -23,6 +22,16 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
   let iconUrl: String?
   let artifact: Artifact?
   let installStrategy: InstallStrategy?
+  let localAppID: String?
+
+  var id: String {
+    Self.makeID(
+      appName: appName,
+      bundleId: bundleId,
+      matchedAppId: matchedAppId,
+      localAppID: localAppID
+    )
+  }
 
   init(
     appName: String,
@@ -44,9 +53,9 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     staleSince: String?,
     iconUrl: String?,
     artifact: Artifact?,
-    installStrategy: InstallStrategy?
+    installStrategy: InstallStrategy?,
+    localAppID: String? = nil
   ) {
-    self.id = appName + (bundleId ?? "")
     self.appName = appName
     self.bundleId = bundleId
     self.installedVersion = installedVersion
@@ -67,6 +76,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     self.iconUrl = iconUrl
     self.artifact = artifact
     self.installStrategy = installStrategy
+    self.localAppID = localAppID
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -80,7 +90,6 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     appName = try container.decode(String.self, forKey: .appName)
     bundleId = try container.decodeIfPresent(String.self, forKey: .bundleId)
-    id = appName + (bundleId ?? "")
     installedVersion = try container.decodeIfPresent(String.self, forKey: .installedVersion)
     matchedAppId = try container.decodeIfPresent(String.self, forKey: .matchedAppId)
     matchedAppName = try container.decodeIfPresent(String.self, forKey: .matchedAppName)
@@ -99,6 +108,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     iconUrl = try container.decodeIfPresent(String.self, forKey: .iconUrl)
     artifact = try container.decodeIfPresent(Artifact.self, forKey: .artifact)
     installStrategy = try container.decodeIfPresent(InstallStrategy.self, forKey: .installStrategy)
+    localAppID = nil
   }
 
   enum Decision: String, Codable, Sendable, CaseIterable {
@@ -172,6 +182,53 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     }
   }
 
+  private static func makeID(
+    appName: String,
+    bundleId: String?,
+    matchedAppId: String?,
+    localAppID: String?
+  ) -> String {
+    if let bundleId {
+      return "bundle:\(bundleId)"
+    }
+
+    if let localAppID {
+      return "local:\(localAppID)"
+    }
+
+    if let matchedAppId {
+      return "match:\(matchedAppId)|name:\(appName)"
+    }
+
+    return "name:\(appName)"
+  }
+
+  func binding(to installedApp: InstalledApp?) -> AppDecision {
+    AppDecision(
+      appName: appName,
+      bundleId: bundleId,
+      installedVersion: installedVersion,
+      matchedAppId: matchedAppId,
+      matchedAppName: matchedAppName,
+      matchConfidence: matchConfidence,
+      decision: decision,
+      trackingState: trackingState,
+      localReasonCode: localReasonCode,
+      latestVersion: latestVersion,
+      latestVersionRaw: latestVersionRaw,
+      latestReleaseId: latestReleaseId,
+      channel: channel,
+      availableChannels: availableChannels,
+      homebrewCaskToken: homebrewCaskToken,
+      releasedAt: releasedAt,
+      staleSince: staleSince,
+      iconUrl: iconUrl,
+      artifact: artifact,
+      installStrategy: installStrategy,
+      localAppID: installedApp?.id ?? localAppID
+    )
+  }
+
   /// Returns a copy with only the decision field changed.
   func replacing(decision newDecision: Decision) -> AppDecision {
     AppDecision(
@@ -194,7 +251,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       staleSince: staleSince,
       iconUrl: iconUrl,
       artifact: artifact,
-      installStrategy: installStrategy
+      installStrategy: installStrategy,
+      localAppID: localAppID
     )
   }
 }

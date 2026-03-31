@@ -62,4 +62,24 @@ struct InstallExecutionContractTests {
     #expect(json["previousVersion"] as? String == "126.0")
     #expect((json["verification"] as? [String: Any])?["signatureVerified"] as? Bool == true)
   }
+
+  @Test func processRunnerCapturesLargeStdoutAndStderr() async throws {
+    let script = """
+      i=0
+      while [ "$i" -lt 5000 ]; do
+        echo "stdout-$i"
+        echo "stderr-$i" 1>&2
+        i=$((i + 1))
+      done
+      """
+
+    let result = try await ProcessRunner.runSuccessful(
+      "/bin/sh",
+      arguments: ["-c", script]
+    )
+
+    #expect(result.terminationStatus == 0)
+    #expect(result.stdout.contains("stdout-4999"))
+    #expect(result.stderr.contains("stderr-4999"))
+  }
 }

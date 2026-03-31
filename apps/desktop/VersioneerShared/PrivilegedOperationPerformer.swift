@@ -1,5 +1,9 @@
 import Foundation
 
+private nonisolated final class PrivilegedProcessPipeBuffer: @unchecked Sendable {
+  var data = Data()
+}
+
 nonisolated struct PrivilegedOperationExecutionResult: Sendable {
   let detail: String
   let usedRollback: Bool
@@ -183,13 +187,26 @@ nonisolated enum PrivilegedOperationPerformer {
     process.standardOutput = stdoutPipe
     process.standardError = stderrPipe
 
-    try process.run()
-    process.waitUntilExit()
+    let stdoutBuffer = PrivilegedProcessPipeBuffer()
+    let stderrBuffer = PrivilegedProcessPipeBuffer()
+    let drainGroup = DispatchGroup()
 
-    let stdout =
-      String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-    let stderr =
-      String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    func startDraining(_ pipe: Pipe, into buffer: PrivilegedProcessPipeBuffer) {
+      drainGroup.enter()
+      DispatchQueue.global(qos: .userInitiated).async {
+        buffer.data = pipe.fileHandleForReading.readDataToEndOfFile()
+        drainGroup.leave()
+      }
+    }
+
+    try process.run()
+    startDraining(stdoutPipe, into: stdoutBuffer)
+    startDraining(stderrPipe, into: stderrBuffer)
+    process.waitUntilExit()
+    drainGroup.wait()
+
+    let stdout = String(data: stdoutBuffer.data, encoding: .utf8) ?? ""
+    let stderr = String(data: stderrBuffer.data, encoding: .utf8) ?? ""
 
     guard process.terminationStatus == 0 else {
       throw PrivilegedOperationExecutionError.commandFailed(
