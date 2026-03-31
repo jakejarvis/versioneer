@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { AliasType } from "@versioneer/schemas/catalog";
 import type { SourceType } from "@versioneer/schemas/sources";
 
 import { onboardDiscoveredApp, checkSlugAvailable, lookupCaskToken } from "@/server/onboarding";
@@ -41,7 +42,7 @@ export function useOnboardDiscoveredApp() {
         notes?: string;
       };
       aliases: {
-        aliasType: "bundle_id" | "name" | "team_id" | "homebrew_cask" | "mas_app_id";
+        aliasType: AliasType;
         value: string;
       }[];
       sources?: {

@@ -76,6 +76,7 @@ async function ensureAlias(params: {
     | "download_pattern"
     | "github_repo"
     | "mas_app_id"
+    | "electron_update_url"
     | "homebrew_cask";
   value: string;
   source: string;

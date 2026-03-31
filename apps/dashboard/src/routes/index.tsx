@@ -638,10 +638,22 @@ function DiscoveryRow({ item }: { item: HomepageDiscoveryItem }) {
                 feed ok
               </Badge>
             ) : null}
+            {item.masAppId ? <Badge variant="outline">App Store ID: {item.masAppId}</Badge> : null}
+            {item.sparkleFeedUrl ? <Badge variant="outline">Sparkle</Badge> : null}
+            {item.electronUpdateUrl ? (
+              <Badge variant="outline">
+                {item.electronUpdateProvider
+                  ? `Electron: ${item.electronUpdateProvider}`
+                  : "Electron feed"}
+              </Badge>
+            ) : null}
             {item.homebrewCaskToken ? (
               <Badge variant="outline" className="border-emerald-500/30 text-emerald-700">
                 brew: {item.homebrewCaskToken}
               </Badge>
+            ) : null}
+            {item.minMacOSVersion ? (
+              <Badge variant="outline">min macOS {item.minMacOSVersion}</Badge>
             ) : null}
             {version ? <Badge variant="outline">latest {version}</Badge> : null}
           </div>

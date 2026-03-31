@@ -117,15 +117,24 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     }
 
     for (const src of allSources) {
-      if (src.sourceType !== "sparkle") continue;
+      const derivedAliasType =
+        src.sourceType === "sparkle"
+          ? "sparkle_feed"
+          : src.sourceType === "electron_generic"
+            ? "electron_update_url"
+            : null;
+      if (!derivedAliasType) continue;
+
       try {
         await assertNoConflictingExactAlias(db, {
-          aliasType: "sparkle_feed",
+          aliasType: derivedAliasType,
           value: src.baseUrl,
         });
       } catch (error) {
         if (error instanceof AliasConflictError) {
-          throw new Error(`Conflicting sparkle feed already belongs to app ${error.appId}`, {
+          const aliasLabel =
+            derivedAliasType === "sparkle_feed" ? "sparkle feed" : "electron update URL";
+          throw new Error(`Conflicting ${aliasLabel} already belongs to app ${error.appId}`, {
             cause: error,
           });
         }

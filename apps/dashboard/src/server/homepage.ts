@@ -222,6 +222,7 @@ export const getHomepage = createServerFn({ method: "GET" }).handler(async () =>
     id: item.id,
     appName: item.appName,
     bundleId: item.bundleId,
+    masAppId: item.masAppId,
     sightingCount: item.sightingCount,
     lastSeenAt: item.lastSeenAt,
     enrichmentStatus: item.enrichmentStatus,
@@ -230,6 +231,10 @@ export const getHomepage = createServerFn({ method: "GET" }).handler(async () =>
     enrichedLatestVersion: item.enrichedLatestVersion,
     enrichedVendorName: item.enrichedVendorName,
     iconR2Key: item.iconR2Key,
+    sparkleFeedUrl: item.sparkleFeedUrl,
+    electronUpdateUrl: item.electronUpdateUrl,
+    electronUpdateProvider: item.electronUpdateProvider,
+    minMacOSVersion: item.minMacOSVersion,
     homebrewCaskToken: item.homebrewCaskToken,
     homebrewCaskVersion: item.homebrewCaskVersion,
   }));

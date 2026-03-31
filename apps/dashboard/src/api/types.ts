@@ -66,6 +66,7 @@ export interface HomepageDiscoveryItem {
   id: string;
   appName: string;
   bundleId: string | null;
+  masAppId: string | null;
   sightingCount: number;
   lastSeenAt: string;
   enrichmentStatus: string;
@@ -74,6 +75,10 @@ export interface HomepageDiscoveryItem {
   enrichedLatestVersion: string | null;
   enrichedVendorName: string | null;
   iconR2Key: string | null;
+  sparkleFeedUrl: string | null;
+  electronUpdateUrl: string | null;
+  electronUpdateProvider: string | null;
+  minMacOSVersion: string | null;
   homebrewCaskToken: string | null;
   homebrewCaskVersion: string | null;
 }

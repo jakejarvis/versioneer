@@ -3,6 +3,7 @@ import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
+import type { AliasType } from "@versioneer/schemas/catalog";
 import {
   ArrowLeft,
   ExternalLink,
@@ -68,6 +69,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const appDetailSearchDefaults = {
   tab: "overview" as const,
+};
+
+const ALIAS_TYPE_LABELS: Partial<Record<AliasType, string>> = {
+  bundle_id: "Bundle ID",
+  name: "Name",
+  team_id: "Team ID",
+  sparkle_feed: "Sparkle Feed",
+  homepage: "Homepage",
+  download_pattern: "Download Pattern",
+  github_repo: "GitHub Repo",
+  mas_app_id: "App Store ID",
+  electron_update_url: "Electron Update URL",
+  homebrew_cask: "Homebrew Cask",
 };
 
 const appDetailSearchSchema = z.object({
@@ -354,7 +368,7 @@ function AliasesTab({ appId }: { appId: string }) {
         header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
         cell: ({ row }) => (
           <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-            {row.original.aliasType}
+            {ALIAS_TYPE_LABELS[row.original.aliasType] ?? row.original.aliasType}
           </span>
         ),
       },
@@ -527,15 +541,7 @@ function CreateAliasForm({
 
   const form = useForm({
     defaultValues: {
-      aliasType: "bundle_id" as
-        | "bundle_id"
-        | "name"
-        | "team_id"
-        | "sparkle_feed"
-        | "homepage"
-        | "download_pattern"
-        | "github_repo"
-        | "mas_app_id",
+      aliasType: "bundle_id" as AliasType,
       value: "",
     },
     onSubmit: async ({ value }) => {
@@ -583,6 +589,8 @@ function CreateAliasForm({
                   <SelectItem value="download_pattern">Download Pattern</SelectItem>
                   <SelectItem value="github_repo">GitHub Repo</SelectItem>
                   <SelectItem value="mas_app_id">App Store ID</SelectItem>
+                  <SelectItem value="electron_update_url">Electron Update URL</SelectItem>
+                  <SelectItem value="homebrew_cask">Homebrew Cask</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>

@@ -231,16 +231,24 @@ export const createSource = createServerFn({ method: "POST" })
         ? defaultRuntimeStatusForSourceType(data.sourceType)
         : "disabled";
 
-    if (data.reviewStatus === "approved" && data.sourceType === "sparkle" && normalizedBaseUrl) {
+    const derivedAliasType =
+      data.sourceType === "sparkle"
+        ? "sparkle_feed"
+        : data.sourceType === "electron_generic"
+          ? "electron_update_url"
+          : null;
+    if (data.reviewStatus === "approved" && derivedAliasType && normalizedBaseUrl) {
       try {
         await assertNoConflictingExactAlias(db, {
-          aliasType: "sparkle_feed",
+          aliasType: derivedAliasType,
           value: normalizedBaseUrl,
           appId: data.appId,
         });
       } catch (error) {
         if (error instanceof AliasConflictError) {
-          throw new Error(`Conflicting sparkle feed already belongs to app ${error.appId}`, {
+          const aliasLabel =
+            derivedAliasType === "sparkle_feed" ? "sparkle feed" : "electron update URL";
+          throw new Error(`Conflicting ${aliasLabel} already belongs to app ${error.appId}`, {
             cause: error,
           });
         }
@@ -388,16 +396,24 @@ export const updateSource = createServerFn({ method: "POST" })
             : existing.status))
         : (fields.status ?? (fields.reviewStatus !== undefined ? "disabled" : existing.status));
 
-    if (nextReviewStatus === "approved" && existing.sourceType === "sparkle" && nextBaseUrl) {
+    const derivedAliasType =
+      existing.sourceType === "sparkle"
+        ? "sparkle_feed"
+        : existing.sourceType === "electron_generic"
+          ? "electron_update_url"
+          : null;
+    if (nextReviewStatus === "approved" && derivedAliasType && nextBaseUrl) {
       try {
         await assertNoConflictingExactAlias(db, {
-          aliasType: "sparkle_feed",
+          aliasType: derivedAliasType,
           value: nextBaseUrl,
           appId: existing.appId,
         });
       } catch (error) {
         if (error instanceof AliasConflictError) {
-          throw new Error(`Conflicting sparkle feed already belongs to app ${error.appId}`, {
+          const aliasLabel =
+            derivedAliasType === "sparkle_feed" ? "sparkle feed" : "electron update URL";
+          throw new Error(`Conflicting ${aliasLabel} already belongs to app ${error.appId}`, {
             cause: error,
           });
         }

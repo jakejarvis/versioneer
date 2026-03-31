@@ -6,7 +6,7 @@ import { and, eq, ne } from "drizzle-orm";
 
 import type { Db, DbExecutor } from "./db-types";
 
-type DerivedAliasType = "sparkle_feed" | "github_repo";
+type DerivedAliasType = "sparkle_feed" | "github_repo" | "electron_update_url";
 
 function sourceAliasTag(sourceId: string, aliasType: DerivedAliasType): string {
   return `source:${sourceId}:${aliasType}`;
@@ -32,6 +32,14 @@ function resolveDerivedAlias(
       aliasType: "github_repo",
       value: repoUrl,
       normalizedValue: normalizeAliasValue("github_repo", repoUrl),
+    };
+  }
+
+  if (sourceType === "electron_generic") {
+    return {
+      aliasType: "electron_update_url",
+      value: baseUrl,
+      normalizedValue: normalizeAliasValue("electron_update_url", baseUrl),
     };
   }
 
@@ -72,7 +80,9 @@ export async function syncSourceDerivedAliases(params: {
       ? ["sparkle_feed"]
       : params.sourceType === "github_releases"
         ? ["github_repo"]
-        : [];
+        : params.sourceType === "electron_generic"
+          ? ["electron_update_url"]
+          : [];
 
   for (const aliasType of supportedAliasTypes) {
     const where = [
@@ -207,7 +217,9 @@ export async function prepareSyncSourceDerivedAliasWrites(
       ? ["sparkle_feed"]
       : params.sourceType === "github_releases"
         ? ["github_repo"]
-        : [];
+        : params.sourceType === "electron_generic"
+          ? ["electron_update_url"]
+          : [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- collected for db.batch()
   const writes: any[] = [];

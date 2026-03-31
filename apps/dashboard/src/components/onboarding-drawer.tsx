@@ -2,6 +2,7 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useForm, useStore } from "@tanstack/react-form";
 import { parseGitHubRepoUrl, resolveSourceUrl } from "@versioneer/core/validation";
+import type { AliasType } from "@versioneer/schemas/catalog";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { SOURCE_TYPE_DEFAULTS } from "@versioneer/schemas/sources";
 import { format } from "date-fns";
@@ -46,31 +47,36 @@ import { Textarea } from "@/components/ui/textarea";
 import { SOURCE_CONFIG_FIELDS, SOURCE_TYPES } from "@/lib/source-types";
 
 // ──────────────────────────────────────────────────────────
-// Alias types — identity matchers only
+// Alias types — operator-managed identity matchers only
 // ──────────────────────────────────────────────────────────
 
-type AliasType = "bundle_id" | "name" | "team_id" | "homebrew_cask" | "mas_app_id";
+type OnboardingAliasType = Extract<
+  AliasType,
+  "bundle_id" | "name" | "team_id" | "homebrew_cask" | "mas_app_id" | "electron_update_url"
+>;
 
 interface AliasEntry {
   key: string;
-  aliasType: AliasType;
+  aliasType: OnboardingAliasType;
   value: string;
 }
 
-const ALIAS_COLORS: Record<AliasType, string> = {
+const ALIAS_COLORS: Record<OnboardingAliasType, string> = {
   bundle_id: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   name: "bg-violet-500/10 text-violet-400 border-violet-500/20",
   team_id: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   homebrew_cask: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
   mas_app_id: "bg-pink-500/10 text-pink-400 border-pink-500/20",
+  electron_update_url: "bg-sky-500/10 text-sky-400 border-sky-500/20",
 };
 
-const ALIAS_LABELS: Record<AliasType, string> = {
+const ALIAS_LABELS: Record<OnboardingAliasType, string> = {
   bundle_id: "Bundle ID",
   name: "Name",
   team_id: "Team ID",
   homebrew_cask: "Homebrew",
   mas_app_id: "App Store",
+  electron_update_url: "Electron Update URL",
 };
 
 // ──────────────────────────────────────────────────────────
@@ -133,6 +139,13 @@ function buildInitialValues(discoveredApp: any): OnboardingFormData {
   aliases.push({ key: crypto.randomUUID(), aliasType: "name", value: discoveredApp.appName });
   if (discoveredApp.teamId) {
     aliases.push({ key: crypto.randomUUID(), aliasType: "team_id", value: discoveredApp.teamId });
+  }
+  if (discoveredApp.masAppId) {
+    aliases.push({
+      key: crypto.randomUUID(),
+      aliasType: "mas_app_id",
+      value: discoveredApp.masAppId,
+    });
   }
 
   const sources: SourceEntry[] = [];
@@ -341,7 +354,7 @@ function OnboardingFormContent({
     if (!currentAliases.some((a) => a.aliasType === "homebrew_cask")) {
       form.pushFieldValue("aliases", {
         key: crypto.randomUUID(),
-        aliasType: "homebrew_cask" as AliasType,
+        aliasType: "homebrew_cask" as OnboardingAliasType,
         value: resolvedCaskToken,
       });
     }
@@ -438,6 +451,41 @@ function OnboardingFormContent({
                 )}
               </div>
             )}
+            {discoveredApp.masAppId ||
+            discoveredApp.homebrewCaskToken ||
+            discoveredApp.sparkleFeedUrl ||
+            discoveredApp.electronUpdateUrl ||
+            discoveredApp.minMacOSVersion ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {discoveredApp.masAppId ? (
+                  <Badge variant="outline" className="text-[10px]">
+                    App Store ID: {discoveredApp.masAppId}
+                  </Badge>
+                ) : null}
+                {discoveredApp.homebrewCaskToken ? (
+                  <Badge variant="outline" className="text-[10px]">
+                    brew: {discoveredApp.homebrewCaskToken}
+                  </Badge>
+                ) : null}
+                {discoveredApp.sparkleFeedUrl ? (
+                  <Badge variant="outline" className="text-[10px]">
+                    Sparkle feed
+                  </Badge>
+                ) : null}
+                {discoveredApp.electronUpdateUrl ? (
+                  <Badge variant="outline" className="text-[10px]">
+                    {discoveredApp.electronUpdateProvider
+                      ? `Electron: ${discoveredApp.electronUpdateProvider}`
+                      : "Electron feed"}
+                  </Badge>
+                ) : null}
+                {discoveredApp.minMacOSVersion ? (
+                  <Badge variant="outline" className="text-[10px]">
+                    min macOS {discoveredApp.minMacOSVersion}
+                  </Badge>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {/* App Identity */}
@@ -581,8 +629,10 @@ function OnboardingFormContent({
                         {(field) => (
                           <select
                             value={field.state.value}
-                            onChange={(e) => field.handleChange(e.target.value as AliasType)}
-                            className={`h-6 shrink-0 cursor-pointer appearance-none rounded border px-1.5 text-[10px] font-medium ${ALIAS_COLORS[field.state.value as AliasType]}`}
+                            onChange={(e) =>
+                              field.handleChange(e.target.value as OnboardingAliasType)
+                            }
+                            className={`h-6 shrink-0 cursor-pointer appearance-none rounded border px-1.5 text-[10px] font-medium ${ALIAS_COLORS[field.state.value as OnboardingAliasType]}`}
                           >
                             {Object.entries(ALIAS_LABELS).map(([val, label]) => (
                               <option key={val} value={val}>

@@ -70,6 +70,7 @@ interface DiscoveredApp {
   appName: string;
   bundleId: string | null;
   teamId: string | null;
+  masAppId: string | null;
   sightingCount: number;
   firstSeenAt: string;
   lastSeenAt: string;
@@ -78,12 +79,14 @@ interface DiscoveredApp {
   sampleVersions: string | null;
   sparkleFeedUrl: string | null;
   electronUpdateUrl: string | null;
+  electronUpdateProvider: string | null;
   enrichmentStatus: string;
   enrichedVendorName: string | null;
   sourceValidationStatus: string;
   confidenceScore: number | null;
   enrichedLatestVersion: string | null;
   iconR2Key: string | null;
+  minMacOSVersion: string | null;
   homebrewCaskToken: string | null;
   homebrewCaskVersion: string | null;
 }
@@ -215,6 +218,41 @@ function DiscoveredAppsPage() {
               {row.original.enrichedVendorName ? (
                 <div className="truncate text-xs text-muted-foreground">
                   by {row.original.enrichedVendorName}
+                </div>
+              ) : null}
+              {row.original.masAppId ||
+              row.original.teamId ||
+              row.original.sparkleFeedUrl ||
+              row.original.electronUpdateUrl ||
+              row.original.minMacOSVersion ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {row.original.masAppId ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      App Store ID: {row.original.masAppId}
+                    </Badge>
+                  ) : null}
+                  {row.original.teamId ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      team: {row.original.teamId}
+                    </Badge>
+                  ) : null}
+                  {row.original.sparkleFeedUrl ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      Sparkle
+                    </Badge>
+                  ) : null}
+                  {row.original.electronUpdateUrl ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      {row.original.electronUpdateProvider
+                        ? `Electron: ${row.original.electronUpdateProvider}`
+                        : "Electron feed"}
+                    </Badge>
+                  ) : null}
+                  {row.original.minMacOSVersion ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      min macOS {row.original.minMacOSVersion}
+                    </Badge>
+                  ) : null}
                 </div>
               ) : null}
             </div>

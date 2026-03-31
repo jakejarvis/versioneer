@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { AliasType } from "@versioneer/schemas/catalog";
 
 import { updateAlias, deleteAlias } from "@/server/aliases";
 import {
@@ -81,15 +82,7 @@ export function useCreateAlias(appId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: {
-      aliasType:
-        | "bundle_id"
-        | "name"
-        | "team_id"
-        | "sparkle_feed"
-        | "homepage"
-        | "download_pattern"
-        | "github_repo"
-        | "mas_app_id";
+      aliasType: AliasType;
       value: string;
       normalizedValue?: string;
       isExact?: boolean;
