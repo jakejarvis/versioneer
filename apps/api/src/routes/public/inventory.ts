@@ -2,7 +2,7 @@ import { matchApp, normalizeAliasValue } from "@versioneer/core/identity";
 import type { AliasRecord, TrustAssertionRecord } from "@versioneer/core/identity";
 import { inventoryCheckRequestSchema, toGitHubApiReleasesUrl } from "@versioneer/core/validation";
 import type { AppDecision } from "@versioneer/core/validation";
-import { normalizeVersion } from "@versioneer/core/versioning";
+import { displayVersion, normalizeVersion } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -833,7 +833,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
             );
 
             if (compatibleArtifact || releaseArtifacts.length === 0) {
-              latestVersion = latest.versionRaw;
+              latestVersion = displayVersion(latest.versionRaw);
               latestVersionRaw = latest.versionRaw;
               latestVersionNormalized = latest.versionNormalized;
               releasedAt = latest.releasedAt;
@@ -888,7 +888,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
               );
 
               if (found) {
-                latestVersion = found.versionRaw;
+                latestVersion = displayVersion(found.versionRaw);
                 latestVersionRaw = found.versionRaw;
                 latestVersionNormalized = found.versionNormalized;
                 releasedAt = found.releasedAt;

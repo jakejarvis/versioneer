@@ -4,6 +4,7 @@ import {
   type CachedRecentRelease,
 } from "@versioneer/core/cache";
 import { compareDatesDesc } from "@versioneer/core/dates";
+import { displayVersion } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
 import { apps, appLatestReleases } from "@versioneer/db";
 import { and, eq, isNotNull } from "drizzle-orm";
@@ -51,7 +52,7 @@ export const recentReleasesRoutes = new Hono<{ Bindings: Env }>()
       vendorName: row.vendorName,
       iconUrl: row.iconR2Key ? `${c.env.ASSETS_BASE_URL}/${row.iconR2Key}` : null,
       releaseId: row.releaseId,
-      version: row.version,
+      version: displayVersion(row.version),
       releasedAt: row.releasedAt!,
     }));
 
