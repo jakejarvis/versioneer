@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -38,19 +38,33 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
+  paginatedSearchDefaults,
   paginatedSearchShape,
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
 
+const reviewSearchDefaults = {
+  ...paginatedSearchDefaults,
+  status: "pending" as const,
+  queueType: "all",
+};
+
 const reviewSearchSchema = z.object({
   ...paginatedSearchShape,
-  status: z.enum(["pending", "approved", "rejected", "superseded"]).catch("pending"),
-  queueType: z.string().catch("all"),
+  status: z
+    .enum(["pending", "approved", "rejected", "superseded"])
+    .default(reviewSearchDefaults.status)
+    .catch(reviewSearchDefaults.status),
+  queueType: z
+    .string()
+    .default(reviewSearchDefaults.queueType)
+    .catch(reviewSearchDefaults.queueType),
 });
 
 export const Route = createFileRoute("/review/")({
-  validateSearch: (search) => reviewSearchSchema.parse(search),
+  validateSearch: reviewSearchSchema,
+  search: { middlewares: [stripSearchParams(reviewSearchDefaults)] },
   component: ReviewPage,
 });
 

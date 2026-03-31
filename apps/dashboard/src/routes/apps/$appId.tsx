@@ -1,7 +1,7 @@
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useForm } from "@tanstack/react-form";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
 import {
   ArrowLeft,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import {
   useApp,
@@ -65,14 +66,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+const appDetailSearchDefaults = {
+  tab: "overview" as const,
+};
+
+const appDetailSearchSchema = z.object({
+  tab: z
+    .enum(["overview", "aliases", "sources", "releases"])
+    .default(appDetailSearchDefaults.tab)
+    .catch(appDetailSearchDefaults.tab),
+});
+
 export const Route = createFileRoute("/apps/$appId")({
+  validateSearch: appDetailSearchSchema,
+  search: { middlewares: [stripSearchParams(appDetailSearchDefaults)] },
   component: AppDetailPage,
 });
 
 function AppDetailPage() {
   const { appId } = Route.useParams();
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const { data: app, isLoading } = useApp(appId);
-  const [tab, setTab] = useState("overview");
   const [editOpen, setEditOpen] = useState(false);
   const uploadIconMutation = useUploadAppIcon(appId);
   const deleteIconMutation = useDeleteAppIcon(appId);
@@ -192,7 +207,15 @@ function AppDetailPage() {
         </Button>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab} className="mt-6">
+      <Tabs
+        value={tab}
+        onValueChange={(value) =>
+          void navigate({
+            search: { tab: value as typeof tab },
+          })
+        }
+        className="mt-6"
+      >
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="aliases">Aliases</TabsTrigger>

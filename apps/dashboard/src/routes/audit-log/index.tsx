@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -17,18 +17,28 @@ import { Input } from "@/components/ui/input";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
+  paginatedSearchDefaults,
   paginatedSearchShape,
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
 
+const auditLogSearchDefaults = {
+  ...paginatedSearchDefaults,
+  eventType: "",
+};
+
 const auditLogSearchSchema = z.object({
   ...paginatedSearchShape,
-  eventType: z.string().catch(""),
+  eventType: z
+    .string()
+    .default(auditLogSearchDefaults.eventType)
+    .catch(auditLogSearchDefaults.eventType),
 });
 
 export const Route = createFileRoute("/audit-log/")({
-  validateSearch: (search) => auditLogSearchSchema.parse(search),
+  validateSearch: auditLogSearchSchema,
+  search: { middlewares: [stripSearchParams(auditLogSearchDefaults)] },
   component: AuditLogPage,
 });
 

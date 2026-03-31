@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { MoreHorizontal, RefreshCw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -34,21 +34,33 @@ import {
 import {
   applyPaginationToSearch,
   applySortingToSearch,
+  paginatedSearchDefaults,
   paginatedSearchShape,
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
 
+const discoveredAppsSearchDefaults = {
+  ...paginatedSearchDefaults,
+  status: "pending" as const,
+  enrichmentStatus: "all" as const,
+};
+
 const discoveredAppsSearchSchema = z.object({
   ...paginatedSearchShape,
-  status: z.enum(["pending", "linked", "dismissed", "support_only"]).catch("pending"),
+  status: z
+    .enum(["pending", "linked", "dismissed", "support_only"])
+    .default(discoveredAppsSearchDefaults.status)
+    .catch(discoveredAppsSearchDefaults.status),
   enrichmentStatus: z
     .enum(["all", "pending", "in_progress", "success", "failed", "skipped"])
-    .catch("all"),
+    .default(discoveredAppsSearchDefaults.enrichmentStatus)
+    .catch(discoveredAppsSearchDefaults.enrichmentStatus),
 });
 
 export const Route = createFileRoute("/discovered-apps/")({
-  validateSearch: (search) => discoveredAppsSearchSchema.parse(search),
+  validateSearch: discoveredAppsSearchSchema,
+  search: { middlewares: [stripSearchParams(discoveredAppsSearchDefaults)] },
   component: DiscoveredAppsPage,
 });
 

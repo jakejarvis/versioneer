@@ -9,10 +9,21 @@ import { z } from "zod";
 export const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 export type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
 export type SortDirection = "asc" | "desc";
-export const pageSizeSchema = z.union([z.literal(25), z.literal(50), z.literal(100)]).catch(50);
+export const paginatedSearchDefaults = {
+  page: 1,
+  pageSize: 50 as PageSizeOption,
+};
 export const paginatedSearchShape = {
-  page: z.coerce.number().int().min(1).catch(1),
-  pageSize: pageSizeSchema,
+  page: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .default(paginatedSearchDefaults.page)
+    .catch(paginatedSearchDefaults.page),
+  pageSize: z
+    .union([z.literal(25), z.literal(50), z.literal(100)])
+    .default(paginatedSearchDefaults.pageSize)
+    .catch(paginatedSearchDefaults.pageSize),
   sortBy: z.string().optional(),
   sortDir: z.enum(["asc", "desc"]).optional(),
 };

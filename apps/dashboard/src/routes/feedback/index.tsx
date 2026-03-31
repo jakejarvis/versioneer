@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { MoreHorizontal } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -32,19 +32,30 @@ import {
 import {
   applyPaginationToSearch,
   applySortingToSearch,
+  paginatedSearchDefaults,
   paginatedSearchShape,
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
 
+const feedbackSearchDefaults = {
+  ...paginatedSearchDefaults,
+  status: "new",
+  type: "all",
+};
+
 const feedbackSearchSchema = z.object({
   ...paginatedSearchShape,
-  status: z.string().catch("new"),
-  type: z.string().catch("all"),
+  status: z
+    .string()
+    .default(feedbackSearchDefaults.status)
+    .catch(feedbackSearchDefaults.status),
+  type: z.string().default(feedbackSearchDefaults.type).catch(feedbackSearchDefaults.type),
 });
 
 export const Route = createFileRoute("/feedback/")({
-  validateSearch: (search) => feedbackSearchSchema.parse(search),
+  validateSearch: feedbackSearchSchema,
+  search: { middlewares: [stripSearchParams(feedbackSearchDefaults)] },
   component: FeedbackPage,
 });
 

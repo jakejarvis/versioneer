@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -25,19 +25,33 @@ import {
 import {
   applyPaginationToSearch,
   applySortingToSearch,
+  paginatedSearchDefaults,
   paginatedSearchShape,
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
 
+const releasesSearchDefaults = {
+  ...paginatedSearchDefaults,
+  channel: "all" as const,
+  status: "all" as const,
+};
+
 const releasesSearchSchema = z.object({
   ...paginatedSearchShape,
-  channel: z.enum(["all", "stable", "beta", "nightly"]).catch("all"),
-  status: z.enum(["all", "active", "superseded", "draft"]).catch("all"),
+  channel: z
+    .enum(["all", "stable", "beta", "nightly"])
+    .default(releasesSearchDefaults.channel)
+    .catch(releasesSearchDefaults.channel),
+  status: z
+    .enum(["all", "active", "superseded", "draft"])
+    .default(releasesSearchDefaults.status)
+    .catch(releasesSearchDefaults.status),
 });
 
 export const Route = createFileRoute("/releases/")({
-  validateSearch: (search) => releasesSearchSchema.parse(search),
+  validateSearch: releasesSearchSchema,
+  search: { middlewares: [stripSearchParams(releasesSearchDefaults)] },
   component: ReleasesPage,
 });
 

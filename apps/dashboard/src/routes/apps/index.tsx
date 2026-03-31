@@ -1,5 +1,5 @@
 import { useForm } from "@tanstack/react-form";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -34,19 +34,30 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
+  paginatedSearchDefaults,
   paginatedSearchShape,
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
 
+const appsSearchDefaults = {
+  ...paginatedSearchDefaults,
+  search: "",
+  status: "all" as const,
+};
+
 const appsSearchSchema = z.object({
   ...paginatedSearchShape,
-  search: z.string().catch(""),
-  status: z.enum(["all", "draft", "public", "deprecated", "merged", "unlisted"]).catch("all"),
+  search: z.string().default(appsSearchDefaults.search).catch(appsSearchDefaults.search),
+  status: z
+    .enum(["all", "draft", "public", "deprecated", "merged", "unlisted"])
+    .default(appsSearchDefaults.status)
+    .catch(appsSearchDefaults.status),
 });
 
 export const Route = createFileRoute("/apps/")({
-  validateSearch: (search) => appsSearchSchema.parse(search),
+  validateSearch: appsSearchSchema,
+  search: { middlewares: [stripSearchParams(appsSearchDefaults)] },
   component: AppsPage,
 });
 

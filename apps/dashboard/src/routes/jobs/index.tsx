@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Ban, CheckCircle, Loader2, MoreHorizontal, Package, Radio, RefreshCw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -39,22 +39,38 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
+  paginatedSearchDefaults,
   paginatedSearchShape,
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
 
+const jobsSearchDefaults = {
+  ...paginatedSearchDefaults,
+  tab: "runs" as const,
+  jobType: "all" as const,
+  failureStatus: "open" as const,
+};
+
 const jobsSearchSchema = z.object({
   ...paginatedSearchShape,
-  tab: z.enum(["runs", "failures"]).catch("runs"),
+  tab: z
+    .enum(["runs", "failures"])
+    .default(jobsSearchDefaults.tab)
+    .catch(jobsSearchDefaults.tab),
   jobType: z
     .enum(["all", "poll_sources", "cask_index_sync", "enrich_discovered_apps"])
-    .catch("all"),
-  failureStatus: z.enum(["open", "retrying", "resolved", "abandoned"]).catch("open"),
+    .default(jobsSearchDefaults.jobType)
+    .catch(jobsSearchDefaults.jobType),
+  failureStatus: z
+    .enum(["open", "retrying", "resolved", "abandoned"])
+    .default(jobsSearchDefaults.failureStatus)
+    .catch(jobsSearchDefaults.failureStatus),
 });
 
 export const Route = createFileRoute("/jobs/")({
-  validateSearch: (search) => jobsSearchSchema.parse(search),
+  validateSearch: jobsSearchSchema,
+  search: { middlewares: [stripSearchParams(jobsSearchDefaults)] },
   component: JobsPage,
 });
 

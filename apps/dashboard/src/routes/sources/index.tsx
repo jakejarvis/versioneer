@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { sourceTypeValues } from "@versioneer/schemas/sources";
 import { Plus, Zap } from "lucide-react";
@@ -29,20 +29,34 @@ import {
 import {
   applyPaginationToSearch,
   applySortingToSearch,
+  paginatedSearchDefaults,
   paginatedSearchShape,
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
 import { SOURCE_TYPES } from "@/lib/source-types";
 
+const sourcesSearchDefaults = {
+  ...paginatedSearchDefaults,
+  status: "all" as const,
+  type: "all" as const,
+};
+
 const sourcesSearchSchema = z.object({
   ...paginatedSearchShape,
-  status: z.enum(["all", "active", "paused", "disabled", "error", "at_risk"]).catch("all"),
-  type: z.enum(["all", ...sourceTypeValues]).catch("all"),
+  status: z
+    .enum(["all", "active", "paused", "disabled", "error", "at_risk"])
+    .default(sourcesSearchDefaults.status)
+    .catch(sourcesSearchDefaults.status),
+  type: z
+    .enum(["all", ...sourceTypeValues])
+    .default(sourcesSearchDefaults.type)
+    .catch(sourcesSearchDefaults.type),
 });
 
 export const Route = createFileRoute("/sources/")({
-  validateSearch: (search) => sourcesSearchSchema.parse(search),
+  validateSearch: sourcesSearchSchema,
+  search: { middlewares: [stripSearchParams(sourcesSearchDefaults)] },
   component: SourcesPage,
 });
 
