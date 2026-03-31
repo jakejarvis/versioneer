@@ -13,6 +13,7 @@ export const aliasTypeValues = [
   "download_pattern",
   "github_repo",
   "mas_app_id",
+  "electron_update_url",
   "homebrew_cask",
 ] as const;
 export const aliasTypeSchema = z.enum(aliasTypeValues);

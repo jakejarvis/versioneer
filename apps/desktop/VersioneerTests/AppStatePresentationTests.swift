@@ -271,6 +271,124 @@ struct AppStatePresentationTests {
     )
   }
 
+  @Test func localHomebrewUpdatesExposePrimaryActionWithoutGenericInstallRoute() throws {
+    let state = AppState()
+
+    let decision = AppDecision(
+      appName: "Firefox",
+      bundleId: "org.mozilla.firefox",
+      installedVersion: "126.0",
+      matchedAppId: nil,
+      matchedAppName: nil,
+      matchConfidence: nil,
+      decision: .updateAvailable,
+      trackingState: .localOnly,
+      localReasonCode: .notFound,
+      latestVersion: "127.0",
+      latestVersionRaw: "127.0",
+      latestReleaseId: nil,
+      channel: nil,
+      availableChannels: nil,
+      homebrewCaskToken: "firefox",
+      releasedAt: nil,
+      staleSince: nil,
+      iconUrl: nil,
+      artifact: nil,
+      installStrategy: nil,
+      localAppID: "/Applications/Firefox.app"
+    )
+    let installedApp = InstalledApp(
+      name: "Firefox",
+      bundleId: "org.mozilla.firefox",
+      version: "126.0",
+      buildNumber: nil,
+      teamId: "43AQ936H96",
+      path: "/Applications/Firefox.app",
+      architecture: nil,
+      sparkleFeedUrl: nil,
+      sparklePublicKey: nil,
+      isSparkleApp: false,
+      isMasApp: false,
+      masAppId: nil,
+      isElectronApp: false,
+      electronUpdateProvider: nil,
+      electronUpdateUrl: nil,
+      codeSigningAuthority: nil,
+      appCategory: nil,
+      minMacOSVersion: nil,
+      isHomebrewInstalled: true,
+      homebrewCaskToken: "firefox"
+    )
+
+    state.installedApps = [installedApp]
+    state.rawInventoryResults = [decision]
+    state.refreshDisplayedResults()
+
+    let row = try #require(state.resultsBrowserRows.first)
+    #expect(row.canInstall == false)
+    #expect(row.hasUpdateAction == true)
+    #expect(state.canPerformPrimaryUpdate(for: decision))
+  }
+
+  @Test func localMasUpdatesExposePrimaryActionWithoutGenericInstallRoute() throws {
+    let state = AppState()
+
+    let decision = AppDecision(
+      appName: "Pages",
+      bundleId: "com.apple.iWork.Pages",
+      installedVersion: "13.0",
+      matchedAppId: nil,
+      matchedAppName: nil,
+      matchConfidence: nil,
+      decision: .updateAvailable,
+      trackingState: .localOnly,
+      localReasonCode: .notFound,
+      latestVersion: "14.0",
+      latestVersionRaw: "14.0",
+      latestReleaseId: nil,
+      channel: nil,
+      availableChannels: nil,
+      homebrewCaskToken: nil,
+      releasedAt: nil,
+      staleSince: nil,
+      iconUrl: nil,
+      artifact: nil,
+      installStrategy: nil,
+      localAppID: "/Applications/Pages.app"
+    )
+    let installedApp = InstalledApp(
+      name: "Pages",
+      bundleId: "com.apple.iWork.Pages",
+      version: "13.0",
+      buildNumber: nil,
+      teamId: "APPLETEAMID",
+      path: "/Applications/Pages.app",
+      architecture: nil,
+      sparkleFeedUrl: nil,
+      sparklePublicKey: nil,
+      isSparkleApp: false,
+      isMasApp: true,
+      masAppId: "409201541",
+      isElectronApp: false,
+      electronUpdateProvider: nil,
+      electronUpdateUrl: nil,
+      codeSigningAuthority: nil,
+      appCategory: nil,
+      minMacOSVersion: nil,
+      isHomebrewInstalled: false,
+      homebrewCaskToken: nil
+    )
+
+    state.installedApps = [installedApp]
+    state.rawInventoryResults = [decision]
+    state.refreshDisplayedResults()
+
+    let row = try #require(state.resultsBrowserRows.first)
+    #expect(row.canInstall == false)
+    #expect(row.hasUpdateAction == true)
+    #expect(state.canPerformPrimaryUpdate(for: decision))
+  }
+
   private func seed(_ state: AppState, with results: [AppDecision]) {
     state.installedApps = results.map(DesktopUITestFixtures.makeInstalledApp)
     state.rawInventoryResults = results

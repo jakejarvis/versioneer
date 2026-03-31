@@ -32,6 +32,15 @@ const aliases: AliasRecord[] = [
     confidenceWeight: 100,
   },
   {
+    appId: "app_firefox",
+    appName: "Firefox",
+    aliasType: "mas_app_id",
+    value: "989804926",
+    normalizedValue: "989804926",
+    isExact: true,
+    confidenceWeight: 100,
+  },
+  {
     appId: "app_vscode",
     appName: "Visual Studio Code",
     aliasType: "bundle_id",
@@ -46,6 +55,24 @@ const aliases: AliasRecord[] = [
     aliasType: "name",
     value: "Visual Studio Code",
     normalizedValue: "visual studio code",
+    isExact: true,
+    confidenceWeight: 100,
+  },
+  {
+    appId: "app_vscode",
+    appName: "Visual Studio Code",
+    aliasType: "electron_update_url",
+    value: "https://updates.example.com/vscode",
+    normalizedValue: "https://updates.example.com/vscode",
+    isExact: true,
+    confidenceWeight: 100,
+  },
+  {
+    appId: "app_pages",
+    appName: "Pages",
+    aliasType: "mas_app_id",
+    value: "409201541",
+    normalizedValue: "409201541",
     isExact: true,
     confidenceWeight: 100,
   },
@@ -84,5 +111,53 @@ describe("matchApp", () => {
     expect(result.matched).toBe(true);
     expect(result.appId).toBe("app_firefox");
     expect(result.method).toBe("team_id_name");
+  });
+
+  it("matches by Mac App Store Adam ID", () => {
+    const result = matchApp({ appName: "Firefox", masAppId: "989804926" }, aliases);
+    expect(result.matched).toBe(true);
+    expect(result.appId).toBe("app_firefox");
+    expect(result.method).toBe("mas_app_id");
+  });
+
+  it("matches by Electron update URL", () => {
+    const result = matchApp(
+      {
+        appName: "Visual Studio Code",
+        electronUpdateUrl: "https://updates.example.com/vscode",
+      },
+      aliases,
+    );
+    expect(result.matched).toBe(true);
+    expect(result.appId).toBe("app_vscode");
+    expect(result.method).toBe("electron_update_url");
+  });
+
+  it("normalizes Electron update URLs before matching", () => {
+    const result = matchApp(
+      {
+        appName: "Visual Studio Code",
+        electronUpdateUrl: " HTTPS://UPDATES.EXAMPLE.COM/VSCODE ",
+      },
+      aliases,
+    );
+    expect(result.matched).toBe(true);
+    expect(result.appId).toBe("app_vscode");
+    expect(result.method).toBe("electron_update_url");
+  });
+
+  it("keeps exact bundle ID precedence over lower-confidence exact aliases", () => {
+    const result = matchApp(
+      {
+        appName: "Firefox",
+        bundleId: "org.mozilla.firefox",
+        masAppId: "409201541",
+      },
+      aliases,
+    );
+    expect(result.matched).toBe(true);
+    expect(result.appId).toBe("app_firefox");
+    expect(result.method).toBe("exact_bundle_id");
+    expect(result.ambiguous).toBe(false);
   });
 });

@@ -58,6 +58,11 @@ export const appAliases = sqliteTable(
       .where(
         sql`${table.isActive} = 1 and ${table.isExact} = 1 and ${table.aliasType} = 'mas_app_id'`,
       ),
+    uniqueIndex("idx_aliases_unique_active_exact_electron_update_url")
+      .on(table.aliasType, table.normalizedValue)
+      .where(
+        sql`${table.isActive} = 1 and ${table.isExact} = 1 and ${table.aliasType} = 'electron_update_url'`,
+      ),
     uniqueIndex("idx_aliases_unique_active_exact_homebrew_cask")
       .on(table.aliasType, table.normalizedValue)
       .where(

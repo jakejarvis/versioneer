@@ -6,6 +6,7 @@ const globallyUniqueExactAliasTypes = new Set<AliasType>([
   "bundle_id",
   "sparkle_feed",
   "mas_app_id",
+  "electron_update_url",
   "homebrew_cask",
 ]);
 

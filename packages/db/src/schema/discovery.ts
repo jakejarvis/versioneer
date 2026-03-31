@@ -27,6 +27,7 @@ export const discoveredApps = sqliteTable(
     sparklePublicKey: text("sparkle_public_key"),
     isSparkleApp: integer("is_sparkle_app", { mode: "boolean" }),
     isMasApp: integer("is_mas_app", { mode: "boolean" }),
+    masAppId: text("mas_app_id"),
     isElectronApp: integer("is_electron_app", { mode: "boolean" }),
     electronUpdateProvider: text("electron_update_provider"),
     electronUpdateUrl: text("electron_update_url"),

@@ -188,12 +188,16 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     matchedAppId: String?,
     localAppID: String?
   ) -> String {
-    if let bundleId {
-      return "bundle:\(bundleId)"
+    if let localAppID, let bundleId {
+      return "bundle:\(bundleId)|local:\(localAppID)"
     }
 
     if let localAppID {
       return "local:\(localAppID)"
+    }
+
+    if let bundleId {
+      return "bundle:\(bundleId)"
     }
 
     if let matchedAppId {

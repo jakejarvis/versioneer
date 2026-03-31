@@ -42,6 +42,7 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
   let releasedDateText: String
   let isUpdateAvailable: Bool
   let canInstall: Bool
+  let hasUpdateAction: Bool
   let versionDiffText: String?
   let defaultSortRank: Int
   let latestVersionSortKey: String
@@ -49,7 +50,8 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
 
   static func make(
     result: AppDecision,
-    installState: InstallCoordinator.OperationState
+    installState: InstallCoordinator.OperationState,
+    hasUpdateAction: Bool
   ) -> ResultsBrowserRowPresentation {
     let status = statusPresentation(result: result, installState: installState)
     let isUpdate = result.decision == .updateAvailable && installState.phase == .idle
@@ -74,6 +76,7 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
       releasedDateText: VersionFormatting.relativeDate(from: result.releasedAt),
       isUpdateAvailable: isUpdate,
       canInstall: result.canInstall && installState.phase == .idle,
+      hasUpdateAction: hasUpdateAction,
       versionDiffText: versionDiff,
       defaultSortRank: defaultSortRank(result: result, installState: installState),
       latestVersionSortKey: result.latestVersionRaw ?? result.latestVersion ?? "",

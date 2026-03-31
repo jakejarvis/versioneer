@@ -20,6 +20,7 @@ final class AppState {
   let sparkleChecker = SparkleChecker()
   let electronChecker = ElectronChecker()
   let appStoreChecker = AppStoreChecker()
+  let homebrewChecker = HomebrewChecker()
   let installCoordinator = InstallCoordinator()
   private let cacheStore: ScanCacheStore
   @ObservationIgnored private var directoryWatcher: DirectoryWatcher?
@@ -194,9 +195,11 @@ final class AppState {
 
   private func rebuildResultsBrowserRows() {
     let rows = filteredResults.map { result in
-      ResultsBrowserRowPresentation.make(
+      let installState = installCoordinator.state(for: result)
+      return ResultsBrowserRowPresentation.make(
         result: result,
-        installState: installCoordinator.state(for: result)
+        installState: installState,
+        hasUpdateAction: canPerformPrimaryUpdate(for: result, installState: installState)
       )
     }
     resultsBrowserRows = sort(rows: rows, by: resultsSort)
@@ -448,36 +451,45 @@ final class AppState {
           defaultChannel: settings.defaultChannel,
           perApp: perApp
         )
-    async let backendTask = apiClient.checkInventory(
-      apps: apps,
-      scanDurationMs: scanMs,
-      channelPreferences: channelPrefs
-    )
     async let sparkleTask = sparkleChecker.checkAll(apps: apps)
     async let electronTask = electronChecker.checkAll(apps: apps)
     async let appStoreTask = appStoreChecker.checkAll(apps: apps)
+    async let homebrewTask = homebrewChecker.checkAll(apps: apps)
 
-    let sparkleResults = await sparkleTask
-    let electronResults = await electronTask
     let appStoreResults = await appStoreTask
 
     // Enrich installed apps with confirmed App Store IDs from iTunes API
     for (index, app) in installedApps.enumerated() {
-      if let storeResult = appStoreResults[app.id], app.masAppId == nil {
+      if let storeResult = appStoreResults[app.localID], app.masAppId == nil {
         installedApps[index] = app.withMasAppId(storeResult.masAppId)
       }
     }
     rebuildLookupTables()
 
-    let localResults = buildLocalVersionMap(
-      sparkle: sparkleResults, electron: electronResults, appStore: appStoreResults)
+    async let backendTask = apiClient.checkInventory(
+      apps: installedApps,
+      scanDurationMs: scanMs,
+      channelPreferences: channelPrefs
+    )
+
+    let sparkleResults = await sparkleTask
+    let electronResults = await electronTask
+    let homebrewResults = await homebrewTask
+
+    let localResults = buildLocalUpdateMap(
+      sparkle: sparkleResults,
+      electron: electronResults,
+      appStore: appStoreResults,
+      homebrew: homebrewResults,
+      apps: installedApps
+    )
 
     do {
       let response = try await backendTask
       rawInventoryResults = mergeResults(
         backend: response.results,
         local: localResults,
-        apps: apps
+        apps: installedApps
       )
       loadState = .done
       lastScanCompletedAt = Date()
@@ -490,7 +502,7 @@ final class AppState {
     } catch {
       // Backend failed — fall back to local results if we have any
       if !localResults.isEmpty {
-        rawInventoryResults = buildLocalOnlyResults(local: localResults, apps: apps)
+        rawInventoryResults = buildLocalOnlyResults(local: localResults, apps: installedApps)
         loadState = .done
         lastScanCompletedAt = Date()
         refreshDisplayedResults(preservingSelectionID: previousSelectionID)
@@ -507,32 +519,47 @@ final class AppState {
 
   // MARK: - Result merging
 
-  /// Unified local version info from any checker (Sparkle, Electron, etc.)
-  private struct LocalVersionInfo {
-    let latestVersion: String?
-    let publishedAt: String?
+  private enum LocalUpdateSourceKind: Int {
+    case versionOnly
+    case electron
+    case sparkle
+    case homebrew
+    case appStore
   }
 
-  /// Combines Sparkle, Electron, and MAS results into a single lookup by app ID.
-  private func buildLocalVersionMap(
+  /// Unified local update info from any checker (Sparkle, Electron, MAS, Homebrew).
+  private struct LocalUpdateCandidate {
+    let sourceKind: LocalUpdateSourceKind
+    let latestVersion: String?
+    let publishedAt: String?
+    let artifact: AppDecision.Artifact?
+    let installStrategy: InstallStrategy?
+    let updateDetected: Bool
+  }
+
+  /// Combines Sparkle, Electron, MAS, and Homebrew results into a single lookup by local app ID.
+  private func buildLocalUpdateMap(
     sparkle: [String: SparkleChecker.SparkleResult],
     electron: [String: ElectronChecker.ElectronResult],
-    appStore: [String: AppStoreChecker.AppStoreResult]
-  ) -> [String: LocalVersionInfo] {
-    var map: [String: LocalVersionInfo] = [:]
-    for (id, result) in sparkle {
-      map[id] = LocalVersionInfo(
-        latestVersion: result.latestVersion, publishedAt: result.publishedAt)
-    }
-    for (id, result) in electron where map[id] == nil {
-      map[id] = LocalVersionInfo(
-        latestVersion: result.latestVersion, publishedAt: result.publishedAt)
-    }
-    for (id, result) in appStore where map[id] == nil {
-      if let latestVersion = result.latestVersion {
-        map[id] = LocalVersionInfo(latestVersion: latestVersion, publishedAt: result.releaseDate)
+    appStore: [String: AppStoreChecker.AppStoreResult],
+    homebrew: [String: HomebrewChecker.HomebrewResult],
+    apps: [InstalledApp]
+  ) -> [String: LocalUpdateCandidate] {
+    var map: [String: LocalUpdateCandidate] = [:]
+
+    for app in apps {
+      let candidates = localUpdateCandidates(
+        for: app,
+        sparkle: sparkle[app.localID],
+        electron: electron[app.localID],
+        appStore: appStore[app.localID],
+        homebrew: homebrew[app.localID]
+      )
+      if let preferred = preferredLocalUpdateCandidate(from: candidates) {
+        map[app.localID] = preferred
       }
     }
+
     return map
   }
 
@@ -541,7 +568,7 @@ final class AppState {
   /// MAS apps with unknown decisions are marked as ignored.
   private func mergeResults(
     backend: [AppDecision],
-    local: [String: LocalVersionInfo],
+    local: [String: LocalUpdateCandidate],
     apps: [InstalledApp]
   ) -> [AppDecision] {
     var results = bindInstalledApps(to: backend, apps: apps)
@@ -551,7 +578,7 @@ final class AppState {
 
       // For unmatched apps, try local version data
       guard decision.isLocalOnly else { continue }
-      guard let matchingApp, let localInfo = local[matchingApp.id] else { continue }
+      guard let matchingApp, let localInfo = local[matchingApp.localID] else { continue }
 
       results[index] = AppDecision(
         appName: decision.appName,
@@ -560,10 +587,7 @@ final class AppState {
         matchedAppId: decision.matchedAppId,
         matchedAppName: decision.matchedAppName,
         matchConfidence: decision.matchConfidence,
-        decision: decisionFromVersion(
-          latest: localInfo.latestVersion,
-          installed: decision.installedVersion
-        ),
+        decision: localDecision(for: localInfo, installedVersion: decision.installedVersion),
         trackingState: decision.trackingState,
         localReasonCode: decision.localReasonCode,
         latestVersion: localInfo.latestVersion ?? decision.latestVersion,
@@ -571,12 +595,12 @@ final class AppState {
         latestReleaseId: decision.latestReleaseId,
         channel: decision.channel,
         availableChannels: decision.availableChannels,
-        homebrewCaskToken: decision.homebrewCaskToken,
+        homebrewCaskToken: matchingApp.homebrewCaskToken ?? decision.homebrewCaskToken,
         releasedAt: localInfo.publishedAt ?? decision.releasedAt,
         staleSince: decision.staleSince,
         iconUrl: decision.iconUrl,
-        artifact: decision.artifact,
-        installStrategy: decision.installStrategy,
+        artifact: localInfo.artifact ?? decision.artifact,
+        installStrategy: localInfo.installStrategy ?? decision.installStrategy,
         localAppID: decision.localAppID
       )
     }
@@ -586,22 +610,28 @@ final class AppState {
 
   /// Builds AppDecision entries from local results when the backend is unavailable.
   private func buildLocalOnlyResults(
-    local: [String: LocalVersionInfo],
+    local: [String: LocalUpdateCandidate],
     apps: [InstalledApp]
   ) -> [AppDecision] {
     apps.map { app in
       let decision: AppDecision.Decision
       let latestVersion: String?
       let releasedAt: String?
+      let artifact: AppDecision.Artifact?
+      let installStrategy: InstallStrategy?
 
-      if let info = local[app.id] {
-        decision = decisionFromVersion(latest: info.latestVersion, installed: app.version)
+      if let info = local[app.localID] {
+        decision = localDecision(for: info, installedVersion: app.version)
         latestVersion = info.latestVersion
         releasedAt = info.publishedAt
+        artifact = info.artifact
+        installStrategy = info.installStrategy
       } else {
         decision = .localOnly
         latestVersion = nil
         releasedAt = nil
+        artifact = nil
+        installStrategy = nil
       }
 
       return AppDecision(
@@ -619,15 +649,177 @@ final class AppState {
         latestReleaseId: nil,
         channel: nil,
         availableChannels: nil,
-        homebrewCaskToken: nil,
+        homebrewCaskToken: app.homebrewCaskToken,
         releasedAt: releasedAt,
         staleSince: nil,
         iconUrl: nil,
-        artifact: nil,
-        installStrategy: nil,
-        localAppID: app.id
+        artifact: artifact,
+        installStrategy: installStrategy,
+        localAppID: app.localID
       )
     }
+  }
+
+  private func localUpdateCandidates(
+    for app: InstalledApp,
+    sparkle: SparkleChecker.SparkleResult?,
+    electron: ElectronChecker.ElectronResult?,
+    appStore: AppStoreChecker.AppStoreResult?,
+    homebrew: HomebrewChecker.HomebrewResult?
+  ) -> [LocalUpdateCandidate] {
+    var candidates: [LocalUpdateCandidate] = []
+
+    if let appStore, app.isMasApp {
+      candidates.append(
+        LocalUpdateCandidate(
+          sourceKind: .appStore,
+          latestVersion: appStore.latestVersion,
+          publishedAt: appStore.releaseDate,
+          artifact: nil,
+          installStrategy: nil,
+          updateDetected: false
+        )
+      )
+    }
+
+    if let homebrew {
+      candidates.append(
+        LocalUpdateCandidate(
+          sourceKind: .homebrew,
+          latestVersion: homebrew.latestVersion,
+          publishedAt: nil,
+          artifact: nil,
+          installStrategy: nil,
+          updateDetected: homebrew.updateDetected
+        )
+      )
+    }
+
+    if let sparkle {
+      candidates.append(
+        LocalUpdateCandidate(
+          sourceKind: .sparkle,
+          latestVersion: sparkle.latestVersion,
+          publishedAt: sparkle.publishedAt,
+          artifact: artifactFromDownloadURL(
+            sparkle.downloadUrl,
+            minOsVersion: sparkle.minOsVersion
+          ),
+          installStrategy: .sparkle,
+          updateDetected: false
+        )
+      )
+    }
+
+    if let electron {
+      let directInstall = directInstallDetails(
+        downloadUrl: electron.downloadUrl,
+        minOsVersion: nil,
+        installedApp: app
+      )
+      candidates.append(
+        LocalUpdateCandidate(
+          sourceKind: .electron,
+          latestVersion: electron.latestVersion,
+          publishedAt: electron.publishedAt,
+          artifact: directInstall?.artifact,
+          installStrategy: directInstall?.strategy,
+          updateDetected: false
+        )
+      )
+    }
+
+    return candidates.filter {
+      $0.latestVersion != nil || $0.updateDetected || $0.installStrategy != nil
+    }
+  }
+
+  private func preferredLocalUpdateCandidate(
+    from candidates: [LocalUpdateCandidate]
+  ) -> LocalUpdateCandidate? {
+    candidates.max { lhs, rhs in
+      if lhs.sourceKind.rawValue != rhs.sourceKind.rawValue {
+        return lhs.sourceKind.rawValue < rhs.sourceKind.rawValue
+      }
+
+      let lhsIsInstallable = lhs.installStrategy != nil
+      let rhsIsInstallable = rhs.installStrategy != nil
+      if lhsIsInstallable != rhsIsInstallable {
+        return !lhsIsInstallable && rhsIsInstallable
+      }
+
+      let lhsHasVersion = lhs.latestVersion != nil
+      let rhsHasVersion = rhs.latestVersion != nil
+      if lhsHasVersion != rhsHasVersion {
+        return !lhsHasVersion && rhsHasVersion
+      }
+
+      return false
+    }
+  }
+
+  private func localDecision(
+    for candidate: LocalUpdateCandidate,
+    installedVersion: String?
+  ) -> AppDecision.Decision {
+    if candidate.updateDetected {
+      return .updateAvailable
+    }
+    return decisionFromVersion(latest: candidate.latestVersion, installed: installedVersion)
+  }
+
+  private func directInstallDetails(
+    downloadUrl: String?,
+    minOsVersion: String?,
+    installedApp: InstalledApp
+  ) -> (strategy: InstallStrategy, artifact: AppDecision.Artifact)? {
+    guard let strategy = supportedDirectInstallStrategy(for: downloadUrl) else { return nil }
+    guard installedApp.bundleId != nil || installedApp.teamId != nil else { return nil }
+    guard let artifact = artifactFromDownloadURL(downloadUrl, minOsVersion: minOsVersion) else {
+      return nil
+    }
+    return (strategy, artifact)
+  }
+
+  private func artifactFromDownloadURL(
+    _ downloadUrl: String?,
+    minOsVersion: String?
+  ) -> AppDecision.Artifact? {
+    guard let downloadUrl,
+      let artifactType = artifactType(for: downloadUrl)
+    else { return nil }
+
+    return AppDecision.Artifact(
+      id: nil,
+      downloadUrl: downloadUrl,
+      architecture: nil,
+      minOsVersion: minOsVersion,
+      artifactType: artifactType,
+      sizeBytes: nil,
+      sha256: nil
+    )
+  }
+
+  private func supportedDirectInstallStrategy(for downloadUrl: String?) -> InstallStrategy? {
+    guard let artifactType = downloadUrl.flatMap(artifactType(for:)) else { return nil }
+    switch artifactType {
+    case "zip":
+      return .zipReplace
+    case "dmg":
+      return .dmgCopyReplace
+    case "pkg":
+      return .pkgInstall
+    default:
+      return nil
+    }
+  }
+
+  private func artifactType(for downloadUrl: String) -> String? {
+    let pathExtension =
+      (URL(string: downloadUrl)?.pathExtension ?? (downloadUrl as NSString).pathExtension)
+        .lowercased()
+    guard ["zip", "dmg", "pkg"].contains(pathExtension) else { return nil }
+    return pathExtension
   }
 
   private func bindInstalledApps(
@@ -791,7 +983,27 @@ final class AppState {
 
   func installAll() async {
     for target in updatableResults {
-      await install(target)
+      await performPrimaryUpdate(for: target)
+    }
+  }
+
+  func canPerformPrimaryUpdate(
+    for result: AppDecision,
+    installState: InstallCoordinator.OperationState? = nil
+  ) -> Bool {
+    guard result.decision == .updateAvailable else { return false }
+    let currentState = installState ?? installCoordinator.state(for: result)
+    guard currentState.phase == .idle else { return false }
+    return result.canInstall || isMasUpgradeable(for: result) || isHomebrewInstalled(for: result)
+  }
+
+  func performPrimaryUpdate(for result: AppDecision) async {
+    if isMasUpgradeable(for: result) {
+      await masUpgrade(result)
+    } else if isHomebrewInstalled(for: result) {
+      await brewUpgrade(result)
+    } else {
+      await install(result)
     }
   }
 

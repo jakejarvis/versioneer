@@ -51,6 +51,7 @@ type DiscoveryCandidate = {
   sparklePublicKey?: string | null;
   isSparkleApp?: boolean | null;
   isMasApp?: boolean | null;
+  masAppId?: string | null;
   isElectronApp?: boolean | null;
   electronUpdateProvider?: string | null;
   electronUpdateUrl?: string | null;
@@ -86,6 +87,7 @@ function collectUnmatchedApps(
       sparklePublicKey: installedApp.sparklePublicKey,
       isSparkleApp: installedApp.isSparkleApp,
       isMasApp: installedApp.isMasApp,
+      masAppId: installedApp.masAppId,
       isElectronApp: installedApp.isElectronApp,
       electronUpdateProvider: installedApp.electronUpdateProvider,
       electronUpdateUrl: installedApp.electronUpdateUrl,
@@ -125,6 +127,7 @@ async function upsertDiscoveredApps(params: {
       sparklePublicKey: discoveredApps.sparklePublicKey,
       isSparkleApp: discoveredApps.isSparkleApp,
       isMasApp: discoveredApps.isMasApp,
+      masAppId: discoveredApps.masAppId,
       isElectronApp: discoveredApps.isElectronApp,
       electronUpdateProvider: discoveredApps.electronUpdateProvider,
       electronUpdateUrl: discoveredApps.electronUpdateUrl,
@@ -151,6 +154,7 @@ async function upsertDiscoveredApps(params: {
         sparklePublicKey: discoveredApps.sparklePublicKey,
         isSparkleApp: discoveredApps.isSparkleApp,
         isMasApp: discoveredApps.isMasApp,
+        masAppId: discoveredApps.masAppId,
         isElectronApp: discoveredApps.isElectronApp,
         electronUpdateProvider: discoveredApps.electronUpdateProvider,
         electronUpdateUrl: discoveredApps.electronUpdateUrl,
@@ -196,6 +200,7 @@ async function upsertDiscoveredApps(params: {
           sparklePublicKey: app.sparklePublicKey ?? existing.sparklePublicKey,
           isSparkleApp: app.isSparkleApp ?? existing.isSparkleApp,
           isMasApp: app.isMasApp ?? existing.isMasApp,
+          masAppId: app.masAppId ?? existing.masAppId,
           isElectronApp: app.isElectronApp ?? existing.isElectronApp,
           electronUpdateProvider: app.electronUpdateProvider ?? existing.electronUpdateProvider,
           electronUpdateUrl: app.electronUpdateUrl ?? existing.electronUpdateUrl,
@@ -227,6 +232,7 @@ async function upsertDiscoveredApps(params: {
       sparklePublicKey: app.sparklePublicKey ?? null,
       isSparkleApp: app.isSparkleApp ?? null,
       isMasApp: app.isMasApp ?? null,
+      masAppId: app.masAppId ?? null,
       isElectronApp: app.isElectronApp ?? null,
       electronUpdateProvider: app.electronUpdateProvider ?? null,
       electronUpdateUrl: app.electronUpdateUrl ?? null,
@@ -747,6 +753,8 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           teamId: installedApp.teamId,
           version: installedApp.version,
           sparkleFeedUrl: installedApp.sparkleFeedUrl,
+          masAppId: installedApp.masAppId,
+          electronUpdateUrl: installedApp.electronUpdateUrl,
           homebrewCaskToken: installedApp.homebrewCaskToken,
         },
         aliasRecords,
@@ -1051,6 +1059,22 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
             });
           }
 
+          if (installedApp.masAppId) {
+            await createAliasSuggestion({
+              db,
+              appId: appRow.id,
+              appName: appRow.canonicalName,
+              lookupKey,
+              aliasType: "mas_app_id",
+              value: installedApp.masAppId,
+              canonicalSnapshotJson,
+              evidenceType: "scan",
+              evidenceFingerprint: `public-mas-id:${lookupKey}:${installedApp.masAppId}`,
+              evidencePayloadJson: JSON.stringify({ masAppId: installedApp.masAppId }),
+              now,
+            });
+          }
+
           if (installedApp.homebrewCaskToken) {
             await createAliasSuggestion({
               db,
@@ -1064,6 +1088,25 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
               evidenceFingerprint: `public-homebrew:${lookupKey}:${installedApp.homebrewCaskToken}`,
               evidencePayloadJson: JSON.stringify({
                 homebrewCaskToken: installedApp.homebrewCaskToken,
+              }),
+              now,
+            });
+          }
+
+          if (installedApp.electronUpdateUrl) {
+            await createAliasSuggestion({
+              db,
+              appId: appRow.id,
+              appName: appRow.canonicalName,
+              lookupKey,
+              aliasType: "electron_update_url",
+              value: installedApp.electronUpdateUrl,
+              canonicalSnapshotJson,
+              evidenceType: "scan",
+              evidenceFingerprint: `public-electron-alias:${lookupKey}:${installedApp.electronUpdateUrl}`,
+              evidencePayloadJson: JSON.stringify({
+                electronUpdateUrl: installedApp.electronUpdateUrl,
+                electronUpdateProvider: installedApp.electronUpdateProvider ?? null,
               }),
               now,
             });

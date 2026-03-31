@@ -9,6 +9,8 @@ export type MatchMethod =
   | "exact_bundle_id"
   | "alias_bundle_id"
   | "sparkle_feed"
+  | "mas_app_id"
+  | "electron_update_url"
   | "homebrew_cask"
   | "team_id_name"
   | "alias_name"
@@ -31,6 +33,8 @@ export interface MatchInput {
   teamId?: string | null;
   version?: string | null;
   sparkleFeedUrl?: string | null;
+  masAppId?: string | null;
+  electronUpdateUrl?: string | null;
   homebrewCaskToken?: string | null;
 }
 

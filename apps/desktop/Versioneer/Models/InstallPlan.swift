@@ -2,13 +2,28 @@ import Foundation
 
 /// Resolved install plan derived from an AppDecision.
 /// Replaces the old server-issued InstallPrepareResponse.
-nonisolated struct InstallPlan: Sendable {
+nonisolated struct InstallPlan: Sendable, Equatable {
+  nonisolated enum Origin: Sendable, Equatable {
+    case catalog(appId: String, releaseId: String, channel: String?)
+    case local
+  }
+
   let localId: String
   let strategy: InstallStrategy
-  let appId: String
-  let releaseId: String
-  let channel: String?
+  let origin: Origin
   let artifact: AppDecision.Artifact?
+
+  init(
+    localId: String = UUID().uuidString,
+    strategy: InstallStrategy,
+    origin: Origin,
+    artifact: AppDecision.Artifact? = nil
+  ) {
+    self.localId = localId
+    self.strategy = strategy
+    self.origin = origin
+    self.artifact = artifact
+  }
 
   init(
     localId: String = UUID().uuidString,
@@ -18,25 +33,64 @@ nonisolated struct InstallPlan: Sendable {
     channel: String? = nil,
     artifact: AppDecision.Artifact? = nil
   ) {
-    self.localId = localId
-    self.strategy = strategy
-    self.appId = appId
-    self.releaseId = releaseId
-    self.channel = channel
-    self.artifact = artifact
+    self.init(
+      localId: localId,
+      strategy: strategy,
+      origin: .catalog(appId: appId, releaseId: releaseId, channel: channel),
+      artifact: artifact
+    )
   }
 
-  init?(result: AppDecision) {
-    guard let strategy = result.installStrategy,
-      let appId = result.matchedAppId,
-      let releaseId = result.latestReleaseId
+  var appId: String? {
+    guard case .catalog(let appId, _, _) = origin else { return nil }
+    return appId
+  }
+
+  var releaseId: String? {
+    guard case .catalog(_, let releaseId, _) = origin else { return nil }
+    return releaseId
+  }
+
+  var channel: String? {
+    guard case .catalog(_, _, let channel) = origin else { return nil }
+    return channel
+  }
+
+  var isCatalogBacked: Bool {
+    if case .catalog = origin {
+      return true
+    }
+    return false
+  }
+
+  init?(result: AppDecision, installedApp: InstalledApp?) {
+    guard result.decision == .updateAvailable,
+      let strategy = result.installStrategy
     else { return nil }
 
-    self.localId = UUID().uuidString
-    self.strategy = strategy
-    self.appId = appId
-    self.releaseId = releaseId
-    self.channel = result.channel
-    self.artifact = result.artifact
+    if let appId = result.matchedAppId,
+      let releaseId = result.latestReleaseId
+    {
+      self.init(
+        strategy: strategy,
+        origin: .catalog(appId: appId, releaseId: releaseId, channel: result.channel),
+        artifact: result.artifact
+      )
+      return
+    }
+
+    guard result.isLocalOnly else { return nil }
+
+    switch strategy {
+    case .sparkle:
+      self.init(strategy: strategy, origin: .local, artifact: result.artifact)
+    case .zipReplace, .dmgCopyReplace, .pkgInstall:
+      guard result.artifact?.downloadUrl != nil else { return nil }
+      let hasIdentityAnchor = installedApp?.bundleId != nil || installedApp?.teamId != nil
+      guard hasIdentityAnchor else { return nil }
+      self.init(strategy: strategy, origin: .local, artifact: result.artifact)
+    case .macAppStore, .manualOnly:
+      return nil
+    }
   }
 }

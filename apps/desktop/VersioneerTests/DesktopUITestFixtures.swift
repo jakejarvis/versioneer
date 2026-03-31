@@ -43,7 +43,8 @@ enum DesktopUITestFixtures {
       staleSince: nil,
       iconUrl: nil,
       artifact: artifact,
-      installStrategy: installStrategy
+      installStrategy: installStrategy,
+      localAppID: "/Applications/\(appName).app"
     )
   }
 

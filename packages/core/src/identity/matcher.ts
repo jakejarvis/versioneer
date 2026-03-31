@@ -4,7 +4,9 @@ import type { MatchInput, MatchResult, MatchCandidate, AliasRecord } from "./typ
 
 const CONFIDENCE_EXACT_BUNDLE = 100;
 const CONFIDENCE_ALIAS_BUNDLE = 95;
+const CONFIDENCE_MAS_APP_ID = 90;
 const CONFIDENCE_SPARKLE_FEED = 90;
+const CONFIDENCE_ELECTRON_UPDATE_URL = 89;
 const CONFIDENCE_HOMEBREW_CASK = 88;
 const CONFIDENCE_TEAM_NAME = 80;
 const CONFIDENCE_ALIAS_NAME = 60;
@@ -48,6 +50,28 @@ export function matchApp(input: MatchInput, aliases: AliasRecord[]): MatchResult
       normalizeAliasValue("sparkle_feed", input.sparkleFeedUrl),
       "sparkle_feed",
       CONFIDENCE_SPARKLE_FEED,
+    );
+  }
+
+  if (input.masAppId) {
+    pushAliasMatches(
+      candidates,
+      aliases,
+      "mas_app_id",
+      normalizeAliasValue("mas_app_id", input.masAppId),
+      "mas_app_id",
+      CONFIDENCE_MAS_APP_ID,
+    );
+  }
+
+  if (input.electronUpdateUrl) {
+    pushAliasMatches(
+      candidates,
+      aliases,
+      "electron_update_url",
+      normalizeAliasValue("electron_update_url", input.electronUpdateUrl),
+      "electron_update_url",
+      CONFIDENCE_ELECTRON_UPDATE_URL,
     );
   }
 

@@ -112,6 +112,7 @@ nonisolated struct InventoryAPIClient: Sendable {
         sparklePublicKey: app.sparklePublicKey,
         isSparkleApp: app.isSparkleApp ? true : nil,
         isMasApp: app.isMasApp ? true : nil,
+        masAppId: app.masAppId,
         isElectronApp: app.isElectronApp ? true : nil,
         electronUpdateProvider: app.electronUpdateProvider,
         electronUpdateUrl: app.electronUpdateUrl,
@@ -136,6 +137,12 @@ nonisolated struct InventoryAPIClient: Sendable {
     installedApp: InstalledApp,
     executionRoute: InstallCoordinator.ExecutionRoute
   ) async throws -> InstallPrepareResponse {
+    guard let appId = plan.appId,
+      let releaseId = plan.releaseId
+    else {
+      throw APIError.invalidRequest("Catalog-backed install plan required")
+    }
+
     let endpoint = baseURL.appendingPathComponent("v1/install/prepare")
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
@@ -143,8 +150,8 @@ nonisolated struct InventoryAPIClient: Sendable {
 
     let payload = InstallPrepareRequest(
       client: buildClientInfo(channelPreferences: nil),
-      appId: plan.appId,
-      releaseId: plan.releaseId,
+      appId: appId,
+      releaseId: releaseId,
       artifactId: plan.artifact?.id,
       installStrategy: plan.strategy.rawValue,
       executionRoute: executionRoute.rawValue,
@@ -183,6 +190,12 @@ nonisolated struct InventoryAPIClient: Sendable {
     errorMessage: String?,
     verification: InstallVerificationSummary?
   ) async throws -> InstallExecutionStatusResponse {
+    guard let appId = plan.appId,
+      let releaseId = plan.releaseId
+    else {
+      throw APIError.invalidRequest("Catalog-backed install plan required")
+    }
+
     let endpoint = baseURL.appendingPathComponent("v1/install/executions/\(executionId)/status")
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
@@ -190,8 +203,8 @@ nonisolated struct InventoryAPIClient: Sendable {
 
     let payload = InstallExecutionStatusRequest(
       client: buildClientInfo(channelPreferences: nil),
-      appId: plan.appId,
-      releaseId: plan.releaseId,
+      appId: appId,
+      releaseId: releaseId,
       artifactId: plan.artifact?.id,
       installStrategy: plan.strategy.rawValue,
       executionRoute: executionRoute.rawValue,
@@ -327,6 +340,7 @@ nonisolated struct InventoryAPIClient: Sendable {
 
 nonisolated enum APIError: LocalizedError, Sendable {
   case invalidResponse
+  case invalidRequest(String)
   case httpError(statusCode: Int, body: String)
   case decodingFailed(String)
 
@@ -334,6 +348,8 @@ nonisolated enum APIError: LocalizedError, Sendable {
     switch self {
     case .invalidResponse:
       "Invalid response from server"
+    case .invalidRequest(let message):
+      message
     case .httpError(let statusCode, _):
       "Server returned status \(statusCode)"
     case .decodingFailed(let message):

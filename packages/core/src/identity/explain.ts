@@ -68,6 +68,20 @@ function findMatchingAlias(
           a.aliasType === "sparkle_feed" &&
           a.normalizedValue === input.sparkleFeedUrl?.toLowerCase().trim(),
       );
+    case "mas_app_id":
+      return aliases.find(
+        (a) =>
+          a.appId === appId &&
+          a.aliasType === "mas_app_id" &&
+          a.normalizedValue === input.masAppId?.toLowerCase().trim(),
+      );
+    case "electron_update_url":
+      return aliases.find(
+        (a) =>
+          a.appId === appId &&
+          a.aliasType === "electron_update_url" &&
+          a.normalizedValue === input.electronUpdateUrl?.toLowerCase().trim(),
+      );
     case "homebrew_cask":
       return aliases.find(
         (a) =>

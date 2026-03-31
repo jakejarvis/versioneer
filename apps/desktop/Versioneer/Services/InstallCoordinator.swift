@@ -142,7 +142,7 @@ final class InstallCoordinator {
         helperStatus: .notNeeded
       )
 
-      guard let installPlan = InstallPlan(result: result) else {
+      guard let installPlan = InstallPlan(result: result, installedApp: installedApp) else {
         throw InstallError.unsupportedStrategy
       }
       plan = installPlan
@@ -160,7 +160,7 @@ final class InstallCoordinator {
         }
       verificationSummary.executionRoute = executionRouteUsed?.rawValue
 
-      if let route = executionRouteUsed {
+      if let route = executionRouteUsed, installPlan.isCatalogBacked {
         do {
           let prepared = try await apiClient.prepareInstallExecution(
             plan: installPlan,
@@ -364,7 +364,7 @@ final class InstallCoordinator {
         recoveryAction: nil,
         helperStatus: usedPrivilegedHelper ? .ready : .notNeeded
       )
-      if let installPlan = plan, let route = executionRouteUsed {
+      if let installPlan = plan, installPlan.isCatalogBacked, let route = executionRouteUsed {
         await reportInstallExecution(
           apiClient: apiClient,
           executionId: activeExecutionId,
@@ -392,7 +392,7 @@ final class InstallCoordinator {
         recoveryAction: recoveryAction(for: error),
         helperStatus: helperSetupState(for: error) ?? (usedPrivilegedHelper ? .failed : .notNeeded)
       )
-      if let installPlan = plan, let route = executionRouteUsed {
+      if let installPlan = plan, installPlan.isCatalogBacked, let route = executionRouteUsed {
         let reportExecutionId = executionId ?? installPlan.localId
         await reportInstallExecution(
           apiClient: apiClient,

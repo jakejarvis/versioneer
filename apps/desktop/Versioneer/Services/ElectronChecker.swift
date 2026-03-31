@@ -215,7 +215,7 @@ actor ElectronChecker {
         let body = String(data: data, encoding: .utf8)
       else { return nil }
 
-      return parseLatestMacYml(body)
+      return parseLatestMacYml(body, updateUrl: updateUrl)
     } catch {
       Logger.electron.debug(
         "Failed to fetch latest-mac.yml from \(feedUrl): \(error.localizedDescription)")
@@ -224,27 +224,78 @@ actor ElectronChecker {
   }
 
   /// Parses electron-builder's `latest-mac.yml` format.
-  private func parseLatestMacYml(_ yaml: String) -> ElectronResult? {
+  func parseLatestMacYml(_ yaml: String, updateUrl: String) -> ElectronResult? {
     var version: String?
     var releaseDate: String?
+    var path: String?
+    var filesUrl: String?
+    var inFilesSection = false
+    var filesIndentation: Int?
 
-    for line in yaml.split(separator: "\n") {
+    for line in yaml.components(separatedBy: .newlines) {
       let trimmed = line.trimmingCharacters(in: .whitespaces)
+      let indentation = line.prefix { $0 == " " }.count
+
+      if trimmed == "files:" {
+        inFilesSection = true
+        filesIndentation = indentation
+        continue
+      }
+
+      if inFilesSection,
+        let currentFilesIndentation = filesIndentation,
+        indentation <= currentFilesIndentation,
+        !trimmed.hasPrefix("-"),
+        trimmed.contains(":")
+      {
+        inFilesSection = false
+        filesIndentation = nil
+      }
+
       if trimmed.hasPrefix("version:") {
         version = String(trimmed.dropFirst("version:".count)).trimmingCharacters(in: .whitespaces)
       } else if trimmed.hasPrefix("releaseDate:") {
         releaseDate = String(trimmed.dropFirst("releaseDate:".count))
           .trimmingCharacters(in: .whitespaces)
           .trimmingCharacters(in: CharacterSet(charactersIn: "'\""))
+      } else if path == nil, trimmed.hasPrefix("path:") {
+        path = String(trimmed.dropFirst("path:".count))
+          .trimmingCharacters(in: .whitespaces)
+          .trimmingCharacters(in: CharacterSet(charactersIn: "'\""))
+      } else if inFilesSection, filesUrl == nil, trimmed.hasPrefix("url:") {
+        filesUrl = String(trimmed.dropFirst("url:".count))
+          .trimmingCharacters(in: .whitespaces)
+          .trimmingCharacters(in: CharacterSet(charactersIn: "'\""))
+      } else if inFilesSection, filesUrl == nil, trimmed.hasPrefix("- url:") {
+        filesUrl = String(trimmed.dropFirst("- url:".count))
+          .trimmingCharacters(in: .whitespaces)
+          .trimmingCharacters(in: CharacterSet(charactersIn: "'\""))
       }
     }
 
     guard let version else { return nil }
+    let downloadUrl = resolveDownloadURL(pathOrUrl: filesUrl ?? path, updateUrl: updateUrl)
 
     return ElectronResult(
       latestVersion: version,
-      downloadUrl: nil,
+      downloadUrl: downloadUrl,
       publishedAt: releaseDate
     )
+  }
+
+  private func resolveDownloadURL(pathOrUrl: String?, updateUrl: String) -> String? {
+    guard let pathOrUrl, !pathOrUrl.isEmpty else { return nil }
+
+    if let absoluteURL = URL(string: pathOrUrl), absoluteURL.scheme != nil {
+      return absoluteURL.absoluteString
+    }
+
+    let baseString =
+      updateUrl.hasSuffix("/")
+      ? updateUrl
+      : "\(updateUrl)/"
+
+    guard let baseURL = URL(string: baseString) else { return nil }
+    return URL(string: pathOrUrl, relativeTo: baseURL)?.absoluteURL.absoluteString
   }
 }

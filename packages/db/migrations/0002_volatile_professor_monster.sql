@@ -1,0 +1,2 @@
+ALTER TABLE `discovered_apps` ADD `mas_app_id` text;--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_aliases_unique_active_exact_electron_update_url` ON `app_aliases` (`alias_type`,`normalized_value`) WHERE "app_aliases"."is_active" = 1 and "app_aliases"."is_exact" = 1 and "app_aliases"."alias_type" = 'electron_update_url';

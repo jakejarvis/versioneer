@@ -23,6 +23,28 @@ describe("public contract schemas", () => {
     expect(parsed.apps).toEqual([]);
   });
 
+  it("accepts richer installed-app identity fields", () => {
+    const parsed = inventoryCheckRequestSchema.parse({
+      client: {
+        platform: "macos",
+        osVersion: "15.0",
+        systemArchitecture: "arm64",
+      },
+      apps: [
+        {
+          appName: "Safari",
+          bundleId: "com.apple.Safari",
+          isMasApp: true,
+          masAppId: "1569813296",
+          electronUpdateUrl: "https://updates.example.com/app",
+        },
+      ],
+    });
+
+    expect(parsed.apps[0]?.masAppId).toBe("1569813296");
+    expect(parsed.apps[0]?.electronUpdateUrl).toBe("https://updates.example.com/app");
+  });
+
   it("accepts the inventory response shape used by the desktop app", () => {
     const parsed = inventoryCheckResponseSchema.parse({
       processedAt: "2026-03-26T18:00:00Z",

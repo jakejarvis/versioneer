@@ -46,10 +46,7 @@ const feedbackSearchDefaults = {
 
 const feedbackSearchSchema = z.object({
   ...paginatedSearchShape,
-  status: z
-    .string()
-    .default(feedbackSearchDefaults.status)
-    .catch(feedbackSearchDefaults.status),
+  status: z.string().default(feedbackSearchDefaults.status).catch(feedbackSearchDefaults.status),
   type: z.string().default(feedbackSearchDefaults.type).catch(feedbackSearchDefaults.type),
 });
 

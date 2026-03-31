@@ -31,6 +31,7 @@ nonisolated struct InventoryCheckRequest: Codable, Sendable {
     let sparklePublicKey: String?
     let isSparkleApp: Bool?
     let isMasApp: Bool?
+    let masAppId: String?
     let isElectronApp: Bool?
     let electronUpdateProvider: String?
     let electronUpdateUrl: String?

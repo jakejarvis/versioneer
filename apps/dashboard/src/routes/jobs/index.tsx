@@ -54,10 +54,7 @@ const jobsSearchDefaults = {
 
 const jobsSearchSchema = z.object({
   ...paginatedSearchShape,
-  tab: z
-    .enum(["runs", "failures"])
-    .default(jobsSearchDefaults.tab)
-    .catch(jobsSearchDefaults.tab),
+  tab: z.enum(["runs", "failures"]).default(jobsSearchDefaults.tab).catch(jobsSearchDefaults.tab),
   jobType: z
     .enum(["all", "poll_sources", "cask_index_sync", "enrich_discovered_apps"])
     .default(jobsSearchDefaults.jobType)

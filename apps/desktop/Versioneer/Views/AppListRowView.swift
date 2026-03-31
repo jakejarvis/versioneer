@@ -140,16 +140,10 @@ struct AppListRowView: View {
         tint: .red,
         systemImage: "xmark.circle.fill"
       )
-    } else if row.canInstall && row.isUpdateAvailable {
+    } else if row.hasUpdateAction && row.isUpdateAvailable {
       Button {
         guard let result else { return }
-        if appState.isMasUpgradeable(for: result) {
-          Task { await appState.masUpgrade(result) }
-        } else if appState.isHomebrewInstalled(for: result) {
-          Task { await appState.brewUpgrade(result) }
-        } else {
-          Task { await appState.install(result) }
-        }
+        Task { await appState.performPrimaryUpdate(for: result) }
       } label: {
         Text("Update")
           .font(.caption.weight(.semibold))
@@ -189,7 +183,7 @@ struct AppListRowView: View {
 
     Divider()
 
-    if !isUserIgnored && row.isUpdateAvailable && row.canInstall {
+    if !isUserIgnored && row.isUpdateAvailable && row.hasUpdateAction {
       if appState.isMasUpgradeable(for: result) {
         Button("Update via Mac App Store") {
           Task { await appState.masUpgrade(result) }

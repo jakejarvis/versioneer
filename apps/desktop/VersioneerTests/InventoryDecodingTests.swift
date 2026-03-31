@@ -153,7 +153,8 @@ struct InventoryDecodingTests {
           sparkleFeedUrl: nil,
           sparklePublicKey: nil,
           isSparkleApp: nil,
-          isMasApp: nil,
+          isMasApp: true,
+          masAppId: "1569813296",
           isElectronApp: nil,
           electronUpdateProvider: nil,
           electronUpdateUrl: nil,
@@ -179,5 +180,6 @@ struct InventoryDecodingTests {
     #expect(apps.count == 1)
     #expect(apps[0]["appName"] as? String == "Safari")
     #expect(apps[0]["bundleId"] as? String == "com.apple.Safari")
+    #expect(apps[0]["masAppId"] as? String == "1569813296")
   }
 }

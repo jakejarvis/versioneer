@@ -14,6 +14,7 @@ export const installedAppSchema = z.object({
   sparklePublicKey: z.string().max(500).optional(),
   isSparkleApp: z.boolean().optional(),
   isMasApp: z.boolean().optional(),
+  masAppId: z.string().max(100).optional(),
   isElectronApp: z.boolean().optional(),
   electronUpdateProvider: z.string().max(100).optional(),
   electronUpdateUrl: z.string().url().max(2000).optional(),
