@@ -140,21 +140,15 @@ describe("jsonParser", () => {
         releases: [
           {
             version: "2025.5",
-            installers: [
-              { architecture: "arm64", urls: ["https://example.com/2025.5.pkg"] },
-            ],
+            installers: [{ architecture: "arm64", urls: ["https://example.com/2025.5.pkg"] }],
           },
           {
             version: "2025.6-beta1",
-            installers: [
-              { architecture: "arm64", urls: ["https://example.com/2025.6-beta1.pkg"] },
-            ],
+            installers: [{ architecture: "arm64", urls: ["https://example.com/2025.6-beta1.pkg"] }],
           },
           {
             version: "2026.1",
-            installers: [
-              { architecture: "arm64", urls: ["https://example.com/2026.1.pkg"] },
-            ],
+            installers: [{ architecture: "arm64", urls: ["https://example.com/2026.1.pkg"] }],
           },
         ],
       },

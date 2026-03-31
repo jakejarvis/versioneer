@@ -129,6 +129,20 @@ export function useReorderSources() {
   });
 }
 
+export function useBulkUpdateSourceStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "active" | "paused" | "disabled" }) =>
+      updateSource({ data: { id, status } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["sources"] });
+      void qc.invalidateQueries({ queryKey: ["apps"] });
+      void qc.invalidateQueries({ queryKey: ["homepage"] });
+      void qc.invalidateQueries({ queryKey: ["stats"] });
+    },
+  });
+}
+
 export function useReparse(sourceId: string) {
   const qc = useQueryClient();
   return useMutation({

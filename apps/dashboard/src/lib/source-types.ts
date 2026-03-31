@@ -139,8 +139,7 @@ export const SOURCE_CONFIG_FIELDS: Partial<Record<SourceType, SourceConfigSchema
         label: "Releases Path",
         placeholder: "$.releases[*]",
         required: false,
-        description:
-          "JSONPath to array of release objects. Leave empty for single-release feeds.",
+        description: "JSONPath to array of release objects. Leave empty for single-release feeds.",
       },
       {
         key: "versionPath",
@@ -168,8 +167,7 @@ export const SOURCE_CONFIG_FIELDS: Partial<Record<SourceType, SourceConfigSchema
         label: "Releases XPath",
         placeholder: "//release",
         required: false,
-        description:
-          "XPath to repeating release elements. Leave empty for single-release feeds.",
+        description: "XPath to repeating release elements. Leave empty for single-release feeds.",
       },
       {
         key: "versionXPath",
@@ -184,8 +182,7 @@ export const SOURCE_CONFIG_FIELDS: Partial<Record<SourceType, SourceConfigSchema
         label: "Download XPath",
         placeholder: "//download/@url",
         required: false,
-        description:
-          "XPath for the download URL. Use ./ prefix when Releases XPath is set.",
+        description: "XPath for the download URL. Use ./ prefix when Releases XPath is set.",
       },
     ],
   },

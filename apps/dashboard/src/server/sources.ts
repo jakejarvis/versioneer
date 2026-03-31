@@ -24,6 +24,7 @@ import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-confl
 import type { Db } from "./db-types";
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { scheduleSourceFetch, scheduleSourceReparse } from "./followup-jobs";
+import { atRiskSourceCondition } from "./homepage-helpers";
 import { authMiddleware } from "./middleware";
 import {
   normalizeSourceBaseUrl,
@@ -42,6 +43,8 @@ function sourceOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
       return [direction(sources.sourceType), desc(sources.updatedAt)];
     case "parserKey":
       return [direction(sources.parserKey), desc(sources.updatedAt)];
+    case "channel":
+      return [direction(sources.channel), desc(sources.updatedAt)];
     case "status":
       return [direction(sources.status), desc(sources.updatedAt)];
     case "pollIntervalMinutes":
@@ -133,16 +136,7 @@ export const listSources = createServerFn({ method: "GET" })
 
     const conditions = [];
     if (status === "at_risk") {
-      conditions.push(sql`
-        ${sources.status} = 'error'
-        or (
-          ${sources.status} = 'active'
-          and (
-            ${sources.lastFetchedAt} is null
-            or datetime(${sources.lastFetchedAt}, '+' || ${sources.pollIntervalMinutes} || ' minutes') <= datetime('now')
-          )
-        )
-      `);
+      conditions.push(atRiskSourceCondition);
     } else if (status) {
       conditions.push(eq(sources.status, status));
     }

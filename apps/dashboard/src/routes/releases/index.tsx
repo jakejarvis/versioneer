@@ -9,7 +9,7 @@ import { useReleases } from "@/api/hooks/use-releases";
 import { usePinRelease, useUnpinRelease } from "@/api/hooks/use-releases";
 import type { ReleaseListItem } from "@/api/types";
 import { CreateReleaseDialog } from "@/components/shared/create-release-dialog";
-import { DataTable } from "@/components/shared/data-table";
+import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { AppEntityLink, ReleaseEntityLink } from "@/components/shared/entity-link";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -75,6 +75,7 @@ function ReleasesPage() {
       {
         id: "app",
         meta: { label: "App" },
+        header: "App",
         enableSorting: false,
         cell: ({ row }) =>
           row.original.app ? <AppEntityLink app={row.original.app} showId /> : <span>--</span>,
@@ -157,6 +158,29 @@ function ReleasesPage() {
     [togglePin],
   );
 
+  const bulkActions: BulkAction<ReleaseListItem>[] = [
+    {
+      label: "Pin Selected",
+      disabled: pinRelease.isPending,
+      onClick: async (rows) => {
+        for (const row of rows) {
+          pinRelease.mutate(row.id, { onError: (err) => toast.error(err.message) });
+        }
+        toast.success(`Pinned ${rows.length} release${rows.length === 1 ? "" : "s"}`);
+      },
+    },
+    {
+      label: "Unpin Selected",
+      disabled: unpinRelease.isPending,
+      onClick: async (rows) => {
+        for (const row of rows) {
+          unpinRelease.mutate(row.id, { onError: (err) => toast.error(err.message) });
+        }
+        toast.success(`Unpinned ${rows.length} release${rows.length === 1 ? "" : "s"}`);
+      },
+    },
+  ];
+
   const pageCount = data ? Math.max(1, Math.ceil(data.total / pagination.pageSize)) : 0;
 
   return (
@@ -184,6 +208,8 @@ function ReleasesPage() {
           }
           manualSorting
           enableColumnVisibility
+          enableRowSelection
+          bulkActions={bulkActions}
           toolbar={
             <>
               <Select

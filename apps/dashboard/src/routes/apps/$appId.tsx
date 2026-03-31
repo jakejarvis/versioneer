@@ -36,7 +36,7 @@ import { useReorderSources } from "@/api/hooks/use-sources";
 import type { AppAlias, AppLatestRelease, Release, Source } from "@/api/types";
 import { AppIcon } from "@/components/shared/app-icon";
 import { CreateSourceDialog } from "@/components/shared/create-source-dialog";
-import { DataTable } from "@/components/shared/data-table";
+import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { EditAppDialog } from "@/components/shared/edit-app-dialog";
 import { SourceEntityLink } from "@/components/shared/entity-link";
@@ -407,6 +407,46 @@ function AliasesTab({ appId }: { appId: string }) {
     [deleteAlias, updateAlias],
   );
 
+  const bulkActions: BulkAction<AppAlias>[] = [
+    {
+      label: "Activate Selected",
+      disabled: updateAlias.isPending,
+      onClick: async (rows) => {
+        for (const row of rows) {
+          updateAlias.mutate(
+            { id: row.id, isActive: true },
+            { onError: (err) => toast.error(err.message) },
+          );
+        }
+        toast.success(`Activated ${rows.length} alias${rows.length === 1 ? "" : "es"}`);
+      },
+    },
+    {
+      label: "Deactivate Selected",
+      disabled: updateAlias.isPending,
+      onClick: async (rows) => {
+        for (const row of rows) {
+          updateAlias.mutate(
+            { id: row.id, isActive: false },
+            { onError: (err) => toast.error(err.message) },
+          );
+        }
+        toast.success(`Deactivated ${rows.length} alias${rows.length === 1 ? "" : "es"}`);
+      },
+    },
+    {
+      label: "Delete Selected",
+      variant: "destructive",
+      disabled: deleteAlias.isPending,
+      onClick: async (rows) => {
+        for (const row of rows) {
+          deleteAlias.mutate(row.id, { onError: (err) => toast.error(err.message) });
+        }
+        toast.success(`Deleted ${rows.length} alias${rows.length === 1 ? "" : "es"}`);
+      },
+    },
+  ];
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -427,6 +467,8 @@ function AliasesTab({ appId }: { appId: string }) {
         isLoading={isLoading}
         emptyMessage="No aliases configured."
         enableColumnVisibility
+        enableRowSelection
+        bulkActions={bulkActions}
       />
       <CreateAliasDialog appId={appId} open={createOpen} onOpenChange={setCreateOpen} />
     </div>
@@ -571,7 +613,10 @@ function SortableSourceRow({
   const { ref } = useSortable({ id: source.id, index });
 
   return (
-    <div ref={ref} className="flex items-center gap-3 rounded-lg border bg-card p-3 shadow-sm">
+    <div
+      ref={ref}
+      className="flex items-center gap-3 rounded-lg border bg-card p-3 text-[13px] shadow-sm"
+    >
       <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <SourceEntityLink

@@ -635,6 +635,7 @@ function ParserRunsPanel({ fetchId, sourceId }: { fetchId: string; sourceId: str
       {
         id: "duration",
         meta: { label: "Duration" },
+        header: "Duration",
         enableSorting: false,
         cell: ({ row }) => formatDuration(row.original.startedAt, row.original.finishedAt),
       },

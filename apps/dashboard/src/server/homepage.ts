@@ -29,26 +29,11 @@ import {
   loadSourcesByIds,
   toAppSummary,
 } from "./entity-summaries";
-import { buildAtRiskSources } from "./homepage-helpers";
-
-const staleSourceCondition = sql`
-  ${sources.status} = 'active'
-  and (
-    ${sources.lastFetchedAt} is null
-    or datetime(${sources.lastFetchedAt}, '+' || ${sources.pollIntervalMinutes} || ' minutes') <= datetime('now')
-  )
-`;
-
-const atRiskSourceCondition = sql`
-  ${sources.status} = 'error'
-  or (
-    ${sources.status} = 'active'
-    and (
-      ${sources.lastFetchedAt} is null
-      or datetime(${sources.lastFetchedAt}, '+' || ${sources.pollIntervalMinutes} || ' minutes') <= datetime('now')
-    )
-  )
-`;
+import {
+  atRiskSourceCondition,
+  buildAtRiskSources,
+  staleSourceCondition,
+} from "./homepage-helpers";
 
 export const getHomepage = createServerFn({ method: "GET" }).handler(async () => {
   const db = createDb(env.DB);

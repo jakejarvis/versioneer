@@ -6,7 +6,11 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { useSources, useTriggerSourceFetch } from "@/api/hooks/use-sources";
+import {
+  useBulkUpdateSourceStatus,
+  useSources,
+  useTriggerSourceFetch,
+} from "@/api/hooks/use-sources";
 import type { SourceListItem } from "@/api/types";
 import { CreateSourceDialog } from "@/components/shared/create-source-dialog";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
@@ -48,6 +52,7 @@ function SourcesPage() {
   const pagination = paginationFromSearch(searchState);
   const sorting = sortingFromSearch(searchState);
   const triggerFetch = useTriggerSourceFetch();
+  const bulkStatusUpdate = useBulkUpdateSourceStatus();
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useSources({
@@ -97,6 +102,7 @@ function SourcesPage() {
       {
         id: "app",
         meta: { label: "App" },
+        header: "App",
         enableSorting: false,
         cell: ({ row }) =>
           row.original.app ? <AppEntityLink app={row.original.app} showId /> : <span>--</span>,
@@ -169,6 +175,32 @@ function SourcesPage() {
         for (const row of rows) {
           queueFetch(row.id);
         }
+      },
+    },
+    {
+      label: "Pause Selected",
+      disabled: bulkStatusUpdate.isPending,
+      onClick: async (rows) => {
+        for (const row of rows) {
+          bulkStatusUpdate.mutate(
+            { id: row.id, status: "paused" },
+            { onError: (err) => toast.error(err.message) },
+          );
+        }
+        toast.success(`Paused ${rows.length} source${rows.length === 1 ? "" : "s"}`);
+      },
+    },
+    {
+      label: "Activate Selected",
+      disabled: bulkStatusUpdate.isPending,
+      onClick: async (rows) => {
+        for (const row of rows) {
+          bulkStatusUpdate.mutate(
+            { id: row.id, status: "active" },
+            { onError: (err) => toast.error(err.message) },
+          );
+        }
+        toast.success(`Activated ${rows.length} source${rows.length === 1 ? "" : "s"}`);
       },
     },
   ];

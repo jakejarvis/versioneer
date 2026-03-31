@@ -134,9 +134,7 @@ function parseMultiRelease(
     }
     nodes = result as Node[];
   } catch (e) {
-    errors.push(
-      `Invalid releasesXPath expression: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    errors.push(`Invalid releasesXPath expression: ${e instanceof Error ? e.message : String(e)}`);
     return { releases: [], confidence: 0, parserVersion: xmlParser.version, errors };
   }
 

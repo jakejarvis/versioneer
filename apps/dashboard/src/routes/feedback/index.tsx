@@ -93,6 +93,7 @@ function FeedbackPage() {
       {
         id: "app",
         meta: { label: "App" },
+        header: "App",
         enableSorting: false,
         cell: ({ row }) =>
           row.original.targetApp ? (

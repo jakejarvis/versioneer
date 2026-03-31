@@ -71,9 +71,9 @@ function AuditLogPage() {
         ),
       },
       {
-        id: "targetRef",
+        accessorKey: "targetType",
         meta: { label: "Target" },
-        enableSorting: false,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Target" />,
         cell: ({ row }) => <EntityReferenceLink refItem={row.original.targetRef} />,
       },
       {

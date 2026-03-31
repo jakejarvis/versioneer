@@ -1,6 +1,35 @@
 import { toEpochMs } from "@versioneer/core/dates";
+import { sources } from "@versioneer/db";
+import { sql } from "drizzle-orm";
 
 import type { AppSummary, AtRiskSourceItem, Source } from "@/api/types";
+
+/**
+ * Sources aren't flagged as stale/overdue until this multiple of their
+ * poll interval has elapsed, giving the worker headroom to finish the fetch.
+ */
+export const OVERDUE_GRACE_MULTIPLIER = 1.5;
+
+/** Active source that has missed its poll interval (with grace). */
+export const staleSourceCondition = sql`
+  ${sources.status} = 'active'
+  and (
+    ${sources.lastFetchedAt} is null
+    or datetime(${sources.lastFetchedAt}, '+' || cast(${sources.pollIntervalMinutes} * ${OVERDUE_GRACE_MULTIPLIER} as integer) || ' minutes') <= datetime('now')
+  )
+`;
+
+/** Error sources OR active sources past their grace window. */
+export const atRiskSourceCondition = sql`
+  ${sources.status} = 'error'
+  or (
+    ${sources.status} = 'active'
+    and (
+      ${sources.lastFetchedAt} is null
+      or datetime(${sources.lastFetchedAt}, '+' || cast(${sources.pollIntervalMinutes} * ${OVERDUE_GRACE_MULTIPLIER} as integer) || ' minutes') <= datetime('now')
+    )
+  )
+`;
 
 export interface AtRiskSourceCandidate {
   id: string;
@@ -36,16 +65,17 @@ function computeOverdueMinutes(source: AtRiskSourceCandidate, now: Date): number
   }
 
   const minutesSinceBase = Math.floor((now.getTime() - baseTime) / 60_000);
-  return Math.max(minutesSinceBase - source.pollIntervalMinutes, 0);
+  const gracedInterval = Math.floor(source.pollIntervalMinutes * OVERDUE_GRACE_MULTIPLIER);
+  return Math.max(minutesSinceBase - gracedInterval, 0);
 }
 
 export function buildAtRiskSources(
-  sources: AtRiskSourceCandidate[],
+  candidates: AtRiskSourceCandidate[],
   appSummaries: Map<string, AppSummary>,
   now = new Date(),
   limit = 8,
 ): AtRiskSourceItem[] {
-  return sources
+  return candidates
     .map((source) => {
       const overdueMinutes = computeOverdueMinutes(source, now);
       const risk = source.status === "error" ? "error" : "overdue";

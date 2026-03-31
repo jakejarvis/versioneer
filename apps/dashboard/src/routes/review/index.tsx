@@ -12,7 +12,7 @@ import {
 } from "@/api/hooks/use-review";
 import type { CatalogSuggestion } from "@/api/types";
 import { AppIcon } from "@/components/shared/app-icon";
-import { DataTable } from "@/components/shared/data-table";
+import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { JsonViewer } from "@/components/shared/json-viewer";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -189,6 +189,30 @@ function ReviewPage() {
     [approveMutation, rejectMutation],
   );
 
+  const bulkActions: BulkAction<CatalogSuggestion>[] = [
+    {
+      label: "Approve Selected",
+      disabled: approveMutation.isPending || rejectMutation.isPending,
+      onClick: async (rows) => {
+        for (const row of rows) {
+          approveMutation.mutate(row.id, { onError: (err) => toast.error(err.message) });
+        }
+        toast.success(`Approved ${rows.length} suggestion${rows.length === 1 ? "" : "s"}`);
+      },
+    },
+    {
+      label: "Reject Selected",
+      variant: "destructive",
+      disabled: approveMutation.isPending || rejectMutation.isPending,
+      onClick: async (rows) => {
+        for (const row of rows) {
+          rejectMutation.mutate(row.id, { onError: (err) => toast.error(err.message) });
+        }
+        toast.success(`Rejected ${rows.length} suggestion${rows.length === 1 ? "" : "s"}`);
+      },
+    },
+  ];
+
   const pageCount = data ? Math.max(1, Math.ceil(data.total / pagination.pageSize)) : 0;
 
   return (
@@ -257,6 +281,8 @@ function ReviewPage() {
           }
           manualSorting
           enableColumnVisibility
+          enableRowSelection
+          bulkActions={bulkActions}
           pagination={
             data
               ? {
