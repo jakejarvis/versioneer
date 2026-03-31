@@ -54,6 +54,55 @@ nonisolated struct PrivilegedHelperRegistrationController: PrivilegedHelperRegis
   }
 }
 
+private nonisolated final class XPCLivenessState: @unchecked Sendable {
+  private let lock = NSLock()
+  private var finished = false
+  private let connection: NSXPCConnection
+  private let continuation: CheckedContinuation<Bool, Never>
+
+  init(connection: NSXPCConnection, continuation: CheckedContinuation<Bool, Never>) {
+    self.connection = connection
+    self.continuation = continuation
+  }
+
+  func complete(_ alive: Bool) {
+    lock.lock()
+    defer { lock.unlock() }
+    guard !finished else { return }
+    finished = true
+    connection.invalidationHandler = nil
+    connection.interruptionHandler = nil
+    connection.invalidate()
+    continuation.resume(returning: alive)
+  }
+}
+
+private nonisolated final class XPCOperationState: @unchecked Sendable {
+  private let lock = NSLock()
+  private var finished = false
+  private let connection: NSXPCConnection
+  private let continuation: CheckedContinuation<PrivilegedOperationResult, any Error>
+
+  init(
+    connection: NSXPCConnection,
+    continuation: CheckedContinuation<PrivilegedOperationResult, any Error>
+  ) {
+    self.connection = connection
+    self.continuation = continuation
+  }
+
+  func complete(_ result: Result<PrivilegedOperationResult, any Error>) {
+    lock.lock()
+    defer { lock.unlock() }
+    guard !finished else { return }
+    finished = true
+    connection.invalidationHandler = nil
+    connection.interruptionHandler = nil
+    connection.invalidate()
+    continuation.resume(with: result)
+  }
+}
+
 nonisolated struct XPCPrivilegedHelperConnectionProvider: PrivilegedHelperConnectionProviding {
   /// Pings the helper to check if it is alive. Returns false if the connection fails or times out.
   func checkLiveness() async -> Bool {
@@ -67,39 +116,28 @@ nonisolated struct XPCPrivilegedHelperConnectionProvider: PrivilegedHelperConnec
         connection.setCodeSigningRequirement(PrivilegedHelperConstants.helperCodeSigningRequirement)
       }
 
-      let lock = NSLock()
-      var finished = false
-      func complete(_ alive: Bool) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !finished else { return }
-        finished = true
-        connection.invalidationHandler = nil
-        connection.interruptionHandler = nil
-        connection.invalidate()
-        continuation.resume(returning: alive)
-      }
+      let state = XPCLivenessState(connection: connection, continuation: continuation)
 
       // 5-second timeout
       DispatchQueue.global().asyncAfter(deadline: .now() + 5) {
-        complete(false)
+        state.complete(false)
       }
 
-      connection.invalidationHandler = { complete(false) }
-      connection.interruptionHandler = { complete(false) }
+      connection.invalidationHandler = { state.complete(false) }
+      connection.interruptionHandler = { state.complete(false) }
       connection.resume()
 
       guard
         let proxy = connection.remoteObjectProxyWithErrorHandler({ _ in
-          complete(false)
+          state.complete(false)
         }) as? PrivilegedInstallerXPCProtocol
       else {
-        complete(false)
+        state.complete(false)
         return
       }
 
       proxy.ping { alive in
-        complete(alive)
+        state.complete(alive)
       }
     }
   }
@@ -115,28 +153,17 @@ nonisolated struct XPCPrivilegedHelperConnectionProvider: PrivilegedHelperConnec
         connection.setCodeSigningRequirement(PrivilegedHelperConstants.helperCodeSigningRequirement)
       }
 
-      let lock = NSLock()
-      var finished = false
-      func complete(_ result: Result<PrivilegedOperationResult, Error>) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !finished else { return }
-        finished = true
-        connection.invalidationHandler = nil
-        connection.interruptionHandler = nil
-        connection.invalidate()
-        continuation.resume(with: result)
-      }
+      let state = XPCOperationState(connection: connection, continuation: continuation)
 
       connection.invalidationHandler = {
-        complete(
+        state.complete(
           .failure(
             InstallError.privilegedHelperConnectionFailed(
               "The privileged helper connection was invalidated."
             )))
       }
       connection.interruptionHandler = {
-        complete(
+        state.complete(
           .failure(
             InstallError.privilegedHelperConnectionFailed(
               "The privileged helper connection was interrupted."
@@ -147,11 +174,11 @@ nonisolated struct XPCPrivilegedHelperConnectionProvider: PrivilegedHelperConnec
 
       guard
         let proxy = connection.remoteObjectProxyWithErrorHandler({ error in
-          complete(
+          state.complete(
             .failure(InstallError.privilegedHelperConnectionFailed(error.localizedDescription)))
         }) as? PrivilegedInstallerXPCProtocol
       else {
-        complete(
+        state.complete(
           .failure(
             InstallError.privilegedHelperConnectionFailed(
               "Versioneer could not create a privileged helper connection."
@@ -161,14 +188,14 @@ nonisolated struct XPCPrivilegedHelperConnectionProvider: PrivilegedHelperConnec
 
       proxy.perform(request) { result in
         guard result.succeeded else {
-          complete(
+          state.complete(
             .failure(
               InstallError.privilegedHelperExecutionFailed(
                 result.errorMessage ?? result.detail
               )))
           return
         }
-        complete(.success(result))
+        state.complete(.success(result))
       }
     }
   }
