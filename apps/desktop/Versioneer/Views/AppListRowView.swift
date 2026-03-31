@@ -140,17 +140,16 @@ struct AppListRowView: View {
         tint: .red,
         systemImage: "xmark.circle.fill"
       )
-    } else if row.hasUpdateAction && row.isUpdateAvailable {
+    } else if row.hasUpdateAction && row.isUpdateAvailable, let result {
       Button {
-        guard let result else { return }
         Task { await appState.performPrimaryUpdate(for: result) }
       } label: {
-        Text("Update")
+        Text(appState.primaryActionCompactTitle(for: result))
           .font(.caption.weight(.semibold))
       }
       .buttonStyle(.glass)
       .controlSize(.small)
-      .accessibilityLabel("Update \(row.appName)")
+      .accessibilityLabel("\(appState.primaryActionTitle(for: result)) \(row.appName)")
     } else {
       StatusChip(
         title: row.statusText,
@@ -192,9 +191,13 @@ struct AppListRowView: View {
         Button("Update via Homebrew") {
           Task { await appState.brewUpgrade(result) }
         }
-      } else {
+      } else if result.canInstall {
         Button("Update") {
           Task { await appState.install(result) }
+        }
+      } else {
+        Button(appState.primaryActionTitle(for: result)) {
+          appState.openManualUpdate(result)
         }
       }
 

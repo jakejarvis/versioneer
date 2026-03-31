@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Logging
 
@@ -55,6 +56,20 @@ actor AppScanner {
         } else {
           Logger.appScanner.debug("Could not read bundle: \(item.lastPathComponent)")
         }
+      }
+    }
+
+    // Include currently running apps even if they live outside the configured scan roots.
+    let runningBundleURLs = await MainActor.run {
+      NSWorkspace.shared.runningApplications.compactMap(\.bundleURL)
+    }
+    for bundleURL in runningBundleURLs where bundleURL.pathExtension == "app" {
+      let resolved = bundleURL.resolvingSymlinksInPath().path
+      guard seenPaths.insert(resolved).inserted else { continue }
+
+      if let app = BundleMetadataReader.readApp(at: bundleURL) {
+        guard !GloballyIgnoredApps.shouldIgnore(bundleId: app.bundleId) else { continue }
+        results.append(app)
       }
     }
 

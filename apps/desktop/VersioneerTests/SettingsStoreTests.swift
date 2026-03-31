@@ -108,6 +108,21 @@ struct SettingsStoreTests {
     #expect(settings.masCliPathOverride == nil)
   }
 
+  @Test func defaultScanRootsIncludeSharedApplicationsAndExtras() throws {
+    let (settings, suiteName) = try makeSettings()
+    defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+
+    settings.addExtraScanRoot("/Volumes/Tools/Apps")
+    settings.addExtraScanRoot("/Volumes/Tools/Apps")
+
+    let roots = settings.allScanRootURLs.map(\.path)
+
+    #expect(roots.contains("/Applications"))
+    #expect(roots.contains("/Users/Shared/Applications"))
+    #expect(roots.contains("/Volumes/Tools/Apps"))
+    #expect(roots.filter { $0 == "/Volumes/Tools/Apps" }.count == 1)
+  }
+
   private func makeSettings() throws -> (SettingsStore, String) {
     let suiteName = "com.jakejarvis.versioneer.tests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))

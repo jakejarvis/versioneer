@@ -7,6 +7,7 @@ export type {
   MatchMethod,
   MatchExplanation,
   AliasRecord,
+  TrustAssertionRecord,
 } from "./types";
 export { matchApp } from "./matcher";
 export { normalizeName, normalizeBundleId } from "./normalize";

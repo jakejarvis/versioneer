@@ -188,6 +188,10 @@ struct DetailPaneView: View {
     appState.isMasUpgradeable(for: result)
   }
 
+  private var manualUpdateAction: (title: String, detail: String, url: URL)? {
+    appState.manualUpdateAction(for: result)
+  }
+
   @ViewBuilder
   private var primaryActionSection: some View {
     if isUserIgnored {
@@ -198,6 +202,8 @@ struct DetailPaneView: View {
       brewUpgradeActionSection
     } else if result.canInstall {
       standardInstallActionSection
+    } else if let manualUpdateAction, result.decision == .updateAvailable {
+      manualUpdateActionSection(action: manualUpdateAction)
     } else if result.decision == .updateAvailable {
       VStack(alignment: .leading, spacing: 8) {
         Text("Install Unavailable")
@@ -224,6 +230,34 @@ struct DetailPaneView: View {
       }
       .buttonStyle(.glassProminent)
       .controlSize(.large)
+    }
+    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
+  }
+
+  private func manualUpdateActionSection(
+    action: (title: String, detail: String, url: URL)
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 14) {
+      SectionHeader(
+        title: "Manual Update",
+        subtitle: action.detail
+      )
+
+      Button {
+        appState.openManualUpdate(result)
+      } label: {
+        Label(action.title, systemImage: "arrow.up.forward.app")
+          .font(.body.weight(.semibold))
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.glassProminent)
+      .controlSize(.large)
+      .disabled(installState.isRunning)
+
+      Text(action.url.absoluteString)
+        .font(.caption.monospaced())
+        .foregroundStyle(.secondary)
+        .textSelection(.enabled)
     }
     .glassCard(interactive: true, cornerRadius: 22, padding: 18)
   }

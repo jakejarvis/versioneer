@@ -33,6 +33,7 @@ export interface MatchInput {
   teamId?: string | null;
   version?: string | null;
   sparkleFeedUrl?: string | null;
+  sparklePublicKey?: string | null;
   masAppId?: string | null;
   electronUpdateUrl?: string | null;
   homebrewCaskToken?: string | null;
@@ -46,6 +47,12 @@ export interface AliasRecord {
   normalizedValue: string;
   isExact: boolean;
   confidenceWeight: number;
+}
+
+export interface TrustAssertionRecord {
+  appId: string;
+  assertionType: string;
+  value: string;
 }
 
 export interface MatchExplanation {

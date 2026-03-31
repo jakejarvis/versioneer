@@ -228,7 +228,7 @@ actor ElectronChecker {
     var version: String?
     var releaseDate: String?
     var path: String?
-    var filesUrl: String?
+    var filesUrls: [String] = []
     var inFilesSection = false
     var filesIndentation: Int?
 
@@ -262,25 +262,44 @@ actor ElectronChecker {
         path = String(trimmed.dropFirst("path:".count))
           .trimmingCharacters(in: .whitespaces)
           .trimmingCharacters(in: CharacterSet(charactersIn: "'\""))
-      } else if inFilesSection, filesUrl == nil, trimmed.hasPrefix("url:") {
-        filesUrl = String(trimmed.dropFirst("url:".count))
-          .trimmingCharacters(in: .whitespaces)
-          .trimmingCharacters(in: CharacterSet(charactersIn: "'\""))
-      } else if inFilesSection, filesUrl == nil, trimmed.hasPrefix("- url:") {
-        filesUrl = String(trimmed.dropFirst("- url:".count))
-          .trimmingCharacters(in: .whitespaces)
-          .trimmingCharacters(in: CharacterSet(charactersIn: "'\""))
+      } else if inFilesSection, trimmed.hasPrefix("url:") {
+        filesUrls.append(
+          String(trimmed.dropFirst("url:".count))
+            .trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "'\""))
+        )
+      } else if inFilesSection, trimmed.hasPrefix("- url:") {
+        filesUrls.append(
+          String(trimmed.dropFirst("- url:".count))
+            .trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "'\""))
+        )
       }
     }
 
     guard let version else { return nil }
-    let downloadUrl = resolveDownloadURL(pathOrUrl: filesUrl ?? path, updateUrl: updateUrl)
+    let preferredPath =
+      preferredDownloadPath(from: filesUrls)
+      ?? preferredDownloadPath(from: path.map { [$0] } ?? [])
+      ?? filesUrls.first
+      ?? path
+    let downloadUrl = resolveDownloadURL(pathOrUrl: preferredPath, updateUrl: updateUrl)
 
     return ElectronResult(
       latestVersion: version,
       downloadUrl: downloadUrl,
       publishedAt: releaseDate
     )
+  }
+
+  private func preferredDownloadPath(from candidates: [String]) -> String? {
+    candidates.first(where: isInstallablePath) ?? candidates.first
+  }
+
+  private func isInstallablePath(_ candidate: String) -> Bool {
+    let pathExtension =
+      (URL(string: candidate)?.pathExtension ?? (candidate as NSString).pathExtension).lowercased()
+    return ["zip", "dmg", "pkg"].contains(pathExtension)
   }
 
   private func resolveDownloadURL(pathOrUrl: String?, updateUrl: String) -> String? {

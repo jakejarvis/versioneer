@@ -712,6 +712,7 @@ final class AppState {
     }
 
     if let electron {
+      let artifact = artifactFromDownloadURL(electron.downloadUrl, minOsVersion: nil)
       let directInstall = directInstallDetails(
         downloadUrl: electron.downloadUrl,
         minOsVersion: nil,
@@ -722,7 +723,7 @@ final class AppState {
           sourceKind: .electron,
           latestVersion: electron.latestVersion,
           publishedAt: electron.publishedAt,
-          artifact: directInstall?.artifact,
+          artifact: directInstall?.artifact ?? artifact,
           installStrategy: directInstall?.strategy,
           updateDetected: false
         )
@@ -994,7 +995,10 @@ final class AppState {
     guard result.decision == .updateAvailable else { return false }
     let currentState = installState ?? installCoordinator.state(for: result)
     guard currentState.phase == .idle else { return false }
-    return result.canInstall || isMasUpgradeable(for: result) || isHomebrewInstalled(for: result)
+    return result.canInstall
+      || isMasUpgradeable(for: result)
+      || isHomebrewInstalled(for: result)
+      || manualUpdateAction(for: result) != nil
   }
 
   func performPrimaryUpdate(for result: AppDecision) async {
@@ -1002,8 +1006,10 @@ final class AppState {
       await masUpgrade(result)
     } else if isHomebrewInstalled(for: result) {
       await brewUpgrade(result)
-    } else {
+    } else if result.canInstall {
       await install(result)
+    } else {
+      openManualUpdate(result)
     }
   }
 
@@ -1070,6 +1076,80 @@ final class AppState {
   func isMasUpgradeable(for result: AppDecision) -> Bool {
     guard let app = installedApp(for: result) else { return false }
     return app.isMasApp && app.masAppId != nil && settings.isMasCliAvailable
+  }
+
+  func primaryActionTitle(for result: AppDecision) -> String {
+    if isMasUpgradeable(for: result) {
+      return "Update via Mac App Store"
+    }
+    if isHomebrewInstalled(for: result) {
+      return "Update via Homebrew"
+    }
+    if result.canInstall {
+      return "Update"
+    }
+    return manualUpdateAction(for: result)?.title ?? "Update"
+  }
+
+  func primaryActionCompactTitle(for result: AppDecision) -> String {
+    if result.canInstall || isMasUpgradeable(for: result) || isHomebrewInstalled(for: result) {
+      return "Update"
+    }
+    return manualUpdateAction(for: result) == nil ? "Update" : "Open"
+  }
+
+  func manualUpdateAction(for result: AppDecision) -> (title: String, detail: String, url: URL)? {
+    guard result.decision == .updateAvailable else { return nil }
+    guard let installedApp = installedApp(for: result) else { return nil }
+
+    if installedApp.isMasApp,
+      let masAppId = installedApp.masAppId,
+      !settings.isMasCliAvailable,
+      let storeURL = URL(string: "https://apps.apple.com/app/id\(masAppId)")
+    {
+      return (
+        "Open App Store Listing",
+        "Versioneer found an App Store update, but `mas` is not configured on this Mac.",
+        storeURL
+      )
+    }
+
+    if let downloadURLString = result.artifact?.downloadUrl,
+      let downloadURL = URL(string: downloadURLString)
+    {
+      return (
+        "Open Download",
+        "Versioneer found a downloadable update, but this Mac does not meet the trust requirements for one-click install.",
+        downloadURL
+      )
+    }
+
+    if let updateURLString = installedApp.electronUpdateUrl,
+      let updateURL = URL(string: updateURLString)
+    {
+      return (
+        "Open Update Feed",
+        "Versioneer found a local Electron update source but could not derive a trusted automatic install route.",
+        updateURL
+      )
+    }
+
+    if let feedURLString = installedApp.sparkleFeedUrl,
+      let feedURL = URL(string: feedURLString)
+    {
+      return (
+        "Open Appcast",
+        "Versioneer found a Sparkle feed for this app but could not use it for an automatic install.",
+        feedURL
+      )
+    }
+
+    return nil
+  }
+
+  func openManualUpdate(_ result: AppDecision) {
+    guard let action = manualUpdateAction(for: result) else { return }
+    NSWorkspace.shared.open(action.url)
   }
 
   func refreshDisplayedResults(preservingSelectionID selectionID: String? = nil) {

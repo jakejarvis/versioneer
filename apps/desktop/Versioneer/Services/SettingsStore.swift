@@ -155,6 +155,7 @@ final class SettingsStore {
   var allScanRootURLs: [URL] {
     var urls: [URL] = [
       URL(fileURLWithPath: "/Applications"),
+      URL(fileURLWithPath: "/Users/Shared/Applications"),
     ]
     if let home = FileManager.default.homeDirectoryForCurrentUser as URL? {
       urls.append(home.appendingPathComponent("Applications"))

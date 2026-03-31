@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import { matchApp } from "../matcher";
-import type { AliasRecord } from "../types";
+import type { AliasRecord, TrustAssertionRecord } from "../types";
 
 const aliases: AliasRecord[] = [
   {
@@ -75,6 +75,19 @@ const aliases: AliasRecord[] = [
     normalizedValue: "409201541",
     isExact: true,
     confidenceWeight: 100,
+  },
+];
+
+const sparkleTrustAssertions: TrustAssertionRecord[] = [
+  {
+    appId: "app_firefox",
+    assertionType: "sparkle_public_key",
+    value: "abc123+/=",
+  },
+  {
+    appId: "app_vscode",
+    assertionType: "sparkle_public_key",
+    value: "xyz789+/=",
   },
 ];
 
@@ -159,5 +172,62 @@ describe("matchApp", () => {
     expect(result.appId).toBe("app_firefox");
     expect(result.method).toBe("exact_bundle_id");
     expect(result.ambiguous).toBe(false);
+  });
+
+  it("uses matching Sparkle public keys to break low-confidence ambiguity", () => {
+    const result = matchApp(
+      {
+        appName: "Firefox",
+        sparklePublicKey: " abc123+/= ",
+      },
+      [
+        {
+          appId: "app_firefox",
+          appName: "Firefox",
+          aliasType: "name",
+          value: "Firefox",
+          normalizedValue: "firefox",
+          isExact: false,
+          confidenceWeight: 60,
+        },
+        {
+          appId: "app_other",
+          appName: "Firefox ESR",
+          aliasType: "name",
+          value: "Firefox",
+          normalizedValue: "firefox",
+          isExact: false,
+          confidenceWeight: 60,
+        },
+      ],
+      [
+        ...sparkleTrustAssertions,
+        {
+          appId: "app_other",
+          assertionType: "sparkle_public_key",
+          value: "different-key",
+        },
+      ],
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.appId).toBe("app_firefox");
+    expect(result.method).toBe("alias_name");
+    expect(result.ambiguous).toBe(false);
+    expect(result.confidence).toBe(72);
+  });
+
+  it("does not use Sparkle public keys as a standalone match key", () => {
+    const result = matchApp(
+      {
+        appName: "Unknown Browser",
+        sparklePublicKey: "abc123+/=",
+      },
+      aliases,
+      sparkleTrustAssertions,
+    );
+
+    expect(result.matched).toBe(false);
+    expect(result.appId).toBeNull();
   });
 });

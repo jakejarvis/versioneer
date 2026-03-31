@@ -389,6 +389,74 @@ struct AppStatePresentationTests {
     #expect(state.canPerformPrimaryUpdate(for: decision))
   }
 
+  @Test func localElectronDownloadsExposeManualFallbackAction() throws {
+    let state = AppState()
+
+    let decision = AppDecision(
+      appName: "Mystery Electron",
+      bundleId: nil,
+      installedVersion: "1.0",
+      matchedAppId: nil,
+      matchedAppName: nil,
+      matchConfidence: nil,
+      decision: .updateAvailable,
+      trackingState: .localOnly,
+      localReasonCode: .notFound,
+      latestVersion: "1.1",
+      latestVersionRaw: "1.1",
+      latestReleaseId: nil,
+      channel: nil,
+      availableChannels: nil,
+      homebrewCaskToken: nil,
+      releasedAt: nil,
+      staleSince: nil,
+      iconUrl: nil,
+      artifact: .init(
+        id: nil,
+        downloadUrl: "https://updates.example.com/mystery-1.1.zip",
+        architecture: nil,
+        minOsVersion: nil,
+        artifactType: "zip",
+        sizeBytes: nil,
+        sha256: nil
+      ),
+      installStrategy: nil,
+      localAppID: "/Applications/Mystery Electron.app"
+    )
+    let installedApp = InstalledApp(
+      name: "Mystery Electron",
+      bundleId: nil,
+      version: "1.0",
+      buildNumber: nil,
+      teamId: nil,
+      path: "/Applications/Mystery Electron.app",
+      architecture: nil,
+      sparkleFeedUrl: nil,
+      sparklePublicKey: nil,
+      isSparkleApp: false,
+      isMasApp: false,
+      masAppId: nil,
+      isElectronApp: true,
+      electronUpdateProvider: "generic",
+      electronUpdateUrl: "https://updates.example.com/feed",
+      codeSigningAuthority: nil,
+      appCategory: nil,
+      minMacOSVersion: nil,
+      isHomebrewInstalled: false,
+      homebrewCaskToken: nil
+    )
+
+    state.installedApps = [installedApp]
+    state.rawInventoryResults = [decision]
+    state.refreshDisplayedResults()
+
+    let row = try #require(state.resultsBrowserRows.first)
+    #expect(row.canInstall == false)
+    #expect(row.hasUpdateAction == true)
+    #expect(state.primaryActionCompactTitle(for: decision) == "Open")
+    #expect(state.primaryActionTitle(for: decision) == "Open Download")
+  }
+
   private func seed(_ state: AppState, with results: [AppDecision]) {
     state.installedApps = results.map(DesktopUITestFixtures.makeInstalledApp)
     state.rawInventoryResults = results

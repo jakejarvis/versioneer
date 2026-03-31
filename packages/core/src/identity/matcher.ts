@@ -1,6 +1,12 @@
 import { normalizeAliasValue } from "./aliases";
 import { normalizeBundleId, normalizeName } from "./normalize";
-import type { MatchInput, MatchResult, MatchCandidate, AliasRecord } from "./types";
+import type {
+  MatchInput,
+  MatchResult,
+  MatchCandidate,
+  AliasRecord,
+  TrustAssertionRecord,
+} from "./types";
 
 const CONFIDENCE_EXACT_BUNDLE = 100;
 const CONFIDENCE_ALIAS_BUNDLE = 95;
@@ -10,6 +16,7 @@ const CONFIDENCE_ELECTRON_UPDATE_URL = 89;
 const CONFIDENCE_HOMEBREW_CASK = 88;
 const CONFIDENCE_TEAM_NAME = 80;
 const CONFIDENCE_ALIAS_NAME = 60;
+const CONFIDENCE_SPARKLE_PUBLIC_KEY_BONUS = 12;
 const MULTI_SIGNAL_BONUS = 8;
 const AMBIGUITY_THRESHOLD = 10;
 
@@ -17,7 +24,11 @@ const AMBIGUITY_THRESHOLD = 10;
  * Match an installed app against known aliases.
  * Aliases should be pre-fetched from D1 and passed in.
  */
-export function matchApp(input: MatchInput, aliases: AliasRecord[]): MatchResult {
+export function matchApp(
+  input: MatchInput,
+  aliases: AliasRecord[],
+  trustAssertions: TrustAssertionRecord[] = [],
+): MatchResult {
   const candidates: MatchCandidate[] = [];
 
   if (input.bundleId) {
@@ -123,6 +134,8 @@ export function matchApp(input: MatchInput, aliases: AliasRecord[]): MatchResult
     }
   }
 
+  applySparklePublicKeyBonuses(candidates, input, trustAssertions);
+
   if (candidates.length > 0) {
     return buildResult(candidates);
   }
@@ -136,6 +149,57 @@ export function matchApp(input: MatchInput, aliases: AliasRecord[]): MatchResult
     candidates: [],
     ambiguous: false,
   };
+}
+
+function applySparklePublicKeyBonuses(
+  candidates: MatchCandidate[],
+  input: MatchInput,
+  trustAssertions: TrustAssertionRecord[],
+): void {
+  if (!input.sparklePublicKey || candidates.length === 0 || trustAssertions.length === 0) {
+    return;
+  }
+
+  const normalizedKey = normalizeSparklePublicKey(input.sparklePublicKey);
+  if (!normalizedKey) {
+    return;
+  }
+
+  const matchingAppIds = new Set(
+    trustAssertions
+      .filter(
+        (assertion) =>
+          assertion.assertionType === "sparkle_public_key" &&
+          normalizeSparklePublicKey(assertion.value) === normalizedKey,
+      )
+      .map((assertion) => assertion.appId),
+  );
+  if (matchingAppIds.size === 0) {
+    return;
+  }
+
+  const strongestCandidates = new Map<string, MatchCandidate>();
+  for (const candidate of candidates) {
+    if (!matchingAppIds.has(candidate.appId)) {
+      continue;
+    }
+
+    const existing = strongestCandidates.get(candidate.appId);
+    if (!existing || candidate.confidence > existing.confidence) {
+      strongestCandidates.set(candidate.appId, candidate);
+    }
+  }
+
+  for (const candidate of strongestCandidates.values()) {
+    candidates.push({
+      ...candidate,
+      confidence: CONFIDENCE_SPARKLE_PUBLIC_KEY_BONUS,
+    });
+  }
+}
+
+function normalizeSparklePublicKey(value: string): string {
+  return value.replace(/\s+/g, "").trim();
 }
 
 function pushAliasMatches(

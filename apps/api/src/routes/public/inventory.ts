@@ -1,5 +1,5 @@
 import { matchApp, normalizeAliasValue } from "@versioneer/core/identity";
-import type { AliasRecord } from "@versioneer/core/identity";
+import type { AliasRecord, TrustAssertionRecord } from "@versioneer/core/identity";
 import { inventoryCheckRequestSchema, toGitHubApiReleasesUrl } from "@versioneer/core/validation";
 import type { AppDecision } from "@versioneer/core/validation";
 import { normalizeVersion } from "@versioneer/core/versioning";
@@ -703,6 +703,28 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       confidenceWeight: a.confidenceWeight,
     }));
     const caskTokenByApp = pickPreferredAliasMap(allAliases, "homebrew_cask");
+    const sparkleTrustAssertions: TrustAssertionRecord[] = (
+      await db
+        .select({
+          appId: trustAssertions.appId,
+          assertionType: trustAssertions.assertionType,
+          value: trustAssertions.value,
+        })
+        .from(trustAssertions)
+        .where(eq(trustAssertions.assertionType, "sparkle_public_key"))
+        .limit(10_000)
+        .all()
+    ).flatMap((assertion) =>
+      assertion.appId
+        ? [
+            {
+              appId: assertion.appId,
+              assertionType: assertion.assertionType,
+              value: assertion.value,
+            },
+          ]
+        : [],
+    );
 
     // Load all latest releases, indexed by appId → channel → release
     const latestReleases = await db.select().from(appLatestReleases).limit(10_000).all();
@@ -753,11 +775,13 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           teamId: installedApp.teamId,
           version: installedApp.version,
           sparkleFeedUrl: installedApp.sparkleFeedUrl,
+          sparklePublicKey: installedApp.sparklePublicKey,
           masAppId: installedApp.masAppId,
           electronUpdateUrl: installedApp.electronUpdateUrl,
           homebrewCaskToken: installedApp.homebrewCaskToken,
         },
         aliasRecords,
+        sparkleTrustAssertions,
       );
 
       let decision: AppDecision["decision"] = "local_only";
