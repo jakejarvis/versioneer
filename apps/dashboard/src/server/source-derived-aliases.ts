@@ -1,5 +1,5 @@
 import { normalizeAliasValue } from "@versioneer/core/identity";
-import { resolveSourceUrl } from "@versioneer/core/validation";
+import { extractSourceIdentifier, resolveSourceUrl } from "@versioneer/core/validation";
 import { appAliases, generateId, idPrefixes } from "@versioneer/db";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { and, eq, ne } from "drizzle-orm";
@@ -51,9 +51,11 @@ export function normalizeSourceBaseUrl(
   baseUrl: string | null,
 ): string | null {
   if (!baseUrl) return null;
-  // resolveSourceUrl handles identifier → URL for all types
-  // (e.g. "owner/repo" → GitHub API URL, "firefox" → Homebrew API URL)
-  return resolveSourceUrl(sourceType, baseUrl) ?? baseUrl;
+  // Extract the identifier first so this is idempotent — a URL that was
+  // already resolved won't be double-encoded (e.g. a cask URL won't become
+  // https://formulae.brew.sh/api/cask/https%3A%2F%2F…).
+  const identifier = extractSourceIdentifier(sourceType, baseUrl);
+  return resolveSourceUrl(sourceType, identifier) ?? baseUrl;
 }
 
 export async function syncSourceDerivedAliases(params: {
