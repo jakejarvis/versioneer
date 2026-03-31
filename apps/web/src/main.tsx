@@ -1,16 +1,19 @@
+import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { routeTree } from "./routeTree.gen";
 
-import { App } from "./App";
+const router = createRouter({ routeTree });
 
-import "./app.css";
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router;
+  }
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <TooltipProvider>
-      <App />
-    </TooltipProvider>
+    <RouterProvider router={router} />
   </StrictMode>,
 );

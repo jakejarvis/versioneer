@@ -57,12 +57,7 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
   const priorFetch = await db
     .select({ id: sourceFetches.id })
     .from(sourceFetches)
-    .where(
-      and(
-        eq(sourceFetches.sourceId, source.id),
-        ne(sourceFetches.id, fetchRecord.id),
-      ),
-    )
+    .where(and(eq(sourceFetches.sourceId, source.id), ne(sourceFetches.id, fetchRecord.id)))
     .limit(1)
     .get();
   const isInitialFetch = !priorFetch;

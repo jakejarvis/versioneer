@@ -1,9 +1,14 @@
+import { createFileRoute } from "@tanstack/react-router";
 import { ArrowUpRightIcon, HardDriveDownloadIcon } from "lucide-react";
 
-import { RecentReleases } from "./components/recent-releases";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
+import { RecentReleases } from "@/components/recent-releases";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-export function App() {
+export const Route = createFileRoute("/")({
+  component: IndexPage,
+});
+
+function IndexPage() {
   return (
     <div className="mx-auto max-w-xl px-6 py-20 md:py-32 space-y-10">
       <header className="flex items-center justify-between gap-2.5 text-white">

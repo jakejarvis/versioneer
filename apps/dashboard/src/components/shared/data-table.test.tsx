@@ -80,7 +80,7 @@ describe("DataTable", () => {
   });
 
   it("supports controlled manual sorting and clears selection when sort state changes", async () => {
-    const bulkAction = vi.fn();
+    const bulkAction = vi.fn<(selectedRows: RowData[]) => void>();
 
     render(<ControlledTable onBulkAction={bulkAction} />);
 
@@ -96,7 +96,7 @@ describe("DataTable", () => {
   });
 
   it("enables bulk actions for selected rows and clears selection after invoking them", async () => {
-    const bulkAction = vi.fn();
+    const bulkAction = vi.fn<(selectedRows: RowData[]) => void>();
 
     render(<ControlledTable onBulkAction={bulkAction} />);
 
