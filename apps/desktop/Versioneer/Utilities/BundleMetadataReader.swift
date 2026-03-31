@@ -1,3 +1,4 @@
+import CoreServices
 import Foundation
 import Security
 
@@ -36,7 +37,7 @@ nonisolated enum BundleMetadataReader {
       sparklePublicKey: sparkleInfo.publicKey,
       isSparkleApp: sparkleInfo.hasSparkle,
       isMasApp: isMasApp,
-      masAppId: nil,
+      masAppId: isMasApp ? readSpotlightAdamID(at: url) : nil,
       isElectronApp: electronInfo.isElectron,
       electronUpdateProvider: electronInfo.provider,
       electronUpdateUrl: electronInfo.updateUrl,
@@ -163,6 +164,20 @@ nonisolated enum BundleMetadataReader {
     let receiptPath = bundle.bundleURL
       .appendingPathComponent("Contents/_MASReceipt/receipt")
     return FileManager.default.fileExists(atPath: receiptPath.path)
+  }
+
+  /// Reads the App Store Adam ID from Spotlight metadata.
+  /// Returns nil if the app is not indexed or has no Adam ID.
+  nonisolated private static func readSpotlightAdamID(at url: URL) -> String? {
+    guard let mdItem = MDItemCreateWithURL(kCFAllocatorDefault, url as CFURL) else { return nil }
+    guard let adamID = MDItemCopyAttribute(mdItem, "kMDItemAppStoreAdamID" as CFString)
+    else { return nil }
+    if let number = adamID as? NSNumber {
+      let intValue = number.int64Value
+      guard intValue > 0 else { return nil }
+      return String(intValue)
+    }
+    return nil
   }
 
   // MARK: - Electron

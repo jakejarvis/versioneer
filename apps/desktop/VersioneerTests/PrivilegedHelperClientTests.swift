@@ -91,6 +91,7 @@ struct PrivilegedHelperClientTests {
     let client = PrivilegedHelperClient(
       registrationController: MockRegistrationController(initialStatus: .enabled),
       connectionProvider: MockConnectionProvider(
+        livenessResult: true,
         error: InstallError.privilegedHelperConnectionFailed("invalidated"))
     )
 
@@ -110,12 +111,92 @@ struct PrivilegedHelperClientTests {
       Issue.record("Unexpected error: \(error.localizedDescription)")
     }
   }
+
+  // MARK: - Desync detection
+
+  @Test func proceedsWhenHelperIsAlive() async throws {
+    let client = PrivilegedHelperClient(
+      registrationController: MockRegistrationController(initialStatus: .enabled),
+      connectionProvider: MockConnectionProvider(
+        livenessResult: true,
+        result: PrivilegedOperationResult(
+          operationType: .installPackage,
+          succeeded: true,
+          detail: "ok"
+        ))
+    )
+
+    let result = try await client.performOperation(
+      executionId: "exec_test",
+      stagingDirectory: FileManager.default.temporaryDirectory
+    )
+    #expect(result.succeeded)
+  }
+
+  @Test func recoversFromDesyncViaReRegistration() async throws {
+    let registration = MockRegistrationController(
+      initialStatus: .enabled, statusAfterRegister: .enabled)
+    // First liveness check fails (desync), second succeeds (after re-registration)
+    let connection = MockConnectionProvider(
+      livenessSequence: [false, true],
+      result: PrivilegedOperationResult(
+        operationType: .installPackage,
+        succeeded: true,
+        detail: "ok"
+      ))
+    let client = PrivilegedHelperClient(
+      registrationController: registration,
+      connectionProvider: connection
+    )
+
+    let result = try await client.performOperation(
+      executionId: "exec_test",
+      stagingDirectory: FileManager.default.temporaryDirectory
+    )
+    #expect(result.succeeded)
+    #expect(registration.unregisterCalls == 1)
+    #expect(registration.registerCalls == 1)
+  }
+
+  @Test func failsWhenDesyncRecoveryExhausted() async {
+    let registration = MockRegistrationController(
+      initialStatus: .enabled, statusAfterRegister: .enabled)
+    // Both liveness checks fail
+    let connection = MockConnectionProvider(
+      livenessSequence: [false, false],
+      result: PrivilegedOperationResult(
+        operationType: .installPackage,
+        succeeded: true,
+        detail: "unused"
+      ))
+    let client = PrivilegedHelperClient(
+      registrationController: registration,
+      connectionProvider: connection
+    )
+
+    do {
+      _ = try await client.performOperation(
+        executionId: "exec_test",
+        stagingDirectory: FileManager.default.temporaryDirectory
+      )
+      Issue.record("Expected connection failure")
+    } catch let error as InstallError {
+      guard case .privilegedHelperConnectionFailed(let message) = error else {
+        Issue.record("Unexpected install error: \(error.localizedDescription)")
+        return
+      }
+      #expect(message.contains("not responding"))
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
+    }
+  }
 }
 
 private final class MockRegistrationController: PrivilegedHelperRegistrationControlling,
   @unchecked Sendable
 {
   private(set) var registerCalls = 0
+  private(set) var unregisterCalls = 0
   private let initialStatus: PrivilegedHelperRegistrationStatus
   private let statusAfterRegister: PrivilegedHelperRegistrationStatus
   private let registerError: Error?
@@ -140,6 +221,10 @@ private final class MockRegistrationController: PrivilegedHelperRegistrationCont
       throw registerError
     }
   }
+
+  func unregister() throws {
+    unregisterCalls += 1
+  }
 }
 
 private final class MockConnectionProvider: PrivilegedHelperConnectionProviding, @unchecked Sendable
@@ -147,10 +232,36 @@ private final class MockConnectionProvider: PrivilegedHelperConnectionProviding,
   private(set) var requests: [PrivilegedOperationRequest] = []
   private let result: PrivilegedOperationResult?
   private let error: Error?
+  private var livenessResults: [Bool]
+  private var livenessIndex = 0
 
-  init(result: PrivilegedOperationResult? = nil, error: Error? = nil) {
+  init(
+    livenessResult: Bool = true,
+    result: PrivilegedOperationResult? = nil,
+    error: Error? = nil
+  ) {
+    self.livenessResults = [livenessResult]
     self.result = result
     self.error = error
+  }
+
+  init(
+    livenessSequence: [Bool],
+    result: PrivilegedOperationResult? = nil,
+    error: Error? = nil
+  ) {
+    self.livenessResults = livenessSequence
+    self.result = result
+    self.error = error
+  }
+
+  func checkLiveness() async -> Bool {
+    let index = livenessIndex
+    livenessIndex += 1
+    if index < livenessResults.count {
+      return livenessResults[index]
+    }
+    return livenessResults.last ?? true
   }
 
   func perform(request: PrivilegedOperationRequest) async throws -> PrivilegedOperationResult {

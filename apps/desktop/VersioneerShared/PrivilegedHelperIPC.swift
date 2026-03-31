@@ -137,4 +137,7 @@ nonisolated final class PrivilegedOperationResult: NSObject, NSSecureCoding, @un
     _ request: PrivilegedOperationRequest,
     withReply reply: @escaping (PrivilegedOperationResult) -> Void
   )
+
+  /// Lightweight liveness probe. The helper replies `true` if it is running.
+  nonisolated func ping(withReply reply: @escaping (Bool) -> Void)
 }

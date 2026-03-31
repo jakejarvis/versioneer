@@ -19,7 +19,7 @@ final class AppState {
   let scanner = AppScanner()
   let sparkleChecker = SparkleChecker()
   let electronChecker = ElectronChecker()
-  let masChecker = MasChecker()
+  let appStoreChecker = AppStoreChecker()
   let installCoordinator = InstallCoordinator()
   private let cacheStore: ScanCacheStore
 
@@ -440,22 +440,22 @@ final class AppState {
     )
     async let sparkleTask = sparkleChecker.checkAll(apps: apps)
     async let electronTask = electronChecker.checkAll(apps: apps)
-    async let masTask = masChecker.checkAll(apps: apps, masCliPath: settings.resolvedMasCliPath)
+    async let appStoreTask = appStoreChecker.checkAll(apps: apps)
 
     let sparkleResults = await sparkleTask
     let electronResults = await electronTask
-    let masResults = await masTask
+    let appStoreResults = await appStoreTask
 
-    // Enrich installed apps with MAS app IDs from mas list
+    // Enrich installed apps with confirmed App Store IDs from iTunes API
     for (index, app) in installedApps.enumerated() {
-      if let masInfo = masResults[app.id] {
-        installedApps[index] = app.withMasAppId(masInfo.masAppId)
+      if let storeResult = appStoreResults[app.id], app.masAppId == nil {
+        installedApps[index] = app.withMasAppId(storeResult.masAppId)
       }
     }
     rebuildLookupTables()
 
     let localResults = buildLocalVersionMap(
-      sparkle: sparkleResults, electron: electronResults, mas: masResults)
+      sparkle: sparkleResults, electron: electronResults, appStore: appStoreResults)
 
     do {
       let response = try await backendTask
@@ -502,7 +502,7 @@ final class AppState {
   private func buildLocalVersionMap(
     sparkle: [String: SparkleChecker.SparkleResult],
     electron: [String: ElectronChecker.ElectronResult],
-    mas: [String: MasChecker.MasAppInfo]
+    appStore: [String: AppStoreChecker.AppStoreResult]
   ) -> [String: LocalVersionInfo] {
     var map: [String: LocalVersionInfo] = [:]
     for (id, result) in sparkle {
@@ -513,9 +513,9 @@ final class AppState {
       map[id] = LocalVersionInfo(
         latestVersion: result.latestVersion, publishedAt: result.publishedAt)
     }
-    for (id, info) in mas where map[id] == nil {
-      if let latestVersion = info.latestVersion {
-        map[id] = LocalVersionInfo(latestVersion: latestVersion, publishedAt: nil)
+    for (id, result) in appStore where map[id] == nil {
+      if let latestVersion = result.latestVersion {
+        map[id] = LocalVersionInfo(latestVersion: latestVersion, publishedAt: result.releaseDate)
       }
     }
     return map
@@ -632,18 +632,9 @@ final class AppState {
     return .upToDate
   }
 
-  /// Returns true if `a` is a newer version than `b` using numeric component comparison.
+  /// Returns true if `a` is a newer version than `b`.
   private func compareVersionStrings(_ a: String, isNewerThan b: String) -> Bool {
-    let aParts = a.split(separator: ".").compactMap { Int($0) }
-    let bParts = b.split(separator: ".").compactMap { Int($0) }
-
-    for i in 0..<max(aParts.count, bParts.count) {
-      let av = i < aParts.count ? aParts[i] : 0
-      let bv = i < bParts.count ? bParts[i] : 0
-      if av > bv { return true }
-      if av < bv { return false }
-    }
-    return false  // equal
+    Version(a) > Version(b)
   }
 
   // MARK: - Release Notes

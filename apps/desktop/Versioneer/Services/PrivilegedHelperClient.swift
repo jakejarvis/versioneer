@@ -11,11 +11,13 @@ nonisolated enum PrivilegedHelperRegistrationStatus: Sendable {
 nonisolated protocol PrivilegedHelperRegistrationControlling: Sendable {
   nonisolated var status: PrivilegedHelperRegistrationStatus { get }
   nonisolated func register() throws
+  nonisolated func unregister() throws
 }
 
 nonisolated protocol PrivilegedHelperConnectionProviding: Sendable {
   nonisolated func perform(request: PrivilegedOperationRequest) async throws
     -> PrivilegedOperationResult
+  nonisolated func checkLiveness() async -> Bool
 }
 
 nonisolated protocol PrivilegedHelperClientProtocol: Sendable {
@@ -46,9 +48,62 @@ nonisolated struct PrivilegedHelperRegistrationController: PrivilegedHelperRegis
   func register() throws {
     try appService.register()
   }
+
+  func unregister() throws {
+    try appService.unregister()
+  }
 }
 
 nonisolated struct XPCPrivilegedHelperConnectionProvider: PrivilegedHelperConnectionProviding {
+  /// Pings the helper to check if it is alive. Returns false if the connection fails or times out.
+  func checkLiveness() async -> Bool {
+    await withCheckedContinuation { continuation in
+      let connection = NSXPCConnection(
+        machServiceName: PrivilegedHelperConstants.serviceLabel,
+        options: .privileged
+      )
+      connection.remoteObjectInterface = NSXPCInterface(with: PrivilegedInstallerXPCProtocol.self)
+      if #available(macOS 13.0, *) {
+        connection.setCodeSigningRequirement(PrivilegedHelperConstants.helperCodeSigningRequirement)
+      }
+
+      let lock = NSLock()
+      var finished = false
+      func complete(_ alive: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !finished else { return }
+        finished = true
+        connection.invalidationHandler = nil
+        connection.interruptionHandler = nil
+        connection.invalidate()
+        continuation.resume(returning: alive)
+      }
+
+      // 5-second timeout
+      DispatchQueue.global().asyncAfter(deadline: .now() + 5) {
+        complete(false)
+      }
+
+      connection.invalidationHandler = { complete(false) }
+      connection.interruptionHandler = { complete(false) }
+      connection.resume()
+
+      guard
+        let proxy = connection.remoteObjectProxyWithErrorHandler({ _ in
+          complete(false)
+        }) as? PrivilegedInstallerXPCProtocol
+      else {
+        complete(false)
+        return
+      }
+
+      proxy.ping { alive in
+        complete(alive)
+      }
+    }
+  }
+
   func perform(request: PrivilegedOperationRequest) async throws -> PrivilegedOperationResult {
     try await withCheckedThrowingContinuation { continuation in
       let connection = NSXPCConnection(
@@ -136,7 +191,7 @@ nonisolated struct PrivilegedHelperClient: PrivilegedHelperClientProtocol {
   func performOperation(executionId: String, stagingDirectory: URL) async throws
     -> PrivilegedOperationResult
   {
-    try ensureHelperIsReady()
+    try await ensureHelperIsReady()
     return try await connectionProvider.perform(
       request: PrivilegedOperationRequest(
         executionId: executionId,
@@ -148,10 +203,23 @@ nonisolated struct PrivilegedHelperClient: PrivilegedHelperClientProtocol {
     registrationController.status
   }
 
-  private func ensureHelperIsReady() throws {
+  private func ensureHelperIsReady() async throws {
     switch registrationController.status {
     case .enabled:
-      return
+      // Liveness check: verify the helper is actually responding
+      if await connectionProvider.checkLiveness() {
+        return
+      }
+      // Desync detected — try to recover via re-registration
+      try? registrationController.unregister()
+      try registrationController.register()
+      if await connectionProvider.checkLiveness() {
+        return
+      }
+      throw InstallError.privilegedHelperConnectionFailed(
+        "The privileged helper is registered but not responding. "
+          + "Try removing and re-adding Versioneer in System Settings > Login Items."
+      )
     case .requiresApproval:
       throw InstallError.privilegedHelperApprovalRequired
     case .notFound:
@@ -164,7 +232,7 @@ nonisolated struct PrivilegedHelperClient: PrivilegedHelperClientProtocol {
       } catch {
         switch registrationController.status {
         case .enabled:
-          return
+          break
         case .requiresApproval:
           throw InstallError.privilegedHelperApprovalRequired
         case .notFound:

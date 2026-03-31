@@ -117,13 +117,18 @@ actor SparkleChecker {
       "\(osVersion.majorVersion).\(osVersion.minorVersion).\(osVersion.patchVersion)"
 
     // Filter to items compatible with the current OS
+    let currentOs = Version(osVersionString)
     let applicable = items.filter { item in
       guard let minOs = item.minOsVersion else { return true }
-      return compareVersions(osVersionString, isAtLeast: minOs)
+      return currentOs.isAtLeast(Version(minOs))
     }
 
-    // Take the first item (appcasts are typically newest-first)
-    guard let latest = applicable.first else { return nil }
+    // Sort by version descending and take the newest (handles out-of-order feeds)
+    guard let latest = applicable.sorted(by: { item1, item2 in
+      let v1 = Version(item1.shortVersionString ?? item1.version ?? "")
+      let v2 = Version(item2.shortVersionString ?? item2.version ?? "")
+      return v1 > v2
+    }).first else { return nil }
 
     let bestEnclosure = latest.bestEnclosure
 
@@ -311,17 +316,4 @@ actor SparkleChecker {
     return components.url ?? url
   }
 
-  /// Simple numeric version comparison: returns true if `current` >= `minimum`.
-  private func compareVersions(_ current: String, isAtLeast minimum: String) -> Bool {
-    let currentParts = current.split(separator: ".").compactMap { Int($0) }
-    let minimumParts = minimum.split(separator: ".").compactMap { Int($0) }
-
-    for i in 0..<max(currentParts.count, minimumParts.count) {
-      let c = i < currentParts.count ? currentParts[i] : 0
-      let m = i < minimumParts.count ? minimumParts[i] : 0
-      if c > m { return true }
-      if c < m { return false }
-    }
-    return true  // equal
-  }
 }

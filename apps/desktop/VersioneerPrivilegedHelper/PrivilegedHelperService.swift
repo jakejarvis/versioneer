@@ -7,6 +7,10 @@ final class PrivilegedHelperService: NSObject, PrivilegedInstallerXPCProtocol {
     self.validator = validator
   }
 
+  func ping(withReply reply: @escaping (Bool) -> Void) {
+    reply(true)
+  }
+
   func perform(
     _ request: PrivilegedOperationRequest,
     withReply reply: @escaping (PrivilegedOperationResult) -> Void
