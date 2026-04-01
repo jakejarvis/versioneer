@@ -15,6 +15,7 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import { inferReleasedAt, toISODate } from "../dates";
 import { createLogger } from "../logger";
 import { getParser } from "../parsers";
+import { resolveElectronArtifactBase } from "../validation/electron-url";
 import { normalizeVersion, inferChannel } from "../versioning";
 import { normalizeReleaseNotes } from "./release-notes";
 import type { Env, ParseStepResult, SourceParseJob } from "./types";
@@ -98,9 +99,13 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
   }
 
   try {
+    const artifactBase =
+      source.sourceType === "electron_generic" && source.baseUrl
+        ? resolveElectronArtifactBase(source.baseUrl)
+        : source.baseUrl;
     const output = parser.parse(body, {
       ...config,
-      sourceBaseUrl: source.baseUrl,
+      sourceBaseUrl: artifactBase,
     });
 
     // Insert parser run

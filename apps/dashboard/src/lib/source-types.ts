@@ -30,7 +30,7 @@ export const SOURCE_TYPES = {
   electron_generic: {
     label: "Electron Feed",
     color: "border-violet-500/30 bg-violet-500/10 text-violet-400",
-    input: { label: "Feed URL", placeholder: "https://example.com/update/RELEASES" },
+    input: { label: "Feed URL", placeholder: "https://github.com/owner/repo" },
   },
   web_page: {
     label: "Web Page",

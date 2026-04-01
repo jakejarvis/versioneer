@@ -1,5 +1,6 @@
 import type { SourceType } from "@versioneer/schemas/sources";
 
+import { canonicalizeElectronBaseUrl } from "./electron-url";
 import { parseGitHubRepoUrl } from "./github-url";
 
 /**
@@ -18,8 +19,10 @@ export function resolveSourceUrl(sourceType: SourceType, identifier: string): st
   if (!trimmed) return null;
 
   switch (sourceType) {
-    case "sparkle":
     case "electron_generic":
+      return canonicalizeElectronBaseUrl(trimmed);
+
+    case "sparkle":
     case "web_page":
     case "regex":
     case "json":

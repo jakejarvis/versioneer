@@ -3,6 +3,7 @@ import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/db";
 import { desc, eq } from "drizzle-orm";
 
 import { createLogger } from "../logger";
+import { buildElectronFeedCandidates } from "../validation/electron-url";
 import { readResponseTextLimited } from "./response-body";
 import { githubApiHeaders } from "./types";
 import type { Env, FetchStepResult, SourceFetchJob } from "./types";
@@ -207,8 +208,3 @@ async function fetchElectronGenericFeed(
   return lastResponse ?? fetch(baseUrl, { headers });
 }
 
-function buildElectronFeedCandidates(baseUrl: string): string[] {
-  if (baseUrl.endsWith("latest-mac.yml") || baseUrl.endsWith("latest.yml")) return [baseUrl];
-  const normalized = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-  return [`${normalized}latest-mac.yml`, `${normalized}latest.yml`];
-}

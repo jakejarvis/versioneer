@@ -16,6 +16,10 @@ import {
   readResponseTextLimited,
   ResponseBodyTooLargeError,
 } from "@versioneer/core/pipeline";
+import {
+  buildElectronFeedCandidates,
+  resolveElectronArtifactBase,
+} from "@versioneer/core/validation";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { sourceTypeSchema } from "@versioneer/schemas/sources";
 import { env } from "cloudflare:workers";
@@ -58,16 +62,24 @@ export const validateSource = createServerFn({ method: "POST" })
       };
     }
 
-    const fetchUrl = sourceType === "electron_generic" ? resolveElectronFeedUrl(url) : url;
+    const fetchUrls =
+      sourceType === "electron_generic" ? buildElectronFeedCandidates(url) : [url];
 
-    let response: Response;
+    let response: Response | undefined;
     try {
       const headers: Record<string, string> =
         sourceType === "github_releases" ? githubApiHeaders(env.GITHUB_TOKEN) : {};
-      response = await fetch(fetchUrl, {
-        signal: AbortSignal.timeout(10_000),
-        headers,
-      });
+      for (const candidate of fetchUrls) {
+        const res = await fetch(candidate, {
+          signal: AbortSignal.timeout(10_000),
+          headers,
+        });
+        if (res.ok) {
+          response = res;
+          break;
+        }
+        response = res;
+      }
     } catch {
       return {
         status: "timeout" as const,
@@ -79,13 +91,17 @@ export const validateSource = createServerFn({ method: "POST" })
       };
     }
 
-    if (!response.ok) {
+    if (!response?.ok) {
       return {
         status: "invalid" as const,
         releaseCount: 0,
         latestVersion: null,
         latestPublishedAt: null,
-        errors: [`HTTP ${response.status}: ${response.statusText}`],
+        errors: [
+          response
+            ? `HTTP ${response.status}: ${response.statusText}`
+            : "No candidate URLs to try",
+        ],
         releases: [],
       };
     }
@@ -107,7 +123,9 @@ export const validateSource = createServerFn({ method: "POST" })
       throw error;
     }
 
-    let config: Record<string, unknown> = { sourceBaseUrl: url };
+    const artifactBase =
+      sourceType === "electron_generic" ? resolveElectronArtifactBase(url) : url;
+    let config: Record<string, unknown> = { sourceBaseUrl: artifactBase };
     if (data.configJson) {
       try {
         const parsed = JSON.parse(data.configJson) as Record<string, unknown>;
@@ -155,8 +173,3 @@ export const validateSource = createServerFn({ method: "POST" })
     };
   });
 
-function resolveElectronFeedUrl(url: string): string {
-  if (url.endsWith("latest-mac.yml") || url.endsWith("latest.yml")) return url;
-  const normalized = url.endsWith("/") ? url : `${url}/`;
-  return `${normalized}latest-mac.yml`;
-}
