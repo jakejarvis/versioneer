@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		23472BD82F7DA7E700095A35 /* Versioneer.icon in Resources */ = {isa = PBXBuildFile; fileRef = 23472BD72F7DA7E700095A35 /* Versioneer.icon */; };
 		23AB35582F782C6300933422 /* AdSupport.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 23AB35572F782C6300933422 /* AdSupport.framework */; };
 		23EBFEDC2F75F5390026DE17 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 23EBFEDA2F75F5390026DE17 /* GoogleService-Info.plist */; };
 		23EBFEDF2F75F6CF0026DE17 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 23EBFEDE2F75F6CF0026DE17 /* FirebaseAnalytics */; };
@@ -35,6 +36,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		23472BD72F7DA7E700095A35 /* Versioneer.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Versioneer.icon; sourceTree = "<group>"; };
 		23967D082F74926F0012749C /* Versioneer-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Versioneer-Info.plist"; sourceTree = "<group>"; };
 		23967D222F74949F0012749C /* Versioneer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Versioneer.xcodeproj; sourceTree = "<group>"; };
 		23A5A6032F74908500245F54 /* Versioneer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Versioneer.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -118,6 +120,7 @@
 				23EBFED92F75F5390026DE17 /* Versioneer.entitlements */,
 				23EBFEDA2F75F5390026DE17 /* GoogleService-Info.plist */,
 				23AB35562F782C6200933422 /* Frameworks */,
+				23472BD72F7DA7E700095A35 /* Versioneer.icon */,
 			);
 			sourceTree = "<group>";
 		};
@@ -279,6 +282,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				23472BD82F7DA7E700095A35 /* Versioneer.icon in Resources */,
 				23EBFEDC2F75F5390026DE17 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -516,8 +520,7 @@
 		23A5A6252F74908600245F54 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Versioneer;
 				CODE_SIGN_ENTITLEMENTS = Versioneer.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -542,6 +545,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Versioneer-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Versioneer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "2026 Jake Jarvis";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -567,8 +571,7 @@
 		23A5A6262F74908600245F54 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Versioneer;
 				CODE_SIGN_ENTITLEMENTS = Versioneer.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -593,6 +596,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Versioneer-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Versioneer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "2026 Jake Jarvis";
 				LD_RUNPATH_SEARCH_PATHS = (

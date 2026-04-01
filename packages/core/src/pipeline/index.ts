@@ -10,7 +10,7 @@ export { githubApiHeaders } from "./types";
 export { handleSourceFetch } from "./fetch";
 export { handleSourceParse } from "./parse";
 export { handleRecomputeLatest } from "./recompute";
-export { normalizeReleaseNotes, renderReleaseNotesDocument } from "./release-notes";
+export { normalizeReleaseNotes } from "./release-notes";
 export { sanitizeHtml } from "./sanitize-html";
 export { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
 export {

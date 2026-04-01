@@ -12,7 +12,8 @@
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt --config ../../.oxfmtrc.json",
     "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "typegen:workers": "wrangler types"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",
@@ -24,7 +25,7 @@
     "radix-ui": "^1.4.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "shadcn": "^4.1.1",
+    "shadcn": "^4.1.2",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {

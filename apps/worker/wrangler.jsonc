@@ -6,6 +6,10 @@
   "compatibility_date": "2026-02-24",
   "compatibility_flags": ["nodejs_compat"],
 
+  "secrets": {
+    "required": ["GITHUB_TOKEN"]
+  },
+
   "triggers": {
     "crons": ["*/15 * * * *"]
   },

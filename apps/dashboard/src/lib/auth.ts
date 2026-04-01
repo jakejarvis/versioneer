@@ -27,8 +27,8 @@ export function createAuth(d1: D1Database) {
     secret: env.BETTER_AUTH_SECRET,
     socialProviders: {
       github: {
-        clientId: env.GITHUB_OAUTH_CLIENT_ID,
-        clientSecret: env.GITHUB_OAUTH_CLIENT_SECRET,
+        clientId: env.GITHUB_OAUTH_CLIENT_ID!,
+        clientSecret: env.GITHUB_OAUTH_CLIENT_SECRET!,
       },
     },
     hooks: {

@@ -68,3 +68,84 @@
     @apply bg-primary/20;
   }
 }
+
+/* Prose styles for GitHub-rendered release notes HTML */
+.prose {
+  @apply text-sm leading-relaxed text-foreground/90;
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply text-foreground font-medium mt-5 mb-2;
+  }
+  h1 {
+    @apply text-base;
+  }
+  h2 {
+    @apply text-[15px];
+  }
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply text-sm;
+  }
+
+  p {
+    @apply my-2;
+  }
+
+  a {
+    @apply text-foreground underline underline-offset-4 hover:text-foreground/80;
+  }
+
+  ul,
+  ol {
+    @apply my-2 pl-5;
+  }
+  ul {
+    @apply list-disc;
+  }
+  ol {
+    @apply list-decimal;
+  }
+  li {
+    @apply my-0.5;
+  }
+
+  code {
+    @apply font-mono text-[13px] bg-foreground/10 px-1 py-0.5 rounded;
+  }
+  pre {
+    @apply my-3 overflow-x-auto rounded-lg bg-foreground/[0.07] p-3;
+  }
+  pre code {
+    @apply bg-transparent p-0;
+  }
+
+  blockquote {
+    @apply my-3 border-l-2 border-foreground/15 pl-3 text-muted-foreground;
+  }
+
+  img {
+    @apply max-w-full h-auto rounded;
+  }
+
+  table {
+    @apply w-full text-[13px] my-3;
+  }
+  th,
+  td {
+    @apply px-2.5 py-1.5 border border-foreground/10 text-left;
+  }
+  th {
+    @apply font-medium text-foreground;
+  }
+
+  hr {
+    @apply my-4 border-foreground/10;
+  }
+}

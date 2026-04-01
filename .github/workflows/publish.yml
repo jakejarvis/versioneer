@@ -159,15 +159,44 @@ jobs:
       - name: Render release notes HTML
         run: |
           set -euo pipefail
-          RELEASE_NOTES_HTML_PATH="$ARCHIVES_DIR/${VERSION}.html"
-          APPCAST_RELEASE_NOTES_PATH="$ARCHIVES_DIR/${ARCHIVE_STEM}.html"
+          BODY_HTML=$(npx marked < "$RUNNER_TEMP/release-notes.md")
 
-          pnpm exec tsx apps/desktop/scripts/render-release-notes.ts \
-            --input "$RUNNER_TEMP/release-notes.md" \
-            --output "$RELEASE_NOTES_HTML_PATH" \
-            --title "Versioneer ${VERSION}"
+          cat > "$ARCHIVES_DIR/${VERSION}.html" <<HTMLEOF
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Versioneer ${VERSION}</title>
+            <style>
+              :root { color-scheme: light dark; }
+              body { margin: 0; background: #0f172a; color: #e2e8f0;
+                     font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+              main { max-width: 760px; margin: 0 auto; padding: 48px 24px 64px; }
+              h1, h2, h3, h4, h5, h6 { color: #f8fafc; line-height: 1.2; }
+              a { color: #7dd3fc; }
+              code, pre { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+                          background: rgba(15, 23, 42, 0.45); border-radius: 10px; }
+              code { padding: 0.15em 0.35em; }
+              pre { overflow-x: auto; padding: 14px 16px; }
+              blockquote { margin: 0; padding-left: 16px;
+                           border-left: 3px solid rgba(125, 211, 252, 0.45); color: #cbd5e1; }
+              img { max-width: 100%; height: auto; }
+              table { width: 100%; border-collapse: collapse; }
+              th, td { padding: 8px 10px; border: 1px solid rgba(148, 163, 184, 0.25); }
+              hr { border: 0; border-top: 1px solid rgba(148, 163, 184, 0.2); }
+            </style>
+          </head>
+          <body>
+            <main>
+              <h1>Versioneer ${VERSION}</h1>
+              ${BODY_HTML}
+            </main>
+          </body>
+          </html>
+          HTMLEOF
 
-          cp "$RELEASE_NOTES_HTML_PATH" "$APPCAST_RELEASE_NOTES_PATH"
+          cp "$ARCHIVES_DIR/${VERSION}.html" "$ARCHIVES_DIR/${ARCHIVE_STEM}.html"
 
       - name: Generate Sparkle appcast
         run: |
