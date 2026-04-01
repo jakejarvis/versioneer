@@ -10,7 +10,7 @@ export const Route = createFileRoute("/")({
 
 function IndexPage() {
   return (
-    <div className="mx-auto max-w-xl px-6 py-20 md:py-32 space-y-10">
+    <div className="mx-auto max-w-xl px-6 py-16 sm:py-20 md:py-28 space-y-10">
       <header className="flex items-center justify-between gap-2.5 text-white">
         <a href="/" className="flex items-center gap-2.5">
           <svg
@@ -47,7 +47,7 @@ function IndexPage() {
       </header>
 
       <main className="space-y-6">
-        <p className="leading-relaxed text-sm">
+        <p className="leading-relaxed text-sm text-pretty">
           A modern replacement for{" "}
           <a
             href="https://www.corecode.io/macupdater/"

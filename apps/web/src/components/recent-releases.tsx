@@ -111,11 +111,13 @@ export function RecentReleases() {
             {items.map((item) => (
               <li
                 key={item.releaseId}
-                className="flex items-center gap-2.5 text-[13px] select-none"
+                className="flex items-center gap-2.5 text-[13px] leading-none select-none"
               >
                 <AppIcon name={item.appName} iconUrl={item.iconUrl} />
                 <span className="text-foreground truncate">{item.appName}</span>
-                <span className="text-muted-foreground font-mono text-[11px]">{item.version}</span>
+                <span className="text-muted-foreground font-mono text-[11px] leading-none">
+                  {item.version}
+                </span>
                 <span className="ml-auto text-muted-foreground/60 text-xs whitespace-nowrap">
                   {formatRelativeTime(item.releasedAt)}
                 </span>
