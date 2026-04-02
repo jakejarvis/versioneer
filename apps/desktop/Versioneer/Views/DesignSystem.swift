@@ -197,7 +197,7 @@ struct MetadataPopoverButton: View {
     }
     .buttonStyle(.plain)
     .onHover { isHovered = $0 }
-    .accessibilityLabel("App metadata")
+    .accessibilityLabel("App details")
     .accessibilityHint("Shows bundle ID, canonical name, and other technical details")
     .popover(isPresented: $showPopover, arrowEdge: .trailing) {
       VStack(alignment: .leading, spacing: 10) {
@@ -268,10 +268,9 @@ struct InstallProgressView: View {
             Capsule(style: .continuous)
               .fill(step <= progress.currentStep ? Color.accentColor : Color.primary.opacity(0.08))
               .frame(height: 6)
-              .glassEffect(
-                step <= progress.currentStep ? .regular : .regular,
-                in: .capsule
-              )
+              .if(step <= progress.currentStep) {
+                $0.glassEffect(.regular, in: .capsule)
+              }
           }
         }
       }

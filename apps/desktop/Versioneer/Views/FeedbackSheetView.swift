@@ -21,6 +21,7 @@ struct FeedbackSheetView: View {
   @State private var isSubmitting = false
   @State private var error: String?
   @State private var success = false
+  @State private var autoDismissTask: Task<Void, Never>?
 
   var body: some View {
     NavigationStack {
@@ -76,10 +77,14 @@ struct FeedbackSheetView: View {
     .frame(minWidth: 480, minHeight: 360)
     .onChange(of: success) {
       guard success else { return }
-      Task {
+      autoDismissTask = Task {
         try? await Task.sleep(for: .seconds(2))
+        guard !Task.isCancelled else { return }
         dismiss()
       }
+    }
+    .onDisappear {
+      autoDismissTask?.cancel()
     }
   }
 

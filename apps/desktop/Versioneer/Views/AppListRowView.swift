@@ -62,7 +62,7 @@ struct AppListRowView: View {
     .padding(.vertical, 8)
     .padding(.horizontal, 4)
     .background(
-      isHovered && !isSelected ? Color.primary.opacity(0.04) : .clear,
+      isHovered && !isSelected ? Color.primary.opacity(0.06) : .clear,
       in: .rect(cornerRadius: 8)
     )
     .contentShape(Rectangle())

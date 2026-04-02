@@ -70,7 +70,7 @@ struct FilterChipBar: View {
       .background(
         isSelected
           ? Color.accentColor.opacity(0.18)
-          : (hoveredSection == section ? Color.primary.opacity(0.04) : Color.clear),
+          : (hoveredSection == section ? Color.primary.opacity(0.06) : Color.clear),
         in: .capsule
       )
     }
@@ -93,7 +93,7 @@ struct FilterChipBar: View {
       .font(.caption.weight(.semibold))
       .lineLimit(1)
     }
-    .buttonStyle(.borderedProminent)
+    .buttonStyle(.glass)
     .controlSize(.small)
     .fixedSize(horizontal: true, vertical: false)
     .layoutPriority(1)

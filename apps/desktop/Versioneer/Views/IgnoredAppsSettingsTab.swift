@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct IgnoredAppsSettingsTab: View {
@@ -107,7 +108,8 @@ private struct IgnoredRuleRow: View {
       Button("Remove", role: .destructive) {
         appState.removeIgnoredAppRule(rule)
       }
-      .buttonStyle(.link)
+      .buttonStyle(.bordered)
+      .tint(.red)
     }
     .padding(.vertical, 2)
   }
@@ -240,13 +242,18 @@ private struct AddIgnoredAppSheet: View {
       } else {
         List(selection: $selectedInstalledAppID) {
           ForEach(availableInstalledApps, id: \.id) { app in
-            VStack(alignment: .leading, spacing: 2) {
-              Text(app.name)
-                .font(.body.weight(.medium))
-              Text(app.bundleId ?? app.path)
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            HStack(spacing: 8) {
+              Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
+                .resizable()
+                .frame(width: 24, height: 24)
+              VStack(alignment: .leading, spacing: 2) {
+                Text(app.name)
+                  .font(.body.weight(.medium))
+                Text(app.bundleId ?? app.path)
+                  .font(.caption.monospacedDigit())
+                  .foregroundStyle(.secondary)
+                  .lineLimit(1)
+              }
             }
             .tag(app.id)
           }

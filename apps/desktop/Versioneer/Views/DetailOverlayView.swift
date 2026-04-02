@@ -28,6 +28,7 @@ struct DetailPaneView: View {
         DetailReleaseNotesSection(result: result)
       }
       .padding(24)
+      .frame(maxWidth: 640, alignment: .leading)
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -257,34 +258,11 @@ private struct DetailPrimaryActionSection: View {
 
   private var masUpgradeCard: some View {
     VStack(alignment: .leading, spacing: 14) {
-      if installState.isRunning {
-        if let progress = installPresentation.progress {
-          InstallProgressView(progress: progress)
-        }
-        if let statusDetail = installPresentation.statusDetail, !statusDetail.isEmpty {
-          Text(statusDetail)
-            .font(.callout)
-            .foregroundStyle(.secondary)
-        }
-      }
-
-      if installState.phase == .completed {
-        Label("Updated via Mac App Store", systemImage: "checkmark.circle.fill")
-          .font(.callout.weight(.semibold))
-          .foregroundStyle(.green)
-      } else if installState.phase == .failed {
-        VStack(alignment: .leading, spacing: 4) {
-          Label("Mac App Store upgrade failed", systemImage: "xmark.circle.fill")
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(.red)
-          if let error = installState.errorMessage {
-            Text(error)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .textSelection(.enabled)
-          }
-        }
-      }
+      ActionCardStatusSection(
+        installState: installState,
+        installPresentation: installPresentation,
+        sourceLabel: "Mac App Store"
+      )
 
       Button {
         Task { await appState.masUpgrade(result) }
@@ -309,34 +287,11 @@ private struct DetailPrimaryActionSection: View {
 
   private var brewUpgradeCard: some View {
     VStack(alignment: .leading, spacing: 14) {
-      if installState.isRunning {
-        if let progress = installPresentation.progress {
-          InstallProgressView(progress: progress)
-        }
-        if let statusDetail = installPresentation.statusDetail, !statusDetail.isEmpty {
-          Text(statusDetail)
-            .font(.callout)
-            .foregroundStyle(.secondary)
-        }
-      }
-
-      if installState.phase == .completed {
-        Label("Updated via Homebrew", systemImage: "checkmark.circle.fill")
-          .font(.callout.weight(.semibold))
-          .foregroundStyle(.green)
-      } else if installState.phase == .failed {
-        VStack(alignment: .leading, spacing: 4) {
-          Label("Homebrew upgrade failed", systemImage: "xmark.circle.fill")
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(.red)
-          if let error = installState.errorMessage {
-            Text(error)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .textSelection(.enabled)
-          }
-        }
-      }
+      ActionCardStatusSection(
+        installState: installState,
+        installPresentation: installPresentation,
+        sourceLabel: "Homebrew"
+      )
 
       Button {
         Task { await appState.brewUpgrade(result) }
@@ -487,6 +442,46 @@ private struct DetailPrimaryActionSection: View {
   }
 }
 
+// MARK: - Action Card Status Section
+
+private struct ActionCardStatusSection: View {
+  let installState: InstallCoordinator.OperationState
+  let installPresentation: InstallPresentation
+  let sourceLabel: String
+
+  @ViewBuilder
+  var body: some View {
+    if installState.isRunning {
+      if let progress = installPresentation.progress {
+        InstallProgressView(progress: progress)
+      }
+      if let statusDetail = installPresentation.statusDetail, !statusDetail.isEmpty {
+        Text(statusDetail)
+          .font(.callout)
+          .foregroundStyle(.secondary)
+      }
+    }
+
+    if installState.phase == .completed {
+      Label("Updated via \(sourceLabel)", systemImage: "checkmark.circle.fill")
+        .font(.callout.weight(.semibold))
+        .foregroundStyle(.green)
+    } else if installState.phase == .failed {
+      VStack(alignment: .leading, spacing: 4) {
+        Label("\(sourceLabel) upgrade failed", systemImage: "xmark.circle.fill")
+          .font(.callout.weight(.semibold))
+          .foregroundStyle(.red)
+        if let error = installState.errorMessage {
+          Text(error)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .textSelection(.enabled)
+        }
+      }
+    }
+  }
+}
+
 // MARK: - Quick Actions Section
 
 private struct DetailQuickActionsSection: View {
@@ -522,24 +517,30 @@ private struct DetailQuickActionsSection: View {
   }
 
   private var openAppButton: some View {
-    Button("Open App") {
+    Button {
       appState.openApp(result)
+    } label: {
+      Label("Open App", systemImage: "macwindow")
     }
     .buttonStyle(.glass)
     .disabled(!hasAppPath)
   }
 
   private var showInFinderButton: some View {
-    Button("Show in Finder") {
+    Button {
       appState.revealAppInFinder(result)
+    } label: {
+      Label("Show in Finder", systemImage: "folder")
     }
     .buttonStyle(.glass)
     .disabled(!hasAppPath)
   }
 
   private var reportIssueButton: some View {
-    Button("Report Issue") {
+    Button {
       showFeedbackSheet = true
+    } label: {
+      Label("Report Issue", systemImage: "exclamationmark.bubble")
     }
     .buttonStyle(.glass)
   }
@@ -577,8 +578,6 @@ private struct DetailReleaseNotesSection: View {
               .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
               .mask {
                 VStack(spacing: 0) {
-                  LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 18)
                   Rectangle().fill(.black)
                   LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
                     .frame(height: 18)

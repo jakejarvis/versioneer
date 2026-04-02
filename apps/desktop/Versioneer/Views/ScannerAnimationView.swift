@@ -5,7 +5,6 @@ struct ScannerAnimationView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   @State private var revealedCount = 0
-  @State private var animationTimer: Timer?
 
   private let gridColumns = Array(repeating: GridItem(.fixed(48), spacing: 12), count: 6)
 
@@ -46,8 +45,16 @@ struct ScannerAnimationView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Scanning for installed applications")
-    .onAppear { startRevealAnimation() }
-    .onDisappear { stopRevealAnimation() }
+    .task {
+      revealedCount = 0
+      let maxCount = min(appState.installedApps.count, 24)
+      guard maxCount > 0 else { return }
+      for i in 1...maxCount {
+        try? await Task.sleep(for: .milliseconds(60))
+        guard !Task.isCancelled else { return }
+        revealedCount = i
+      }
+    }
   }
 
   private func appIconTile(app: InstalledApp, index: Int) -> some View {
@@ -92,22 +99,4 @@ struct ScannerAnimationView: View {
     )
   }
 
-  private func startRevealAnimation() {
-    revealedCount = 0
-    animationTimer = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) { _ in
-      Task { @MainActor in
-        let maxCount = min(appState.installedApps.count, 24)
-        if revealedCount < maxCount {
-          revealedCount += 1
-        } else {
-          stopRevealAnimation()
-        }
-      }
-    }
-  }
-
-  private func stopRevealAnimation() {
-    animationTimer?.invalidate()
-    animationTimer = nil
-  }
 }

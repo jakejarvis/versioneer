@@ -14,7 +14,7 @@ struct SettingsView: View {
       }
     }
     .scenePadding()
-    .frame(width: 560, height: 440)
+    .frame(minWidth: 560, maxWidth: 560, minHeight: 400, idealHeight: 440, maxHeight: 640)
     .versioneerAnalyticsScreen(name: "settings", class: "SettingsView")
   }
 }

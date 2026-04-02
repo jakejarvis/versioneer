@@ -16,10 +16,25 @@ struct RootView: View {
         .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 360)
     } detail: {
       detailContent
+        .motionAwareAnimation(.easeInOut(duration: 0.2), value: appState.selectedAppID)
     }
     .navigationSplitViewStyle(.balanced)
     .toolbar {
       ToolbarItemGroup(placement: .primaryAction) {
+        Picker(
+          "Sort",
+          selection: Binding(
+            get: { appState.resultsSort },
+            set: { appState.setResultsSort($0) }
+          )
+        ) {
+          ForEach(ResultsBrowserSort.allCases) { sort in
+            Text(sort.title).tag(sort)
+          }
+        }
+        .pickerStyle(.menu)
+        .help("Sort order")
+
         Button {
           Task { await appState.scanAndSubmit() }
         } label: {
@@ -75,6 +90,7 @@ struct RootView: View {
   private var detailContent: some View {
     if let selectedResult = appState.selectedResult {
       DetailPaneView(result: selectedResult)
+        .id(selectedResult.id)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(detailPaneBackground)
     } else {

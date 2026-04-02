@@ -46,7 +46,7 @@ private struct ServerSettingsSection: View {
     Section {
       TextField("Server URL", text: $urlString)
         .font(.body.monospaced())
-        .textFieldStyle(.plain)
+        .textFieldStyle(.roundedBorder)
 
       if hasPendingChange {
         Label(
@@ -119,7 +119,8 @@ private struct ScanDirectoriesSection: View {
             Button("Remove", role: .destructive) {
               appState.settings.removeExtraScanRoot(root)
             }
-            .buttonStyle(.link)
+            .buttonStyle(.bordered)
+            .tint(.red)
           }
         }
       }
@@ -127,7 +128,7 @@ private struct ScanDirectoriesSection: View {
       HStack {
         TextField("/path/to/directory", text: $newScanRoot)
           .font(.body.monospaced())
-          .textFieldStyle(.plain)
+          .textFieldStyle(.roundedBorder)
         Button("Add", action: addScanRoot)
           .disabled(!canAddRoot)
       }
@@ -211,7 +212,7 @@ private struct MasCliSection: View {
       HStack {
         TextField("Custom mas path (optional)", text: $masPathOverride)
           .font(.body.monospaced())
-          .textFieldStyle(.plain)
+          .textFieldStyle(.roundedBorder)
         Button("Apply", action: applyMasPath)
           .disabled(!canApplyMasPath)
         Button("Clear", action: clearMasPath)
