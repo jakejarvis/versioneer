@@ -12,7 +12,6 @@ import {
   CircleAlert,
   ExternalLink,
   GripVertical,
-  Loader2,
   Plus,
   RefreshCw,
   Trash2,
@@ -22,13 +21,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 
-import { useDiscoveredApp } from "@/api/hooks/use-discovered-apps";
-import {
-  useCheckSlugAvailable,
-  useLookupCaskToken,
-  useOnboardDiscoveredApp,
-  useValidateSource,
-} from "@/api/hooks/use-onboarding";
 import { AppIcon } from "@/components/shared/app-icon";
 import { serializeConfig, SourceConfigFields } from "@/components/shared/source-config-fields";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +36,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { useDiscoveredApp } from "@/hooks/use-discovered-apps";
+import {
+  useCheckSlugAvailable,
+  useLookupCaskToken,
+  useOnboardDiscoveredApp,
+  useValidateSource,
+} from "@/hooks/use-onboarding";
 import { SOURCE_CONFIG_FIELDS, SOURCE_TYPES } from "@/lib/source-types";
 
 // ──────────────────────────────────────────────────────────
@@ -249,7 +249,7 @@ export function OnboardingDrawer({ discoveredAppId, open, onOpenChange, onSucces
 
         {isLoading ? (
           <div className="flex flex-1 items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <Spinner className="size-5 text-muted-foreground" />
           </div>
         ) : !discoveredApp ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -761,7 +761,7 @@ function OnboardingFormContent({
             size="sm"
             className="h-8 flex-1"
           >
-            {onboard.isPending ? <Loader2 className="animate-spin" /> : <Zap />}
+            {onboard.isPending ? <Spinner /> : <Zap />}
             {onboard.isPending ? "Onboarding..." : "Onboard App"}
           </Button>
           <Button variant="outline" size="sm" className="h-8" onClick={() => onOpenChange(false)}>
@@ -929,7 +929,7 @@ function SourceCard({
             onClick={handleTestFeed}
             disabled={validateMutation.isPending}
           >
-            {validateMutation.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            {validateMutation.isPending ? <Spinner /> : <RefreshCw />}
             Test
           </Button>
           {validateMutation.data && (

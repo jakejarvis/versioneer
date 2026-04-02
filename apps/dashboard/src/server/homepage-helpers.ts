@@ -2,7 +2,7 @@ import { toEpochMs } from "@versioneer/core/dates";
 import { sources } from "@versioneer/db";
 import { sql } from "drizzle-orm";
 
-import type { AppSummary, AtRiskSourceItem, Source } from "@/api/types";
+import type { AppSummary, AtRiskSourceItem, Source } from "@/lib/types";
 
 /**
  * Sources aren't flagged as stale/overdue until this multiple of their

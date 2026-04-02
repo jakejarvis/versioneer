@@ -4,15 +4,6 @@ import { ArrowLeft, ExternalLink, Inbox, Pencil, Save, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import {
-  usePinRelease,
-  useRelease,
-  useReleaseArtifacts,
-  useReleaseObservations,
-  useUnpinRelease,
-  useUpdateRelease,
-} from "@/api/hooks/use-releases";
-import type { Artifact, ReleaseObservation } from "@/api/types";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { AppEntityLink } from "@/components/shared/entity-link";
@@ -31,6 +22,15 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  usePinRelease,
+  useRelease,
+  useReleaseArtifacts,
+  useReleaseObservations,
+  useUnpinRelease,
+  useUpdateRelease,
+} from "@/hooks/use-releases";
+import type { Artifact, ReleaseObservation } from "@/lib/types";
 
 export const Route = createFileRoute("/releases/$releaseId")({
   component: ReleaseDetailPage,
@@ -221,7 +221,7 @@ function ReleaseDetailPage() {
         Back to Releases
       </Link>
 
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="font-mono text-xl font-semibold tracking-tight">{release.versionRaw}</h2>
@@ -241,7 +241,7 @@ function ReleaseDetailPage() {
             </div>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {release.isPinnedLatest ? (
             <Button
               variant="outline"
@@ -281,7 +281,7 @@ function ReleaseDetailPage() {
               )
             }
           >
-            <SelectTrigger className="w-36">
+            <SelectTrigger size="sm" className="w-36">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -393,7 +393,7 @@ function ReleaseNotesSection({
 
   return (
     <div className="mt-6">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <h3 className="text-lg font-medium">Release Notes</h3>
           {!editing && releaseNotesUrl ? (

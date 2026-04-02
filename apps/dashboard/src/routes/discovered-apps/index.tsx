@@ -5,12 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import {
-  useDiscoveredApps,
-  useDismissDiscoveredApp,
-  useReEnrichDiscoveredApp,
-} from "@/api/hooks/use-discovered-apps";
-import { OnboardingDrawer } from "@/components/onboarding-drawer";
+import { OnboardingDrawer } from "@/components/layout/onboarding-drawer";
 import { AppIcon } from "@/components/shared/app-icon";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
@@ -31,6 +26,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  useDiscoveredApps,
+  useDismissDiscoveredApp,
+  useReEnrichDiscoveredApp,
+} from "@/hooks/use-discovered-apps";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
@@ -393,7 +393,7 @@ function DiscoveredAppsPage() {
         Unmatched apps found during client inventory scans. Review and onboard high-confidence apps.
       </p>
 
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <Select
           value={searchState.status}
           onValueChange={(value) =>
@@ -407,7 +407,7 @@ function DiscoveredAppsPage() {
             })
           }
         >
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-full sm:w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -431,7 +431,7 @@ function DiscoveredAppsPage() {
             })
           }
         >
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="w-full sm:w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

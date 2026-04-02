@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
 
 export const Route = createFileRoute("/login")({
@@ -34,7 +34,7 @@ function LoginPage() {
         }}
         disabled={isLoading}
       >
-        {isLoading ? <Loader2 className="animate-spin" /> : <OcticonMarkGithub16 />}
+        {isLoading ? <Spinner /> : <OcticonMarkGithub16 />}
         {isLoading ? "Loading…" : "Sign in with GitHub"}
       </Button>
     </div>

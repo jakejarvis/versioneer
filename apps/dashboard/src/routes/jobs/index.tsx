@@ -1,17 +1,10 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
-import { Ban, CheckCircle, Loader2, MoreHorizontal, Package, Radio, RefreshCw } from "lucide-react";
+import { Ban, CheckCircle, MoreHorizontal, Package, Radio, RefreshCw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import {
-  useJobFailures,
-  useRetryJobFailure,
-  useUpdateJobFailure,
-} from "@/api/hooks/use-job-failures";
-import { useCronJobRuns, useTriggerCaskSync, useTriggerPollSources } from "@/api/hooks/use-jobs";
-import type { JobFailureListItem } from "@/api/types";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { EntityReferenceLink } from "@/components/shared/entity-link";
@@ -35,7 +28,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useJobFailures, useRetryJobFailure, useUpdateJobFailure } from "@/hooks/use-job-failures";
+import { useCronJobRuns, useTriggerCaskSync, useTriggerPollSources } from "@/hooks/use-jobs";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
@@ -44,6 +40,7 @@ import {
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
+import type { JobFailureListItem } from "@/lib/types";
 
 const jobsSearchDefaults = {
   ...paginatedSearchDefaults,
@@ -253,7 +250,7 @@ function RunsTab() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={handlePollSources} disabled={pollSources.isPending}>
-            {pollSources.isPending ? <Loader2 className="animate-spin" /> : <Radio />}
+            {pollSources.isPending ? <Spinner /> : <Radio />}
             Poll Sources
           </Button>
           <div className="flex items-center gap-1.5">
@@ -269,11 +266,11 @@ function RunsTab() {
         </div>
 
         <Button size="sm" onClick={handleCaskSync} disabled={caskSync.isPending}>
-          {caskSync.isPending ? <Loader2 className="animate-spin" /> : <Package />}
+          {caskSync.isPending ? <Spinner /> : <Package />}
           Cask Index Sync
         </Button>
 
-        <div className="ml-auto">
+        <div className="w-full sm:ml-auto sm:w-auto">
           <Select
             value={search.jobType}
             onValueChange={(value) =>
@@ -283,7 +280,7 @@ function RunsTab() {
               })
             }
           >
-            <SelectTrigger className="w-44">
+            <SelectTrigger size="sm" className="w-full sm:w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -490,7 +487,7 @@ function FailuresTab() {
             })
           }
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full sm:w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

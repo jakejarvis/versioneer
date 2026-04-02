@@ -37,7 +37,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260401.1",
+    "@cloudflare/workers-types": "^4.20260402.1",
     "@versioneer/tsconfig": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"

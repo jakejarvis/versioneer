@@ -7,15 +7,6 @@ import { ArrowLeft, Ban, Inbox, RefreshCw, RotateCcw, Save, Zap } from "lucide-r
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import {
-  useParserRuns,
-  useReparse,
-  useSource,
-  useSourceFetches,
-  useTriggerSourceFetch,
-  useUpdateSource,
-} from "@/api/hooks/use-sources";
-import type { ParserRun, SourceFetch } from "@/api/types";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
@@ -40,8 +31,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  useParserRuns,
+  useReparse,
+  useSource,
+  useSourceFetches,
+  useTriggerSourceFetch,
+  useUpdateSource,
+} from "@/hooks/use-sources";
 import { formatDuration } from "@/lib/format-duration";
 import { SOURCE_TYPES } from "@/lib/source-types";
+import type { ParserRun, SourceFetch } from "@/lib/types";
 
 export const Route = createFileRoute("/sources/$sourceId")({
   component: SourceDetailPage,
@@ -102,7 +102,7 @@ function SourceDetailPage() {
         Back to Sources
       </Link>
 
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-semibold tracking-tight">
@@ -124,7 +124,7 @@ function SourceDetailPage() {
             </div>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Select
             value={source.channel ?? "auto"}
             onValueChange={(value) =>
@@ -137,7 +137,7 @@ function SourceDetailPage() {
               )
             }
           >
-            <SelectTrigger className="w-36">
+            <SelectTrigger size="sm" className="w-36">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -159,7 +159,7 @@ function SourceDetailPage() {
               )
             }
           >
-            <SelectTrigger className="w-32">
+            <SelectTrigger size="sm" className="w-32">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -324,7 +324,7 @@ function SourceEditForm({
 
   return (
     <div className="mt-4 rounded-lg border p-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-sm font-medium">Configuration</h3>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span>

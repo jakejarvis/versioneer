@@ -5,8 +5,6 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { useFeedback, useUpdateFeedback } from "@/api/hooks/use-feedback";
-import type { FeedbackListItem } from "@/api/types";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { AppEntityLink } from "@/components/shared/entity-link";
@@ -29,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useFeedback, useUpdateFeedback } from "@/hooks/use-feedback";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
@@ -37,6 +36,7 @@ import {
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
+import type { FeedbackListItem } from "@/lib/types";
 
 const feedbackSearchDefaults = {
   ...paginatedSearchDefaults,
@@ -199,7 +199,7 @@ function FeedbackPage() {
         Client-reported feedback for triage and resolution.
       </p>
 
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <Select
           value={searchState.status}
           onValueChange={(value) =>
@@ -213,7 +213,7 @@ function FeedbackPage() {
             })
           }
         >
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-full sm:w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -237,7 +237,7 @@ function FeedbackPage() {
             })
           }
         >
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="w-full sm:w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { AppSummary } from "@/api/types";
+import type { AppSummary } from "@/lib/types";
 
 import {
   buildAtRiskSources,

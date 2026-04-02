@@ -21,7 +21,7 @@ import type {
   HomepageRunItem,
   JobFailureListItem,
   ReleaseListItem,
-} from "@/api/types";
+} from "@/lib/types";
 
 import {
   loadAppsByIds,

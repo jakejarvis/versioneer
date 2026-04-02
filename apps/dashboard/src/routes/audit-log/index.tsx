@@ -4,8 +4,6 @@ import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
-import { useAuditLog } from "@/api/hooks/use-audit-log";
-import type { AuditLogListItem } from "@/api/types";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { EntityReferenceLink } from "@/components/shared/entity-link";
@@ -14,6 +12,7 @@ import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
@@ -22,6 +21,7 @@ import {
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
+import type { AuditLogListItem } from "@/lib/types";
 
 const auditLogSearchDefaults = {
   ...paginatedSearchDefaults,
@@ -116,7 +116,7 @@ function AuditLogPage() {
       <p className="mt-1 text-muted-foreground">Immutable event log for state changes.</p>
 
       <div className="mt-4">
-        <div className="relative max-w-sm">
+        <div className="relative w-full sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Filter by event type..."

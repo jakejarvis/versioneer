@@ -1,7 +1,6 @@
 import { useForm } from "@tanstack/react-form";
 import { toast } from "sonner";
 
-import { useCreateRelease } from "@/api/hooks/use-releases";
 import { FormField } from "@/components/shared/form-field";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useCreateRelease } from "@/hooks/use-releases";
 
 interface CreateReleaseDialogProps {
   appId?: string;

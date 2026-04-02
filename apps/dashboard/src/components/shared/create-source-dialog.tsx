@@ -7,7 +7,6 @@ import {
 } from "@versioneer/schemas/sources";
 import { toast } from "sonner";
 
-import { useCreateSource } from "@/api/hooks/use-sources";
 import { FormField } from "@/components/shared/form-field";
 import { serializeConfig, SourceConfigFields } from "@/components/shared/source-config-fields";
 import { Button } from "@/components/ui/button";
@@ -26,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useCreateSource } from "@/hooks/use-sources";
 import { SOURCE_TYPES } from "@/lib/source-types";
 
 interface CreateSourceDialogProps {

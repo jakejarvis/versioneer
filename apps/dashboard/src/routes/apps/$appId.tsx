@@ -21,21 +21,6 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import {
-  useApp,
-  useAppAliases,
-  useAppReleases,
-  useAppSources,
-  useCreateAlias,
-  useDeleteAlias,
-  useDeleteAppIcon,
-  useRecomputeLatest,
-  useTriggerFetch,
-  useUpdateAlias,
-  useUploadAppIcon,
-} from "@/api/hooks/use-apps";
-import { useReorderSources } from "@/api/hooks/use-sources";
-import type { AppAlias, AppLatestRelease, Release, Source } from "@/api/types";
 import { AppIcon } from "@/components/shared/app-icon";
 import { CreateSourceDialog } from "@/components/shared/create-source-dialog";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
@@ -66,6 +51,21 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  useApp,
+  useAppAliases,
+  useAppReleases,
+  useAppSources,
+  useCreateAlias,
+  useDeleteAlias,
+  useDeleteAppIcon,
+  useRecomputeLatest,
+  useTriggerFetch,
+  useUpdateAlias,
+  useUploadAppIcon,
+} from "@/hooks/use-apps";
+import { useReorderSources } from "@/hooks/use-sources";
+import type { AppAlias, AppLatestRelease, Release, Source } from "@/lib/types";
 
 const appDetailSearchDefaults = {
   tab: "overview" as const,
@@ -141,7 +141,7 @@ function AppDetailPage() {
         Back to Apps
       </Link>
 
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div className="flex items-start gap-4">
           <div className="group relative">
             <AppIcon iconR2Key={app.iconR2Key} appName={app.canonicalName} size={48} />
@@ -267,7 +267,7 @@ function OverviewTab({
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-lg border p-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <h3 className="font-medium">Latest Releases</h3>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -486,7 +486,7 @@ function AliasesTab({ appId }: { appId: string }) {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="font-medium">Aliases</h3>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -737,7 +737,7 @@ function SourcesTab({ appId }: { appId: string }) {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="font-medium">Sources</h3>
           <p className="mt-1 text-sm text-muted-foreground">

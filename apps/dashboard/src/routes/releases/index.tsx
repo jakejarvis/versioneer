@@ -5,9 +5,6 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { useReleases } from "@/api/hooks/use-releases";
-import { usePinRelease, useUnpinRelease } from "@/api/hooks/use-releases";
-import type { ReleaseListItem } from "@/api/types";
 import { CreateReleaseDialog } from "@/components/shared/create-release-dialog";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
@@ -22,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useReleases } from "@/hooks/use-releases";
+import { usePinRelease, useUnpinRelease } from "@/hooks/use-releases";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
@@ -30,6 +29,7 @@ import {
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
+import type { ReleaseListItem } from "@/lib/types";
 
 const releasesSearchDefaults = {
   ...paginatedSearchDefaults,
@@ -199,7 +199,7 @@ function ReleasesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Releases</h2>
           <p className="mt-1 text-muted-foreground">Browse release records across all apps.</p>
@@ -239,7 +239,7 @@ function ReleasesPage() {
                   })
                 }
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-full sm:w-40">
                   <SelectValue placeholder="Channel" />
                 </SelectTrigger>
                 <SelectContent>
@@ -262,7 +262,7 @@ function ReleasesPage() {
                   })
                 }
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-full sm:w-40">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>

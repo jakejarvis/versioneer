@@ -6,8 +6,6 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { useApps, useCreateApp } from "@/api/hooks/use-apps";
-import type { AppListItem } from "@/api/types";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { AppEntityLink } from "@/components/shared/entity-link";
@@ -31,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useApps, useCreateApp } from "@/hooks/use-apps";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
@@ -39,6 +38,7 @@ import {
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
+import type { AppListItem } from "@/lib/types";
 
 const appsSearchDefaults = {
   ...paginatedSearchDefaults,
@@ -146,7 +146,7 @@ function AppsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Apps</h2>
           <p className="mt-1 text-muted-foreground">Manage the application catalog.</p>
@@ -169,7 +169,7 @@ function AppsPage() {
           enableColumnVisibility
           toolbar={
             <>
-              <div className="relative flex-1 max-w-sm">
+              <div className="relative w-full sm:max-w-sm sm:flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search apps..."
@@ -200,7 +200,7 @@ function AppsPage() {
                   })
                 }
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-full sm:w-40">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>

@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import {
   HeadContent,
+  Link,
   Outlet,
   Scripts,
   createRootRoute,
@@ -45,7 +46,14 @@ export const Route = createRootRoute({
       { title: "Versioneer Admin" },
       { name: "robots", content: "noindex, nofollow" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      {
+        rel: "stylesheet",
+        href: appCss,
+      },
+      { rel: "icon", href: "/favicon.ico" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+    ],
   }),
   component: RootComponent,
 });
@@ -58,9 +66,12 @@ function AppShell() {
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 md:hidden">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
-          <span className="text-sm font-semibold">Versioneer</span>
+          <Link to="/" className="flex items-center gap-2.5">
+            <img src="/versioneer.png" alt="Versioneer" className="rounded-sm size-5" />
+            <span className="text-base font-mono font-semibold">Versioneer</span>
+          </Link>
         </header>
-        <div className="px-6 py-5">
+        <div className="px-4 py-4 sm:px-6 sm:py-5">
           <Outlet />
         </div>
       </SidebarInset>

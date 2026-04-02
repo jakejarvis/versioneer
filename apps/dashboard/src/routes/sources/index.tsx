@@ -6,12 +6,6 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import {
-  useBulkUpdateSourceStatus,
-  useSources,
-  useTriggerSourceFetch,
-} from "@/api/hooks/use-sources";
-import type { SourceListItem } from "@/api/types";
 import { CreateSourceDialog } from "@/components/shared/create-source-dialog";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
@@ -26,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useBulkUpdateSourceStatus, useSources, useTriggerSourceFetch } from "@/hooks/use-sources";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
@@ -35,6 +30,7 @@ import {
   sortingFromSearch,
 } from "@/lib/data-table-search";
 import { SOURCE_TYPES } from "@/lib/source-types";
+import type { SourceListItem } from "@/lib/types";
 
 const sourcesSearchDefaults = {
   ...paginatedSearchDefaults,
@@ -223,7 +219,7 @@ function SourcesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Sources</h2>
           <p className="mt-1 text-muted-foreground">
@@ -265,7 +261,7 @@ function SourcesPage() {
                   })
                 }
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-full sm:w-40">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -290,7 +286,7 @@ function SourcesPage() {
                   })
                 }
               >
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-full sm:w-48">
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>

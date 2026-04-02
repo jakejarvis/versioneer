@@ -4,13 +4,6 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import {
-  useApproveCatalogSuggestion,
-  useCatalogSuggestion,
-  useCatalogSuggestions,
-  useRejectCatalogSuggestion,
-} from "@/api/hooks/use-review";
-import type { CatalogSuggestion } from "@/api/types";
 import { AppIcon } from "@/components/shared/app-icon";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
@@ -36,6 +29,12 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  useApproveCatalogSuggestion,
+  useCatalogSuggestion,
+  useCatalogSuggestions,
+  useRejectCatalogSuggestion,
+} from "@/hooks/use-review";
+import {
   applyPaginationToSearch,
   applySortingToSearch,
   paginatedSearchDefaults,
@@ -43,6 +42,7 @@ import {
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
+import type { CatalogSuggestion } from "@/lib/types";
 
 const reviewSearchDefaults = {
   ...paginatedSearchDefaults,
@@ -236,7 +236,7 @@ function ReviewPage() {
         Review and action catalog suggestions. FIFO queue backed by deduped evidence.
       </p>
 
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <Select
           value={searchState.status}
           onValueChange={(value) =>
@@ -246,7 +246,7 @@ function ReviewPage() {
             })
           }
         >
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-full sm:w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -265,7 +265,7 @@ function ReviewPage() {
             })
           }
         >
-          <SelectTrigger className="w-48">
+          <SelectTrigger className="w-full sm:w-48">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

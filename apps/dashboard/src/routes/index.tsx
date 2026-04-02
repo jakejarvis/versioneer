@@ -13,17 +13,6 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { useHomepage } from "@/api/hooks/use-homepage";
-import type {
-  AtRiskSourceItem,
-  CatalogSuggestion,
-  DashboardHomepageData,
-  FeedbackListItem,
-  HomepageDiscoveryItem,
-  HomepageRunItem,
-  JobFailureListItem,
-  ReleaseListItem,
-} from "@/api/types";
 import { AppIcon } from "@/components/shared/app-icon";
 import { ReleaseEntityLink } from "@/components/shared/entity-link";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -38,7 +27,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useHomepage } from "@/hooks/use-homepage";
 import { formatDuration } from "@/lib/format-duration";
+import type {
+  AtRiskSourceItem,
+  CatalogSuggestion,
+  DashboardHomepageData,
+  FeedbackListItem,
+  HomepageDiscoveryItem,
+  HomepageRunItem,
+  JobFailureListItem,
+  ReleaseListItem,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const reviewSearch = { page: 1, pageSize: 25, status: "pending", queueType: "all" } as const;

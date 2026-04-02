@@ -1,9 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { LogOut } from "lucide-react";
 
-import { useAuth } from "@/api/hooks/use-auth";
-import { useStats } from "@/api/hooks/use-stats";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Sidebar,
@@ -18,6 +16,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/hooks/use-auth";
+import { useStats } from "@/hooks/use-stats";
 import { authClient } from "@/lib/auth-client";
 import { navItems } from "@/lib/constants";
 
@@ -44,7 +44,10 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
-        <h1 className="text-base font-semibold tracking-tight">Versioneer</h1>
+        <Link to="/" className="flex items-center gap-2.5">
+          <img src="/versioneer.png" alt="Versioneer" className="size-6 rounded-sm" />
+          <span className="text-sm font-mono font-semibold">Versioneer</span>
+        </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

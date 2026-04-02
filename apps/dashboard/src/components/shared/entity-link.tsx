@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import type { AppSummary, LinkedEntityRef, ReleaseSummary, SourceSummary } from "@/api/types";
+import type { AppSummary, LinkedEntityRef, ReleaseSummary, SourceSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import { AppIcon } from "./app-icon";

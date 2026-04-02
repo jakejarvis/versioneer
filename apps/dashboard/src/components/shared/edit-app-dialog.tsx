@@ -1,8 +1,6 @@
 import { useForm } from "@tanstack/react-form";
 import { toast } from "sonner";
 
-import { useUpdateApp } from "@/api/hooks/use-apps";
-import type { App } from "@/api/types";
 import { FormField } from "@/components/shared/form-field";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useUpdateApp } from "@/hooks/use-apps";
+import type { App } from "@/lib/types";
 
 interface EditAppDialogProps {
   app: App;
