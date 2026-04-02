@@ -47,14 +47,14 @@ struct AppListRowView: View {
           }
         }
 
-        subtitleText
+        AppListRowSubtitle(row: row, installState: installState)
           .motionAwareAnimation(.spring(duration: 0.25), value: installState.phase)
       }
       .layoutPriority(1)
 
       Spacer(minLength: 4)
 
-      trailingContent
+      AppListRowTrailingContent(row: row, result: result, installState: installState)
         .fixedSize()
         .motionAwareAnimation(.spring(duration: 0.25), value: installState.phase)
     }
@@ -90,8 +90,89 @@ struct AppListRowView: View {
     .frame(width: 36, height: 36)
   }
 
+  // MARK: - Context Menu
+
   @ViewBuilder
-  private var subtitleText: some View {
+  private func rowContextMenu(for result: AppDecision) -> some View {
+    let hasPath = appState.appPathText(for: result) != nil
+    let hasBundleId = appState.bundleIdText(for: result) != nil
+
+    Button("Open App") {
+      appState.openApp(result)
+    }
+    .disabled(!hasPath)
+
+    Button("Show in Finder") {
+      appState.revealAppInFinder(result)
+    }
+    .disabled(!hasPath)
+
+    Button("Open Details") {
+      withMotionAwareAnimation(reduceMotion: reduceMotion) {
+        appState.openDetail(id: result.id)
+      }
+    }
+
+    Divider()
+
+    if !isUserIgnored && row.isUpdateAvailable && row.hasUpdateAction {
+      contextMenuUpdateAction(for: result)
+      Divider()
+    }
+
+    if isUserIgnored {
+      Button("Unignore") {
+        appState.unignore(result)
+      }
+    } else {
+      Button("Ignore") {
+        appState.ignore(result)
+      }
+    }
+
+    Divider()
+
+    Button("Copy Bundle ID") {
+      appState.copyBundleId(result)
+    }
+    .disabled(!hasBundleId)
+
+    Button("Copy Path") {
+      appState.copyAppPath(result)
+    }
+    .disabled(!hasPath)
+  }
+
+  @ViewBuilder
+  private func contextMenuUpdateAction(for result: AppDecision) -> some View {
+    if appState.isMasUpgradeable(for: result) {
+      Button("Update via Mac App Store") {
+        Task { await appState.masUpgrade(result) }
+      }
+    } else if appState.isHomebrewInstalled(for: result) {
+      Button("Update via Homebrew") {
+        Task { await appState.brewUpgrade(result) }
+      }
+    } else if result.canInstall {
+      Button("Update") {
+        Task { await appState.install(result) }
+      }
+    } else {
+      Button(appState.primaryActionTitle(for: result)) {
+        appState.openManualUpdate(result)
+      }
+    }
+  }
+}
+
+// MARK: - Subtitle
+
+private struct AppListRowSubtitle: View {
+  let row: ResultsBrowserRowPresentation
+  let installState: InstallCoordinator.OperationState
+
+  @ViewBuilder
+  var body: some View {
     if installState.isRunning {
       HStack(spacing: 6) {
         ProgressView()
@@ -117,9 +198,20 @@ struct AppListRowView: View {
         .lineLimit(1)
     }
   }
+}
+
+// MARK: - Trailing Content
+
+private struct AppListRowTrailingContent: View {
+  @Environment(AppState.self) private var appState
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  let row: ResultsBrowserRowPresentation
+  let result: AppDecision?
+  let installState: InstallCoordinator.OperationState
 
   @ViewBuilder
-  private var trailingContent: some View {
+  var body: some View {
     if installState.isRunning {
       StatusChip(
         title: installState.phase.rawValue.capitalized,
@@ -157,73 +249,5 @@ struct AppListRowView: View {
         systemImage: row.statusSystemImage
       )
     }
-  }
-
-  @ViewBuilder
-  private func rowContextMenu(for result: AppDecision) -> some View {
-    let hasPath = appState.appPathText(for: result) != nil
-    let hasBundleId = appState.bundleIdText(for: result) != nil
-
-    Button("Open App") {
-      appState.openApp(result)
-    }
-    .disabled(!hasPath)
-
-    Button("Show in Finder") {
-      appState.revealAppInFinder(result)
-    }
-    .disabled(!hasPath)
-
-    Button("Open Details") {
-      withMotionAwareAnimation(reduceMotion: reduceMotion) {
-        appState.openDetail(id: result.id)
-      }
-    }
-
-    Divider()
-
-    if !isUserIgnored && row.isUpdateAvailable && row.hasUpdateAction {
-      if appState.isMasUpgradeable(for: result) {
-        Button("Update via Mac App Store") {
-          Task { await appState.masUpgrade(result) }
-        }
-      } else if appState.isHomebrewInstalled(for: result) {
-        Button("Update via Homebrew") {
-          Task { await appState.brewUpgrade(result) }
-        }
-      } else if result.canInstall {
-        Button("Update") {
-          Task { await appState.install(result) }
-        }
-      } else {
-        Button(appState.primaryActionTitle(for: result)) {
-          appState.openManualUpdate(result)
-        }
-      }
-
-      Divider()
-    }
-
-    if isUserIgnored {
-      Button("Unignore") {
-        appState.unignore(result)
-      }
-    } else {
-      Button("Ignore") {
-        appState.ignore(result)
-      }
-    }
-
-    Divider()
-
-    Button("Copy Bundle ID") {
-      appState.copyBundleId(result)
-    }
-    .disabled(!hasBundleId)
-
-    Button("Copy Path") {
-      appState.copyAppPath(result)
-    }
-    .disabled(!hasPath)
   }
 }

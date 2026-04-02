@@ -9,16 +9,18 @@ enum FeedbackType: String, CaseIterable, Identifiable {
 }
 
 struct FeedbackSheetView: View {
-  @Binding var feedbackType: FeedbackType
-  @Binding var feedbackComment: String
-  @Binding var feedbackVersion: String
-  @Binding var feedbackURL: String
-  @Binding var feedbackSubmitting: Bool
-  @Binding var feedbackError: String?
-  @Binding var feedbackSuccess: Bool
+  @Environment(AppState.self) private var appState
+  @Environment(\.dismiss) private var dismiss
 
-  let onCancel: () -> Void
-  let onSubmit: () -> Void
+  let result: AppDecision
+
+  @State private var feedbackType: FeedbackType = .wrongMatch
+  @State private var comment = ""
+  @State private var version = ""
+  @State private var url = ""
+  @State private var isSubmitting = false
+  @State private var error: String?
+  @State private var success = false
 
   var body: some View {
     NavigationStack {
@@ -33,23 +35,23 @@ struct FeedbackSheetView: View {
         }
 
         Section {
-          feedbackBody
+          feedbackFields
 
-          TextField("Additional comments (optional)", text: $feedbackComment, axis: .vertical)
+          TextField("Additional comments (optional)", text: $comment, axis: .vertical)
             .lineLimit(4...6)
         } footer: {
           Text("Send catalog feedback without leaving the desktop app.")
         }
 
-        if let feedbackError {
+        if let error {
           Section {
-            Text(feedbackError)
+            Text(error)
               .font(.callout)
               .foregroundStyle(.red)
           }
         }
 
-        if feedbackSuccess {
+        if success {
           Section {
             Label("Thank you for your feedback.", systemImage: "checkmark.circle.fill")
               .foregroundStyle(.green)
@@ -60,22 +62,29 @@ struct FeedbackSheetView: View {
       .navigationTitle("Report Issue")
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel", action: onCancel)
+          Button("Cancel") { dismiss() }
             .keyboardShortcut(.cancelAction)
         }
 
         ToolbarItem(placement: .confirmationAction) {
-          Button("Submit", action: onSubmit)
+          Button("Submit", action: submit)
             .keyboardShortcut(.defaultAction)
-            .disabled(feedbackSubmitting)
+            .disabled(isSubmitting)
         }
       }
     }
     .frame(minWidth: 480, minHeight: 360)
+    .onChange(of: success) {
+      guard success else { return }
+      Task {
+        try? await Task.sleep(for: .seconds(2))
+        dismiss()
+      }
+    }
   }
 
   @ViewBuilder
-  private var feedbackBody: some View {
+  private var feedbackFields: some View {
     switch feedbackType {
     case .wrongMatch:
       Text("This app was matched to the wrong catalog entry.")
@@ -86,15 +95,53 @@ struct FeedbackSheetView: View {
         Text("The latest version shown is incorrect.")
           .font(.callout)
           .foregroundStyle(.secondary)
-        TextField("Correct latest version (optional)", text: $feedbackVersion)
+        TextField("Correct latest version (optional)", text: $version)
       }
     case .missingApp:
       VStack(alignment: .leading, spacing: 10) {
         Text("This app is not in the catalog and should be.")
           .font(.callout)
           .foregroundStyle(.secondary)
-        TextField("Homepage URL (optional)", text: $feedbackURL)
+        TextField("Homepage URL (optional)", text: $url)
       }
     }
+  }
+
+  // MARK: - Actions
+
+  private func submit() {
+    Task { await submitAsync() }
+  }
+
+  private func submitAsync() async {
+    isSubmitting = true
+    error = nil
+
+    do {
+      switch feedbackType {
+      case .wrongMatch:
+        try await appState.submitWrongMatch(
+          for: result,
+          comment: comment.isEmpty ? nil : comment
+        )
+      case .wrongVersion:
+        try await appState.submitWrongVersion(
+          for: result,
+          reportedVersion: version.isEmpty ? nil : version,
+          comment: comment.isEmpty ? nil : comment
+        )
+      case .missingApp:
+        try await appState.submitMissingApp(
+          for: result,
+          homepageUrl: url.isEmpty ? nil : url,
+          comment: comment.isEmpty ? nil : comment
+        )
+      }
+      success = true
+    } catch {
+      self.error = error.localizedDescription
+    }
+
+    isSubmitting = false
   }
 }

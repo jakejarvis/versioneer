@@ -2,68 +2,37 @@ import SwiftUI
 
 struct DetailPaneView: View {
   @Environment(AppState.self) private var appState
-  @Environment(InstallCoordinator.self) private var installCoordinator
 
   let result: AppDecision
 
   @State private var showFeedbackSheet = false
   @State private var showInstallWarning = false
   @State private var showBrewBypassWarning = false
-  @State private var feedbackType: FeedbackType = .wrongMatch
-  @State private var feedbackComment = ""
-  @State private var feedbackVersion = ""
-  @State private var feedbackURL = ""
-  @State private var feedbackSubmitting = false
-  @State private var feedbackError: String?
-  @State private var feedbackSuccess = false
-  @State private var releaseNotes: ReleaseNotesContent?
-  @State private var releaseNotesLoading = false
-
-  private var installState: InstallCoordinator.OperationState {
-    installCoordinator.state(for: result)
-  }
-
-  private var installPresentation: InstallPresentation {
-    InstallPresentation.make(result: result, state: installState)
-  }
-
-  private var isUserIgnored: Bool {
-    appState.isUserIgnored(result)
-  }
-
-  private var hasPrimaryActionSection: Bool {
-    isUserIgnored || (isBrewApp && result.decision == .updateAvailable)
-      || result.canInstall || result.decision == .updateAvailable
-  }
 
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
-        heroSection
+        DetailHeroSection(result: result)
 
-        if hasPrimaryActionSection {
-          primaryActionSection
-        }
+        DetailPrimaryActionSection(
+          result: result,
+          showInstallWarning: $showInstallWarning,
+          showBrewBypassWarning: $showBrewBypassWarning
+        )
 
-        secondaryActionSection
-        releaseNotesSection
+        DetailQuickActionsSection(
+          result: result,
+          showFeedbackSheet: $showFeedbackSheet
+        )
+
+        DetailReleaseNotesSection(result: result)
       }
       .padding(24)
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .sheet(isPresented: $showFeedbackSheet) {
-      FeedbackSheetView(
-        feedbackType: $feedbackType,
-        feedbackComment: $feedbackComment,
-        feedbackVersion: $feedbackVersion,
-        feedbackURL: $feedbackURL,
-        feedbackSubmitting: $feedbackSubmitting,
-        feedbackError: $feedbackError,
-        feedbackSuccess: $feedbackSuccess,
-        onCancel: resetFeedbackState,
-        onSubmit: { Task { await submitFeedback() } }
-      )
+      FeedbackSheetView(result: result)
     }
     .alert("Install provisional update?", isPresented: $showInstallWarning) {
       Button("Install", role: .destructive) {
@@ -85,21 +54,53 @@ struct DetailPaneView: View {
         "This app was installed via Homebrew. Installing directly may cause Homebrew to lose track of it. You can re-sync with `brew reinstall --cask`."
       )
     }
-    .task(id: result.latestReleaseId) {
-      await loadReleaseNotes()
+  }
+}
+
+// MARK: - Hero Section
+
+private struct DetailHeroSection: View {
+  @Environment(AppState.self) private var appState
+
+  let result: AppDecision
+
+  private var decisionTitle: String {
+    if result.isLocalOnly {
+      return result.localOnlyStatusTitle
     }
-    .onChange(of: feedbackSuccess) {
-      guard feedbackSuccess else { return }
-      Task {
-        try? await Task.sleep(for: .seconds(2))
-        resetFeedbackState()
-      }
+    switch result.decision {
+    case .updateAvailable: return "Update Available"
+    case .upToDate: return "Up to Date"
+    case .ambiguous: return "Needs Review"
+    case .localOnly: return "Local Only"
     }
   }
 
-  // MARK: - Hero Section
+  private var decisionTint: Color {
+    if result.isLocalOnly {
+      return result.decision == .updateAvailable ? .orange : .secondary
+    }
+    switch result.decision {
+    case .updateAvailable: return .accentColor
+    case .upToDate: return .green
+    case .ambiguous: return .orange
+    case .localOnly: return .secondary
+    }
+  }
 
-  private var heroSection: some View {
+  private var decisionSymbol: String {
+    if result.isLocalOnly {
+      return result.decision == .updateAvailable ? "arrow.up.circle" : "desktopcomputer"
+    }
+    switch result.decision {
+    case .updateAvailable: return "arrow.up.circle.fill"
+    case .upToDate: return "checkmark.circle.fill"
+    case .ambiguous: return "scope"
+    case .localOnly: return "desktopcomputer"
+    }
+  }
+
+  var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack(alignment: .top, spacing: 16) {
         Image(nsImage: appState.appIcon(for: result))
@@ -177,8 +178,30 @@ struct DetailPaneView: View {
       }
     }
   }
+}
 
-  // MARK: - Action Sections
+// MARK: - Primary Action Section
+
+private struct DetailPrimaryActionSection: View {
+  @Environment(AppState.self) private var appState
+  @Environment(InstallCoordinator.self) private var installCoordinator
+
+  let result: AppDecision
+
+  @Binding var showInstallWarning: Bool
+  @Binding var showBrewBypassWarning: Bool
+
+  private var installState: InstallCoordinator.OperationState {
+    installCoordinator.state(for: result)
+  }
+
+  private var installPresentation: InstallPresentation {
+    InstallPresentation.make(result: result, state: installState)
+  }
+
+  private var isUserIgnored: Bool {
+    appState.isUserIgnored(result)
+  }
 
   private var isBrewApp: Bool {
     appState.isHomebrewInstalled(for: result)
@@ -193,31 +216,25 @@ struct DetailPaneView: View {
   }
 
   @ViewBuilder
-  private var primaryActionSection: some View {
+  var body: some View {
     if isUserIgnored {
-      ignoredActionSection
+      ignoredActionCard
     } else if isMasUpgradeable && result.decision == .updateAvailable {
-      masUpgradeActionSection
+      masUpgradeCard
     } else if isBrewApp && result.decision == .updateAvailable {
-      brewUpgradeActionSection
+      brewUpgradeCard
     } else if result.canInstall {
-      standardInstallActionSection
-    } else if let manualUpdateAction, result.decision == .updateAvailable {
-      manualUpdateActionSection(action: manualUpdateAction)
+      standardInstallCard
+    } else if let action = manualUpdateAction, result.decision == .updateAvailable {
+      manualUpdateCard(action: action)
     } else if result.decision == .updateAvailable {
-      VStack(alignment: .leading, spacing: 8) {
-        Text("Install Unavailable")
-          .font(.subheadline.weight(.semibold))
-        Text(unavailableInstallReason)
-          .font(.callout)
-          .foregroundStyle(.secondary)
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .glassCard(cornerRadius: 18, padding: 16)
+      unavailableInstallCard
     }
   }
 
-  private var ignoredActionSection: some View {
+  // MARK: - Action Cards
+
+  private var ignoredActionCard: some View {
     VStack(alignment: .leading, spacing: 14) {
       SectionHeader(
         title: "Ignored",
@@ -234,35 +251,7 @@ struct DetailPaneView: View {
     .glassCard(interactive: true, cornerRadius: 22, padding: 18)
   }
 
-  private func manualUpdateActionSection(
-    action: (title: String, detail: String, url: URL)
-  ) -> some View {
-    VStack(alignment: .leading, spacing: 14) {
-      SectionHeader(
-        title: "Manual Update",
-        subtitle: action.detail
-      )
-
-      Button {
-        appState.openManualUpdate(result)
-      } label: {
-        Label(action.title, systemImage: "arrow.up.forward.app")
-          .font(.body.weight(.semibold))
-          .frame(maxWidth: .infinity)
-      }
-      .buttonStyle(.glassProminent)
-      .controlSize(.large)
-      .disabled(installState.isRunning)
-
-      Text(action.url.absoluteString)
-        .font(.caption.monospaced())
-        .foregroundStyle(.secondary)
-        .textSelection(.enabled)
-    }
-    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
-  }
-
-  private var masUpgradeActionSection: some View {
+  private var masUpgradeCard: some View {
     VStack(alignment: .leading, spacing: 14) {
       if installState.isRunning {
         if let progress = installPresentation.progress {
@@ -314,7 +303,7 @@ struct DetailPaneView: View {
     .glassCard(interactive: true, cornerRadius: 22, padding: 18)
   }
 
-  private var brewUpgradeActionSection: some View {
+  private var brewUpgradeCard: some View {
     VStack(alignment: .leading, spacing: 14) {
       if installState.isRunning {
         if let progress = installPresentation.progress {
@@ -377,7 +366,7 @@ struct DetailPaneView: View {
     .glassCard(interactive: true, cornerRadius: 22, padding: 18)
   }
 
-  private var standardInstallActionSection: some View {
+  private var standardInstallCard: some View {
     VStack(alignment: .leading, spacing: 14) {
       ForEach(installPresentation.banners) { banner in
         GlassBanner(
@@ -399,9 +388,7 @@ struct DetailPaneView: View {
           .foregroundStyle(.secondary)
       }
 
-      Button {
-        handlePrimaryInstallAction()
-      } label: {
+      Button(action: handlePrimaryInstallAction) {
         Text(installPresentation.primaryActionTitle)
           .font(.body.weight(.semibold))
           .frame(maxWidth: .infinity)
@@ -430,7 +417,86 @@ struct DetailPaneView: View {
     .glassCard(interactive: true, cornerRadius: 22, padding: 18)
   }
 
-  private var secondaryActionSection: some View {
+  private func manualUpdateCard(
+    action: (title: String, detail: String, url: URL)
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 14) {
+      SectionHeader(
+        title: "Manual Update",
+        subtitle: action.detail
+      )
+
+      Button {
+        appState.openManualUpdate(result)
+      } label: {
+        Label(action.title, systemImage: "arrow.up.forward.app")
+          .font(.body.weight(.semibold))
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.glassProminent)
+      .controlSize(.large)
+      .disabled(installState.isRunning)
+
+      Text(action.url.absoluteString)
+        .font(.caption.monospaced())
+        .foregroundStyle(.secondary)
+        .textSelection(.enabled)
+    }
+    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
+  }
+
+  private var unavailableInstallCard: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Install Unavailable")
+        .font(.subheadline.weight(.semibold))
+      Text(
+        result.installStrategy == nil
+          ? "Versioneer does not currently have an install path for this update."
+          : "Versioneer is ready to run the install flow for this update."
+      )
+      .font(.callout)
+      .foregroundStyle(.secondary)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .glassCard(cornerRadius: 18, padding: 16)
+  }
+
+  // MARK: - Helpers
+
+  private func tint(for tone: InstallPresentation.Tone) -> Color {
+    switch tone {
+    case .neutral: .secondary
+    case .progress: .accentColor
+    case .success: .green
+    case .warning: .orange
+    case .failure: .red
+    }
+  }
+
+  private func handlePrimaryInstallAction() {
+    guard result.canInstall else { return }
+    if !result.isVerified {
+      showInstallWarning = true
+    } else {
+      Task { await appState.install(result) }
+    }
+  }
+}
+
+// MARK: - Quick Actions Section
+
+private struct DetailQuickActionsSection: View {
+  @Environment(AppState.self) private var appState
+
+  let result: AppDecision
+
+  @Binding var showFeedbackSheet: Bool
+
+  private var hasAppPath: Bool {
+    appState.appPathText(for: result) != nil
+  }
+
+  var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       SectionHeader(title: "Quick Actions")
 
@@ -456,7 +522,7 @@ struct DetailPaneView: View {
       appState.openApp(result)
     }
     .buttonStyle(.glass)
-    .disabled(appState.appPathText(for: result) == nil)
+    .disabled(!hasAppPath)
   }
 
   private var showInFinderButton: some View {
@@ -464,22 +530,29 @@ struct DetailPaneView: View {
       appState.revealAppInFinder(result)
     }
     .buttonStyle(.glass)
-    .disabled(appState.appPathText(for: result) == nil)
+    .disabled(!hasAppPath)
   }
 
   private var reportIssueButton: some View {
     Button("Report Issue") {
       showFeedbackSheet = true
-      feedbackError = nil
-      feedbackSuccess = false
     }
     .buttonStyle(.glass)
   }
+}
 
-  // MARK: - Release Notes Section
+// MARK: - Release Notes Section
+
+private struct DetailReleaseNotesSection: View {
+  @Environment(AppState.self) private var appState
+
+  let result: AppDecision
+
+  @State private var releaseNotes: ReleaseNotesContent?
+  @State private var releaseNotesLoading = false
 
   @ViewBuilder
-  private var releaseNotesSection: some View {
+  var body: some View {
     if result.latestReleaseId != nil {
       VStack(alignment: .leading, spacing: 12) {
         Text("What's New")
@@ -489,7 +562,7 @@ struct DetailPaneView: View {
           HStack(spacing: 8) {
             ProgressView()
               .controlSize(.small)
-            Text("Loading release notes…")
+            Text("Loading release notes\u{2026}")
               .font(.callout)
               .foregroundStyle(.secondary)
           }
@@ -520,6 +593,9 @@ struct DetailPaneView: View {
             .foregroundStyle(.secondary)
         }
       }
+      .task(id: result.latestReleaseId) {
+        await loadReleaseNotes()
+      }
     }
   }
 
@@ -533,83 +609,6 @@ struct DetailPaneView: View {
     .allowsHitTesting(false)
   }
 
-  // MARK: - Helpers
-
-  private var decisionTitle: String {
-    if result.isLocalOnly {
-      return result.localOnlyStatusTitle
-    }
-    switch result.decision {
-    case .updateAvailable:
-      return "Update Available"
-    case .upToDate:
-      return "Up to Date"
-    case .ambiguous:
-      return "Needs Review"
-    case .localOnly:
-      return "Local Only"
-    }
-  }
-
-  private var decisionTint: Color {
-    if result.isLocalOnly {
-      return result.decision == .updateAvailable ? .orange : .secondary
-    }
-    switch result.decision {
-    case .updateAvailable:
-      return .accentColor
-    case .upToDate:
-      return .green
-    case .ambiguous:
-      return .orange
-    case .localOnly:
-      return .secondary
-    }
-  }
-
-  private var decisionSymbol: String {
-    if result.isLocalOnly {
-      return result.decision == .updateAvailable ? "arrow.up.circle" : "desktopcomputer"
-    }
-    switch result.decision {
-    case .updateAvailable:
-      return "arrow.up.circle.fill"
-    case .upToDate:
-      return "checkmark.circle.fill"
-    case .ambiguous:
-      return "scope"
-    case .localOnly:
-      return "desktopcomputer"
-    }
-  }
-
-  private var unavailableInstallReason: String {
-    if result.installStrategy == nil {
-      "Versioneer does not currently have an install path for this update."
-    } else {
-      "Versioneer is ready to run the install flow for this update."
-    }
-  }
-
-  private func tint(for tone: InstallPresentation.Tone) -> Color {
-    switch tone {
-    case .neutral: .secondary
-    case .progress: .accentColor
-    case .success: .green
-    case .warning: .orange
-    case .failure: .red
-    }
-  }
-
-  private func handlePrimaryInstallAction() {
-    guard result.canInstall else { return }
-    if !result.isVerified {
-      showInstallWarning = true
-    } else {
-      Task { await appState.install(result) }
-    }
-  }
-
   private func loadReleaseNotes() async {
     guard let releaseId = result.latestReleaseId else {
       releaseNotes = nil
@@ -619,48 +618,6 @@ struct DetailPaneView: View {
     releaseNotes = nil
     releaseNotes = await appState.fetchReleaseNotes(releaseId: releaseId)
     releaseNotesLoading = false
-  }
-
-  private func resetFeedbackState() {
-    showFeedbackSheet = false
-    feedbackComment = ""
-    feedbackVersion = ""
-    feedbackURL = ""
-    feedbackError = nil
-    feedbackSuccess = false
-    feedbackSubmitting = false
-  }
-
-  private func submitFeedback() async {
-    feedbackSubmitting = true
-    feedbackError = nil
-
-    do {
-      switch feedbackType {
-      case .wrongMatch:
-        try await appState.submitWrongMatch(
-          for: result,
-          comment: feedbackComment.isEmpty ? nil : feedbackComment
-        )
-      case .wrongVersion:
-        try await appState.submitWrongVersion(
-          for: result,
-          reportedVersion: feedbackVersion.isEmpty ? nil : feedbackVersion,
-          comment: feedbackComment.isEmpty ? nil : feedbackComment
-        )
-      case .missingApp:
-        try await appState.submitMissingApp(
-          for: result,
-          homepageUrl: feedbackURL.isEmpty ? nil : feedbackURL,
-          comment: feedbackComment.isEmpty ? nil : feedbackComment
-        )
-      }
-      feedbackSuccess = true
-    } catch {
-      feedbackError = error.localizedDescription
-    }
-
-    feedbackSubmitting = false
   }
 }
 
@@ -678,6 +635,15 @@ private struct ChannelPicker: View {
   private var currentChannel: String {
     guard let appId = result.matchedAppId else { return "stable" }
     return appState.settings.channel(forAppId: appId)
+  }
+
+  private var channelTint: Color {
+    switch currentChannel {
+    case "stable": .secondary
+    case "beta": .orange
+    case "nightly": .purple
+    default: .blue
+    }
   }
 
   var body: some View {
@@ -710,15 +676,6 @@ private struct ChannelPicker: View {
         tint: channelTint,
         systemImage: "antenna.radiowaves.left.and.right"
       )
-    }
-  }
-
-  private var channelTint: Color {
-    switch currentChannel {
-    case "stable": .secondary
-    case "beta": .orange
-    case "nightly": .purple
-    default: .blue
     }
   }
 
