@@ -1,5 +1,5 @@
 import { useForm } from "@tanstack/react-form";
-import { resolveSourceUrl } from "@versioneer/core/validation";
+import { resolveSourceUrl } from "@versioneer/core/sources";
 import type { SourceType } from "@versioneer/schemas/sources";
 import {
   defaultParserKeyForSourceType,

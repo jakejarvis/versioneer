@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getDescriptor, normalizeBaseUrl } from "@versioneer/core/sources";
 import { sourceCreateSchema, sourceUpdateSchema } from "@versioneer/core/validation";
 import { createDb } from "@versioneer/db";
 import {
@@ -11,6 +12,7 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
+import type { SourceType } from "@versioneer/schemas/sources";
 import {
   defaultRoleForSourceType,
   defaultRuntimeStatusForSourceType,
@@ -26,10 +28,7 @@ import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { scheduleSourceFetch, scheduleSourceReparse } from "./followup-jobs";
 import { atRiskSourceCondition } from "./homepage-helpers";
 import { authMiddleware } from "./middleware";
-import {
-  normalizeSourceBaseUrl,
-  prepareSyncSourceDerivedAliasWrites,
-} from "./source-derived-aliases";
+import { prepareSyncSourceDerivedAliasWrites } from "./source-derived-aliases";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
 
@@ -205,7 +204,7 @@ export const createSource = createServerFn({ method: "POST" })
     const db = createDb(env.DB);
     const now = new Date().toISOString();
     const id = generateId(idPrefixes.source);
-    const normalizedBaseUrl = normalizeSourceBaseUrl(data.sourceType, data.baseUrl ?? null);
+    const normalizedBaseUrl = data.baseUrl ? normalizeBaseUrl(data.sourceType, data.baseUrl) : null;
     const desiredRole =
       data.reviewStatus === "approved"
         ? (data.role ?? defaultRoleForSourceType(data.sourceType))
@@ -231,26 +230,22 @@ export const createSource = createServerFn({ method: "POST" })
         ? defaultRuntimeStatusForSourceType(data.sourceType)
         : "disabled";
 
-    const derivedAliasType =
-      data.sourceType === "sparkle"
-        ? "sparkle_feed"
-        : data.sourceType === "electron_generic"
-          ? "electron_update_url"
-          : null;
-    if (data.reviewStatus === "approved" && derivedAliasType && normalizedBaseUrl) {
+    const derivedAlias = normalizedBaseUrl
+      ? getDescriptor(data.sourceType).derivedAlias(normalizedBaseUrl)
+      : null;
+    if (data.reviewStatus === "approved" && derivedAlias) {
       try {
         await assertNoConflictingExactAlias(db, {
-          aliasType: derivedAliasType,
-          value: normalizedBaseUrl,
+          aliasType: derivedAlias.aliasType,
+          value: derivedAlias.value,
           appId: data.appId,
         });
       } catch (error) {
         if (error instanceof AliasConflictError) {
-          const aliasLabel =
-            derivedAliasType === "sparkle_feed" ? "sparkle feed" : "electron update URL";
-          throw new Error(`Conflicting ${aliasLabel} already belongs to app ${error.appId}`, {
-            cause: error,
-          });
+          throw new Error(
+            `Conflicting ${derivedAlias.aliasType} already belongs to app ${error.appId}`,
+            { cause: error },
+          );
         }
         throw error;
       }
@@ -355,7 +350,9 @@ export const updateSource = createServerFn({ method: "POST" })
     const updates: Record<string, unknown> = { updatedAt: now };
     const nextBaseUrl =
       fields.baseUrl !== undefined
-        ? normalizeSourceBaseUrl(existing.sourceType, fields.baseUrl)
+        ? fields.baseUrl
+          ? normalizeBaseUrl(existing.sourceType as SourceType, fields.baseUrl)
+          : null
         : existing.baseUrl;
     const nextReviewStatus = fields.reviewStatus ?? existing.reviewStatus;
     const transitionedToApproved =
@@ -396,26 +393,22 @@ export const updateSource = createServerFn({ method: "POST" })
             : existing.status))
         : (fields.status ?? (fields.reviewStatus !== undefined ? "disabled" : existing.status));
 
-    const derivedAliasType =
-      existing.sourceType === "sparkle"
-        ? "sparkle_feed"
-        : existing.sourceType === "electron_generic"
-          ? "electron_update_url"
-          : null;
-    if (nextReviewStatus === "approved" && derivedAliasType && nextBaseUrl) {
+    const derivedAlias = nextBaseUrl
+      ? getDescriptor(existing.sourceType as SourceType).derivedAlias(nextBaseUrl)
+      : null;
+    if (nextReviewStatus === "approved" && derivedAlias) {
       try {
         await assertNoConflictingExactAlias(db, {
-          aliasType: derivedAliasType,
-          value: nextBaseUrl,
+          aliasType: derivedAlias.aliasType,
+          value: derivedAlias.value,
           appId: existing.appId,
         });
       } catch (error) {
         if (error instanceof AliasConflictError) {
-          const aliasLabel =
-            derivedAliasType === "sparkle_feed" ? "sparkle feed" : "electron update URL";
-          throw new Error(`Conflicting ${aliasLabel} already belongs to app ${error.appId}`, {
-            cause: error,
-          });
+          throw new Error(
+            `Conflicting ${derivedAlias.aliasType} already belongs to app ${error.appId}`,
+            { cause: error },
+          );
         }
         throw error;
       }

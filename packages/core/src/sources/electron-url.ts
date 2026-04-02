@@ -1,4 +1,4 @@
-import { parseGitHubRepoUrl } from "./github-url";
+import { parseGitHubRepoUrl } from "../validation/github-url";
 
 const ELECTRON_FEED_FILENAMES = ["latest-mac.yml", "latest.yml"] as const;
 

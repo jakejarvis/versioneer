@@ -1,6 +1,6 @@
 import type { ParsedVersion } from "./types";
 
-const PRE_RELEASE_TAGS: Record<string, number> = {
+export const PRE_RELEASE_TAGS: Record<string, number> = {
   alpha: 0,
   a: 0,
   beta: 1,

@@ -4,7 +4,7 @@ import { eq, and, isNotNull, or } from "drizzle-orm";
 
 import { msElapsedSince } from "../dates";
 import { createLogger } from "../logger";
-import type { Env } from "./types";
+import { VERSIONEER_USER_AGENT, type Env } from "./types";
 
 const CASK_INDEX_URL = "https://formulae.brew.sh/api/cask.json";
 const ETAG_KV_KEY = "cask-index-etag";
@@ -153,7 +153,7 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
 
   // Fetch the cask index with ETag caching
   const headers: Record<string, string> = {
-    "User-Agent": "Versioneer/1.0 (https://versioneer.app)",
+    "User-Agent": VERSIONEER_USER_AGENT,
   };
   const lastEtag = await env.CONFIG_KV.get(ETAG_KV_KEY);
   if (lastEtag && !job.force) {

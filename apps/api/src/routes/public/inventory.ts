@@ -1,6 +1,7 @@
 import { matchApp, normalizeAliasValue } from "@versioneer/core/identity";
 import type { AliasRecord, TrustAssertionRecord } from "@versioneer/core/identity";
-import { inventoryCheckRequestSchema, toGitHubApiReleasesUrl } from "@versioneer/core/validation";
+import { normalizeBaseUrl, resolveSourceUrl } from "@versioneer/core/sources";
+import { inventoryCheckRequestSchema } from "@versioneer/core/validation";
 import type { AppDecision } from "@versioneer/core/validation";
 import { displayVersion, normalizeVersion } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
@@ -347,17 +348,6 @@ async function upsertSuggestion(params: {
     .onConflictDoNothing();
 }
 
-function normalizeSuggestedSourceUrl(sourceType: SourceType, url: string): string {
-  if (sourceType === "github_releases") {
-    return toGitHubApiReleasesUrl(url) ?? url;
-  }
-  return url;
-}
-
-function macAppStoreLookupUrl(bundleId: string): string {
-  return `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(bundleId)}&country=us`;
-}
-
 async function findExistingAlias(params: {
   db: ReturnType<typeof createDb>;
   appId: string;
@@ -383,7 +373,7 @@ async function findExistingSource(params: {
   sourceType: SourceType;
   baseUrl: string;
 }) {
-  const normalizedUrl = normalizeSuggestedSourceUrl(params.sourceType, params.baseUrl);
+  const normalizedUrl = normalizeBaseUrl(params.sourceType, params.baseUrl);
   return params.db
     .select({
       id: sources.id,
@@ -427,7 +417,7 @@ async function createSourceSuggestion(params: {
   });
   if (existing) return;
 
-  const normalizedUrl = normalizeSuggestedSourceUrl(params.sourceType, params.baseUrl);
+  const normalizedUrl = normalizeBaseUrl(params.sourceType, params.baseUrl);
   await upsertSuggestion({
     db: params.db,
     queueType: "new_source",
@@ -1175,7 +1165,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           }
 
           if (installedApp.isMasApp && installedApp.bundleId) {
-            const lookupUrl = macAppStoreLookupUrl(installedApp.bundleId);
+            const lookupUrl = resolveSourceUrl("mac_app_store", installedApp.bundleId)!;
             await createSourceSuggestion({
               db,
               appId: appRow.id,

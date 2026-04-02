@@ -1,4 +1,4 @@
-import { parseVersion } from "./parse";
+import { parseVersion, PRE_RELEASE_TAGS } from "./parse";
 
 /**
  * Normalize a raw version string to a comparable form.
@@ -8,19 +8,6 @@ export function normalizeVersion(raw: string): string {
   const parsed = parseVersion(raw);
   return parsed.valid ? parsed.normalized : raw;
 }
-
-const PRE_RELEASE_TAGS = new Set([
-  "alpha",
-  "a",
-  "beta",
-  "b",
-  "dev",
-  "nightly",
-  "rc",
-  "cr",
-  "preview",
-  "pre",
-]);
 
 /**
  * Extract a display-friendly version from a raw string.
@@ -33,7 +20,7 @@ export function displayVersion(raw: string): string {
   // Strip leading name prefix (e.g. "release-3.5.7", "XQuartz-2.8.6_beta4").
   // Keep the prefix when it is a known pre-release tag ("beta-1.0").
   const m = s.match(/^([a-zA-Z]+)[-_](?=\d)/);
-  if (m && !PRE_RELEASE_TAGS.has(m[1]!.toLowerCase())) {
+  if (m && !(m[1]!.toLowerCase() in PRE_RELEASE_TAGS)) {
     s = s.slice(m[0]!.length);
   }
 

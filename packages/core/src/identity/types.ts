@@ -14,7 +14,6 @@ export type MatchMethod =
   | "homebrew_cask"
   | "team_id_name"
   | "alias_name"
-  | "match_rule"
   | "none";
 
 export interface MatchResult {

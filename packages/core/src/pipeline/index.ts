@@ -6,29 +6,12 @@ export type {
   FetchStepResult,
   ParseStepResult,
 } from "./types";
-export { githubApiHeaders } from "./types";
+export { VERSIONEER_USER_AGENT } from "./types";
 export { handleSourceFetch } from "./fetch";
 export { handleSourceParse } from "./parse";
 export { handleRecomputeLatest } from "./recompute";
 export { normalizeReleaseNotes } from "./release-notes";
 export { sanitizeHtml } from "./sanitize-html";
 export { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
-export {
-  enrichDiscoveredApp,
-  shouldEnrich,
-  lookupCaskTokenByBundleId,
-  ENRICHMENT_STALE_MS,
-} from "./enrich-discovered-app";
-export { handleCaskIndexSync, isCaskSyncDue, extractBundleIdsFromCask } from "./cask-index-sync";
-export type { CaskIndexSyncJob } from "./cask-index-sync";
-export type { EnrichmentResult } from "./enrich-discovered-app";
-export {
-  fetchAndParse,
-  fetchHomepageSourceCandidates,
-  discoverHomepageSourceCandidates,
-  extractIconUrl,
-  extractOpenGraph,
-  extractLinks,
-  extractTitle,
-} from "./scrape-html";
-export type { CheerioDoc, HomepageSourceCandidate } from "./scrape-html";
+export { enrichDiscoveredApp, lookupCaskTokenByBundleId } from "./enrich-discovered-app";
+export { handleCaskIndexSync, isCaskSyncDue } from "./cask-index-sync";

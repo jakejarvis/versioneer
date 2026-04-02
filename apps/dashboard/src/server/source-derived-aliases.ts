@@ -1,69 +1,29 @@
 import { normalizeAliasValue } from "@versioneer/core/identity";
-import { extractSourceIdentifier, resolveSourceUrl } from "@versioneer/core/validation";
+import { getDescriptor } from "@versioneer/core/sources";
 import { appAliases, generateId, idPrefixes } from "@versioneer/db";
+import type { AliasType } from "@versioneer/schemas/catalog";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { and, eq, ne } from "drizzle-orm";
 
 import type { Db, DbExecutor } from "./db-types";
 
-type DerivedAliasType = "sparkle_feed" | "github_repo" | "electron_update_url";
-
-function sourceAliasTag(sourceId: string, aliasType: DerivedAliasType): string {
+function sourceAliasTag(sourceId: string, aliasType: string): string {
   return `source:${sourceId}:${aliasType}`;
 }
 
 function resolveDerivedAlias(
   sourceType: SourceType,
   baseUrl: string | null,
-): { aliasType: DerivedAliasType; value: string; normalizedValue: string } | null {
+): { aliasType: AliasType; value: string; normalizedValue: string } | null {
   if (!baseUrl) return null;
 
-  if (sourceType === "sparkle") {
-    return {
-      aliasType: "sparkle_feed",
-      value: baseUrl,
-      normalizedValue: normalizeAliasValue("sparkle_feed", baseUrl),
-    };
-  }
+  const derived = getDescriptor(sourceType).derivedAlias(baseUrl);
+  if (!derived) return null;
 
-  if (sourceType === "github_releases") {
-    const repoUrl = toGitHubRepoUrl(baseUrl);
-    return {
-      aliasType: "github_repo",
-      value: repoUrl,
-      normalizedValue: normalizeAliasValue("github_repo", repoUrl),
-    };
-  }
-
-  if (sourceType === "electron_generic") {
-    return {
-      aliasType: "electron_update_url",
-      value: baseUrl,
-      normalizedValue: normalizeAliasValue("electron_update_url", baseUrl),
-    };
-  }
-
-  return null;
-}
-
-export function toGitHubRepoUrl(url: string): string {
-  const match = url.match(/repos\/([^/]+)\/([^/]+)\/releases$/);
-  if (match) {
-    return `https://github.com/${match[1]}/${match[2]}`;
-  }
-  return url;
-}
-
-export function normalizeSourceBaseUrl(
-  sourceType: SourceType,
-  baseUrl: string | null,
-): string | null {
-  if (!baseUrl) return null;
-  // Extract the identifier first so this is idempotent — a URL that was
-  // already resolved won't be double-encoded (e.g. a cask URL won't become
-  // https://formulae.brew.sh/api/cask/https%3A%2F%2F…).
-  const identifier = extractSourceIdentifier(sourceType, baseUrl);
-  return resolveSourceUrl(sourceType, identifier) ?? baseUrl;
+  return {
+    ...derived,
+    normalizedValue: normalizeAliasValue(derived.aliasType, derived.value),
+  };
 }
 
 export async function syncSourceDerivedAliases(params: {
@@ -75,14 +35,7 @@ export async function syncSourceDerivedAliases(params: {
   now: string;
 }): Promise<void> {
   const derived = resolveDerivedAlias(params.sourceType, params.baseUrl);
-  const supportedAliasTypes: DerivedAliasType[] =
-    params.sourceType === "sparkle"
-      ? ["sparkle_feed"]
-      : params.sourceType === "github_releases"
-        ? ["github_repo"]
-        : params.sourceType === "electron_generic"
-          ? ["electron_update_url"]
-          : [];
+  const supportedAliasTypes = derived ? [derived.aliasType] : [];
 
   for (const aliasType of supportedAliasTypes) {
     const where = [
@@ -212,14 +165,7 @@ export async function prepareSyncSourceDerivedAliasWrites(
   },
 ) {
   const derived = resolveDerivedAlias(params.sourceType, params.baseUrl);
-  const supportedAliasTypes: DerivedAliasType[] =
-    params.sourceType === "sparkle"
-      ? ["sparkle_feed"]
-      : params.sourceType === "github_releases"
-        ? ["github_repo"]
-        : params.sourceType === "electron_generic"
-          ? ["electron_update_url"]
-          : [];
+  const supportedAliasTypes = derived ? [derived.aliasType] : [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- collected for db.batch()
   const writes: any[] = [];

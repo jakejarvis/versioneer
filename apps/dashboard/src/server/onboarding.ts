@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { normalizeAliasValue } from "@versioneer/core/identity";
 import { lookupCaskTokenByBundleId } from "@versioneer/core/pipeline";
+import { getDescriptor, normalizeBaseUrl } from "@versioneer/core/sources";
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -12,6 +13,7 @@ import {
   idPrefixes,
 } from "@versioneer/db";
 import { aliasTypeSchema } from "@versioneer/schemas/catalog";
+import type { SourceType } from "@versioneer/schemas/sources";
 import {
   defaultRoleForSourceType,
   defaultRuntimeStatusForSourceType,
@@ -24,7 +26,7 @@ import { z } from "zod";
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
 import { scheduleSourceFetch } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
-import { buildSourceDerivedAliasInserts, normalizeSourceBaseUrl } from "./source-derived-aliases";
+import { buildSourceDerivedAliasInserts } from "./source-derived-aliases";
 
 // ──────────────────────────────────────────────────────────
 // Slug availability check
@@ -117,26 +119,21 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     }
 
     for (const src of allSources) {
-      const derivedAliasType =
-        src.sourceType === "sparkle"
-          ? "sparkle_feed"
-          : src.sourceType === "electron_generic"
-            ? "electron_update_url"
-            : null;
-      if (!derivedAliasType) continue;
+      if (!src.baseUrl) continue;
+      const derived = getDescriptor(src.sourceType as SourceType).derivedAlias(src.baseUrl);
+      if (!derived) continue;
 
       try {
         await assertNoConflictingExactAlias(db, {
-          aliasType: derivedAliasType,
-          value: src.baseUrl,
+          aliasType: derived.aliasType,
+          value: derived.value,
         });
       } catch (error) {
         if (error instanceof AliasConflictError) {
-          const aliasLabel =
-            derivedAliasType === "sparkle_feed" ? "sparkle feed" : "electron update URL";
-          throw new Error(`Conflicting ${aliasLabel} already belongs to app ${error.appId}`, {
-            cause: error,
-          });
+          throw new Error(
+            `Conflicting ${derived.aliasType} already belongs to app ${error.appId}`,
+            { cause: error },
+          );
         }
         throw error;
       }
@@ -189,7 +186,9 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     const sourceIds: string[] = [];
     for (let i = 0; i < allSources.length; i++) {
       const src = allSources[i]!;
-      const normalizedBaseUrl = normalizeSourceBaseUrl(src.sourceType, src.baseUrl);
+      const normalizedBaseUrl = src.baseUrl
+        ? normalizeBaseUrl(src.sourceType as SourceType, src.baseUrl)
+        : null;
       const sourceId = generateId(idPrefixes.source);
       const isPrimary = i === 0;
       const defaultRole = defaultRoleForSourceType(src.sourceType);

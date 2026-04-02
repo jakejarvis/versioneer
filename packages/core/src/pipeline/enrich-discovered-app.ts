@@ -4,7 +4,9 @@ import { eq } from "drizzle-orm";
 
 import { msElapsedSince } from "../dates";
 import { sparkleParser, githubReleasesParser } from "../parsers";
-import { toGitHubApiReleasesUrl } from "../validation";
+import { toGitHubRepoUrl } from "../sources/github-releases";
+import { resolveSourceUrl } from "../sources/registry";
+import { toGitHubApiReleasesUrl } from "../validation/github-url";
 import { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
 import { fetchAndParse, extractIconUrl } from "./scrape-html";
 import { githubApiHeaders } from "./types";
@@ -317,17 +319,16 @@ async function enrichFromGitHubReleases(
     result.enrichedLatestPublishedAt = latest.publishedAt ?? null;
   }
 
-  // Extract homepage from GitHub API URL: repos/{owner}/{repo} → github.com/{owner}/{repo}
   if (!result.enrichedHomepageUrl) {
-    const match = apiUrl.match(/repos\/([^/]+\/[^/]+)/);
-    if (match) {
-      result.enrichedHomepageUrl = `https://github.com/${match[1]}`;
+    const repoUrl = toGitHubRepoUrl(apiUrl);
+    if (repoUrl !== apiUrl) {
+      result.enrichedHomepageUrl = repoUrl;
     }
   }
 }
 
 async function enrichFromMasLookup(bundleId: string, result: EnrichmentResult): Promise<void> {
-  const url = `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(bundleId)}&country=us`;
+  const url = resolveSourceUrl("mac_app_store", bundleId)!;
   let response: Response;
   try {
     response = await fetch(url, { signal: AbortSignal.timeout(10_000) });

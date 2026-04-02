@@ -1,5 +1,6 @@
 import { inferChannel, isPreRelease } from "../versioning";
 import type { SourceParser, ParserOutput, ParsedRelease, ParsedArtifact } from "./types";
+import { inferArtifactType } from "./utils";
 
 interface GitHubRelease {
   tag_name: string;
@@ -57,13 +58,10 @@ export const githubReleasesParser: SourceParser = {
             }
           }
 
+          const channel = inferChannel(versionRaw);
           const release: ParsedRelease = {
             versionRaw,
-            channel: ghRelease.prerelease
-              ? inferChannel(versionRaw) === "stable"
-                ? "beta"
-                : inferChannel(versionRaw)
-              : inferChannel(versionRaw),
+            channel: ghRelease.prerelease && channel === "stable" ? "beta" : channel,
             isPrerelease: ghRelease.prerelease || isPreRelease(versionRaw),
             publishedAt: ghRelease.published_at ?? undefined,
             releaseNotesUrl: ghRelease.html_url ?? undefined,
@@ -107,14 +105,6 @@ function isMacArtifact(name: string): boolean {
   // Non-archive files with mac keywords (e.g. "MyApp-mac.tar.gz")
   if (hasMacKeyword) return true;
   return false;
-}
-
-function inferArtifactType(name: string): ParsedArtifact["type"] {
-  const lower = name.toLowerCase();
-  if (lower.endsWith(".dmg")) return "dmg";
-  if (lower.endsWith(".zip")) return "zip";
-  if (lower.endsWith(".pkg")) return "pkg";
-  return "other";
 }
 
 function inferArchitecture(name: string): string | undefined {

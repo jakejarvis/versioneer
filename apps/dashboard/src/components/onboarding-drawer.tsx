@@ -1,7 +1,8 @@
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useForm, useStore } from "@tanstack/react-form";
-import { parseGitHubRepoUrl, resolveSourceUrl } from "@versioneer/core/validation";
+import { resolveSourceUrl } from "@versioneer/core/sources";
+import { parseGitHubRepoUrl } from "@versioneer/core/validation";
 import type { AliasType } from "@versioneer/schemas/catalog";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { SOURCE_TYPE_DEFAULTS } from "@versioneer/schemas/sources";

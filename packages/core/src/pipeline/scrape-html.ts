@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 
 import { parseGitHubRepoUrl } from "../validation/github-url";
 import { readResponseTextLimited } from "./response-body";
+import { VERSIONEER_USER_AGENT } from "./types";
 
 export type CheerioDoc = cheerio.CheerioAPI;
 export interface HomepageSourceCandidate {
@@ -28,7 +29,7 @@ export async function fetchAndParse(
     const response = await fetch(url, {
       signal: AbortSignal.timeout(timeoutMs),
       headers: {
-        "User-Agent": "Versioneer/1.0 (https://versioneer.app)",
+        "User-Agent": VERSIONEER_USER_AGENT,
         Accept: "text/html, application/xhtml+xml",
         ...headers,
       },

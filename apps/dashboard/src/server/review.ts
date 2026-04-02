@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { normalizeAliasValue } from "@versioneer/core/identity";
+import { getDescriptor, normalizeBaseUrl } from "@versioneer/core/sources";
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -13,6 +14,7 @@ import {
   suggestionEvidence,
   trustAssertions,
 } from "@versioneer/db";
+import type { SourceType } from "@versioneer/schemas/sources";
 import {
   defaultParserKeyForSourceType,
   defaultRoleForSourceType,
@@ -28,7 +30,7 @@ import { assertNoConflictingExactAlias } from "./alias-conflicts";
 import { loadAppsByIds, loadSourcesByIds, toAppSummary, toSourceSummary } from "./entity-summaries";
 import { scheduleRecomputeLatest, scheduleSourceFetch } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
-import { normalizeSourceBaseUrl, syncSourceDerivedAliases } from "./source-derived-aliases";
+import { syncSourceDerivedAliases } from "./source-derived-aliases";
 
 type Db = ReturnType<typeof createDb>;
 type SuggestionRow = typeof catalogSuggestions.$inferSelect;
@@ -284,12 +286,15 @@ async function approveNewSourceSuggestion(params: {
     throw new Error("New source suggestion is missing required fields");
   }
 
-  if (payload.sourceType === "sparkle" && payload.baseUrl) {
-    await assertNoConflictingExactAlias(db, {
-      aliasType: "sparkle_feed",
-      value: payload.baseUrl,
-      appId,
-    });
+  if (payload.baseUrl) {
+    const derived = getDescriptor(payload.sourceType as SourceType).derivedAlias(payload.baseUrl);
+    if (derived) {
+      await assertNoConflictingExactAlias(db, {
+        aliasType: derived.aliasType,
+        value: derived.value,
+        appId,
+      });
+    }
   }
 
   const existingSources = await db.select().from(sources).where(eq(sources.appId, appId)).all();
@@ -297,7 +302,7 @@ async function approveNewSourceSuggestion(params: {
     (source) =>
       source.sourceType === payload.sourceType &&
       (source.baseUrl ?? null) ===
-        normalizeSourceBaseUrl(payload.sourceType, payload.baseUrl ?? null),
+        (payload.baseUrl ? normalizeBaseUrl(payload.sourceType, payload.baseUrl) : null),
   );
 
   const desiredRole = payload.role ?? defaultRoleForSourceType(payload.sourceType);
@@ -314,7 +319,9 @@ async function approveNewSourceSuggestion(params: {
   const persistedRole = conflictingAuthority ? "corroborating" : desiredRole;
   const parserKey = payload.parserKey ?? defaultParserKeyForSourceType(payload.sourceType);
   const runtimeStatus = defaultRuntimeStatusForSourceType(payload.sourceType);
-  const normalizedBaseUrl = normalizeSourceBaseUrl(payload.sourceType, payload.baseUrl ?? null);
+  const normalizedBaseUrl = payload.baseUrl
+    ? normalizeBaseUrl(payload.sourceType, payload.baseUrl)
+    : null;
 
   let sourceId = duplicate?.id ?? null;
   if (duplicate) {

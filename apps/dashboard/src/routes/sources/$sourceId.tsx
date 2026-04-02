@@ -1,7 +1,7 @@
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
-import { extractSourceIdentifier, resolveSourceUrl } from "@versioneer/core/validation";
+import { extractSourceIdentifier, resolveSourceUrl } from "@versioneer/core/sources";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { ArrowLeft, Ban, Inbox, RefreshCw, RotateCcw, Save, Zap } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";

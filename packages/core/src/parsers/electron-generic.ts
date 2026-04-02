@@ -1,5 +1,6 @@
 import { inferChannel, isPreRelease } from "../versioning";
 import type { ParsedArtifact, ParsedRelease, ParserOutput, SourceParser } from "./types";
+import { inferArtifactType } from "./utils";
 
 export const electronGenericParser: SourceParser = {
   key: "electron_generic",
@@ -88,14 +89,6 @@ function resolveArtifactUrl(sourceBaseUrl: unknown, artifactPath: string): strin
   if (typeof sourceBaseUrl !== "string" || sourceBaseUrl.length === 0) return artifactPath;
   const normalizedBase = sourceBaseUrl.endsWith("/") ? sourceBaseUrl : `${sourceBaseUrl}/`;
   return `${normalizedBase}${artifactPath.replace(/^\/+/, "")}`;
-}
-
-function inferArtifactType(path: string): ParsedArtifact["type"] {
-  const lower = path.toLowerCase();
-  if (lower.endsWith(".zip")) return "zip";
-  if (lower.endsWith(".dmg")) return "dmg";
-  if (lower.endsWith(".pkg")) return "pkg";
-  return "other";
 }
 
 function parsePositiveInt(value: string): number | undefined {

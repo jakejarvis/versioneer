@@ -18,6 +18,8 @@ export interface ParseStepResult {
   releaseCount: number;
 }
 
+export const VERSIONEER_USER_AGENT = "Versioneer/1.0 (https://versioneer.app)";
+
 /**
  * Builds standard headers for GitHub API requests.
  * Uses token authentication when available (5,000 req/hr),
@@ -26,7 +28,7 @@ export interface ParseStepResult {
 export function githubApiHeaders(token?: string): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github.v3+json",
-    "User-Agent": "Versioneer/1.0 (https://versioneer.app)",
+    "User-Agent": VERSIONEER_USER_AGENT,
   };
   if (token) {
     headers["Authorization"] = `token ${token}`;

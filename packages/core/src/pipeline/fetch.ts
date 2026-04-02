@@ -1,23 +1,39 @@
 import { createDb } from "@versioneer/db";
 import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/db";
+import type { SourceType } from "@versioneer/schemas/sources";
 import { desc, eq } from "drizzle-orm";
 
 import { createLogger } from "../logger";
-import { buildElectronFeedCandidates } from "../validation/electron-url";
+import { getDescriptor } from "../sources/registry";
+import type { SourceTypeDescriptor } from "../sources/types";
 import { readResponseTextLimited } from "./response-body";
-import { githubApiHeaders } from "./types";
 import type { Env, FetchStepResult, SourceFetchJob } from "./types";
 
 const MAX_SOURCE_FETCH_BODY_BYTES = 5 * 1024 * 1024;
 
-async function fetchGitHubReleases(
+async function fetchWithCandidates(
+  descriptor: SourceTypeDescriptor,
   baseUrl: string,
   conditionalHeaders: Record<string, string>,
   env: Env,
 ): Promise<Response> {
-  return fetch(baseUrl, {
-    headers: { ...githubApiHeaders(env.GITHUB_TOKEN), ...conditionalHeaders },
-  });
+  const candidates = descriptor.buildFetchUrls(baseUrl);
+  if (candidates.length === 0) {
+    throw new Error("No fetch URLs for source");
+  }
+
+  const headers = {
+    ...descriptor.fetchHeaders({ githubToken: env.GITHUB_TOKEN }),
+    ...conditionalHeaders,
+  };
+
+  let lastResponse: Response | undefined;
+  for (const candidate of candidates) {
+    lastResponse = await fetch(candidate, { headers });
+    if (lastResponse.ok || lastResponse.status === 304) return lastResponse;
+  }
+
+  return lastResponse!;
 }
 
 export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<FetchStepResult> {
@@ -36,14 +52,16 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
     return { sourceFetchId: null, shouldParse: false, appId: source.appId };
   }
 
-  if (!source.baseUrl && source.sourceType !== "manual") {
+  const descriptor = getDescriptor(source.sourceType as SourceType);
+
+  if (!source.baseUrl && !descriptor.skipsFetch) {
     throw new Error(`Source ${job.sourceId} has no base URL`);
   }
 
   const fetchId = generateId(idPrefixes.sourceFetch);
 
-  // For manual sources, skip HTTP fetch
-  if (source.sourceType === "manual") {
+  // Sources that skip HTTP fetch (e.g. manual)
+  if (descriptor.skipsFetch) {
     await db.insert(sourceFetches).values({
       id: fetchId,
       sourceId: source.id,
@@ -70,12 +88,12 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
       if (lastFetch.lastModified) conditionalHeaders["If-Modified-Since"] = lastFetch.lastModified;
     }
 
-    const response =
-      source.sourceType === "github_releases"
-        ? await fetchGitHubReleases(source.baseUrl!, conditionalHeaders, env)
-        : source.sourceType === "electron_generic"
-          ? await fetchElectronGenericFeed(source.baseUrl!, conditionalHeaders)
-          : await fetch(source.baseUrl!, { headers: conditionalHeaders });
+    const response = await fetchWithCandidates(
+      descriptor,
+      source.baseUrl!,
+      conditionalHeaders,
+      env,
+    );
 
     if (response.status === 304) {
       log.info("not modified", { fetchId });
@@ -191,20 +209,3 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
     throw error;
   }
 }
-
-async function fetchElectronGenericFeed(
-  baseUrl: string,
-  headers: Record<string, string>,
-): Promise<Response> {
-  const candidates = buildElectronFeedCandidates(baseUrl);
-
-  let lastResponse: Response | undefined;
-  for (const candidate of candidates) {
-    const response = await fetch(candidate, { headers });
-    if (response.ok || response.status === 304) return response;
-    lastResponse = response;
-  }
-
-  return lastResponse ?? fetch(baseUrl, { headers });
-}
-

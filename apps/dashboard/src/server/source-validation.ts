@@ -11,15 +11,8 @@ import {
   jsonParser,
   xmlParser,
 } from "@versioneer/core/parsers";
-import {
-  githubApiHeaders,
-  readResponseTextLimited,
-  ResponseBodyTooLargeError,
-} from "@versioneer/core/pipeline";
-import {
-  buildElectronFeedCandidates,
-  resolveElectronArtifactBase,
-} from "@versioneer/core/validation";
+import { readResponseTextLimited, ResponseBodyTooLargeError } from "@versioneer/core/pipeline";
+import { getDescriptor } from "@versioneer/core/sources";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { sourceTypeSchema } from "@versioneer/schemas/sources";
 import { env } from "cloudflare:workers";
@@ -62,13 +55,12 @@ export const validateSource = createServerFn({ method: "POST" })
       };
     }
 
-    const fetchUrls =
-      sourceType === "electron_generic" ? buildElectronFeedCandidates(url) : [url];
+    const descriptor = getDescriptor(sourceType);
+    const fetchUrls = descriptor.buildFetchUrls(url);
+    const headers = descriptor.fetchHeaders({ githubToken: env.GITHUB_TOKEN });
 
     let response: Response | undefined;
     try {
-      const headers: Record<string, string> =
-        sourceType === "github_releases" ? githubApiHeaders(env.GITHUB_TOKEN) : {};
       for (const candidate of fetchUrls) {
         const res = await fetch(candidate, {
           signal: AbortSignal.timeout(10_000),
@@ -98,9 +90,7 @@ export const validateSource = createServerFn({ method: "POST" })
         latestVersion: null,
         latestPublishedAt: null,
         errors: [
-          response
-            ? `HTTP ${response.status}: ${response.statusText}`
-            : "No candidate URLs to try",
+          response ? `HTTP ${response.status}: ${response.statusText}` : "No candidate URLs to try",
         ],
         releases: [],
       };
@@ -123,13 +113,12 @@ export const validateSource = createServerFn({ method: "POST" })
       throw error;
     }
 
-    const artifactBase =
-      sourceType === "electron_generic" ? resolveElectronArtifactBase(url) : url;
+    const artifactBase = descriptor.resolveArtifactBase(url);
     let config: Record<string, unknown> = { sourceBaseUrl: artifactBase };
     if (data.configJson) {
       try {
         const parsed = JSON.parse(data.configJson) as Record<string, unknown>;
-        config = { ...parsed, sourceBaseUrl: url };
+        config = { ...parsed, sourceBaseUrl: artifactBase };
       } catch {
         return {
           status: "invalid" as const,
@@ -172,4 +161,3 @@ export const validateSource = createServerFn({ method: "POST" })
       })),
     };
   });
-

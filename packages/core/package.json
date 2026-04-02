@@ -9,6 +9,7 @@
     "./identity": "./src/identity/index.ts",
     "./parsers": "./src/parsers/index.ts",
     "./pipeline": "./src/pipeline/index.ts",
+    "./sources": "./src/sources/registry.ts",
     "./validation": "./src/validation/index.ts",
     "./versioning": "./src/versioning/index.ts"
   },
