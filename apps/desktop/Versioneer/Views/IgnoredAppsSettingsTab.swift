@@ -49,10 +49,9 @@ struct IgnoredAppsSettingsTab: View {
             Text("Ignore an app from the main list or add one here.")
           }
         } else {
-          List(appState.ignoredAppRules) { rule in
+          ForEach(appState.ignoredAppRules) { rule in
             IgnoredRuleRow(rule: rule)
           }
-          .frame(minHeight: 240)
         }
       } header: {
         Text("Ignored Rules")

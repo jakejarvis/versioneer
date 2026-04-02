@@ -4,11 +4,14 @@ import SwiftUI
 struct RootView: View {
   @Environment(AppState.self) private var appState
 
+  @Environment(\.undoManager) private var undoManager
+
   @State private var searchInput: String = ""
   @State private var searchDebounceTask: Task<Void, Never>?
+  @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
   var body: some View {
-    NavigationSplitView {
+    NavigationSplitView(columnVisibility: $columnVisibility) {
       sidebarContent
         .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 360)
     } detail: {
@@ -36,10 +39,15 @@ struct RootView: View {
         appState.setSearchText(newValue)
       }
     }
+    .onExitCommand {
+      guard appState.selectedAppID != nil else { return }
+      appState.selectedAppID = nil
+    }
     .frame(minWidth: 680, minHeight: 500)
     .background(TranslucentWindowBackground())
     .versioneerAnalyticsScreen(name: "main_window", class: "RootView")
     .task {
+      appState.windowUndoManager = undoManager
       guard appState.settings.scanOnLaunch else { return }
       guard !isRunningPreview else { return }
       await Task.yield()
@@ -47,6 +55,9 @@ struct RootView: View {
     }
     .task(id: appState.visibleUpdateCount) {
       updateDockBadge(with: appState.visibleUpdateCount)
+    }
+    .onDisappear {
+      searchDebounceTask?.cancel()
     }
   }
 
@@ -124,6 +135,12 @@ struct RootView: View {
     }
     .listStyle(.inset)
     .scrollContentBackground(.hidden)
+    .onDeleteCommand {
+      guard let result = appState.selectedResult,
+        !appState.isUserIgnored(result)
+      else { return }
+      appState.ignore(result, undoManager: undoManager)
+    }
   }
 
   private var resultsPaneBackground: some View {

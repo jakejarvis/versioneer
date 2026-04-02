@@ -37,7 +37,7 @@
 
 /* Begin PBXFileReference section */
 		23472BD72F7DA7E700095A35 /* Versioneer.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Versioneer.icon; sourceTree = "<group>"; };
-		23967D082F74926F0012749C /* Versioneer-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Versioneer-Info.plist"; sourceTree = "<group>"; };
+		23967D082F74926F0012749C /* Versioneer-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Versioneer-Info.plist"; sourceTree = "<group>"; };
 		23967D222F74949F0012749C /* Versioneer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Versioneer.xcodeproj; sourceTree = "<group>"; };
 		23A5A6032F74908500245F54 /* Versioneer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Versioneer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		23A5A6102F74908600245F54 /* VersioneerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VersioneerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -102,25 +102,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		23967D232F74949F0012749C /* Products */ = {
-			isa = PBXGroup;
-			name = Products;
-			sourceTree = "<group>";
-		};
 		23A5A5FA2F74908500245F54 = {
 			isa = PBXGroup;
 			children = (
 				23967D222F74949F0012749C /* Versioneer.xcodeproj */,
-				23A5A6042F74908500245F54 /* Products */,
-				23967D7C2F74959C0012749C /* VersioneerTests */,
-				23967D782F7495980012749C /* Versioneer */,
-				24B100022F8000010058763E /* VersioneerShared */,
-				24B100032F8000010058763E /* VersioneerPrivilegedHelper */,
-				23967D082F74926F0012749C /* Versioneer-Info.plist */,
 				23EBFED92F75F5390026DE17 /* Versioneer.entitlements */,
-				23EBFEDA2F75F5390026DE17 /* GoogleService-Info.plist */,
+				23967D082F74926F0012749C /* Versioneer-Info.plist */,
+				23967D782F7495980012749C /* Versioneer */,
+				24B100032F8000010058763E /* VersioneerPrivilegedHelper */,
+				24B100022F8000010058763E /* VersioneerShared */,
+				23967D7C2F74959C0012749C /* VersioneerTests */,
 				23AB35562F782C6200933422 /* Frameworks */,
+				23A5A6042F74908500245F54 /* Products */,
 				23472BD72F7DA7E700095A35 /* Versioneer.icon */,
+				23EBFEDA2F75F5390026DE17 /* GoogleService-Info.plist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -262,12 +257,6 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 23A5A6042F74908500245F54 /* Products */;
 			projectDirPath = "";
-			projectReferences = (
-				{
-					ProductGroup = 23967D232F74949F0012749C /* Products */;
-					ProjectRef = 23967D222F74949F0012749C /* Versioneer.xcodeproj */;
-				},
-			);
 			projectRoot = "";
 			targets = (
 				23A5A6022F74908500245F54 /* Versioneer */,

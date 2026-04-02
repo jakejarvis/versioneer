@@ -201,21 +201,39 @@ struct MetadataPopoverButton: View {
     .accessibilityHint("Shows bundle ID, canonical name, and other technical details")
     .popover(isPresented: $showPopover, arrowEdge: .trailing) {
       VStack(alignment: .leading, spacing: 10) {
-        metadataRow("Bundle ID", value: result.bundleId ?? "—")
-        metadataRow("App Name", value: result.appName)
-        if let matched = result.matchedAppName {
-          metadataRow("Canonical Name", value: matched)
+        ForEach(metadataFields, id: \.label) { field in
+          metadataRow(field.label, value: field.value)
         }
-        if let matchedId = result.matchedAppId {
-          metadataRow("Matched App ID", value: matchedId)
+
+        Divider()
+
+        Button("Copy All") {
+          let text = metadataFields.map { "\($0.label): \($0.value)" }.joined(separator: "\n")
+          NSPasteboard.general.clearContents()
+          NSPasteboard.general.setString(text, forType: .string)
         }
-        if let minOS = result.artifact?.minOsVersion {
-          metadataRow("Minimum macOS", value: minOS)
-        }
+        .buttonStyle(.link)
       }
       .padding(16)
       .frame(minWidth: 280)
     }
+  }
+
+  private var metadataFields: [(label: String, value: String)] {
+    var fields = [
+      (label: "Bundle ID", value: result.bundleId ?? "—"),
+      (label: "App Name", value: result.appName),
+    ]
+    if let matched = result.matchedAppName {
+      fields.append((label: "Canonical Name", value: matched))
+    }
+    if let matchedId = result.matchedAppId {
+      fields.append((label: "Matched App ID", value: matchedId))
+    }
+    if let minOS = result.artifact?.minOsVersion {
+      fields.append((label: "Minimum macOS", value: minOS))
+    }
+    return fields
   }
 
   private func metadataRow(_ label: String, value: String) -> some View {
@@ -292,6 +310,41 @@ extension ResultsBrowserRowPresentation.Tone {
     case .error: .red
     case .neutral: .secondary
     }
+  }
+}
+
+// MARK: - App Context Menu Items
+
+struct AppContextMenuItems: View {
+  @Environment(AppState.self) private var appState
+
+  let result: AppDecision
+
+  var body: some View {
+    let hasPath = appState.appPathText(for: result) != nil
+    let hasBundleId = appState.bundleIdText(for: result) != nil
+
+    Button("Open App") {
+      appState.openApp(result)
+    }
+    .disabled(!hasPath)
+
+    Button("Show in Finder") {
+      appState.revealAppInFinder(result)
+    }
+    .disabled(!hasPath)
+
+    Divider()
+
+    Button("Copy Bundle ID") {
+      appState.copyBundleId(result)
+    }
+    .disabled(!hasBundleId)
+
+    Button("Copy Path") {
+      appState.copyAppPath(result)
+    }
+    .disabled(!hasPath)
   }
 }
 

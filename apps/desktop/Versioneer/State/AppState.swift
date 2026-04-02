@@ -78,6 +78,7 @@ final class AppState {
   var selectedSection: FilterSection = .all
   var selectedAppID: String?
   var resultsSort: ResultsBrowserSort = .updatesFirst
+  @ObservationIgnored weak var windowUndoManager: UndoManager?
 
   // MARK: - Data
 
@@ -376,17 +377,52 @@ final class AppState {
     userIgnoredResultIDs.contains(result.id)
   }
 
-  func ignore(_ result: AppDecision) {
+  func ignore(_ result: AppDecision, undoManager: UndoManager? = nil) {
     guard let installedApp = installedApp(for: result) else { return }
-    settings.addIgnoredAppRule(IgnoredAppRule.make(from: installedApp))
-    refreshDisplayedResults()
+    let rule = IgnoredAppRule.make(from: installedApp)
+
+    withUndo("Ignore \(result.appName)", undoManager: undoManager) { state in
+      state.settings.addIgnoredAppRule(rule)
+      state.refreshDisplayedResults()
+    } reverse: { state in
+      state.settings.removeIgnoredAppRule(rule)
+      state.refreshDisplayedResults()
+    }
   }
 
-  func unignore(_ result: AppDecision) {
-    let ruleIDs = Set(ignoredAppRules(matching: result).map(\.id))
+  func unignore(_ result: AppDecision, undoManager: UndoManager? = nil) {
+    let rules = ignoredAppRules(matching: result)
+    let ruleIDs = Set(rules.map(\.id))
     guard !ruleIDs.isEmpty else { return }
-    settings.ignoredAppRules = settings.ignoredAppRules.filter { !ruleIDs.contains($0.id) }
-    refreshDisplayedResults()
+
+    withUndo("Unignore \(result.appName)", undoManager: undoManager) { state in
+      state.settings.ignoredAppRules = state.settings.ignoredAppRules.filter {
+        !ruleIDs.contains($0.id)
+      }
+      state.refreshDisplayedResults()
+    } reverse: { state in
+      for rule in rules {
+        state.settings.addIgnoredAppRule(rule)
+      }
+      state.refreshDisplayedResults()
+    }
+  }
+
+  private func withUndo(
+    _ actionName: String,
+    undoManager: UndoManager?,
+    forward: @escaping (AppState) -> Void,
+    reverse: @escaping (AppState) -> Void
+  ) {
+    forward(self)
+    undoManager?.registerUndo(withTarget: self) { state in
+      reverse(state)
+      undoManager?.registerUndo(withTarget: state) { state in
+        forward(state)
+      }
+      undoManager?.setActionName(actionName)
+    }
+    undoManager?.setActionName(actionName)
   }
 
   func addIgnoredAppRule(_ rule: IgnoredAppRule) {

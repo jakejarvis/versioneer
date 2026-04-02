@@ -177,6 +177,9 @@ private struct DetailHeroSection: View {
         )
       }
     }
+    .contextMenu {
+      AppContextMenuItems(result: result)
+    }
   }
 }
 
@@ -185,6 +188,7 @@ private struct DetailHeroSection: View {
 private struct DetailPrimaryActionSection: View {
   @Environment(AppState.self) private var appState
   @Environment(InstallCoordinator.self) private var installCoordinator
+  @Environment(\.undoManager) private var undoManager
 
   let result: AppDecision
 
@@ -243,7 +247,7 @@ private struct DetailPrimaryActionSection: View {
       )
 
       Button("Stop Ignoring") {
-        appState.unignore(result)
+        appState.unignore(result, undoManager: undoManager)
       }
       .buttonStyle(.glassProminent)
       .controlSize(.large)
@@ -571,11 +575,14 @@ private struct DetailReleaseNotesSection: View {
             ReleaseNotesWebView(html: html)
               .frame(minHeight: 100, maxHeight: 300)
               .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-              .overlay(alignment: .top) {
-                releaseNotesFade(startPoint: .top, endPoint: .bottom)
-              }
-              .overlay(alignment: .bottom) {
-                releaseNotesFade(startPoint: .bottom, endPoint: .top)
+              .mask {
+                VStack(spacing: 0) {
+                  LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 18)
+                  Rectangle().fill(.black)
+                  LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 18)
+                }
               }
           } else {
             Text("No release notes available.")
@@ -593,20 +600,11 @@ private struct DetailReleaseNotesSection: View {
             .foregroundStyle(.secondary)
         }
       }
+      .glassCard(cornerRadius: 18, padding: 16)
       .task(id: result.latestReleaseId) {
         await loadReleaseNotes()
       }
     }
-  }
-
-  private func releaseNotesFade(startPoint: UnitPoint, endPoint: UnitPoint) -> some View {
-    LinearGradient(
-      colors: [Color(nsColor: .windowBackgroundColor), .clear],
-      startPoint: startPoint,
-      endPoint: endPoint
-    )
-    .frame(height: 18)
-    .allowsHitTesting(false)
   }
 
   private func loadReleaseNotes() async {

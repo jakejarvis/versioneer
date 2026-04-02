@@ -14,6 +14,20 @@ struct VersioneerApp: App {
     return appState.inventoryResultsByID[id]
   }
 
+  private func filterSectionToggle(
+    _ section: AppState.FilterSection,
+    shortcut: KeyEquivalent
+  ) -> some View {
+    Toggle(
+      section.rawValue,
+      isOn: Binding(
+        get: { appState.selectedSection == section },
+        set: { if $0 { appState.setSelectedSection(section) } }
+      )
+    )
+    .keyboardShortcut(shortcut, modifiers: .command)
+  }
+
   var body: some Scene {
     Window("Versioneer", id: "main") {
       RootView()
@@ -35,31 +49,11 @@ struct VersioneerApp: App {
 
       // View menu — filter switching + sort
       CommandGroup(after: .toolbar) {
-        Button(AppState.FilterSection.all.rawValue) {
-          appState.setSelectedSection(.all)
-        }
-        .keyboardShortcut("1", modifiers: .command)
-
-        Button(AppState.FilterSection.updatesAvailable.rawValue) {
-          appState.setSelectedSection(.updatesAvailable)
-        }
-        .keyboardShortcut("2", modifiers: .command)
-
-        Button(AppState.FilterSection.localOnly.rawValue) {
-          appState.setSelectedSection(.localOnly)
-        }
-        .keyboardShortcut("3", modifiers: .command)
-
-        Button(AppState.FilterSection.needsReview.rawValue) {
-          appState.setSelectedSection(.needsReview)
-        }
-        .keyboardShortcut("4", modifiers: .command)
-
-        Button(AppState.FilterSection.ignored.rawValue) {
-          appState.setSelectedSection(.ignored)
-        }
-        .keyboardShortcut("5", modifiers: .command)
-
+        filterSectionToggle(.all, shortcut: "1")
+        filterSectionToggle(.updatesAvailable, shortcut: "2")
+        filterSectionToggle(.localOnly, shortcut: "3")
+        filterSectionToggle(.needsReview, shortcut: "4")
+        filterSectionToggle(.ignored, shortcut: "5")
 
         Divider()
 
@@ -100,20 +94,27 @@ struct VersioneerApp: App {
         Button("Show in Finder") {
           if let result = selectedMenuResult { appState.revealAppInFinder(result) }
         }
+        .keyboardShortcut("f", modifiers: [.command, .shift])
         .disabled(selectedMenuResult.flatMap { appState.appPathText(for: $0) } == nil)
 
         Divider()
 
         Button("Ignore") {
-          if let result = selectedMenuResult { appState.ignore(result) }
+          if let result = selectedMenuResult {
+            appState.ignore(result, undoManager: appState.windowUndoManager)
+          }
         }
+        .keyboardShortcut(.delete, modifiers: .command)
         .disabled(
           selectedMenuResult == nil
             || (selectedMenuResult.map { appState.isUserIgnored($0) } ?? true))
 
         Button("Unignore") {
-          if let result = selectedMenuResult { appState.unignore(result) }
+          if let result = selectedMenuResult {
+            appState.unignore(result, undoManager: appState.windowUndoManager)
+          }
         }
+        .keyboardShortcut(.delete, modifiers: [.command, .shift])
         .disabled(
           selectedMenuResult == nil
             || !(selectedMenuResult.map { appState.isUserIgnored($0) } ?? false))
@@ -129,12 +130,13 @@ struct VersioneerApp: App {
         Button("Copy Path") {
           if let result = selectedMenuResult { appState.copyAppPath(result) }
         }
+        .keyboardShortcut("c", modifiers: [.command, .option])
         .disabled(selectedMenuResult.flatMap { appState.appPathText(for: $0) } == nil)
       }
 
       // Help menu
-      CommandGroup(replacing: .help) {
-        Link("Versioneer Help", destination: URL(string: "https://versioneer.app")!)
+      CommandGroup(after: .help) {
+        Link("Versioneer Website", destination: URL(string: "https://versioneer.app")!)
       }
     }
 

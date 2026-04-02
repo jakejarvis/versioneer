@@ -4,6 +4,7 @@ struct AppListRowView: View {
   @Environment(AppState.self) private var appState
   @Environment(InstallCoordinator.self) private var installCoordinator
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.undoManager) private var undoManager
 
   let row: ResultsBrowserRowPresentation
 
@@ -94,18 +95,7 @@ struct AppListRowView: View {
 
   @ViewBuilder
   private func rowContextMenu(for result: AppDecision) -> some View {
-    let hasPath = appState.appPathText(for: result) != nil
-    let hasBundleId = appState.bundleIdText(for: result) != nil
-
-    Button("Open App") {
-      appState.openApp(result)
-    }
-    .disabled(!hasPath)
-
-    Button("Show in Finder") {
-      appState.revealAppInFinder(result)
-    }
-    .disabled(!hasPath)
+    AppContextMenuItems(result: result)
 
     Button("Open Details") {
       withMotionAwareAnimation(reduceMotion: reduceMotion) {
@@ -122,25 +112,13 @@ struct AppListRowView: View {
 
     if isUserIgnored {
       Button("Unignore") {
-        appState.unignore(result)
+        appState.unignore(result, undoManager: undoManager)
       }
     } else {
       Button("Ignore") {
-        appState.ignore(result)
+        appState.ignore(result, undoManager: undoManager)
       }
     }
-
-    Divider()
-
-    Button("Copy Bundle ID") {
-      appState.copyBundleId(result)
-    }
-    .disabled(!hasBundleId)
-
-    Button("Copy Path") {
-      appState.copyAppPath(result)
-    }
-    .disabled(!hasPath)
   }
 
   @ViewBuilder

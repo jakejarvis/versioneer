@@ -46,7 +46,7 @@ private struct ServerSettingsSection: View {
     Section {
       TextField("Server URL", text: $urlString)
         .font(.body.monospaced())
-        .textFieldStyle(.roundedBorder)
+        .textFieldStyle(.plain)
 
       if hasPendingChange {
         Label(
@@ -127,7 +127,7 @@ private struct ScanDirectoriesSection: View {
       HStack {
         TextField("/path/to/directory", text: $newScanRoot)
           .font(.body.monospaced())
-          .textFieldStyle(.roundedBorder)
+          .textFieldStyle(.plain)
         Button("Add", action: addScanRoot)
           .disabled(!canAddRoot)
       }
@@ -211,7 +211,7 @@ private struct MasCliSection: View {
       HStack {
         TextField("Custom mas path (optional)", text: $masPathOverride)
           .font(.body.monospaced())
-          .textFieldStyle(.roundedBorder)
+          .textFieldStyle(.plain)
         Button("Apply", action: applyMasPath)
           .disabled(!canApplyMasPath)
         Button("Clear", action: clearMasPath)
