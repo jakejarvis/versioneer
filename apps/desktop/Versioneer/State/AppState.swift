@@ -22,7 +22,19 @@ final class AppState {
   let appStoreChecker = AppStoreChecker()
   let homebrewChecker = HomebrewChecker()
   let installCoordinator = InstallCoordinator()
-  let attestClient: AppAttestClient
+  private var _attestClient: AppAttestClient?
+  private var _attestClientBaseURL: URL?
+
+  var attestClient: AppAttestClient {
+    let url = settings.baseURL
+    if let existing = _attestClient, _attestClientBaseURL == url {
+      return existing
+    }
+    let client = AppAttestClient(baseURL: url)
+    _attestClient = client
+    _attestClientBaseURL = url
+    return client
+  }
   private let cacheStore: ScanCacheStore
   @ObservationIgnored private var directoryWatcher: DirectoryWatcher?
 
@@ -124,7 +136,6 @@ final class AppState {
   ) {
     self.settings = settings
     self.cacheStore = cacheStore
-    self.attestClient = AppAttestClient(baseURL: settings.baseURL)
 
     installCoordinator.onStateChange = { [weak self] in
       self?.rebuildResultsBrowserRows()

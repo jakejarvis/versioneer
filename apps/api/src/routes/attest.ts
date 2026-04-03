@@ -7,6 +7,7 @@ import { HTTPException } from "hono/http-exception";
 import { sign } from "hono/jwt";
 
 import { verifyAttestation, verifyAssertion } from "@/lib/app-attest";
+import { requireSecret } from "@/lib/env";
 
 const JWT_EXPIRY_SECONDS = 24 * 60 * 60; // 24 hours
 const CHALLENGE_TTL_SECONDS = 300; // 5 minutes
@@ -33,9 +34,8 @@ async function issueToken(
 }
 
 export const attestRoutes = new Hono<{ Bindings: Env }>()
-
-  // GET /v1/attest/challenge — generate a one-time challenge
-  .get("/attest/challenge", async (c) => {
+  // POST /v1/attest/challenge — generate a one-time challenge
+  .post("/attest/challenge", async (c) => {
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
     let binary = "";
@@ -65,22 +65,34 @@ export const attestRoutes = new Hono<{ Bindings: Env }>()
       throw new HTTPException(400, { message });
     }
 
+    if (result.environment === "development" && c.env.ENVIRONMENT === "production") {
+      throw new HTTPException(403, {
+        message: "Development attestations not accepted in production",
+      });
+    }
+
     const db = createDb(c.env.DB);
     const id = generateId(idPrefixes.deviceAttestation);
     const now = new Date().toISOString();
-
-    await db.insert(deviceAttestations).values({
-      id,
-      keyId,
+    const upsertFields = {
       publicKey: result.publicKey,
       counter: result.counter,
       receipt: result.receipt,
       environment: result.environment,
-      createdAt: now,
       lastUsedAt: now,
-    });
+    };
 
-    return c.json(await issueToken(c.env.JWT_SECRET!, id));
+    const [device] = await db
+      .insert(deviceAttestations)
+      .values({ id, keyId, createdAt: now, ...upsertFields })
+      .onConflictDoUpdate({ target: deviceAttestations.keyId, set: upsertFields })
+      .returning({ id: deviceAttestations.id });
+
+    if (!device) {
+      throw new HTTPException(500, { message: "Failed to persist attestation" });
+    }
+
+    return c.json(await issueToken(requireSecret(c.env), device.id));
   })
 
   // POST /v1/attest/refresh — verify assertion, issue new JWT
@@ -125,5 +137,5 @@ export const attestRoutes = new Hono<{ Bindings: Env }>()
       throw new HTTPException(409, { message: "Assertion replay detected" });
     }
 
-    return c.json(await issueToken(c.env.JWT_SECRET!, device.id));
+    return c.json(await issueToken(requireSecret(c.env), device.id));
   });

@@ -115,7 +115,7 @@ actor AppAttestClient: TokenProvider {
   private func fetchChallenge() async throws -> String {
     let url = baseURL.appendingPathComponent("v1/attest/challenge")
     var request = URLRequest(url: url)
-    request.httpMethod = "GET"
+    request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Accept")
 
     let (data, response) = try await URLSession.shared.data(for: request)
@@ -133,7 +133,7 @@ actor AppAttestClient: TokenProvider {
   private func isExpired(_ token: String) -> Bool {
     let parts = token.split(separator: ".")
     guard parts.count >= 2,
-      let payloadData = Data(base64Encoded: Self.base64Pad(String(parts[1]))),
+      let payloadData = Data(base64Encoded: Self.base64urlToBase64(String(parts[1]))),
       let json = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any],
       let exp = json["exp"] as? TimeInterval
     else {
@@ -143,10 +143,16 @@ actor AppAttestClient: TokenProvider {
     return Date().timeIntervalSince1970 >= (exp - 60)
   }
 
-  nonisolated private static func base64Pad(_ string: String) -> String {
-    let remainder = string.count % 4
-    if remainder == 0 { return string }
-    return string + String(repeating: "=", count: 4 - remainder)
+  /// Converts a base64url string (used in JWTs) to standard base64 with padding.
+  nonisolated private static func base64urlToBase64(_ string: String) -> String {
+    var result = string
+      .replacingOccurrences(of: "-", with: "+")
+      .replacingOccurrences(of: "_", with: "/")
+    let remainder = result.count % 4
+    if remainder > 0 {
+      result += String(repeating: "=", count: 4 - remainder)
+    }
+    return result
   }
 
   // MARK: - HTTP helpers

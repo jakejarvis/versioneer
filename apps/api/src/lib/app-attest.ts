@@ -150,6 +150,19 @@ function getRootCert(): Certificate {
   return rootCertCache;
 }
 
+/** Verify a certificate's notBefore/notAfter validity period. */
+function checkCertValidity(cert: Certificate, label: string): void {
+  const now = new Date();
+  const notBefore = cert.tbsCertificate.validity.notBefore.getTime();
+  const notAfter = cert.tbsCertificate.validity.notAfter.getTime();
+  if (now < notBefore) {
+    throw new Error(`${label} certificate is not yet valid`);
+  }
+  if (now > notAfter) {
+    throw new Error(`${label} certificate has expired`);
+  }
+}
+
 /**
  * Verify the x5c certificate chain and return the parsed leaf certificate.
  * Chain: [leaf, intermediate] — intermediate must be signed by the Apple root CA.
@@ -162,6 +175,9 @@ async function verifyCertChain(x5c: Uint8Array[]): Promise<Certificate> {
   const rootCert = getRootCert();
   const intermediateCert = parseCert(x5c[1]!);
   const leafCert = parseCert(x5c[0]!);
+
+  checkCertValidity(intermediateCert, "Intermediate");
+  checkCertValidity(leafCert, "Leaf");
 
   // Verify intermediate is signed by root
   const rootKey = await importSPKIKey(getSPKI(rootCert));
