@@ -6,16 +6,6 @@
   "compatibility_date": "2026-02-24",
   "compatibility_flags": ["nodejs_compat"],
 
-  "secrets": {
-    "required": [
-      "BETTER_AUTH_SECRET",
-      "GITHUB_OAUTH_CLIENT_ID",
-      "GITHUB_OAUTH_CLIENT_SECRET",
-      "ALLOWED_ADMIN_EMAILS",
-      "GITHUB_TOKEN"
-    ]
-  },
-
   "vars": {
     "ENVIRONMENT": "dev",
     "ASSETS_BASE_URL": "http://localhost:5173/assets"
@@ -61,6 +51,15 @@
 
   "env": {
     "production": {
+      "secrets": {
+        "required": [
+          "BETTER_AUTH_SECRET",
+          "GITHUB_OAUTH_CLIENT_ID",
+          "GITHUB_OAUTH_CLIENT_SECRET",
+          "ALLOWED_ADMIN_EMAILS",
+          "GITHUB_TOKEN"
+        ]
+      },
       "routes": [
         {
           "pattern": "dash.versioneer.app",

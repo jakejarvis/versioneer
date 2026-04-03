@@ -6,7 +6,7 @@ import Security
 /// Without this, after an in-place app update (e.g., Sparkle), Bundle.infoDictionary
 /// returns stale version info from the pre-update binary.
 @_silgen_name("_CFBundleFlushBundleCaches")
-private nonisolated func _CFBundleFlushBundleCaches(_ bundle: CFBundle?) -> Void
+private nonisolated func _CFBundleFlushBundleCaches(_ bundle: CFBundle?)
 
 /// Extracts metadata from an app bundle on disk.
 nonisolated enum BundleMetadataReader {

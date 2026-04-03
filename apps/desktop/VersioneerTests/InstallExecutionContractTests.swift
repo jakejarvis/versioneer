@@ -11,7 +11,8 @@ struct InstallExecutionContractTests {
         "status": "prepared"
       }
       """
-    let prepare = try JSONDecoder().decode(InstallPrepareResponse.self, from: Data(prepareJson.utf8))
+    let prepare = try JSONDecoder().decode(
+      InstallPrepareResponse.self, from: Data(prepareJson.utf8))
 
     #expect(prepare.executionId == "exec_123")
     #expect(prepare.status == "prepared")

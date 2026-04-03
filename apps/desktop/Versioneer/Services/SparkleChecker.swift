@@ -83,11 +83,13 @@ actor SparkleChecker {
     return await withTaskGroup(of: (String, SparkleResult?).self) { group in
       for app in sparkleApps {
         group.addTask {
-          guard var result = await self.check(
-            feedUrl: app.sparkleFeedUrl!,
-            appName: app.name,
-            installedVersion: app.version
-          ) else { return (app.id, nil) }
+          guard
+            var result = await self.check(
+              feedUrl: app.sparkleFeedUrl!,
+              appName: app.name,
+              installedVersion: app.version
+            )
+          else { return (app.id, nil) }
 
           // Sanitize the remote version against the local version/build to handle
           // format mismatches (e.g., remote "1.2.40" when local is "1.2" build "40").
@@ -145,11 +147,13 @@ actor SparkleChecker {
     }
 
     // Sort by version descending and take the newest (handles out-of-order feeds)
-    guard let latest = applicable.sorted(by: { item1, item2 in
-      let v1 = Version(item1.shortVersionString ?? item1.version ?? "")
-      let v2 = Version(item2.shortVersionString ?? item2.version ?? "")
-      return v1 > v2
-    }).first else { return nil }
+    guard
+      let latest = applicable.sorted(by: { item1, item2 in
+        let v1 = Version(item1.shortVersionString ?? item1.version ?? "")
+        let v2 = Version(item2.shortVersionString ?? item2.version ?? "")
+        return v1 > v2
+      }).first
+    else { return nil }
 
     let bestEnclosure = latest.bestEnclosure
 

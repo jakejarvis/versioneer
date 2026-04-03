@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 
-import { publicRoutes } from "./routes/public/index";
+import { openRoutes, protectedRoutes } from "./routes";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -26,7 +26,8 @@ app.get("/health", (c) => {
   return c.json({ status: "ok", environment: c.env.ENVIRONMENT });
 });
 
-app.route("/v1", publicRoutes);
+app.route("/v1", openRoutes);
+app.route("/v1", protectedRoutes);
 
 app.notFound((c) => {
   return c.json({ error: "Not found" }, 404);

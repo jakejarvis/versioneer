@@ -82,7 +82,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
   private enum CodingKeys: String, CodingKey {
     case appName, bundleId, installedVersion, matchedAppId, matchedAppName,
       matchConfidence, decision, trackingState, localReasonCode, latestVersion, latestVersionRaw,
-      latestReleaseId, channel, availableChannels, homebrewCaskToken, releasedAt, staleSince, iconUrl,
+      latestReleaseId, channel, availableChannels, homebrewCaskToken, releasedAt, staleSince,
+      iconUrl,
       artifact, installStrategy
   }
 

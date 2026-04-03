@@ -90,7 +90,8 @@ struct InventoryDecodingTests {
     ]
 
     for decisionStr in decisions {
-      let trackingState = decisionStr == "up_to_date" || decisionStr == "update_available"
+      let trackingState =
+        decisionStr == "up_to_date" || decisionStr == "update_available"
         ? "public" : "local_only"
       let localReasonCode: String? =
         switch decisionStr {

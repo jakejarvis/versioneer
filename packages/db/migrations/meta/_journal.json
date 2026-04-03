@@ -22,6 +22,13 @@
       "when": 1774975990977,
       "tag": "0002_volatile_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1775163358063,
+      "tag": "0003_true_norrin_radd",
+      "breakpoints": true
     }
   ]
 }
