@@ -375,14 +375,15 @@ export async function verifyAssertion(
     throw new Error(`Counter not monotonic: got ${parsed.counter}, expected > ${storedCounter}`);
   }
 
-  // 3. Compute client data hash and nonce
+  // 3. Construct the verification input: authenticatorData || SHA-256(challenge)
+  // WebCrypto's ECDSA verify with hash:"SHA-256" will SHA-256 this before checking,
+  // matching the Secure Enclave's signature over SHA-256(authenticatorData || clientDataHash).
   const clientDataHash = new Uint8Array(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(challenge)),
   );
-  const nonceInput = new Uint8Array(authenticatorData.length + clientDataHash.length);
-  nonceInput.set(authenticatorData, 0);
-  nonceInput.set(clientDataHash, authenticatorData.length);
-  const nonce = await crypto.subtle.digest("SHA-256", nonceInput);
+  const signedData = new Uint8Array(authenticatorData.length + clientDataHash.length);
+  signedData.set(authenticatorData, 0);
+  signedData.set(clientDataHash, authenticatorData.length);
 
   // 4. Verify ECDSA signature with stored public key
   const spkiBytes = base64ToBytes(storedPublicKeyB64);
@@ -393,7 +394,7 @@ export async function verifyAssertion(
     { name: "ECDSA", hash: "SHA-256" },
     publicKey,
     signature,
-    nonce,
+    signedData,
   );
   if (!valid) {
     throw new Error("Assertion signature verification failed");
