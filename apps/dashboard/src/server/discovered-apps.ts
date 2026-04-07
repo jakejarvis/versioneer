@@ -97,8 +97,12 @@ export const dismissDiscoveredApp = createServerFn({ method: "POST" })
       createdAt: now,
     });
 
-    // Write-through: rebuild dismissed bundle IDs cache for client preflight
-    await refreshDismissedBundleIdsCache(db, env.CONFIG_KV);
+    // Write-through: rebuild dismissed bundle IDs cache for client preflight (best-effort)
+    try {
+      await refreshDismissedBundleIdsCache(db, env.CONFIG_KV);
+    } catch {
+      // Cache will self-heal on next preflight request via TTL expiry
+    }
 
     return { status: "dismissed" };
   });
