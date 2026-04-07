@@ -4,9 +4,9 @@ import Foundation
 import Logging
 import Security
 
-/// Provides a valid auth token for API requests.
+/// Provides a valid auth token for API requests, or nil if unavailable.
 protocol TokenProvider: Sendable {
-  func validToken() async throws -> String
+  func validToken() async -> String?
 }
 
 /// Manages App Attest attestation, token refresh, and Keychain persistence.
@@ -28,7 +28,8 @@ actor AppAttestClient: TokenProvider {
   }
 
   /// Returns a valid JWT token, performing attestation or refresh as needed.
-  func validToken() async throws -> String {
+  /// Returns nil if attestation is unavailable (unsupported device, network error, etc.).
+  func validToken() async -> String? {
     // Check cached/Keychain token
     if let token = cachedToken, !isExpired(token) {
       return token
@@ -45,13 +46,23 @@ actor AppAttestClient: TokenProvider {
     }
 
     // Full attestation from scratch
-    return try await performAttestation()
+    do {
+      return try await performAttestation()
+    } catch {
+      Logger.attest.warning("Attestation unavailable, continuing without auth: \(error.localizedDescription)")
+      return nil
+    }
   }
 
   /// Clears stored state and re-attests from scratch.
-  func forceReAttest() async throws -> String {
+  func forceReAttest() async -> String? {
     clearState()
-    return try await performAttestation()
+    do {
+      return try await performAttestation()
+    } catch {
+      Logger.attest.warning("Re-attestation failed: \(error.localizedDescription)")
+      return nil
+    }
   }
 
   // MARK: - Attestation

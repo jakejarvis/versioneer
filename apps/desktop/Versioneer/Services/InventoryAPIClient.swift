@@ -28,7 +28,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "GET"
     request.setValue("application/json", forHTTPHeaderField: "Accept")
-    try await authorize(&request)
+    await authorize(&request)
 
     let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -60,7 +60,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    try await authorize(&request)
+    await authorize(&request)
 
     let payload = buildRequest(
       from: apps, scanDurationMs: scanDurationMs, channelPreferences: channelPreferences)
@@ -152,7 +152,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    try await authorize(&request)
+    await authorize(&request)
 
     let payload = InstallPrepareRequest(
       client: buildClientInfo(channelPreferences: nil),
@@ -206,7 +206,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    try await authorize(&request)
+    await authorize(&request)
 
     let payload = InstallExecutionStatusRequest(
       client: buildClientInfo(channelPreferences: nil),
@@ -244,9 +244,10 @@ nonisolated struct InventoryAPIClient: Sendable {
     }
   }
 
-  private func authorize(_ request: inout URLRequest) async throws {
-    let token = try await tokenProvider.validToken()
-    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+  private func authorize(_ request: inout URLRequest) async {
+    if let token = await tokenProvider.validToken() {
+      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
   }
 
   private func buildClientInfo(

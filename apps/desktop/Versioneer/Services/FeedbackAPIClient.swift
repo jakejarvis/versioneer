@@ -28,8 +28,7 @@ nonisolated struct FeedbackAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    let token = try await tokenProvider.validToken()
-    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    await authorize(&request)
     request.httpBody = try JSONEncoder().encode(body)
 
     Logger.feedback.info("Submitting feedback to \(endpoint.absoluteString)")
@@ -44,6 +43,12 @@ nonisolated struct FeedbackAPIClient: Sendable {
       let body = String(data: data, encoding: .utf8) ?? ""
       Logger.feedback.error("Feedback API returned \(httpResponse.statusCode): \(body)")
       throw APIError.httpError(statusCode: httpResponse.statusCode, body: body)
+    }
+  }
+
+  private func authorize(_ request: inout URLRequest) async {
+    if let token = await tokenProvider.validToken() {
+      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
   }
 }
