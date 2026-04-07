@@ -23,8 +23,8 @@
       "dependsOn": ["^check-types"]
     },
     "test": {},
-    "typegen:workers": {
-      "dependsOn": ["^typegen:workers"],
+    "cf-typegen": {
+      "dependsOn": ["^cf-typegen"],
       "outputs": ["worker-configuration.d.ts"]
     }
   }

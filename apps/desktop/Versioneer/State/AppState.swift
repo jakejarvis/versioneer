@@ -570,6 +570,7 @@ final class AppState {
         ))
     } catch {
       // Backend failed — fall back to local results if we have any
+      Logger.api.warning("API request failed, using local results only: \(error.localizedDescription)")
       if !localResults.isEmpty {
         rawInventoryResults = buildLocalOnlyResults(local: localResults, apps: installedApps)
         loadState = .done

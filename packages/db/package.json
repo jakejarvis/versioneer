@@ -10,7 +10,7 @@
     "fmt": "oxfmt --config ../../.oxfmtrc.json",
     "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
     "check-types": "tsc --noEmit",
-    "typegen:workers": "wrangler types",
+    "cf-typegen": "wrangler types",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply versioneer-db-dev --local --persist-to ../../.wrangler/state",
     "db:migrate:remote": "wrangler d1 migrations apply versioneer-db-production --remote --env=production"

@@ -59,6 +59,11 @@ actor AppAttestClient: TokenProvider {
   private func performAttestation() async throws -> String {
     Logger.attest.info("Starting App Attest attestation")
 
+    guard service.isSupported else {
+      Logger.attest.error("App Attest is not supported on this device or build configuration")
+      throw AppAttestError.notSupported
+    }
+
     let keyId = try await service.generateKey()
 
     let challenge = try await fetchChallenge()
@@ -251,12 +256,15 @@ private nonisolated struct AttestResponse: Decodable, Sendable {
 // MARK: - Errors
 
 private enum AppAttestError: LocalizedError {
+  case notSupported
   case challengeFailed
   case invalidResponse
   case serverError(statusCode: Int, body: String)
 
   var errorDescription: String? {
     switch self {
+    case .notSupported:
+      "App Attest is not supported on this device or build configuration"
     case .challengeFailed:
       "Failed to fetch attestation challenge"
     case .invalidResponse:

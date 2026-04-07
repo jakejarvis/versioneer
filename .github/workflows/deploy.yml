@@ -1,4 +1,4 @@
-name: CI
+name: Deploy
 
 on:
   push:
@@ -58,13 +58,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Apply D1 migrations
-        uses: cloudflare/wrangler-action@v3
-        with:
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          workingDirectory: packages/db
-          command: d1 migrations apply versioneer-db-production --remote --env=production
+      # - name: Apply D1 migrations
+      #   uses: cloudflare/wrangler-action@v3
+      #   with:
+      #     accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      #     apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      #     workingDirectory: packages/db
+      #     command: d1 migrations apply versioneer-db-production --remote --env=production
 
       - name: Deploy API worker
         uses: cloudflare/wrangler-action@v3
@@ -74,7 +74,7 @@ jobs:
           workingDirectory: apps/api
           command: deploy --env=production
 
-      - name: Deploy worker
+      - name: Deploy pipeline worker
         uses: cloudflare/wrangler-action@v3
         with:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

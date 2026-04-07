@@ -14,14 +14,14 @@
     "db:generate": "pnpm --filter @versioneer/db db:generate",
     "db:migrate:local": "pnpm --filter @versioneer/db db:migrate:local",
     "db:migrate:remote": "pnpm --filter @versioneer/db db:migrate:remote",
-    "typegen:workers": "turbo run typegen:workers"
+    "cf-typegen": "turbo run cf-typegen"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0",
-    "oxfmt": "^0.43.0",
-    "oxlint": "^1.58.0",
+    "@types/node": "^25.5.2",
+    "oxfmt": "^0.44.0",
+    "oxlint": "^1.59.0",
     "tsx": "^4.21.0",
-    "turbo": "^2.9.3",
+    "turbo": "^2.9.4",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

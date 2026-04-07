@@ -16,7 +16,7 @@
 | Typecheck one workspace | `pnpm --filter @versioneer/api check-types`                                 |
 | Test one core file      | `pnpm --filter @versioneer/core exec vitest run path/to/test.test.ts`       |
 | Test one dashboard file | `pnpm --filter @versioneer/dashboard exec vitest run path/to/test.test.tsx` |
-| Regenerate worker types | `pnpm --filter @versioneer/api typegen:workers`                             |
+| Regenerate worker types | `pnpm --filter @versioneer/api cf-typegen`                             |
 
 ## Validation
 
@@ -44,5 +44,5 @@ xcodebuild -project apps/desktop/Versioneer.xcodeproj -scheme Versioneer -destin
 - Dashboard API access goes through `apps/dashboard/src/api/client.ts`; query hooks live in `apps/dashboard/src/api/hooks/`.
 - Workspace packages are consumed from source; no `dist/` output.
 - Edit D1 schema in `packages/db/src/schema/*.ts`, then run `pnpm db:generate`.
-- After `wrangler.jsonc` binding changes, run `pnpm --filter <workspace> typegen:workers`.
+- After `wrangler.jsonc` binding changes, run `pnpm --filter <workspace> cf-typegen`.
 - Keep desktop privileged-install changes aligned across `apps/desktop/VersioneerPrivilegedHelper/` and `apps/desktop/VersioneerShared/`.
