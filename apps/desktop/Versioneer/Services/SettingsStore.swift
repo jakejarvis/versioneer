@@ -15,6 +15,7 @@ final class SettingsStore {
     static let perAppChannels = "versioneer_per_app_channels"
     static let extraScanRoots = "versioneer_extra_scan_roots"
     static let masCliPath = "versioneer_mas_cli_path"
+    static let serverDismissedBundleIds = "versioneer_server_dismissed_bundle_ids"
   }
 
   static let defaultBaseURL = URL(string: "https://api.versioneer.app")!
@@ -197,6 +198,20 @@ final class SettingsStore {
   /// Whether mas-cli is available at any resolved path.
   var isMasCliAvailable: Bool {
     resolvedMasCliPath != nil
+  }
+
+  /// Bundle IDs dismissed by admins on the server, synced during preflight.
+  var serverDismissedBundleIds: Set<String> {
+    get {
+      Set(defaults.stringArray(forKey: Keys.serverDismissedBundleIds) ?? [])
+    }
+    set {
+      if newValue.isEmpty {
+        defaults.removeObject(forKey: Keys.serverDismissedBundleIds)
+      } else {
+        defaults.set(Array(newValue).sorted(), forKey: Keys.serverDismissedBundleIds)
+      }
+    }
   }
 
   /// Resets the base URL to the default value.

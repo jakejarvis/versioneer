@@ -30,4 +30,20 @@ struct BundleMetadataReaderTests {
     // Any Mac should have at least a few apps in /Applications
     #expect(apps.count > 0)
   }
+
+  @Test func scannerFiltersServerDismissedBundleIds() async {
+    let scanner = AppScanner()
+
+    // First scan without dismissed list — Safari should be found
+    let allApps = await scanner.scan(roots: [URL(fileURLWithPath: "/Applications")])
+    // If Safari doesn't exist (CI), skip gracefully
+    guard allApps.contains(where: { $0.bundleId == "com.apple.Safari" }) else { return }
+
+    // Scan again with Safari in the dismissed list
+    let filteredApps = await scanner.scan(
+      roots: [URL(fileURLWithPath: "/Applications")],
+      serverDismissedBundleIds: Set(["com.apple.Safari"])
+    )
+    #expect(!filteredApps.contains(where: { $0.bundleId == "com.apple.Safari" }))
+  }
 }

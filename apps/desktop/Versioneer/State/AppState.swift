@@ -46,6 +46,10 @@ final class AppState {
     FeedbackAPIClient(baseURL: settings.baseURL, tokenProvider: attestClient)
   }
 
+  var preflightClient: PreflightAPIClient {
+    PreflightAPIClient(baseURL: settings.baseURL)
+  }
+
   // MARK: - Navigation
 
   enum FilterSection: String, CaseIterable, Identifiable {
@@ -477,6 +481,20 @@ final class AppState {
     copyToPasteboard(path)
   }
 
+  /// Fetches client preflight config from the server (dismissed bundle IDs, etc.).
+  /// Fails silently — uses previously cached values if the request fails.
+  func loadPreflight() async {
+    do {
+      let preflight = try await preflightClient.fetchPreflight()
+      let freshSet = Set(preflight.dismissedBundleIds)
+      if freshSet != settings.serverDismissedBundleIds {
+        settings.serverDismissedBundleIds = freshSet
+      }
+    } catch {
+      Logger.api.warning("Failed to fetch preflight config: \(error.localizedDescription)")
+    }
+  }
+
   func scanAndSubmit() async {
     loadState = .scanning
     let previousSelectionID = selectedAppID
@@ -485,7 +503,10 @@ final class AppState {
     }
 
     let startTime = CFAbsoluteTimeGetCurrent()
-    let apps = await scanner.scan(roots: settings.allScanRootURLs)
+    let apps = await scanner.scan(
+      roots: settings.allScanRootURLs,
+      serverDismissedBundleIds: settings.serverDismissedBundleIds
+    )
     let scanMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
 
     installedApps = apps

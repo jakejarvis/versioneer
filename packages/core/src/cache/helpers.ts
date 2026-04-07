@@ -1,4 +1,9 @@
-import { latestReleaseKey, bundleLookupKey, recentReleasesKey } from "./keys";
+import {
+  latestReleaseKey,
+  bundleLookupKey,
+  recentReleasesKey,
+  dismissedBundleIdsKey,
+} from "./keys";
 import type { CacheKV } from "./types";
 
 export interface CachedLatestRelease {
@@ -64,6 +69,26 @@ export async function setCachedRecentReleases(
   ttl: number = DEFAULT_TTL,
 ): Promise<void> {
   await kv.put(recentReleasesKey(), JSON.stringify(data), {
+    expirationTtl: ttl,
+  });
+}
+
+export async function getCachedDismissedBundleIds(kv: CacheKV): Promise<string[] | null> {
+  const raw = await kv.get(dismissedBundleIdsKey());
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as string[];
+  } catch {
+    return null;
+  }
+}
+
+export async function setCachedDismissedBundleIds(
+  kv: CacheKV,
+  ids: string[],
+  ttl: number = DEFAULT_TTL,
+): Promise<void> {
+  await kv.put(dismissedBundleIdsKey(), JSON.stringify(ids), {
     expirationTtl: ttl,
   });
 }

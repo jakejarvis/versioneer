@@ -7,12 +7,14 @@ import { attestRoutes } from "./attest";
 import { feedbackRoutes } from "./feedback";
 import { installRoutes } from "./install";
 import { inventoryRoutes } from "./inventory";
+import { preflightRoutes } from "./preflight";
 import { recentReleasesRoutes } from "./recent-releases";
 
 /** Routes that do NOT require App Attest authentication. */
 export const openRoutes = new Hono<{ Bindings: Env }>()
   .route("/", attestRoutes)
-  .route("/", recentReleasesRoutes);
+  .route("/", recentReleasesRoutes)
+  .route("/", preflightRoutes);
 
 /** Routes that require a valid App Attest JWT. */
 export const protectedRoutes = new Hono<{ Bindings: Env }>();

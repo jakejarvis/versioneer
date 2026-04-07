@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { refreshDismissedBundleIdsCache } from "@versioneer/core/cache";
 import { enrichDiscoveredApp } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
 import { discoveredApps, auditLog, generateId, idPrefixes } from "@versioneer/db";
@@ -95,6 +96,13 @@ export const dismissDiscoveredApp = createServerFn({ method: "POST" })
       payloadJson: JSON.stringify({ appName: item.appName, bundleId: item.bundleId }),
       createdAt: now,
     });
+
+    // Write-through: rebuild dismissed bundle IDs cache for client preflight (best-effort)
+    try {
+      await refreshDismissedBundleIdsCache(db, env.CONFIG_KV);
+    } catch {
+      // Cache will self-heal on next preflight request via TTL expiry
+    }
 
     return { status: "dismissed" };
   });

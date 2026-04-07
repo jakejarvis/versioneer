@@ -63,8 +63,9 @@ struct RootView: View {
     .versioneerAnalyticsScreen(name: "main_window", class: "RootView")
     .task {
       appState.windowUndoManager = undoManager
-      guard appState.settings.scanOnLaunch else { return }
       guard !isRunningPreview else { return }
+      await appState.loadPreflight()
+      guard appState.settings.scanOnLaunch else { return }
       await Task.yield()
       await appState.scanAndSubmit()
     }
