@@ -7,7 +7,7 @@ import type { SourceParser, ParserOutput, ParsedRelease, ParsedArtifact } from "
  */
 export const sparkleParser: SourceParser = {
   key: "sparkle",
-  version: "1.1.0",
+  version: "1.2.0",
 
   parse(body: string, _config?: Record<string, unknown>): ParserOutput {
     const releases: ParsedRelease[] = [];
@@ -43,6 +43,10 @@ export const sparkleParser: SourceParser = {
 };
 
 function parseSparkleItem(xml: string): ParsedRelease | null {
+  // Skip delta updates — partial patches targeting a specific prior version,
+  // not standalone releases.
+  if (extractAttr(xml, "enclosure", "sparkle:deltaFrom")) return null;
+
   const version =
     extractTag(xml, "sparkle:shortVersionString") ??
     extractTag(xml, "sparkle:version") ??
@@ -57,6 +61,9 @@ function parseSparkleItem(xml: string): ParsedRelease | null {
   const publishedAt = extractTag(xml, "pubDate");
   const releaseNotesUrl = extractTag(xml, "sparkle:releaseNotesLink");
   const releaseNotesBody = extractDescription(xml);
+
+  // Explicit Sparkle channel tag (e.g. "beta") overrides version-string inference
+  const sparkleChannel = extractTag(xml, "sparkle:channel");
 
   // Extract enclosure info
   const enclosureMatch = xml.match(/<enclosure\s([^>]*?)\/?\s*>/i);
@@ -96,7 +103,7 @@ function parseSparkleItem(xml: string): ParsedRelease | null {
   return {
     versionRaw: version,
     buildNumber: buildNumber !== version ? (buildNumber ?? undefined) : undefined,
-    channel: inferChannel(version),
+    channel: sparkleChannel ?? inferChannel(version),
     isPrerelease: isPreRelease(version),
     publishedAt: publishedAt ?? undefined,
     releaseNotesUrl: releaseNotesUrl ?? undefined,

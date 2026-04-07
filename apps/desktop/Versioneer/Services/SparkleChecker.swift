@@ -223,6 +223,9 @@ actor SparkleChecker {
   }
 
   private func parseItem(_ xml: String) -> AppcastItem? {
+    // Skip delta updates — partial patches, not standalone releases
+    if extractEnclosureAttr(xml, "sparkle:deltaFrom") != nil { return nil }
+
     let shortVersion =
       extractTag(xml, "sparkle:shortVersionString")
       ?? extractEnclosureAttr(xml, "sparkle:shortVersionString")

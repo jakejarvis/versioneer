@@ -46,7 +46,7 @@ export const validateSource = createServerFn({ method: "POST" })
     const parser = validatableParsers[sourceType];
     if (!parser) {
       return {
-        status: "invalid" as const,
+        status: "error" as const,
         releaseCount: 0,
         latestVersion: null,
         latestPublishedAt: null,
@@ -60,8 +60,10 @@ export const validateSource = createServerFn({ method: "POST" })
     const headers = descriptor.fetchHeaders({ githubToken: env.GITHUB_TOKEN });
 
     let response: Response | undefined;
+    let fetchedUrl: string | undefined;
     try {
       for (const candidate of fetchUrls) {
+        fetchedUrl = candidate;
         const res = await fetch(candidate, {
           signal: AbortSignal.timeout(10_000),
           headers,
@@ -72,25 +74,34 @@ export const validateSource = createServerFn({ method: "POST" })
         }
         response = res;
       }
-    } catch {
+    } catch (error) {
+      const isTimeout = error instanceof DOMException && error.name === "TimeoutError";
+      const detail = isTimeout
+        ? "Request timed out after 10 s"
+        : error instanceof Error
+          ? error.message
+          : "Network error";
       return {
-        status: "timeout" as const,
+        status: "error" as const,
         releaseCount: 0,
         latestVersion: null,
         latestPublishedAt: null,
-        errors: ["Request timed out"],
+        errors: [fetchedUrl ? `${detail} (${fetchedUrl})` : detail],
         releases: [],
       };
     }
 
     if (!response?.ok) {
+      const host = fetchedUrl ? new URL(fetchedUrl).host : url;
       return {
-        status: "invalid" as const,
+        status: "error" as const,
         releaseCount: 0,
         latestVersion: null,
         latestPublishedAt: null,
         errors: [
-          response ? `HTTP ${response.status}: ${response.statusText}` : "No candidate URLs to try",
+          response
+            ? `${host} returned HTTP ${response.status} ${response.statusText}`.trim()
+            : "No candidate URLs to try",
         ],
         releases: [],
       };
@@ -102,7 +113,7 @@ export const validateSource = createServerFn({ method: "POST" })
     } catch (error) {
       if (error instanceof ResponseBodyTooLargeError) {
         return {
-          status: "invalid" as const,
+          status: "error" as const,
           releaseCount: 0,
           latestVersion: null,
           latestPublishedAt: null,
@@ -121,11 +132,11 @@ export const validateSource = createServerFn({ method: "POST" })
         config = { ...parsed, sourceBaseUrl: artifactBase };
       } catch {
         return {
-          status: "invalid" as const,
+          status: "error" as const,
           releaseCount: 0,
           latestVersion: null,
           latestPublishedAt: null,
-          errors: ["Invalid configJson — must be valid JSON"],
+          errors: ["Config is not valid JSON"],
           releases: [],
         };
       }
@@ -134,12 +145,18 @@ export const validateSource = createServerFn({ method: "POST" })
     const parsed = parser.parse(body, config);
 
     if (parsed.releases.length === 0) {
+      const hint =
+        parsed.errors.length > 0
+          ? parsed.errors
+          : [
+              `${parser.key} parser found no releases — check that the URL returns the expected format`,
+            ];
       return {
-        status: "invalid" as const,
+        status: "error" as const,
         releaseCount: 0,
         latestVersion: null,
         latestPublishedAt: null,
-        errors: parsed.errors.length > 0 ? parsed.errors : ["No releases found"],
+        errors: hint,
         releases: [],
       };
     }

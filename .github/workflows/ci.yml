@@ -35,8 +35,13 @@ jobs:
       - name: Type check
         run: pnpm run check-types
 
-      - name: Test
-        run: pnpm run test
+      - name: Run tests (w/ coverage)
+        run: pnpm run test -- --coverage
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   deploy:
     name: Deploy backend services

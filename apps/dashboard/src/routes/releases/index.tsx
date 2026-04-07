@@ -44,7 +44,7 @@ const releasesSearchSchema = z.object({
     .default(releasesSearchDefaults.channel)
     .catch(releasesSearchDefaults.channel),
   status: z
-    .enum(["all", "active", "superseded", "draft"])
+    .enum(["all", "active", "superseded", "draft", "withdrawn"])
     .default(releasesSearchDefaults.status)
     .catch(releasesSearchDefaults.status),
 });
@@ -270,6 +270,7 @@ function ReleasesPage() {
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="superseded">Superseded</SelectItem>
                   <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="withdrawn">Withdrawn</SelectItem>
                 </SelectContent>
               </Select>
             </>

@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import { FormField } from "@/components/shared/form-field";
 import { serializeConfig, SourceConfigFields } from "@/components/shared/source-config-fields";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateSource } from "@/hooks/use-sources";
+import { useCreateSource, useValidateSource } from "@/hooks/use-sources";
 import { SOURCE_TYPES } from "@/lib/source-types";
 
 interface CreateSourceDialogProps {
@@ -52,6 +53,7 @@ function CreateSourceForm({
   onOpenChange: (open: boolean) => void;
 }) {
   const createSource = useCreateSource();
+  const validate = useValidateSource();
 
   const form = useForm({
     defaultValues: {
@@ -66,6 +68,26 @@ function CreateSourceForm({
     },
     onSubmit: async ({ value }) => {
       const baseUrl = resolveSourceUrl(value.sourceType, value.identifier) ?? undefined;
+      const configJson = serializeConfig(value.config);
+
+      // Validate the source before creating (skip for manual sources or empty URLs)
+      if (value.sourceType !== "manual" && baseUrl) {
+        try {
+          const result = await validate.mutateAsync({
+            url: baseUrl,
+            sourceType: value.sourceType,
+            configJson,
+          });
+          if (result.status !== "valid") {
+            toast.error(result.errors[0] ?? "Validation failed");
+            return;
+          }
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Validation failed");
+          return;
+        }
+      }
+
       createSource.mutate(
         {
           appId: value.appId,
@@ -74,7 +96,7 @@ function CreateSourceForm({
           baseUrl,
           parserKey: value.parserKey,
           channel: value.channel || undefined,
-          configJson: serializeConfig(value.config),
+          configJson,
           pollIntervalMinutes: value.pollIntervalMinutes,
         },
         {
@@ -129,6 +151,7 @@ function CreateSourceForm({
                 onValueChange={(v) => {
                   const sourceType = v as SourceType;
                   field.handleChange(sourceType);
+                  validate.reset();
                   form.setFieldValue("parserKey", defaultParserKeyForSourceType(sourceType));
                   form.setFieldValue(
                     "pollIntervalMinutes",
@@ -177,16 +200,53 @@ function CreateSourceForm({
                     name={field.name}
                     meta={field.state.meta}
                   >
-                    <Input
-                      id={field.name}
-                      placeholder={SOURCE_TYPES[sourceType].input.placeholder}
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      onBlur={field.handleBlur}
-                      aria-invalid={
-                        field.state.meta.isTouched && field.state.meta.errors.length > 0
-                      }
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        id={field.name}
+                        placeholder={SOURCE_TYPES[sourceType].input.placeholder}
+                        value={field.state.value}
+                        onChange={(e) => {
+                          field.handleChange(e.target.value);
+                          validate.reset();
+                        }}
+                        onBlur={field.handleBlur}
+                        aria-invalid={
+                          field.state.meta.isTouched && field.state.meta.errors.length > 0
+                        }
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!field.state.value || validate.isPending}
+                        onClick={() => {
+                          const url = resolveSourceUrl(sourceType, field.state.value);
+                          if (!url) return;
+                          validate.mutate({
+                            url,
+                            sourceType,
+                            configJson: serializeConfig(form.getFieldValue("config")),
+                          });
+                        }}
+                      >
+                        {validate.isPending ? "Testing..." : "Test"}
+                      </Button>
+                    </div>
+                    {validate.data && (
+                      <Badge
+                        variant="outline"
+                        className={`mt-1.5 text-xs ${
+                          validate.data.status === "valid"
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        {validate.data.status === "valid"
+                          ? `${validate.data.releaseCount} releases found (latest: ${validate.data.latestVersion})`
+                          : validate.data.errors[0]}
+                      </Badge>
+                    )}
                   </FormField>
                 )}
               </form.Field>
@@ -275,8 +335,17 @@ function CreateSourceForm({
           </Button>
           <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
             {([canSubmit, isSubmitting]) => (
-              <Button type="submit" disabled={!canSubmit || isSubmitting || createSource.isPending}>
-                {createSource.isPending ? "Creating..." : "Create"}
+              <Button
+                type="submit"
+                disabled={
+                  !canSubmit || isSubmitting || createSource.isPending || validate.isPending
+                }
+              >
+                {validate.isPending
+                  ? "Validating..."
+                  : createSource.isPending
+                    ? "Creating..."
+                    : "Create"}
               </Button>
             )}
           </form.Subscribe>

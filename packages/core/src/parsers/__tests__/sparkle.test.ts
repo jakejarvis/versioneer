@@ -74,4 +74,51 @@ describe("sparkleParser", () => {
     expect(result.releases).toHaveLength(0);
     expect(result.confidence).toBe(0);
   });
+
+  it("skips delta update items", () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <title>Version 2.1.0</title>
+      <sparkle:shortVersionString>2.1.0</sparkle:shortVersionString>
+      <sparkle:version>210</sparkle:version>
+      <enclosure url="https://example.com/MyApp-2.1.0.dmg" length="15000000" type="application/octet-stream"/>
+    </item>
+    <item>
+      <title>Version 2.1.0 Delta</title>
+      <sparkle:shortVersionString>2.1.0</sparkle:shortVersionString>
+      <sparkle:version>210</sparkle:version>
+      <enclosure url="https://example.com/MyApp-2.0-to-2.1.delta" length="5000000" type="application/octet-stream" sparkle:deltaFrom="200"/>
+    </item>
+  </channel>
+</rss>`;
+    const result = sparkleParser.parse(xml);
+    expect(result.releases).toHaveLength(1);
+    expect(result.releases[0]!.versionRaw).toBe("2.1.0");
+    expect(result.releases[0]!.artifacts[0]!.url).toBe("https://example.com/MyApp-2.1.0.dmg");
+  });
+
+  it("extracts sparkle:channel from items", () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <sparkle:shortVersionString>3.0.0-beta.1</sparkle:shortVersionString>
+      <sparkle:version>300</sparkle:version>
+      <sparkle:channel>beta</sparkle:channel>
+      <enclosure url="https://example.com/MyApp-3.0b1.dmg" length="10000000" type="application/octet-stream"/>
+    </item>
+    <item>
+      <sparkle:shortVersionString>2.5.0</sparkle:shortVersionString>
+      <sparkle:version>250</sparkle:version>
+      <enclosure url="https://example.com/MyApp-2.5.0.dmg" length="12000000" type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>`;
+    const result = sparkleParser.parse(xml);
+    expect(result.releases).toHaveLength(2);
+    expect(result.releases[0]!.channel).toBe("beta");
+    expect(result.releases[1]!.channel).toBe("stable");
+  });
 });

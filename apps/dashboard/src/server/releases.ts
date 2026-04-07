@@ -48,7 +48,7 @@ export const listReleases = createServerFn({ method: "GET" })
       offset: z.number().int().min(0).default(0),
       appId: z.string().optional(),
       channel: z.string().optional(),
-      status: z.enum(["active", "superseded", "draft"]).optional(),
+      status: z.enum(["active", "superseded", "draft", "withdrawn"]).optional(),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,
     }),

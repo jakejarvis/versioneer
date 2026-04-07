@@ -43,8 +43,8 @@ import {
   useCheckSlugAvailable,
   useLookupCaskToken,
   useOnboardDiscoveredApp,
-  useValidateSource,
 } from "@/hooks/use-onboarding";
+import { useValidateSource } from "@/hooks/use-sources";
 import { SOURCE_CONFIG_FIELDS, SOURCE_TYPES } from "@/lib/source-types";
 
 // ──────────────────────────────────────────────────────────
@@ -947,7 +947,7 @@ function SourceCard({
                   {validateMutation.data.releaseCount} releases
                 </>
               ) : (
-                validateMutation.data.status
+                (validateMutation.data.errors[0] ?? "Validation failed")
               )}
             </Badge>
           )}

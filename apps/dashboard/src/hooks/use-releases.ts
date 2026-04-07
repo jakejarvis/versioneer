@@ -14,7 +14,7 @@ import {
 interface UseReleasesParams {
   appId?: string;
   channel?: string;
-  status?: "active" | "superseded" | "draft";
+  status?: "active" | "superseded" | "draft" | "withdrawn";
   limit?: number;
   offset?: number;
   sortBy?: string;
@@ -61,7 +61,7 @@ export function useUpdateRelease(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: {
-      status?: "active" | "superseded" | "draft";
+      status?: "active" | "superseded" | "draft" | "withdrawn";
       channel?: string;
       releaseNotesHtml?: string | null;
       releaseNotesUrl?: string | null;

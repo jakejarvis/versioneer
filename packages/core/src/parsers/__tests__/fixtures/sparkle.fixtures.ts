@@ -76,4 +76,44 @@ export const sparkleFixtures: SparkleFixture[] = [
     expectedReleaseCount: 0,
     expectedConfidence: 0,
   },
+  {
+    name: "delta updates are skipped",
+    xml: `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <sparkle:version>2.0.0</sparkle:version>
+      <enclosure url="https://example.com/app-2.0.0.dmg" length="10485760" type="application/octet-stream"/>
+    </item>
+    <item>
+      <sparkle:version>2.0.0</sparkle:version>
+      <enclosure url="https://example.com/app-1.9-to-2.0.delta" length="2000000" type="application/octet-stream" sparkle:deltaFrom="1.9.0"/>
+    </item>
+  </channel>
+</rss>`,
+    expectedReleaseCount: 1,
+    expectedFirstVersion: "2.0.0",
+    expectedConfidence: 90,
+  },
+  {
+    name: "enclosure-only version attributes (chronological feed)",
+    xml: `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <title>Version 1.0</title>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 +0000</pubDate>
+      <enclosure url="https://example.com/app-1.0.dmg" sparkle:version="100" sparkle:shortVersionString="1.0" length="5000000" type="application/octet-stream"/>
+    </item>
+    <item>
+      <title>Version 2.0</title>
+      <pubDate>Tue, 01 Oct 2024 00:00:00 +0000</pubDate>
+      <enclosure url="https://example.com/app-2.0.dmg" sparkle:version="200" sparkle:shortVersionString="2.0" length="8000000" type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>`,
+    expectedReleaseCount: 2,
+    expectedFirstVersion: "1.0",
+    expectedConfidence: 90,
+  },
 ];

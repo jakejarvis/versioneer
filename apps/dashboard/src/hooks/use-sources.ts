@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SourceType } from "@versioneer/schemas/sources";
 
+import { validateSource } from "@/server/source-validation";
 import {
   listSources,
   getSource,
@@ -140,6 +141,13 @@ export function useBulkUpdateSourceStatus() {
       void qc.invalidateQueries({ queryKey: ["homepage"] });
       void qc.invalidateQueries({ queryKey: ["stats"] });
     },
+  });
+}
+
+export function useValidateSource() {
+  return useMutation({
+    mutationFn: (input: { url: string; sourceType: SourceType; configJson?: string }) =>
+      validateSource({ data: input }),
   });
 }
 

@@ -135,6 +135,9 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
       });
     }
 
+    // Track which releases are observed in this parse for retraction detection
+    const observedReleaseIds = new Set<string>();
+
     // Process each parsed release
     for (const parsedRelease of output.releases) {
       const observationId = generateId(idPrefixes.releaseObservation);
@@ -158,7 +161,7 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
 
       if (matchingRelease) {
         releaseId = matchingRelease.id;
-        // Update if we have newer info
+        // Update if we have newer info; re-activate if previously withdrawn
         const updatedNotesHtml = parsedRelease.releaseNotesBody
           ? normalizeReleaseNotes(
               parsedRelease.releaseNotesBody,
@@ -168,6 +171,7 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
         await db
           .update(releases)
           .set({
+            status: "active",
             releasedAt: toISODate(parsedRelease.publishedAt) ?? matchingRelease.releasedAt,
             sourceConfidence: output.confidence,
             releaseNotesHtml: updatedNotesHtml,
@@ -200,6 +204,8 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
           updatedAt: now,
         });
       }
+
+      observedReleaseIds.add(releaseId);
 
       // Insert observation
       await db.insert(releaseObservations).values({
@@ -260,6 +266,38 @@ export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<
           .update(artifacts)
           .set({ isPrimary: true })
           .where(eq(artifacts.id, firstArtifact.id));
+      }
+    }
+
+    // Withdraw releases no longer present in the feed.  Only run when:
+    //  - this isn't the first fetch (no prior data to compare against)
+    //  - the parse succeeded cleanly (no partial failures that could cause
+    //    false withdrawals)
+    if (!isInitialFetch && output.releases.length > 0 && output.errors.length === 0) {
+      const priorReleases = await db
+        .select({ id: releases.id })
+        .from(releases)
+        .where(
+          and(
+            eq(releases.appId, source.appId),
+            eq(releases.publishedBySourceId, source.id),
+            eq(releases.status, "active"),
+          ),
+        )
+        .all();
+
+      let withdrawnCount = 0;
+      for (const prior of priorReleases) {
+        if (!observedReleaseIds.has(prior.id)) {
+          await db
+            .update(releases)
+            .set({ status: "withdrawn", updatedAt: new Date().toISOString() })
+            .where(eq(releases.id, prior.id));
+          withdrawnCount++;
+        }
+      }
+      if (withdrawnCount > 0) {
+        log.info("withdrew releases absent from feed", { count: withdrawnCount });
       }
     }
 

@@ -137,7 +137,7 @@ export function useAppSources(appId: string) {
 
 interface UseAppReleasesParams {
   channel?: string;
-  status?: "active" | "superseded" | "draft";
+  status?: "active" | "superseded" | "draft" | "withdrawn";
   limit?: number;
   offset?: number;
   sortBy?: string;

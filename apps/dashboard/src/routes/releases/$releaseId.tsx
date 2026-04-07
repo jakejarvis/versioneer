@@ -273,7 +273,7 @@ function ReleaseDetailPage() {
             value={release.status}
             onValueChange={(value) =>
               updateRelease.mutate(
-                { status: value as "active" | "superseded" | "draft" },
+                { status: value as "active" | "superseded" | "draft" | "withdrawn" },
                 {
                   onSuccess: () => toast.success("Status updated"),
                   onError: (error) => toast.error(error.message),
@@ -288,6 +288,7 @@ function ReleaseDetailPage() {
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="superseded">Superseded</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="withdrawn">Withdrawn</SelectItem>
             </SelectContent>
           </Select>
         </div>

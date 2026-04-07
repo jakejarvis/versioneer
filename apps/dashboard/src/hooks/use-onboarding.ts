@@ -3,7 +3,6 @@ import type { AliasType } from "@versioneer/schemas/catalog";
 import type { SourceType } from "@versioneer/schemas/sources";
 
 import { onboardDiscoveredApp, checkSlugAvailable, lookupCaskToken } from "@/server/onboarding";
-import { validateSource } from "@/server/source-validation";
 
 export function useCheckSlugAvailable(slug: string) {
   return useQuery({
@@ -11,13 +10,6 @@ export function useCheckSlugAvailable(slug: string) {
     queryFn: () => checkSlugAvailable({ data: { slug } }),
     enabled: slug.length >= 2,
     staleTime: 0,
-  });
-}
-
-export function useValidateSource() {
-  return useMutation({
-    mutationFn: (input: { url: string; sourceType: SourceType; configJson?: string }) =>
-      validateSource({ data: input }),
   });
 }
 

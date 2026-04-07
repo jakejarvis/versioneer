@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const releaseStatusValues = ["active", "superseded", "draft"] as const;
+export const releaseStatusValues = ["active", "superseded", "draft", "withdrawn"] as const;
 export const releaseStatusSchema = z.enum(releaseStatusValues);
 export type ReleaseStatus = z.infer<typeof releaseStatusSchema>;
 
