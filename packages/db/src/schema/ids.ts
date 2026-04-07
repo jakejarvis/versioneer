@@ -28,4 +28,5 @@ export const idPrefixes = {
   feedback: "fb",
   discoveredApp: "dapp",
   cronJobRun: "cjr",
+  deviceAttestation: "da",
 } as const;

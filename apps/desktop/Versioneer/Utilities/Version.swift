@@ -197,7 +197,8 @@ nonisolated struct Version: Sendable, Comparable, Equatable {
       let localParsed = Version(localVersion)
       if localParsed.valid {
         let remoteAll = [major, minor, patch] + extra
-        let localAll = [localParsed.major, localParsed.minor, localParsed.patch]
+        let localAll =
+          [localParsed.major, localParsed.minor, localParsed.patch]
           + localParsed.extra
 
         // Count segments from the raw string to preserve intent ("1.0" = 2 segments,

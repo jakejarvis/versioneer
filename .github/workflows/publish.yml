@@ -101,6 +101,21 @@ jobs:
             -derivedDataPath "$PWD/.build/DerivedData" \
             -clonedSourcePackagesDirPath "$PWD/.build/DerivedData/SourcePackages"
 
+      - name: Run unit tests
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project apps/desktop/Versioneer.xcodeproj \
+            -scheme Versioneer \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$PWD/.build/DerivedData" \
+            -clonedSourcePackagesDirPath "$PWD/.build/DerivedData/SourcePackages" \
+            ENABLE_USER_SCRIPT_SANDBOXING=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            test
+
       - name: Locate Sparkle tools
         run: |
           set -euo pipefail

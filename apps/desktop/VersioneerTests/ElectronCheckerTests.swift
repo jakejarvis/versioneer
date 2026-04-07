@@ -20,7 +20,9 @@ struct ElectronCheckerTests {
     )
 
     #expect(result?.latestVersion == "1.2.3")
-    #expect(result?.downloadUrl == "https://updates.example.com/downloads/releases/Versioneer-1.2.3-arm64.dmg")
+    #expect(
+      result?.downloadUrl
+        == "https://updates.example.com/downloads/releases/Versioneer-1.2.3-arm64.dmg")
     #expect(result?.publishedAt == "2026-03-31T12:00:00Z")
   }
 
@@ -41,6 +43,8 @@ struct ElectronCheckerTests {
       updateUrl: "https://updates.example.com/downloads"
     )
 
-    #expect(result?.downloadUrl == "https://updates.example.com/downloads/releases/Versioneer-1.2.3-mac.zip")
+    #expect(
+      result?.downloadUrl
+        == "https://updates.example.com/downloads/releases/Versioneer-1.2.3-mac.zip")
   }
 }

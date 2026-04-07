@@ -6,9 +6,11 @@ import zlib
 /// Submits app inventory to the backend and decodes update decisions.
 nonisolated struct InventoryAPIClient: Sendable {
   let baseURL: URL
+  let tokenProvider: any TokenProvider
 
-  init(baseURL: URL) {
+  init(baseURL: URL, tokenProvider: any TokenProvider) {
     self.baseURL = baseURL
+    self.tokenProvider = tokenProvider
   }
 
   /// Response from the release notes endpoint.
@@ -26,6 +28,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "GET"
     request.setValue("application/json", forHTTPHeaderField: "Accept")
+    try await authorize(&request)
 
     let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -57,8 +60,10 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    try await authorize(&request)
 
-    let payload = buildRequest(from: apps, scanDurationMs: scanDurationMs, channelPreferences: channelPreferences)
+    let payload = buildRequest(
+      from: apps, scanDurationMs: scanDurationMs, channelPreferences: channelPreferences)
 
     let encoder = JSONEncoder()
     let jsonData = try encoder.encode(payload)
@@ -147,6 +152,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    try await authorize(&request)
 
     let payload = InstallPrepareRequest(
       client: buildClientInfo(channelPreferences: nil),
@@ -200,6 +206,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    try await authorize(&request)
 
     let payload = InstallExecutionStatusRequest(
       client: buildClientInfo(channelPreferences: nil),
@@ -235,6 +242,11 @@ nonisolated struct InventoryAPIClient: Sendable {
     } catch {
       throw APIError.decodingFailed(error.localizedDescription)
     }
+  }
+
+  private func authorize(_ request: inout URLRequest) async throws {
+    let token = try await tokenProvider.validToken()
+    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
   }
 
   private func buildClientInfo(

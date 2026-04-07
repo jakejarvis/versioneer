@@ -22,15 +22,28 @@ final class AppState {
   let appStoreChecker = AppStoreChecker()
   let homebrewChecker = HomebrewChecker()
   let installCoordinator = InstallCoordinator()
+  private var _attestClient: AppAttestClient?
+  private var _attestClientBaseURL: URL?
+
+  var attestClient: AppAttestClient {
+    let url = settings.baseURL
+    if let existing = _attestClient, _attestClientBaseURL == url {
+      return existing
+    }
+    let client = AppAttestClient(baseURL: url)
+    _attestClient = client
+    _attestClientBaseURL = url
+    return client
+  }
   private let cacheStore: ScanCacheStore
   @ObservationIgnored private var directoryWatcher: DirectoryWatcher?
 
   var apiClient: InventoryAPIClient {
-    InventoryAPIClient(baseURL: settings.baseURL)
+    InventoryAPIClient(baseURL: settings.baseURL, tokenProvider: attestClient)
   }
 
   var feedbackClient: FeedbackAPIClient {
-    FeedbackAPIClient(baseURL: settings.baseURL)
+    FeedbackAPIClient(baseURL: settings.baseURL, tokenProvider: attestClient)
   }
 
   // MARK: - Navigation
@@ -481,12 +494,13 @@ final class AppState {
 
     // Run backend + local checks in parallel
     let perApp = settings.perAppChannels
-    let channelPrefs = perApp.isEmpty && settings.defaultChannel == "stable"
+    let channelPrefs =
+      perApp.isEmpty && settings.defaultChannel == "stable"
       ? nil
       : InventoryCheckRequest.ChannelPreferences(
-          defaultChannel: settings.defaultChannel,
-          perApp: perApp
-        )
+        defaultChannel: settings.defaultChannel,
+        perApp: perApp
+      )
     async let sparkleTask = sparkleChecker.checkAll(apps: apps)
     async let electronTask = electronChecker.checkAll(apps: apps)
     async let appStoreTask = appStoreChecker.checkAll(apps: apps)
@@ -502,12 +516,6 @@ final class AppState {
     }
     rebuildLookupTables()
 
-    async let backendTask = apiClient.checkInventory(
-      apps: installedApps,
-      scanDurationMs: scanMs,
-      channelPreferences: channelPrefs
-    )
-
     let sparkleResults = await sparkleTask
     let electronResults = await electronTask
     let homebrewResults = await homebrewTask
@@ -521,7 +529,11 @@ final class AppState {
     )
 
     do {
-      let response = try await backendTask
+      let response = try await apiClient.checkInventory(
+        apps: installedApps,
+        scanDurationMs: scanMs,
+        channelPreferences: channelPrefs
+      )
       rawInventoryResults = mergeResults(
         backend: response.results,
         local: localResults,
@@ -854,7 +866,7 @@ final class AppState {
   private func artifactType(for downloadUrl: String) -> String? {
     let pathExtension =
       (URL(string: downloadUrl)?.pathExtension ?? (downloadUrl as NSString).pathExtension)
-        .lowercased()
+      .lowercased()
     guard ["zip", "dmg", "pkg"].contains(pathExtension) else { return nil }
     return pathExtension
   }
@@ -865,10 +877,12 @@ final class AppState {
   ) -> [AppDecision] {
     var remainingAppIDs = Set(apps.map(\.id))
     let appsByID = Dictionary(uniqueKeysWithValues: apps.map { ($0.id, $0) })
-    let appsByBundleId = Dictionary(grouping: apps.compactMap { app in
-      app.bundleId.map { ($0, app) }
-    }) { $0.0 }
-      .mapValues { pairs in pairs.map(\.1) }
+    let appsByBundleId = Dictionary(
+      grouping: apps.compactMap { app in
+        app.bundleId.map { ($0, app) }
+      }
+    ) { $0.0 }
+    .mapValues { pairs in pairs.map(\.1) }
     let appsByName = Dictionary(grouping: apps) { $0.name }
 
     func claimFirstMatching(

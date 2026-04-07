@@ -8,12 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		23472BD82F7DA7E700095A35 /* Versioneer.icon in Resources */ = {isa = PBXBuildFile; fileRef = 23472BD72F7DA7E700095A35 /* Versioneer.icon */; };
-		23AB35582F782C6300933422 /* AdSupport.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 23AB35572F782C6300933422 /* AdSupport.framework */; };
 		23EBFEDC2F75F5390026DE17 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 23EBFEDA2F75F5390026DE17 /* GoogleService-Info.plist */; };
 		23EBFEDF2F75F6CF0026DE17 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 23EBFEDE2F75F6CF0026DE17 /* FirebaseAnalytics */; };
-		23EBFEE12F75F6CF0026DE17 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 23EBFEE02F75F6CF0026DE17 /* FirebaseCore */; };
 		23EBFEE32F75F6CF0026DE17 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 23EBFEE22F75F6CF0026DE17 /* FirebaseCrashlytics */; };
-		23EBFEE52F75F6CF0026DE17 /* FirebaseInstallations in Frameworks */ = {isa = PBXBuildFile; productRef = 23EBFEE42F75F6CF0026DE17 /* FirebaseInstallations */; };
 		23F9791D2F7584620058763E /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 23F9791C2F7584620058763E /* Logging */; };
 		23FCB0012F7600010058763E /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 23FCB0022F7600010058763E /* Sparkle */; };
 /* End PBXBuildFile section */
@@ -41,7 +38,6 @@
 		23967D222F74949F0012749C /* Versioneer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Versioneer.xcodeproj; sourceTree = "<group>"; };
 		23A5A6032F74908500245F54 /* Versioneer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Versioneer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		23A5A6102F74908600245F54 /* VersioneerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VersioneerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		23AB35572F782C6300933422 /* AdSupport.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AdSupport.framework; path = System/Library/Frameworks/AdSupport.framework; sourceTree = SDKROOT; };
 		23EBFED92F75F5390026DE17 /* Versioneer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Versioneer.entitlements; sourceTree = "<group>"; };
 		23EBFEDA2F75F5390026DE17 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		24B100012F8000010058763E /* VersioneerPrivilegedHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = VersioneerPrivilegedHelper; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -78,10 +74,7 @@
 				23F9791D2F7584620058763E /* Logging in Frameworks */,
 				23FCB0012F7600010058763E /* Sparkle in Frameworks */,
 				23EBFEE32F75F6CF0026DE17 /* FirebaseCrashlytics in Frameworks */,
-				23EBFEE52F75F6CF0026DE17 /* FirebaseInstallations in Frameworks */,
-				23EBFEE12F75F6CF0026DE17 /* FirebaseCore in Frameworks */,
 				23EBFEDF2F75F6CF0026DE17 /* FirebaseAnalytics in Frameworks */,
-				23AB35582F782C6300933422 /* AdSupport.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -102,6 +95,11 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		2306E5252F7F0DAD00B4F3A6 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
 		23A5A5FA2F74908500245F54 = {
 			isa = PBXGroup;
 			children = (
@@ -132,7 +130,6 @@
 		23AB35562F782C6200933422 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				23AB35572F782C6300933422 /* AdSupport.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -164,9 +161,7 @@
 				23FCB0022F7600010058763E /* Sparkle */,
 				23F9791C2F7584620058763E /* Logging */,
 				23EBFEDE2F75F6CF0026DE17 /* FirebaseAnalytics */,
-				23EBFEE02F75F6CF0026DE17 /* FirebaseCore */,
 				23EBFEE22F75F6CF0026DE17 /* FirebaseCrashlytics */,
-				23EBFEE42F75F6CF0026DE17 /* FirebaseInstallations */,
 			);
 			productName = Versioneer;
 			productReference = 23A5A6032F74908500245F54 /* Versioneer.app */;
@@ -257,6 +252,12 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 23A5A6042F74908500245F54 /* Products */;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = 2306E5252F7F0DAD00B4F3A6 /* Products */;
+					ProjectRef = 23967D222F74949F0012749C /* Versioneer.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				23A5A6022F74908500245F54 /* Versioneer */,
@@ -562,7 +563,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = Versioneer;
 				CODE_SIGN_ENTITLEMENTS = Versioneer.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -768,20 +769,10 @@
 			package = 23EBFEDD2F75F6CF0026DE17 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAnalytics;
 		};
-		23EBFEE02F75F6CF0026DE17 /* FirebaseCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 23EBFEDD2F75F6CF0026DE17 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseCore;
-		};
 		23EBFEE22F75F6CF0026DE17 /* FirebaseCrashlytics */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 23EBFEDD2F75F6CF0026DE17 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseCrashlytics;
-		};
-		23EBFEE42F75F6CF0026DE17 /* FirebaseInstallations */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 23EBFEDD2F75F6CF0026DE17 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseInstallations;
 		};
 		23F9791C2F7584620058763E /* Logging */ = {
 			isa = XCSwiftPackageProductDependency;

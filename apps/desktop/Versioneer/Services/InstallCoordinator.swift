@@ -152,7 +152,8 @@ final class InstallCoordinator {
         case .sparkle:
           .sparkle
         case .zipReplace, .dmgCopyReplace:
-          executionRoute(for: installPlan, destinationAppURL: URL(fileURLWithPath: installedApp.path))
+          executionRoute(
+            for: installPlan, destinationAppURL: URL(fileURLWithPath: installedApp.path))
         case .pkgInstall:
           .privilegedPackage
         case .macAppStore, .manualOnly:
@@ -350,7 +351,8 @@ final class InstallCoordinator {
       }
 
       let installedVersion = readInstalledVersion(at: URL(fileURLWithPath: installedApp.path))
-      if let installedVersion, let expectedVersion = result.latestVersionRaw ?? result.latestVersion {
+      if let installedVersion, let expectedVersion = result.latestVersionRaw ?? result.latestVersion
+      {
         verificationSummary.versionMatch = installedVersion == expectedVersion
       }
 
