@@ -10,14 +10,14 @@ export const installedAppSchema = z.object({
   buildNumber: z.string().max(200).optional(),
   teamId: z.string().max(100).optional(),
   architecture: z.string().max(50).optional(),
-  sparkleFeedUrl: z.string().url().max(2000).optional(),
+  sparkleFeedUrl: z.string().max(2000).optional(),
   sparklePublicKey: z.string().max(500).optional(),
   isSparkleApp: z.boolean().optional(),
   isMasApp: z.boolean().optional(),
   masAppId: z.string().max(100).optional(),
   isElectronApp: z.boolean().optional(),
   electronUpdateProvider: z.string().max(100).optional(),
-  electronUpdateUrl: z.string().url().max(2000).optional(),
+  electronUpdateUrl: z.string().max(2000).optional(),
   codeSigningAuthority: z.string().max(500).optional(),
   appCategory: z.string().max(200).optional(),
   minMacOSVersion: z.string().max(50).optional(),
@@ -28,19 +28,31 @@ export const installedAppSchema = z.object({
 
 export type InstalledApp = z.infer<typeof installedAppSchema>;
 
+const inventoryClientSchema = z.object({
+  platform: z.string().default("macos"),
+  appVersion: z.string().max(50).optional(),
+  osVersion: z.string().max(50).optional(),
+  systemArchitecture: z.string().max(50).optional(),
+  channelPreferences: z
+    .object({
+      defaultChannel: channelSchema.default("stable"),
+      perApp: z.record(z.string(), channelSchema).default({}),
+    })
+    .optional(),
+});
+
+export type InventoryClient = z.infer<typeof inventoryClientSchema>;
+
+/** Validates the request envelope (client info + array shape) without per-app validation. */
+export const inventoryRequestEnvelopeSchema = z.object({
+  client: inventoryClientSchema,
+  apps: z.array(z.unknown()).max(5000),
+  scanDurationMs: z.number().int().optional(),
+});
+
+/** Full request schema — used in contract tests and type inference. The API route validates apps individually via installedAppSchema. */
 export const inventoryCheckRequestSchema = z.object({
-  client: z.object({
-    platform: z.string().default("macos"),
-    appVersion: z.string().max(50).optional(),
-    osVersion: z.string().max(50).optional(),
-    systemArchitecture: z.string().max(50).optional(),
-    channelPreferences: z
-      .object({
-        defaultChannel: channelSchema.default("stable"),
-        perApp: z.record(z.string(), channelSchema).default({}),
-      })
-      .optional(),
-  }),
+  client: inventoryClientSchema,
   apps: z.array(installedAppSchema).max(5000),
   scanDurationMs: z.number().int().optional(),
 });
@@ -80,8 +92,17 @@ export const appDecisionSchema = z.object({
 
 export type AppDecision = z.infer<typeof appDecisionSchema>;
 
+export const skippedAppSchema = z.object({
+  index: z.number(),
+  appName: z.string().nullable(),
+  reasons: z.array(z.string()),
+});
+
+export type SkippedApp = z.infer<typeof skippedAppSchema>;
+
 export const inventoryCheckResponseSchema = z.object({
   results: z.array(appDecisionSchema),
+  skipped: z.array(skippedAppSchema).optional(),
   processedAt: z.string(),
 });
 

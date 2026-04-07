@@ -555,6 +555,14 @@ final class AppState {
         scanDurationMs: scanMs,
         channelPreferences: channelPrefs
       )
+      if let skipped = response.skipped, !skipped.isEmpty {
+        Logger.api.warning("Server skipped \(skipped.count) app(s) due to validation errors")
+        for app in skipped {
+          Logger.api.debug(
+            "Skipped: \(app.appName ?? "index \(app.index)") — \(app.reasons.joined(separator: ", "))"
+          )
+        }
+      }
       rawInventoryResults = mergeResults(
         backend: response.results,
         local: localResults,

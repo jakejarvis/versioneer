@@ -1,8 +1,13 @@
 import { matchApp, normalizeAliasValue } from "@versioneer/core/identity";
 import type { AliasRecord, TrustAssertionRecord } from "@versioneer/core/identity";
 import { normalizeBaseUrl, resolveSourceUrl } from "@versioneer/core/sources";
-import { inventoryCheckRequestSchema } from "@versioneer/core/validation";
-import type { AppDecision } from "@versioneer/core/validation";
+import { installedAppSchema, inventoryRequestEnvelopeSchema } from "@versioneer/core/validation";
+import type {
+  AppDecision,
+  InstalledApp,
+  InventoryClient,
+  SkippedApp,
+} from "@versioneer/core/validation";
 import { displayVersion, normalizeVersion } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
 import {
@@ -29,7 +34,6 @@ import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import type { z } from "zod";
 
 import { isArchCompatible, isOsVersionCompatible, computeStaleSince } from "./helpers";
 
@@ -40,8 +44,6 @@ function computeLookupKey(appName: string, bundleId?: string | null): string {
     .trim()
     .replace(/\.app$/, "")}`;
 }
-
-type InventoryRequestApp = z.infer<typeof inventoryCheckRequestSchema>["apps"][number];
 
 type DiscoveryCandidate = {
   appName: string;
@@ -69,7 +71,7 @@ type PersistedDiscovery = {
 };
 
 function collectUnmatchedApps(
-  installedApps: InventoryRequestApp[],
+  installedApps: InstalledApp[],
   resultByLookupKey: ReadonlyMap<string, AppDecision>,
 ): Map<string, DiscoveryCandidate> {
   const unmatchedByKey = new Map<string, DiscoveryCandidate>();
@@ -602,7 +604,14 @@ function pickPreferredAliasMap(
 
 type InventoryEnv = {
   Bindings: Env;
-  Variables: { inventoryRequest: z.infer<typeof inventoryCheckRequestSchema> };
+  Variables: {
+    inventoryRequest: {
+      client: InventoryClient;
+      apps: InstalledApp[];
+      scanDurationMs?: number;
+    };
+    skippedApps: SkippedApp[];
+  };
 };
 
 const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next) => {
@@ -620,16 +629,43 @@ const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next) => {
   } catch {
     throw new HTTPException(400, { message: "Invalid JSON body" });
   }
-  const parsed = inventoryCheckRequestSchema.safeParse(body);
-  if (!parsed.success) {
+
+  const envelope = inventoryRequestEnvelopeSchema.safeParse(body);
+  if (!envelope.success) {
     throw new HTTPException(400, {
       res: Response.json(
-        { error: "Invalid request", details: parsed.error.issues },
+        { error: "Invalid request", details: envelope.error.issues },
         { status: 400 },
       ),
     });
   }
-  c.set("inventoryRequest", parsed.data);
+
+  // Validate each app individually — skip invalid ones instead of rejecting the batch
+  const validApps: InstalledApp[] = [];
+  const skippedApps: SkippedApp[] = [];
+
+  for (let i = 0; i < envelope.data.apps.length; i++) {
+    const raw = envelope.data.apps[i];
+    const parsed = installedAppSchema.safeParse(raw);
+    if (parsed.success) {
+      validApps.push(parsed.data);
+    } else {
+      const rawObj =
+        typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : null;
+      skippedApps.push({
+        index: i,
+        appName: typeof rawObj?.appName === "string" ? rawObj.appName : null,
+        reasons: parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`),
+      });
+    }
+  }
+
+  c.set("inventoryRequest", {
+    client: envelope.data.client,
+    apps: validApps,
+    scanDurationMs: envelope.data.scanDurationMs,
+  });
+  c.set("skippedApps", skippedApps);
   await next();
 });
 
@@ -1214,8 +1250,10 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       })(),
     );
 
+    const skippedApps = c.get("skippedApps");
     return c.json({
       results,
+      ...(skippedApps.length > 0 ? { skipped: skippedApps } : {}),
       processedAt: now,
     });
   });

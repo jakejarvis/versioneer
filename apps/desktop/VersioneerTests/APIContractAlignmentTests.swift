@@ -49,6 +49,41 @@ struct APIContractAlignmentTests {
     #expect(result.canInstall == true)
   }
 
+  @Test func inventoryResponseDecodesSkippedApps() throws {
+    let json = """
+      {
+        "processedAt": "2026-04-07T12:00:00Z",
+        "results": [],
+        "skipped": [
+          {
+            "index": 112,
+            "appName": "BrokenApp",
+            "reasons": ["sparkleFeedUrl: Invalid URL"]
+          }
+        ]
+      }
+      """
+
+    let response = try JSONDecoder().decode(InventoryCheckResponse.self, from: Data(json.utf8))
+    let skipped = try #require(response.skipped)
+    #expect(skipped.count == 1)
+    #expect(skipped[0].index == 112)
+    #expect(skipped[0].appName == "BrokenApp")
+    #expect(skipped[0].reasons == ["sparkleFeedUrl: Invalid URL"])
+  }
+
+  @Test func inventoryResponseDecodesWithoutSkippedField() throws {
+    let json = """
+      {
+        "processedAt": "2026-04-07T12:00:00Z",
+        "results": []
+      }
+      """
+
+    let response = try JSONDecoder().decode(InventoryCheckResponse.self, from: Data(json.utf8))
+    #expect(response.skipped == nil)
+  }
+
   @Test func preflightResponseDecodesDismissedBundleIds() throws {
     let json = """
       {

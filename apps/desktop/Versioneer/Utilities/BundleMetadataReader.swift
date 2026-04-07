@@ -109,6 +109,18 @@ nonisolated enum BundleMetadataReader {
     return SparkleInfo(feedUrl: feedUrl, publicKey: publicKey, hasSparkle: hasSparkle)
   }
 
+  /// Returns the URL string only if it parses as a valid absolute URL.
+  /// Filters out relative paths, placeholder tokens, and garbage strings.
+  nonisolated private static func validatedUrl(_ raw: String?) -> String? {
+    guard let raw, !raw.isEmpty else { return nil }
+    guard let url = URL(string: raw),
+          let scheme = url.scheme,
+          !scheme.isEmpty,
+          url.host != nil
+    else { return nil }
+    return raw
+  }
+
   /// Reads the Sparkle feed URL from Info.plist, stripping stray quotes.
   /// Falls back to a DevMate-convention URL when DevMateKit is present.
   nonisolated private static func readSparkleFeedUrl(
@@ -122,8 +134,8 @@ nonisolated enum BundleMetadataReader {
       let unquoted =
         trimmed
         .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-      if !unquoted.isEmpty {
-        return unquoted
+      if let url = validatedUrl(unquoted) {
+        return url
       }
     }
 
@@ -138,8 +150,8 @@ nonisolated enum BundleMetadataReader {
       let unquoted =
         trimmed
         .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-      if !unquoted.isEmpty {
-        return unquoted
+      if let url = validatedUrl(unquoted) {
+        return url
       }
     }
 
@@ -231,9 +243,9 @@ nonisolated enum BundleMetadataReader {
     switch provider {
     case "github":
       guard let owner = config["owner"], let repo = config["repo"] else { return nil }
-      return "https://github.com/\(owner)/\(repo)/releases"
+      return validatedUrl("https://github.com/\(owner)/\(repo)/releases")
     case "generic":
-      return config["url"]
+      return validatedUrl(config["url"])
     default:
       return nil
     }

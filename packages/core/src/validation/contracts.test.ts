@@ -46,6 +46,22 @@ describe("public contract schemas", () => {
     expect(parsed.apps[0]?.electronUpdateUrl).toBe("https://updates.example.com/app");
   });
 
+  it("accepts non-URL strings in sparkleFeedUrl and electronUpdateUrl", () => {
+    const parsed = inventoryCheckRequestSchema.parse({
+      client: { platform: "macos" },
+      apps: [
+        {
+          appName: "BrokenApp",
+          sparkleFeedUrl: "SPARKLE_FEED_URL",
+          electronUpdateUrl: "/relative/path",
+        },
+      ],
+    });
+
+    expect(parsed.apps[0]?.sparkleFeedUrl).toBe("SPARKLE_FEED_URL");
+    expect(parsed.apps[0]?.electronUpdateUrl).toBe("/relative/path");
+  });
+
   it("accepts the inventory response shape used by the desktop app", () => {
     const parsed = inventoryCheckResponseSchema.parse({
       processedAt: "2026-03-26T18:00:00Z",
@@ -82,6 +98,23 @@ describe("public contract schemas", () => {
 
     expect(parsed.results[0]?.iconUrl).toBe("https://assets.example.com/firefox.png");
     expect(parsed.results[0]?.installStrategy).toBe("zip_replace");
+  });
+
+  it("accepts inventory response with skipped apps", () => {
+    const parsed = inventoryCheckResponseSchema.parse({
+      processedAt: "2026-04-07T12:00:00Z",
+      results: [],
+      skipped: [
+        {
+          index: 112,
+          appName: "BrokenApp",
+          reasons: ["sparkleFeedUrl: Invalid URL"],
+        },
+      ],
+    });
+
+    expect(parsed.skipped).toHaveLength(1);
+    expect(parsed.skipped![0]?.appName).toBe("BrokenApp");
   });
 
   it("accepts preflight response with dismissed bundle IDs", () => {
