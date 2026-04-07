@@ -1,3 +1,8 @@
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { Hono } from "hono";
+import { createMiddleware } from "hono/factory";
+import { HTTPException } from "hono/http-exception";
+
 import { matchApp, normalizeAliasValue } from "@versioneer/core/identity";
 import type { AliasRecord, TrustAssertionRecord } from "@versioneer/core/identity";
 import { normalizeBaseUrl, resolveSourceUrl } from "@versioneer/core/sources";
@@ -30,10 +35,6 @@ import {
   defaultParserKeyForSourceType,
   defaultRoleForSourceType,
 } from "@versioneer/schemas/sources";
-import { eq, and, desc, inArray, sql } from "drizzle-orm";
-import { Hono } from "hono";
-import { createMiddleware } from "hono/factory";
-import { HTTPException } from "hono/http-exception";
 
 import { isArchCompatible, isOsVersionCompatible, computeStaleSince } from "./helpers";
 

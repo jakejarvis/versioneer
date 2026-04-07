@@ -1,9 +1,10 @@
+import { Hono } from "hono";
+
 import {
   getCachedDismissedBundleIds,
   refreshDismissedBundleIdsCache,
 } from "@versioneer/core/cache";
 import { createDb } from "@versioneer/db";
-import { Hono } from "hono";
 
 export const preflightRoutes = new Hono<{ Bindings: Env }>()
   // GET /v1/client/preflight

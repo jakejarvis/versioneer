@@ -1,8 +1,9 @@
-import { createDb } from "@versioneer/db";
-import { apps, releases } from "@versioneer/db";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+
+import { createDb } from "@versioneer/db";
+import { apps, releases } from "@versioneer/db";
 
 export const appsRoutes = new Hono<{ Bindings: Env }>()
   // GET /v1/apps/:appId

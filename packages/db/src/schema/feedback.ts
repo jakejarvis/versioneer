@@ -1,5 +1,6 @@
-import { feedbackStatusValues, feedbackTypeValues } from "@versioneer/schemas/feedback";
 import { sqliteTable, text, index } from "drizzle-orm/sqlite-core";
+
+import { feedbackStatusValues, feedbackTypeValues } from "@versioneer/schemas/feedback";
 
 export const clientFeedback = sqliteTable(
   "client_feedback",

@@ -1,6 +1,7 @@
+import { eq } from "drizzle-orm";
+
 import { createDb } from "@versioneer/db";
 import { discoveredApps } from "@versioneer/db";
-import { eq } from "drizzle-orm";
 
 import { msElapsedSince } from "../dates";
 import { sparkleParser, githubReleasesParser } from "../parsers";

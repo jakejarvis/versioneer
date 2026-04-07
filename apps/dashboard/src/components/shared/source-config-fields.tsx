@@ -1,8 +1,7 @@
-import type { SourceType } from "@versioneer/schemas/sources";
-
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SOURCE_CONFIG_FIELDS } from "@/lib/source-types";
+import type { SourceType } from "@versioneer/schemas/sources";
 
 interface SourceConfigFieldsProps {
   sourceType: SourceType;

@@ -1,3 +1,5 @@
+import { eq, and } from "drizzle-orm";
+
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -9,7 +11,6 @@ import {
   idPrefixes,
 } from "@versioneer/db";
 import type { InstallStrategy } from "@versioneer/schemas/releases";
-import { eq, and } from "drizzle-orm";
 
 import { setCachedLatest, recentReleasesKey } from "../cache";
 import type { CacheKV } from "../cache";

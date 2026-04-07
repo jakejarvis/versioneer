@@ -1,7 +1,8 @@
+import { desc, eq } from "drizzle-orm";
+
 import { createDb } from "@versioneer/db";
 import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/db";
 import type { SourceType } from "@versioneer/schemas/sources";
-import { desc, eq } from "drizzle-orm";
 
 import { createLogger } from "../logger";
 import { getDescriptor } from "../sources/registry";

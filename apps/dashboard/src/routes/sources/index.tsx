@@ -1,6 +1,5 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
-import { sourceTypeValues } from "@versioneer/schemas/sources";
 import { Plus, Zap } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -31,6 +30,7 @@ import {
 } from "@/lib/data-table-search";
 import { SOURCE_TYPES } from "@/lib/source-types";
 import type { SourceListItem } from "@/lib/types";
+import { sourceTypeValues } from "@versioneer/schemas/sources";
 
 const sourcesSearchDefaults = {
   ...paginatedSearchDefaults,

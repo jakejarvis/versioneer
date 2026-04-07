@@ -1,10 +1,11 @@
-import { createDb } from "@versioneer/db";
-import { adminUsers, adminSessions, adminAccounts, adminVerifications } from "@versioneer/db";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { env } from "cloudflare:workers";
+
+import { createDb } from "@versioneer/db";
+import { adminUsers, adminSessions, adminAccounts, adminVerifications } from "@versioneer/db";
 
 export function createAuth(d1: D1Database) {
   const db = createDb(d1);

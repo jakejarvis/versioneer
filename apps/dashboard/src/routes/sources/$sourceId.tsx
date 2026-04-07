@@ -1,8 +1,6 @@
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
-import { extractSourceIdentifier, resolveSourceUrl } from "@versioneer/core/sources";
-import type { SourceType } from "@versioneer/schemas/sources";
 import { ArrowLeft, Ban, Inbox, RefreshCw, RotateCcw, Save, Zap } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -42,6 +40,8 @@ import {
 import { formatDuration } from "@/lib/format-duration";
 import { SOURCE_TYPES } from "@/lib/source-types";
 import type { ParserRun, SourceFetch } from "@/lib/types";
+import { extractSourceIdentifier, resolveSourceUrl } from "@versioneer/core/sources";
+import type { SourceType } from "@versioneer/schemas/sources";
 
 export const Route = createFileRoute("/sources/$sourceId")({
   component: SourceDetailPage,

@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { SourceType } from "@versioneer/schemas/sources";
 
 import { validateSource } from "@/server/source-validation";
 import {
@@ -14,6 +13,7 @@ import {
   triggerFetch,
   reparse,
 } from "@/server/sources";
+import type { SourceType } from "@versioneer/schemas/sources";
 
 interface UseSourcesParams {
   status?: "active" | "paused" | "disabled" | "error" | "at_risk";

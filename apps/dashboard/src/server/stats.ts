@@ -1,4 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { env } from "cloudflare:workers";
+import { sql } from "drizzle-orm";
+
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -9,8 +12,6 @@ import {
   discoveredApps,
   catalogSuggestions,
 } from "@versioneer/db";
-import { env } from "cloudflare:workers";
-import { sql } from "drizzle-orm";
 
 export const getStats = createServerFn({ method: "GET" }).handler(async () => {
   const db = createDb(env.DB);

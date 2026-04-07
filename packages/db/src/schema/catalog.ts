@@ -1,6 +1,7 @@
-import { aliasTypeValues, appStatusValues } from "@versioneer/schemas/catalog";
 import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+
+import { aliasTypeValues, appStatusValues } from "@versioneer/schemas/catalog";
 
 export const apps = sqliteTable(
   "apps",

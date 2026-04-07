@@ -1,8 +1,8 @@
-import { createDb } from "@versioneer/db";
-import { apps, releases, sources, jobFailures, clientFeedback } from "@versioneer/db";
 import { inArray } from "drizzle-orm";
 
 import type { AppSummary, LinkedEntityRef, ReleaseSummary, SourceSummary } from "@/lib/types";
+import { createDb } from "@versioneer/db";
+import { apps, releases, sources, jobFailures, clientFeedback } from "@versioneer/db";
 
 type Database = ReturnType<typeof createDb>;
 type AppRow = typeof apps.$inferSelect;

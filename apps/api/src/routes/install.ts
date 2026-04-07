@@ -1,4 +1,8 @@
 import { zValidator } from "@hono/zod-validator";
+import { and, eq, sql } from "drizzle-orm";
+import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
+
 import {
   installExecutionStatusRequestSchema,
   installPrepareRequestSchema,
@@ -16,9 +20,6 @@ import {
   suggestionEvidence,
   trustAssertions,
 } from "@versioneer/db";
-import { and, eq, sql } from "drizzle-orm";
-import { Hono } from "hono";
-import { HTTPException } from "hono/http-exception";
 
 function validationErrorResponse(result: { error: { issues: unknown[] } }) {
   return Response.json({ error: "Invalid request", details: result.error.issues }, { status: 400 });

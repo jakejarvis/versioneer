@@ -1,3 +1,5 @@
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+
 import {
   fetchStatusValues,
   reviewStatusValues,
@@ -6,7 +8,6 @@ import {
   sourceStatusValues,
   sourceTypeValues,
 } from "@versioneer/schemas/sources";
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
 import { apps } from "./catalog";
 

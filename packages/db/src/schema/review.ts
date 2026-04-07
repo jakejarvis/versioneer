@@ -1,10 +1,11 @@
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+
 import {
   assertionTypeValues,
   evidenceTypeValues,
   queueTypeValues,
   suggestionStatusValues,
 } from "@versioneer/schemas/review";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import { apps } from "./catalog";
 import { sources } from "./sources";

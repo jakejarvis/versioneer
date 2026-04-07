@@ -1,3 +1,5 @@
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+
 import {
   cronJobTypeValues,
   cronRunStatusValues,
@@ -7,7 +9,6 @@ import {
   jobFailureStatusValues,
 } from "@versioneer/schemas/ops";
 import { installStrategyValues } from "@versioneer/schemas/releases";
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
 import { apps } from "./catalog";
 import { releases } from "./releases";

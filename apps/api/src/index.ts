@@ -1,7 +1,8 @@
-import { createLogger } from "@versioneer/core/logger";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
+
+import { createLogger } from "@versioneer/core/logger";
 
 import { openRoutes, protectedRoutes } from "./routes";
 

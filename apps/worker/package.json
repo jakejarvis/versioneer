@@ -2,6 +2,7 @@
   "name": "@versioneer/worker",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev --persist-to ../../.wrangler/state",
     "deploy": "wrangler deploy --env=production",
@@ -10,6 +11,7 @@
     "fmt": "oxfmt --config ../../.oxfmtrc.json",
     "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
     "check-types": "tsc --noEmit",
+    "test": "vitest run",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
@@ -19,8 +21,10 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "catalog:",
     "@versioneer/tsconfig": "workspace:*",
     "typescript": "catalog:",
+    "vitest": "catalog:",
     "wrangler": "catalog:"
   }
 }

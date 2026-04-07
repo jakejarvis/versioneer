@@ -1,6 +1,7 @@
+import { and, eq, isNotNull } from "drizzle-orm";
+
 import type { Database } from "@versioneer/db";
 import { discoveredApps } from "@versioneer/db";
-import { and, eq, isNotNull } from "drizzle-orm";
 
 import { setCachedDismissedBundleIds } from "./helpers";
 import type { CacheKV } from "./types";

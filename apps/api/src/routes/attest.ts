@@ -1,6 +1,4 @@
 import { zValidator } from "@hono/zod-validator";
-import { attestRequestSchema, attestRefreshRequestSchema } from "@versioneer/core/validation";
-import { createDb, deviceAttestations, generateId, idPrefixes } from "@versioneer/db";
 import { and, eq, lt } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -8,6 +6,8 @@ import { sign } from "hono/jwt";
 
 import { verifyAttestation, verifyAssertion } from "@/lib/app-attest";
 import { requireSecret } from "@/lib/env";
+import { attestRequestSchema, attestRefreshRequestSchema } from "@versioneer/core/validation";
+import { createDb, deviceAttestations, generateId, idPrefixes } from "@versioneer/db";
 
 const JWT_EXPIRY_SECONDS = 24 * 60 * 60; // 24 hours
 const CHALLENGE_TTL_SECONDS = 300; // 5 minutes

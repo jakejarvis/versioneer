@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { aliasTypeSchema, appStatusSchema } from "@versioneer/schemas/catalog";
 import { releaseStatusSchema } from "@versioneer/schemas/releases";
 import {
@@ -6,7 +8,6 @@ import {
   sourceStatusSchema,
   sourceTypeSchema,
 } from "@versioneer/schemas/sources";
-import { z } from "zod";
 
 import { channelSchema } from "./common";
 

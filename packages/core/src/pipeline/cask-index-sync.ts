@@ -1,6 +1,7 @@
+import { eq, and, isNotNull, or } from "drizzle-orm";
+
 import { createDb } from "@versioneer/db";
 import { appAliases, discoveredApps, generateId, idPrefixes } from "@versioneer/db";
-import { eq, and, isNotNull, or } from "drizzle-orm";
 
 import { msElapsedSince } from "../dates";
 import { createLogger } from "../logger";

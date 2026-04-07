@@ -1,10 +1,11 @@
+import { and, eq, ne } from "drizzle-orm";
+
 import {
   type AliasType,
   isGloballyUniqueExactAliasType,
   normalizeAliasValue,
 } from "@versioneer/core/identity";
 import { appAliases } from "@versioneer/db";
-import { and, eq, ne } from "drizzle-orm";
 
 import type { DbExecutor } from "./db-types";
 

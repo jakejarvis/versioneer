@@ -1,5 +1,6 @@
-import type { SourceRole, SourceType } from "@versioneer/schemas/sources";
 import * as cheerio from "cheerio";
+
+import type { SourceRole, SourceType } from "@versioneer/schemas/sources";
 
 import { parseGitHubRepoUrl } from "../validation/github-url";
 import { readResponseTextLimited } from "./response-body";

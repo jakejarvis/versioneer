@@ -1,9 +1,10 @@
+import { and, eq, ne } from "drizzle-orm";
+
 import { normalizeAliasValue } from "@versioneer/core/identity";
 import { getDescriptor } from "@versioneer/core/sources";
 import { appAliases, generateId, idPrefixes } from "@versioneer/db";
 import type { AliasType } from "@versioneer/schemas/catalog";
 import type { SourceType } from "@versioneer/schemas/sources";
-import { and, eq, ne } from "drizzle-orm";
 
 import type { Db, DbExecutor } from "./db-types";
 

@@ -1,10 +1,4 @@
 import { useForm } from "@tanstack/react-form";
-import { resolveSourceUrl } from "@versioneer/core/sources";
-import type { SourceType } from "@versioneer/schemas/sources";
-import {
-  defaultParserKeyForSourceType,
-  defaultPollIntervalForSourceType,
-} from "@versioneer/schemas/sources";
 import { toast } from "sonner";
 
 import { FormField } from "@/components/shared/form-field";
@@ -28,6 +22,12 @@ import {
 } from "@/components/ui/select";
 import { useCreateSource, useValidateSource } from "@/hooks/use-sources";
 import { SOURCE_TYPES } from "@/lib/source-types";
+import { resolveSourceUrl } from "@versioneer/core/sources";
+import type { SourceType } from "@versioneer/schemas/sources";
+import {
+  defaultParserKeyForSourceType,
+  defaultPollIntervalForSourceType,
+} from "@versioneer/schemas/sources";
 
 interface CreateSourceDialogProps {
   appId?: string;

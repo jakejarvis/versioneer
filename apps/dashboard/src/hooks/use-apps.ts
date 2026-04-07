@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { AliasType } from "@versioneer/schemas/catalog";
 
 import { updateAlias, deleteAlias } from "@/server/aliases";
 import {
@@ -16,6 +15,7 @@ import {
 } from "@/server/apps";
 import { uploadAppIcon, deleteAppIcon } from "@/server/icons";
 import { triggerFetch } from "@/server/sources";
+import type { AliasType } from "@versioneer/schemas/catalog";
 
 interface UseAppsParams {
   status?: "draft" | "public" | "deprecated" | "merged" | "unlisted";

@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import {
   executionRouteSchema as installExecutionRouteSchema,
   type ExecutionRoute as InstallExecutionRoute,
@@ -5,7 +7,6 @@ import {
   type InstallExecutionStatus,
 } from "@versioneer/schemas/ops";
 import { installStrategySchema, type InstallStrategy } from "@versioneer/schemas/releases";
-import { z } from "zod";
 
 export const appArtifactSchema = z.object({
   id: z.string().nullable(),

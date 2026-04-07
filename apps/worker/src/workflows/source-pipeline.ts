@@ -1,3 +1,5 @@
+import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
+
 import { createLogger } from "@versioneer/core/logger";
 import {
   handleSourceFetch,
@@ -5,7 +7,6 @@ import {
   handleRecomputeLatest,
 } from "@versioneer/core/pipeline";
 import type { FetchStepResult, ParseStepResult, SourceFetchJob } from "@versioneer/core/pipeline";
-import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 // Import parsers to trigger auto-registration
 import "@versioneer/core/parsers";
 

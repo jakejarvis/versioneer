@@ -1,9 +1,10 @@
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+
 import {
   discoveredAppStatusValues,
   enrichmentStatusValues,
   sourceValidationStatusValues,
 } from "@versioneer/schemas/discovery";
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import { apps } from "./catalog";
 

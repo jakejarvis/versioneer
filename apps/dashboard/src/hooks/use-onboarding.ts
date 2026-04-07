@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { AliasType } from "@versioneer/schemas/catalog";
-import type { SourceType } from "@versioneer/schemas/sources";
 
 import { onboardDiscoveredApp, checkSlugAvailable, lookupCaskToken } from "@/server/onboarding";
+import type { AliasType } from "@versioneer/schemas/catalog";
+import type { SourceType } from "@versioneer/schemas/sources";
 
 export function useCheckSlugAvailable(slug: string) {
   return useQuery({

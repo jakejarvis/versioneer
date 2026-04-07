@@ -9,7 +9,7 @@
       "style",
       "unknown"
     ],
-    "internalPattern": ["@/", "@sofa/"],
+    "internalPattern": ["@/", "@versioneer/"],
     "newlinesBetween": true,
     "order": "asc"
   },

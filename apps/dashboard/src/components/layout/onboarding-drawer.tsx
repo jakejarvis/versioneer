@@ -1,11 +1,6 @@
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useForm, useStore } from "@tanstack/react-form";
-import { resolveSourceUrl } from "@versioneer/core/sources";
-import { parseGitHubRepoUrl } from "@versioneer/core/validation";
-import type { AliasType } from "@versioneer/schemas/catalog";
-import type { SourceType } from "@versioneer/schemas/sources";
-import { SOURCE_TYPE_DEFAULTS } from "@versioneer/schemas/sources";
 import { format } from "date-fns";
 import {
   Check,
@@ -46,6 +41,11 @@ import {
 } from "@/hooks/use-onboarding";
 import { useValidateSource } from "@/hooks/use-sources";
 import { SOURCE_CONFIG_FIELDS, SOURCE_TYPES } from "@/lib/source-types";
+import { resolveSourceUrl } from "@versioneer/core/sources";
+import { parseGitHubRepoUrl } from "@versioneer/core/validation";
+import type { AliasType } from "@versioneer/schemas/catalog";
+import type { SourceType } from "@versioneer/schemas/sources";
+import { SOURCE_TYPE_DEFAULTS } from "@versioneer/schemas/sources";
 
 // ──────────────────────────────────────────────────────────
 // Alias types — operator-managed identity matchers only

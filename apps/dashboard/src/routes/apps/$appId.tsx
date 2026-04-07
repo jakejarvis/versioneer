@@ -3,7 +3,6 @@ import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
-import type { AliasType } from "@versioneer/schemas/catalog";
 import {
   ArrowLeft,
   ExternalLink,
@@ -66,6 +65,7 @@ import {
 } from "@/hooks/use-apps";
 import { useReorderSources } from "@/hooks/use-sources";
 import type { AppAlias, AppLatestRelease, Release, Source } from "@/lib/types";
+import type { AliasType } from "@versioneer/schemas/catalog";
 
 const appDetailSearchDefaults = {
   tab: "overview" as const,
