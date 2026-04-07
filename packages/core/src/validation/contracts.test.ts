@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  clientPreflightResponseSchema,
   installExecutionStatusResponseSchema,
   installPrepareResponseSchema,
   inventoryCheckRequestSchema,
@@ -81,6 +82,22 @@ describe("public contract schemas", () => {
 
     expect(parsed.results[0]?.iconUrl).toBe("https://assets.example.com/firefox.png");
     expect(parsed.results[0]?.installStrategy).toBe("zip_replace");
+  });
+
+  it("accepts preflight response with dismissed bundle IDs", () => {
+    const parsed = clientPreflightResponseSchema.parse({
+      dismissedBundleIds: ["com.adobe.Install", "com.example.foo"],
+    });
+
+    expect(parsed.dismissedBundleIds).toEqual(["com.adobe.Install", "com.example.foo"]);
+  });
+
+  it("accepts preflight response with empty dismissed list", () => {
+    const parsed = clientPreflightResponseSchema.parse({
+      dismissedBundleIds: [],
+    });
+
+    expect(parsed.dismissedBundleIds).toEqual([]);
   });
 
   it("accepts install prepare and status response payloads", () => {

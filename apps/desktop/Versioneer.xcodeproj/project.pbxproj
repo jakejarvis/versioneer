@@ -134,6 +134,11 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		23E0A3AC2F81C0830073C339 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */

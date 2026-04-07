@@ -48,4 +48,28 @@ struct APIContractAlignmentTests {
     #expect(result.isVerified == true)
     #expect(result.canInstall == true)
   }
+
+  @Test func preflightResponseDecodesDismissedBundleIds() throws {
+    let json = """
+      {
+        "dismissedBundleIds": ["com.adobe.Install", "com.google.keystone.agent"]
+      }
+      """
+
+    let response = try JSONDecoder().decode(PreflightResponse.self, from: Data(json.utf8))
+    #expect(response.dismissedBundleIds.count == 2)
+    #expect(response.dismissedBundleIds.contains("com.adobe.Install"))
+    #expect(response.dismissedBundleIds.contains("com.google.keystone.agent"))
+  }
+
+  @Test func preflightResponseDecodesEmptyList() throws {
+    let json = """
+      {
+        "dismissedBundleIds": []
+      }
+      """
+
+    let response = try JSONDecoder().decode(PreflightResponse.self, from: Data(json.utf8))
+    #expect(response.dismissedBundleIds.isEmpty)
+  }
 }

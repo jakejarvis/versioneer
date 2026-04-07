@@ -9,3 +9,7 @@ export function bundleLookupKey(bundleId: string): string {
 export function recentReleasesKey(): string {
   return "recent-releases";
 }
+
+export function dismissedBundleIdsKey(): string {
+  return "dismissed-bundle-ids";
+}

@@ -123,6 +123,25 @@ struct SettingsStoreTests {
     #expect(roots.filter { $0 == "/Volumes/Tools/Apps" }.count == 1)
   }
 
+  @Test func serverDismissedBundleIdsPersistAndClear() throws {
+    let (settings, suiteName) = try makeSettings()
+    defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+
+    #expect(settings.serverDismissedBundleIds.isEmpty)
+
+    settings.serverDismissedBundleIds = Set(["com.example.foo", "com.example.bar"])
+    #expect(settings.serverDismissedBundleIds == Set(["com.example.foo", "com.example.bar"]))
+
+    // Verify persistence through a fresh SettingsStore
+    let reloadedDefaults = try #require(UserDefaults(suiteName: suiteName))
+    let reloaded = SettingsStore(defaults: reloadedDefaults)
+    #expect(reloaded.serverDismissedBundleIds == Set(["com.example.foo", "com.example.bar"]))
+
+    // Clear
+    settings.serverDismissedBundleIds = []
+    #expect(settings.serverDismissedBundleIds.isEmpty)
+  }
+
   private func makeSettings() throws -> (SettingsStore, String) {
     let suiteName = "com.jakejarvis.versioneer.tests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))

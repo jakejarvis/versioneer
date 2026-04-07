@@ -12,9 +12,14 @@ actor AppScanner {
   /// Recursively scans the given root directories for `.app` bundles.
   /// Deduplicates by resolved real path so overlapping roots and symlinks
   /// do not double-count.
-  func scan(roots: [URL]) async -> [InstalledApp] {
+  func scan(roots: [URL], serverDismissedBundleIds: Set<String> = []) async -> [InstalledApp] {
     Logger.appScanner.info("Starting app scan across \(roots.count) root(s)")
     let startTime = CFAbsoluteTimeGetCurrent()
+
+    func isIgnored(_ bundleId: String?) -> Bool {
+      GloballyIgnoredApps.shouldIgnore(bundleId: bundleId)
+        || (bundleId.map { serverDismissedBundleIds.contains($0) } ?? false)
+    }
 
     let fileManager = FileManager.default
     var seenPaths = Set<String>()
@@ -51,7 +56,7 @@ actor AppScanner {
         guard seenPaths.insert(resolved).inserted else { continue }
 
         if let app = BundleMetadataReader.readApp(at: item) {
-          guard !GloballyIgnoredApps.shouldIgnore(bundleId: app.bundleId) else { continue }
+          guard !isIgnored(app.bundleId) else { continue }
           results.append(app)
         } else {
           Logger.appScanner.debug("Could not read bundle: \(item.lastPathComponent)")
@@ -68,7 +73,7 @@ actor AppScanner {
       guard seenPaths.insert(resolved).inserted else { continue }
 
       if let app = BundleMetadataReader.readApp(at: bundleURL) {
-        guard !GloballyIgnoredApps.shouldIgnore(bundleId: app.bundleId) else { continue }
+        guard !isIgnored(app.bundleId) else { continue }
         results.append(app)
       }
     }
