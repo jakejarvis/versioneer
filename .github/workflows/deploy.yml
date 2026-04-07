@@ -82,6 +82,11 @@ jobs:
           workingDirectory: apps/worker
           command: deploy --env=production
 
+      - name: Build dashboard
+        run: pnpm --filter @versioneer/dashboard build
+        env:
+          CLOUDFLARE_ENV: production
+
       - name: Deploy dashboard
         uses: cloudflare/wrangler-action@v3
         with:
@@ -89,6 +94,9 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: apps/dashboard
           command: deploy --env=production
+
+      - name: Build marketing site
+        run: pnpm --filter @versioneer/web build
 
       - name: Deploy marketing site
         uses: cloudflare/wrangler-action@v3
