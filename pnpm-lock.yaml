@@ -63,8 +63,8 @@ importers:
         specifier: ^0.7.6
         version: 0.7.6(hono@4.12.12)(zod@4.3.6)
       '@levischuck/tiny-cbor':
-        specifier: ^0.3.2
-        version: 0.3.2
+        specifier: ^0.3.3
+        version: 0.3.3
       '@peculiar/asn1-ecc':
         specifier: ^2.6.1
         version: 2.6.1
@@ -1693,8 +1693,8 @@ packages:
     peerDependencies:
       jsep: ^0.4.0||^1.0.0
 
-  '@levischuck/tiny-cbor@0.3.2':
-    resolution: {integrity: sha512-v15eUU94R54eghlKZJtO/hwJmYC7w4ZIj/ybAJT2tMKdcrJNlXm7axCHS8xrQiC1wPlAQNemiwEpuBUaFGwJlQ==}
+  '@levischuck/tiny-cbor@0.3.3':
+    resolution: {integrity: sha512-ZU8A5VwdmEjCExdm+XfIpuEjJU2hWn7daSWjMLZBUnCXLbYvV/GOIrnFtgbkWyWZZylIWh0Iy3KHgIstSizeeA==}
 
   '@modelcontextprotocol/sdk@1.29.0':
     resolution: {integrity: sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==}
@@ -6459,7 +6459,7 @@ snapshots:
     dependencies:
       jsep: 1.4.0
 
-  '@levischuck/tiny-cbor@0.3.2': {}
+  '@levischuck/tiny-cbor@0.3.3': {}
 
   '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
     dependencies:
