@@ -29,7 +29,7 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
-    "@rolldown/plugin-babel": "^0.2.2",
+    "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.2.2",
     "@tanstack/router-plugin": "^1.167.12",
     "@types/react": "^19.2.14",
