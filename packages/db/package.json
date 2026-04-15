@@ -18,7 +18,7 @@
   "dependencies": {
     "@versioneer/schemas": "workspace:*",
     "drizzle-orm": "catalog:",
-    "nanoid": "^5.1.7"
+    "nanoid": "^5.1.9"
   },
   "devDependencies": {
     "@versioneer/tsconfig": "workspace:*",
