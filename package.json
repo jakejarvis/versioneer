@@ -20,7 +20,7 @@
     "@types/node": "^25.5.2",
     "@vitest/coverage-v8": "catalog:",
     "oxfmt": "^0.44.0",
-    "oxlint": "^1.59.0",
+    "oxlint": "^1.60.0",
     "tsx": "^4.21.0",
     "turbo": "^2.9.5",
     "typescript": "catalog:",
