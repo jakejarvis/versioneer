@@ -910,11 +910,11 @@ extension InstallStrategy {
     case .sparkle:
       "Sparkle"
     case .zipReplace:
-      "Zip Replace"
+      "Extract"
     case .dmgCopyReplace:
-      "DMG Copy"
+      "DMG Mount"
     case .pkgInstall:
-      "Package Installer"
+      "Installer"
     case .macAppStore:
       "Mac App Store"
     case .manualOnly:

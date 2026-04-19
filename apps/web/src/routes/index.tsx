@@ -11,7 +11,7 @@ export const Route = createFileRoute("/")({
 function IndexPage() {
   return (
     <main className="space-y-6">
-      <p className="prose text-pretty">
+      <p className="prose">
         A modern replacement for{" "}
         <a href="https://www.corecode.io/macupdater/" target="_blank" rel="noopener noreferrer">
           MacUpdater

@@ -47,7 +47,7 @@ function RootComponent() {
 
         <Outlet />
 
-        <footer className="text-sm text-muted-foreground border-t border-foreground/10 pt-6">
+        <footer className="text-xs text-muted-foreground border-t border-foreground/10 pt-6">
           <p>
             Created by{" "}
             <a
@@ -57,7 +57,7 @@ function RootComponent() {
               className="underline-offset-4 underline hover:text-foreground"
             >
               @jakejarvis
-              <ArrowUpRightIcon className="size-3.5 inline-block translate-y-[-1px] ml-0.5" />
+              <ArrowUpRightIcon className="size-3.5 inline-block -translate-y-px ml-0.5" />
             </a>
           </p>
         </footer>
