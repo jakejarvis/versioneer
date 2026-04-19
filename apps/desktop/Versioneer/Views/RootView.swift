@@ -82,7 +82,6 @@ struct RootView: View {
       FilterChipBar()
       listContent
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(resultsPaneBackground)
       StatusBarView()
     }
   }
@@ -93,15 +92,13 @@ struct RootView: View {
       DetailPaneView(result: selectedResult)
         .id(selectedResult.id)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(detailPaneBackground)
     } else {
       ContentUnavailableView {
-        Label("Select an App", systemImage: "sidebar.right")
+        Label("Select an App", systemImage: "sidebar.left")
       } description: {
         Text("Choose an app from the list to view its status, versions, and update actions.")
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .background(detailPaneBackground)
     }
   }
 
@@ -150,28 +147,13 @@ struct RootView: View {
           .tag(row.id)
       }
     }
-    .listStyle(.inset)
-    .scrollContentBackground(.hidden)
+    .listStyle(.sidebar)
     .onDeleteCommand {
       guard let result = appState.selectedResult,
         !appState.isUserIgnored(result)
       else { return }
       appState.ignore(result, undoManager: undoManager)
     }
-  }
-
-  private var resultsPaneBackground: some View {
-    Color(nsColor: .windowBackgroundColor)
-      .overlay {
-        Color.primary.opacity(0.03)
-      }
-  }
-
-  private var detailPaneBackground: some View {
-    Color(nsColor: .windowBackgroundColor)
-      .overlay {
-        Color.primary.opacity(0.02)
-      }
   }
 
   private func updateDockBadge(with count: Int) {

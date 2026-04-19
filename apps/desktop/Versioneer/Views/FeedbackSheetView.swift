@@ -21,13 +21,12 @@ struct FeedbackSheetView: View {
   @State private var isSubmitting = false
   @State private var error: String?
   @State private var success = false
-  @State private var autoDismissTask: Task<Void, Never>?
 
   var body: some View {
     NavigationStack {
       Form {
         Section {
-          Picker("Issue Type", selection: $feedbackType) {
+          Picker("Issue", selection: $feedbackType) {
             ForEach(FeedbackType.allCases) { type in
               Text(type.rawValue).tag(type)
             }
@@ -41,7 +40,7 @@ struct FeedbackSheetView: View {
           TextField("Additional comments (optional)", text: $comment, axis: .vertical)
             .lineLimit(4...6)
         } footer: {
-          Text("Send catalog feedback without leaving the desktop app.")
+          Text("Send catalog feedback from Versioneer.")
         }
 
         if let error {
@@ -60,32 +59,28 @@ struct FeedbackSheetView: View {
         }
       }
       .formStyle(.grouped)
-      .navigationTitle("Report Issue")
+      .navigationTitle("Report an Issue")
       .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") { dismiss() }
-            .keyboardShortcut(.cancelAction)
+        if !success {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") { dismiss() }
+              .keyboardShortcut(.cancelAction)
+          }
         }
 
         ToolbarItem(placement: .confirmationAction) {
-          Button("Submit", action: submit)
-            .keyboardShortcut(.defaultAction)
-            .disabled(isSubmitting)
+          if success {
+            Button("Done") { dismiss() }
+              .keyboardShortcut(.defaultAction)
+          } else {
+            Button("Send", action: submit)
+              .keyboardShortcut(.defaultAction)
+              .disabled(isSubmitting)
+          }
         }
       }
     }
     .frame(minWidth: 480, minHeight: 360)
-    .onChange(of: success) {
-      guard success else { return }
-      autoDismissTask = Task {
-        try? await Task.sleep(for: .seconds(2))
-        guard !Task.isCancelled else { return }
-        dismiss()
-      }
-    }
-    .onDisappear {
-      autoDismissTask?.cancel()
-    }
   }
 
   @ViewBuilder

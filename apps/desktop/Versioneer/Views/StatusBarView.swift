@@ -7,7 +7,13 @@ struct StatusBarView: View {
     let presentation = appState.statusBarPresentation
 
     HStack(spacing: 8) {
-      Text(presentation.isScanning ? "Checking…" : presentation.lastCheckedText)
+      if presentation.isScanning {
+        ProgressView()
+          .controlSize(.mini)
+        Text("Checking apps…")
+      } else {
+        Text(presentation.lastCheckedText)
+      }
 
       Spacer()
 

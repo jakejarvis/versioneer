@@ -11,7 +11,7 @@ struct DetailPaneView: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
+      VStack(alignment: .leading, spacing: 18) {
         DetailHeroSection(result: result)
 
         DetailPrimaryActionSection(
@@ -35,14 +35,14 @@ struct DetailPaneView: View {
     .sheet(isPresented: $showFeedbackSheet) {
       FeedbackSheetView(result: result)
     }
-    .alert("Install provisional update?", isPresented: $showInstallWarning) {
-      Button("Install", role: .destructive) {
+    .alert("Install unverified update?", isPresented: $showInstallWarning) {
+      Button("Install Update", role: .destructive) {
         Task { await appState.install(result) }
       }
       Button("Cancel", role: .cancel) {}
     } message: {
       Text(
-        "This app is only provisionally verified. Versioneer will still run full local verification before installing."
+        "Versioneer will run local verification before installing, but this catalog match still needs review."
       )
     }
     .alert("Install directly?", isPresented: $showBrewBypassWarning) {
@@ -52,7 +52,7 @@ struct DetailPaneView: View {
       Button("Cancel", role: .cancel) {}
     } message: {
       Text(
-        "This app was installed via Homebrew. Installing directly may cause Homebrew to lose track of it. You can re-sync with `brew reinstall --cask`."
+        "This app was installed with Homebrew. Installing directly can leave Homebrew out of sync."
       )
     }
   }
@@ -134,39 +134,37 @@ private struct DetailHeroSection: View {
         MetadataPopoverButton(result: result)
       }
 
-      GlassEffectContainer(spacing: 8) {
-        HStack(spacing: 8) {
+      HStack(spacing: 8) {
+        StatusChip(
+          title: decisionTitle,
+          tint: decisionTint,
+          systemImage: decisionSymbol
+        )
+
+        if appState.isHomebrewInstalled(for: result) {
           StatusChip(
-            title: decisionTitle,
-            tint: decisionTint,
-            systemImage: decisionSymbol
+            title: "Homebrew",
+            tint: .green,
+            systemImage: "mug.fill"
           )
+        }
 
-          if appState.isHomebrewInstalled(for: result) {
-            StatusChip(
-              title: "Homebrew",
-              tint: .green,
-              systemImage: "mug.fill"
-            )
-          }
+        if result.matchedAppId != nil {
+          ChannelPicker(result: result)
+        }
 
-          if result.matchedAppId != nil {
-            ChannelPicker(result: result)
-          }
+        if let confidence = result.matchConfidence {
+          StatusChip(
+            title: VersionFormatting.confidenceLabel(confidence),
+            tint: .secondary,
+            systemImage: "scope"
+          )
+        }
 
-          if let confidence = result.matchConfidence {
-            StatusChip(
-              title: VersionFormatting.confidenceLabel(confidence),
-              tint: .secondary,
-              systemImage: "scope"
-            )
-          }
-
-          if let releasedAt = result.releasedAt {
-            Text(VersionFormatting.relativeDate(from: releasedAt))
-              .font(.caption)
-              .foregroundStyle(.secondary)
-          }
+        if let releasedAt = result.releasedAt {
+          Text(VersionFormatting.relativeDate(from: releasedAt))
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
       }
 
@@ -244,7 +242,7 @@ private struct DetailPrimaryActionSection: View {
       SectionHeader(
         title: "Ignored",
         subtitle:
-          "Versioneer will keep this app out of the normal result sections until you remove its ignore rule."
+          "This app stays out of normal result sections and bulk updates until you remove its rule."
       )
 
       Button("Stop Ignoring") {
@@ -253,7 +251,7 @@ private struct DetailPrimaryActionSection: View {
       .buttonStyle(.glassProminent)
       .controlSize(.large)
     }
-    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
+    .glassCard(interactive: true, cornerRadius: 18, padding: 16)
   }
 
   private var masUpgradeCard: some View {
@@ -276,13 +274,13 @@ private struct DetailPrimaryActionSection: View {
       .disabled(installState.isRunning)
 
       Label(
-        "This app was installed from the Mac App Store. Updating through mas keeps the App Store in sync.",
+        "Updating through the Mac App Store keeps store metadata in sync.",
         systemImage: "info.circle"
       )
       .font(.caption)
       .foregroundStyle(.secondary)
     }
-    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
+    .glassCard(interactive: true, cornerRadius: 18, padding: 16)
   }
 
   private var brewUpgradeCard: some View {
@@ -316,13 +314,13 @@ private struct DetailPrimaryActionSection: View {
       }
 
       Label(
-        "This app was installed via Homebrew. Updating through brew keeps your package manager in sync.",
+        "Updating through Homebrew keeps cask metadata in sync.",
         systemImage: "info.circle"
       )
       .font(.caption)
       .foregroundStyle(.secondary)
     }
-    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
+    .glassCard(interactive: true, cornerRadius: 18, padding: 16)
   }
 
   private var standardInstallCard: some View {
@@ -373,7 +371,7 @@ private struct DetailPrimaryActionSection: View {
         }
       }
     }
-    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
+    .glassCard(interactive: true, cornerRadius: 18, padding: 16)
   }
 
   private func manualUpdateCard(
@@ -401,7 +399,7 @@ private struct DetailPrimaryActionSection: View {
         .foregroundStyle(.secondary)
         .textSelection(.enabled)
     }
-    .glassCard(interactive: true, cornerRadius: 22, padding: 18)
+    .glassCard(interactive: true, cornerRadius: 18, padding: 16)
   }
 
   private var unavailableInstallCard: some View {
@@ -482,7 +480,7 @@ private struct ActionCardStatusSection: View {
   }
 }
 
-// MARK: - Quick Actions Section
+// MARK: - Actions Section
 
 private struct DetailQuickActionsSection: View {
   @Environment(AppState.self) private var appState
@@ -497,7 +495,7 @@ private struct DetailQuickActionsSection: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      SectionHeader(title: "Quick Actions")
+      SectionHeader(title: "Actions")
 
       ViewThatFits(in: .horizontal) {
         HStack(spacing: 10) {

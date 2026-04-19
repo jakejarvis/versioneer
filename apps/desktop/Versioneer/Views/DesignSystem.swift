@@ -4,10 +4,11 @@ import SwiftUI
 // MARK: - Glass Card Modifier
 
 struct GlassCardModifier: ViewModifier {
+  @Environment(\.colorSchemeContrast) private var colorSchemeContrast
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
   var interactive: Bool = false
-  var cornerRadius: CGFloat = 22
+  var cornerRadius: CGFloat = 18
   var padding: CGFloat = 18
 
   func body(content: Content) -> some View {
@@ -20,18 +21,26 @@ struct GlassCardModifier: ViewModifier {
         )
       }
       .if(!reduceTransparency) {
-        $0.glassEffect(
-          interactive ? .regular.interactive() : .regular,
-          in: .rect(cornerRadius: cornerRadius)
-        )
+        $0.background(.regularMaterial, in: .rect(cornerRadius: cornerRadius))
       }
+      .overlay {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+          .strokeBorder(cardBorderColor, lineWidth: 1)
+      }
+      .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+  }
+
+  private var cardBorderColor: Color {
+    colorSchemeContrast == .increased
+      ? Color.primary.opacity(0.18)
+      : Color.primary.opacity(interactive ? 0.10 : 0.07)
   }
 }
 
 extension View {
   func glassCard(
     interactive: Bool = false,
-    cornerRadius: CGFloat = 22,
+    cornerRadius: CGFloat = 18,
     padding: CGFloat = 18
   ) -> some View {
     modifier(
@@ -66,6 +75,8 @@ enum DesignTone: String, Sendable {
 // MARK: - Status Chip
 
 struct StatusChip: View {
+  @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
   let title: String
   let tint: Color
   var systemImage: String?
@@ -89,9 +100,13 @@ struct StatusChip: View {
         .lineLimit(1)
     }
     .foregroundStyle(tint)
-    .padding(.horizontal, 10)
-    .padding(.vertical, 6)
+    .padding(.horizontal, 9)
+    .padding(.vertical, 5)
     .background(chipBackground, in: .capsule)
+    .overlay {
+      Capsule(style: .continuous)
+        .strokeBorder(chipBorder, lineWidth: 1)
+    }
     .accessibilityElement(children: .combine)
     .onHover { hovering in
       guard interactive else { return }
@@ -100,8 +115,13 @@ struct StatusChip: View {
   }
 
   private var chipBackground: Color {
-    guard interactive else { return tint.opacity(0.12) }
-    return tint.opacity(isHovered ? 0.18 : 0.12)
+    let baseOpacity = colorSchemeContrast == .increased ? 0.18 : 0.10
+    guard interactive else { return tint.opacity(baseOpacity) }
+    return tint.opacity(isHovered ? baseOpacity + 0.06 : baseOpacity)
+  }
+
+  private var chipBorder: Color {
+    tint.opacity(colorSchemeContrast == .increased ? 0.34 : 0.18)
   }
 }
 
@@ -114,10 +134,10 @@ struct GlassBanner: View {
 
   var body: some View {
     HStack(alignment: .top, spacing: 12) {
-      Circle()
-        .fill(tint)
-        .frame(width: 9, height: 9)
-        .padding(.top, 6)
+      Image(systemName: "info.circle.fill")
+        .font(.callout.weight(.semibold))
+        .foregroundStyle(tint)
+        .padding(.top, 1)
 
       VStack(alignment: .leading, spacing: 4) {
         Text(title)
@@ -130,7 +150,12 @@ struct GlassBanner: View {
 
       Spacer(minLength: 0)
     }
-    .glassCard(cornerRadius: 18, padding: 14)
+    .padding(14)
+    .background(tint.opacity(0.08), in: .rect(cornerRadius: 14))
+    .overlay {
+      RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .strokeBorder(tint.opacity(0.18), lineWidth: 1)
+    }
     .focusEffectDisabled()
     .accessibilityElement(children: .combine)
   }
@@ -252,7 +277,7 @@ struct InstallProgressView: View {
   let progress: InstallPresentation.Progress
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: 8) {
       HStack {
         Text(progress.title)
           .font(.subheadline.weight(.semibold))
@@ -262,20 +287,16 @@ struct InstallProgressView: View {
           .foregroundStyle(.secondary)
       }
 
-      GlassEffectContainer(spacing: 4) {
-        HStack(spacing: 4) {
-          ForEach(1...progress.totalSteps, id: \.self) { step in
-            Capsule(style: .continuous)
-              .fill(step <= progress.currentStep ? Color.accentColor : Color.primary.opacity(0.08))
-              .frame(height: 6)
-              .if(step <= progress.currentStep) {
-                $0.glassEffect(.regular, in: .capsule)
-              }
-          }
-        }
-      }
+      ProgressView(value: Double(progress.currentStep), total: Double(progress.totalSteps))
+        .progressViewStyle(.linear)
+        .tint(.accentColor)
     }
-    .glassCard(cornerRadius: 18, padding: 14)
+    .padding(12)
+    .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 14))
+    .overlay {
+      RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+    }
     .focusEffectDisabled()
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(progress.title), step \(progress.currentStep) of \(progress.totalSteps)")
@@ -349,8 +370,8 @@ struct AppContextMenuItems: View {
 
 // MARK: - Adaptive Material Modifier
 
-/// Replaces `.ultraThinMaterial` with a solid background when the user
-/// has enabled Reduce Transparency in System Settings.
+/// Provides a restrained system material, with a solid fallback when the
+/// user has enabled Reduce Transparency in System Settings.
 struct AdaptiveMaterialModifier: ViewModifier {
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -358,7 +379,7 @@ struct AdaptiveMaterialModifier: ViewModifier {
     if reduceTransparency {
       content.background(Color(nsColor: .windowBackgroundColor))
     } else {
-      content.background(.ultraThinMaterial)
+      content.background(.regularMaterial)
     }
   }
 }

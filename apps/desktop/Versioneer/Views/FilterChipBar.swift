@@ -35,7 +35,7 @@ struct FilterChipBar: View {
       }
     }
     .padding(.horizontal, 16)
-    .padding(.vertical, 10)
+    .padding(.vertical, 9)
     .adaptiveMaterial()
     .overlay(alignment: .bottom) {
       Divider()
@@ -62,17 +62,21 @@ struct FilterChipBar: View {
         Text("\(count)")
           .font(.caption.monospacedDigit().weight(.medium))
           .foregroundStyle(
-            isSelected ? Color.accentColor.opacity(0.75) : Color.secondary.opacity(0.65))
+            isSelected ? Color.accentColor.opacity(0.8) : Color.secondary.opacity(0.65))
       }
       .fixedSize(horizontal: true, vertical: false)
       .padding(.horizontal, 10)
-      .padding(.vertical, 6)
+      .padding(.vertical, 5)
       .background(
         isSelected
-          ? Color.accentColor.opacity(0.18)
-          : (hoveredSection == section ? Color.primary.opacity(0.06) : Color.clear),
+          ? Color.accentColor.opacity(0.14)
+          : (hoveredSection == section ? Color.primary.opacity(0.045) : Color.clear),
         in: .capsule
       )
+      .overlay {
+        Capsule(style: .continuous)
+          .strokeBorder(isSelected ? Color.accentColor.opacity(0.18) : .clear, lineWidth: 1)
+      }
     }
     .buttonStyle(.plain)
     .onHover { isHovered in hoveredSection = isHovered ? section : nil }

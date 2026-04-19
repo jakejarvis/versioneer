@@ -35,7 +35,7 @@ struct AppListRowView: View {
       VStack(alignment: .leading, spacing: 2) {
         HStack(spacing: 5) {
           Text(row.appName)
-            .font(.body.weight(.semibold))
+            .font(.body.weight(.medium))
             .lineLimit(1)
             .truncationMode(.tail)
 
@@ -59,10 +59,10 @@ struct AppListRowView: View {
         .fixedSize()
         .motionAwareAnimation(.spring(duration: 0.25), value: installState.phase)
     }
-    .padding(.vertical, 8)
-    .padding(.horizontal, 4)
+    .padding(.vertical, 7)
+    .padding(.horizontal, 6)
     .background(
-      isHovered && !isSelected ? Color.primary.opacity(0.06) : .clear,
+      isHovered && !isSelected ? Color.primary.opacity(0.045) : .clear,
       in: .rect(cornerRadius: 8)
     )
     .contentShape(Rectangle())
@@ -88,7 +88,7 @@ struct AppListRowView: View {
       }
     }
     .aspectRatio(contentMode: .fit)
-    .frame(width: 36, height: 36)
+    .frame(width: 32, height: 32)
   }
 
   // MARK: - Context Menu
