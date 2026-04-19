@@ -10,37 +10,30 @@ struct FilterChipBar: View {
   private let chipRailFadeWidth: CGFloat = 18
 
   var body: some View {
-    HStack(spacing: 12) {
-      ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 4) {
-          ForEach(AppState.FilterSection.allCases) { section in
-            filterChip(for: section)
-          }
+    ScrollView(.horizontal, showsIndicators: false) {
+      HStack(spacing: 4) {
+        ForEach(AppState.FilterSection.allCases) { section in
+          filterChip(for: section)
         }
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .mask(chipRailMask)
-      .onScrollGeometryChange(
-        for: FilterChipRailMaskState.self,
-        of: { geometry in
-          FilterChipRailMaskState(geometry: geometry)
-        },
-        action: { _, newState in
-          chipRailMaskState = newState
-        }
-      )
-
-      if appState.filterPresentation.showUpdateAll {
-        updateAllButton
       }
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .mask(chipRailMask)
+    .onScrollGeometryChange(
+      for: FilterChipRailMaskState.self,
+      of: { geometry in
+        FilterChipRailMaskState(geometry: geometry)
+      },
+      action: { _, newState in
+        chipRailMaskState = newState
+      }
+    )
     .padding(.horizontal, 16)
     .padding(.vertical, 9)
     .adaptiveMaterial()
     .overlay(alignment: .bottom) {
       Divider()
     }
-    .motionAwareAnimation(.spring(duration: 0.25), value: appState.filterPresentation.showUpdateAll)
   }
 
   private func filterChip(for section: AppState.FilterSection) -> some View {
@@ -83,31 +76,6 @@ struct FilterChipBar: View {
     .foregroundStyle(isSelected ? Color.accentColor : .secondary)
     .accessibilityLabel("\(section.shortTitle), \(count) apps")
     .accessibilityAddTraits(isSelected ? .isSelected : [])
-  }
-
-  private var updateAllButton: some View {
-    Button {
-      Task { await appState.installAll() }
-    } label: {
-      ViewThatFits(in: .horizontal) {
-        Label("Update All", systemImage: "arrow.down.circle")
-        Text("Update All")
-        Image(systemName: "arrow.down.circle")
-      }
-      .font(.caption.weight(.semibold))
-      .lineLimit(1)
-    }
-    .buttonStyle(.glass)
-    .controlSize(.small)
-    .fixedSize(horizontal: true, vertical: false)
-    .layoutPriority(1)
-    .help("Update all \(appState.filterPresentation.updateAllCount) apps")
-    .accessibilityLabel("Update all \(appState.filterPresentation.updateAllCount) apps")
-    .transition(
-      .motionAware(
-        .opacity.combined(with: .scale(scale: 0.9)),
-        reduceMotion: reduceMotion
-      ))
   }
 
   private var chipRailMask: some View {

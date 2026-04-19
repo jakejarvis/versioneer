@@ -19,32 +19,7 @@ struct RootView: View {
         .motionAwareAnimation(.easeInOut(duration: 0.2), value: appState.selectedAppID)
     }
     .navigationSplitViewStyle(.balanced)
-    .toolbar {
-      ToolbarItemGroup(placement: .primaryAction) {
-        Picker(
-          "Sort",
-          selection: Binding(
-            get: { appState.resultsSort },
-            set: { appState.setResultsSort($0) }
-          )
-        ) {
-          ForEach(ResultsBrowserSort.allCases) { sort in
-            Text(sort.title).tag(sort)
-          }
-        }
-        .pickerStyle(.menu)
-        .help("Sort order")
-
-        Button {
-          Task { await appState.scanAndSubmit() }
-        } label: {
-          Label("Refresh", systemImage: "arrow.clockwise")
-        }
-        .disabled(appState.loadState == .scanning || appState.loadState == .submitting)
-        .help("Refresh (⌘R)")
-        .accessibilityLabel("Refresh")
-      }
-    }
+    .toolbar(removing: .sidebarToggle)
     .searchable(text: $searchInput, placement: .sidebar, prompt: "Filter apps")
     .onChange(of: searchInput) { _, newValue in
       searchDebounceTask?.cancel()

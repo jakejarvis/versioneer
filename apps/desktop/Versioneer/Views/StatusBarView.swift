@@ -15,9 +15,16 @@ struct StatusBarView: View {
         Text(presentation.lastCheckedText)
       }
 
+      refreshButton(isScanning: presentation.isScanning)
+
       Spacer()
 
       Text(presentation.appCountText)
+
+      Text("·")
+        .foregroundStyle(.tertiary)
+
+      sortMenu
     }
     .font(.caption)
     .foregroundStyle(.secondary)
@@ -28,5 +35,48 @@ struct StatusBarView: View {
       Divider()
     }
     .motionAwareAnimation(.easeInOut(duration: 0.2), value: presentation.isScanning)
+  }
+
+  private func refreshButton(isScanning: Bool) -> some View {
+    Button {
+      Task { await appState.scanAndSubmit() }
+    } label: {
+      Image(systemName: "arrow.clockwise")
+        .font(.caption.weight(.semibold))
+        .frame(width: 14, height: 14)
+    }
+    .buttonStyle(.plain)
+    .disabled(isScanning)
+    .help("Refresh (⌘R)")
+    .accessibilityLabel("Refresh")
+  }
+
+  private var sortMenu: some View {
+    Menu {
+      ForEach(ResultsBrowserSort.allCases) { sort in
+        Button {
+          appState.setResultsSort(sort)
+        } label: {
+          if appState.resultsSort == sort {
+            Label(sort.title, systemImage: "checkmark")
+          } else {
+            Text(sort.title)
+          }
+        }
+      }
+    } label: {
+      HStack(spacing: 3) {
+        Text(appState.resultsSort.title)
+          .lineLimit(1)
+        Image(systemName: "chevron.up.chevron.down")
+          .font(.caption2.weight(.semibold))
+      }
+    }
+    .menuStyle(.button)
+    .buttonStyle(.plain)
+    .fixedSize()
+    .help("Sort: \(appState.resultsSort.title)")
+    .accessibilityLabel("Sort")
+    .accessibilityValue(appState.resultsSort.title)
   }
 }
