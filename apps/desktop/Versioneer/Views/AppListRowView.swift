@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct AppListRowView: View {
@@ -36,26 +37,33 @@ struct AppListRowView: View {
         HStack(spacing: 5) {
           Text(row.appName)
             .font(.body.weight(.medium))
+            .foregroundStyle(primaryTextStyle)
             .lineLimit(1)
             .truncationMode(.tail)
 
           if let result, appState.isHomebrewInstalled(for: result) {
             Image(systemName: "mug.fill")
               .font(.caption2)
-              .foregroundStyle(.secondary)
+              .foregroundStyle(secondaryTextStyle)
               .help("Installed via Homebrew")
               .accessibilityLabel("Installed via Homebrew")
           }
         }
 
-        AppListRowSubtitle(row: row, installState: installState)
+        AppListRowSubtitle(row: row, installState: installState, isSelected: isSelected)
           .motionAwareAnimation(.spring(duration: 0.25), value: installState.phase)
       }
       .layoutPriority(1)
 
       Spacer(minLength: 4)
 
-      AppListRowTrailingContent(row: row, result: result, installState: installState)
+      AppListRowTrailingContent(
+        row: row,
+        result: result,
+        installState: installState,
+        isSelected: isSelected,
+        isRowHovered: isHovered
+      )
         .fixedSize()
         .motionAwareAnimation(.spring(duration: 0.25), value: installState.phase)
     }
@@ -74,6 +82,14 @@ struct AppListRowView: View {
         rowContextMenu(for: result)
       }
     }
+  }
+
+  private var primaryTextStyle: Color {
+    isSelected ? Color(nsColor: .selectedControlTextColor) : Color.primary
+  }
+
+  private var secondaryTextStyle: Color {
+    isSelected ? Color(nsColor: .selectedControlTextColor).opacity(0.76) : Color.secondary
   }
 
   private var appIcon: some View {
@@ -148,6 +164,7 @@ struct AppListRowView: View {
 private struct AppListRowSubtitle: View {
   let row: ResultsBrowserRowPresentation
   let installState: InstallCoordinator.OperationState
+  let isSelected: Bool
 
   @ViewBuilder
   var body: some View {
@@ -155,6 +172,7 @@ private struct AppListRowSubtitle: View {
       HStack(spacing: 6) {
         ProgressView()
           .controlSize(.mini)
+          .tint(runningStyle)
         Text(
           installState.detail.isEmpty
             ? installState.phase.rawValue.capitalized : installState.detail
@@ -162,19 +180,31 @@ private struct AppListRowSubtitle: View {
         .lineLimit(1)
       }
       .font(.caption)
-      .foregroundStyle(Color.accentColor)
+      .foregroundStyle(runningStyle)
       .transition(.opacity)
     } else if let versionDiff = row.versionDiffText {
       Text(versionDiff)
         .font(.footnote.monospacedDigit())
-        .foregroundStyle(Color.accentColor)
+        .foregroundStyle(versionDiffStyle)
         .lineLimit(1)
     } else {
       Text(row.installedVersionText)
         .font(.footnote.monospacedDigit())
-        .foregroundStyle(.secondary)
+        .foregroundStyle(secondaryStyle)
         .lineLimit(1)
     }
+  }
+
+  private var runningStyle: Color {
+    isSelected ? Color(nsColor: .selectedControlTextColor) : Color.accentColor
+  }
+
+  private var versionDiffStyle: Color {
+    isSelected ? Color(nsColor: .selectedControlTextColor).opacity(0.82) : Color.accentColor
+  }
+
+  private var secondaryStyle: Color {
+    isSelected ? Color(nsColor: .selectedControlTextColor).opacity(0.72) : Color.secondary
   }
 }
 
@@ -187,45 +217,92 @@ private struct AppListRowTrailingContent: View {
   let row: ResultsBrowserRowPresentation
   let result: AppDecision?
   let installState: InstallCoordinator.OperationState
+  let isSelected: Bool
+  let isRowHovered: Bool
+
+  private var showsInlineAction: Bool {
+    isSelected || isRowHovered
+  }
 
   @ViewBuilder
   var body: some View {
     if installState.isRunning {
       StatusChip(
         title: installState.phase.rawValue.capitalized,
-        tint: .accentColor,
+        tint: statusTint(.accentColor),
         showsProgress: true
       )
       .transition(.motionAware(.opacity.combined(with: .scale), reduceMotion: reduceMotion))
     } else if installState.phase == .completed {
       StatusChip(
         title: "Updated",
-        tint: .green,
+        tint: statusTint(.green),
         systemImage: "checkmark.circle.fill"
       )
       .transition(.motionAware(.scale.combined(with: .opacity), reduceMotion: reduceMotion))
     } else if installState.phase == .failed {
       StatusChip(
         title: "Failed",
-        tint: .red,
+        tint: statusTint(.red),
         systemImage: "xmark.circle.fill"
       )
     } else if row.hasUpdateAction && row.isUpdateAvailable, let result {
-      Button {
-        Task { await appState.performPrimaryUpdate(for: result) }
-      } label: {
-        Text(appState.primaryActionCompactTitle(for: result))
-          .font(.caption.weight(.semibold))
+      if showsInlineAction {
+        Button {
+          Task { await appState.performPrimaryUpdate(for: result) }
+        } label: {
+          Text(appState.primaryActionCompactTitle(for: result))
+            .font(.caption.weight(.semibold))
+        }
+        .buttonStyle(SidebarRowActionButtonStyle(isSelected: isSelected))
+        .accessibilityLabel("\(appState.primaryActionTitle(for: result)) \(row.appName)")
+        .transition(.motionAware(.opacity.combined(with: .scale(scale: 0.96)), reduceMotion: reduceMotion))
       }
-      .buttonStyle(.glass)
-      .controlSize(.small)
-      .accessibilityLabel("\(appState.primaryActionTitle(for: result)) \(row.appName)")
     } else {
       StatusChip(
         title: row.statusText,
-        tint: row.statusTone.color,
+        tint: statusTint(row.statusTone.color),
         systemImage: row.statusSystemImage
       )
     }
+  }
+
+  private func statusTint(_ tint: Color) -> Color {
+    isSelected ? Color(nsColor: .selectedControlTextColor) : tint
+  }
+}
+
+private struct SidebarRowActionButtonStyle: ButtonStyle {
+  let isSelected: Bool
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .lineLimit(1)
+      .foregroundStyle(foregroundStyle)
+      .padding(.horizontal, 9)
+      .padding(.vertical, 4)
+      .background(backgroundColor(isPressed: configuration.isPressed), in: .capsule)
+      .overlay {
+        Capsule(style: .continuous)
+          .strokeBorder(borderColor, lineWidth: 0.5)
+      }
+      .contentShape(Capsule(style: .continuous))
+  }
+
+  private var foregroundStyle: Color {
+    isSelected ? Color(nsColor: .selectedControlTextColor) : Color.primary
+  }
+
+  private func backgroundColor(isPressed: Bool) -> Color {
+    if isSelected {
+      return Color(nsColor: .selectedControlTextColor).opacity(isPressed ? 0.28 : 0.18)
+    }
+    return Color.primary.opacity(isPressed ? 0.12 : 0.075)
+  }
+
+  private var borderColor: Color {
+    isSelected
+      ? Color(nsColor: .selectedControlTextColor).opacity(0.24)
+      : Color.primary.opacity(0.08)
   }
 }
