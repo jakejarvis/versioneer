@@ -24,7 +24,7 @@
   "dependencies": {
     "@versioneer/db": "workspace:*",
     "@versioneer/schemas": "workspace:*",
-    "@xmldom/xmldom": "^0.9.9",
+    "@xmldom/xmldom": "^0.9.10",
     "cheerio": "^1.2.0",
     "dom-serializer": "^3.0.0",
     "domhandler": "^6.0.1",
@@ -32,12 +32,12 @@
     "drizzle-orm": "catalog:",
     "htmlparser2": "^12.0.0",
     "jsonpath-plus": "^10.4.0",
-    "marked": "^18.0.0",
+    "marked": "^18.0.2",
     "xpath": "^0.0.34",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260405.1",
+    "@cloudflare/workers-types": "^4.20260418.1",
     "@versioneer/tsconfig": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"

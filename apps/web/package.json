@@ -18,20 +18,20 @@
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource-variable/geist-mono": "^5.2.7",
-    "@tanstack/react-router": "^1.168.10",
+    "@tanstack/react-router": "^1.168.23",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.7.0",
+    "lucide-react": "^1.8.0",
     "radix-ui": "^1.4.3",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "shadcn": "^4.2.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "shadcn": "^4.3.0",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
-    "@rolldown/plugin-babel": "^0.2.2",
+    "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.2.2",
-    "@tanstack/router-plugin": "^1.167.12",
+    "@tanstack/router-plugin": "^1.167.22",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@versioneer/tsconfig": "workspace:*",
@@ -39,7 +39,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "tailwindcss": "^4.2.2",
     "typescript": "catalog:",
-    "vite": "^8.0.7",
+    "vite": "^8.0.8",
     "wrangler": "catalog:"
   }
 }
