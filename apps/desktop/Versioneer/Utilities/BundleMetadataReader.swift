@@ -114,9 +114,9 @@ nonisolated enum BundleMetadataReader {
   nonisolated private static func validatedUrl(_ raw: String?) -> String? {
     guard let raw, !raw.isEmpty else { return nil }
     guard let url = URL(string: raw),
-          let scheme = url.scheme,
-          !scheme.isEmpty,
-          url.host != nil
+      let scheme = url.scheme,
+      !scheme.isEmpty,
+      url.host != nil
     else { return nil }
     return raw
   }

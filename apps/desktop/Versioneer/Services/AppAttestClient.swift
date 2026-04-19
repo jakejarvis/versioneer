@@ -49,7 +49,8 @@ actor AppAttestClient: TokenProvider {
     do {
       return try await performAttestation()
     } catch {
-      Logger.attest.warning("Attestation unavailable, continuing without auth: \(error.localizedDescription)")
+      Logger.attest.warning(
+        "Attestation unavailable, continuing without auth: \(error.localizedDescription)")
       return nil
     }
   }
@@ -82,14 +83,15 @@ actor AppAttestClient: TokenProvider {
 
     let attestation = try await service.attestKey(keyId, clientDataHash: clientDataHash)
 
-    let response = try await postJSON(
-      path: "v1/attest",
-      body: AttestRequest(
-        keyId: keyId,
-        attestation: attestation.base64EncodedString(),
-        challenge: challenge
-      )
-    ) as AttestResponse
+    let response =
+      try await postJSON(
+        path: "v1/attest",
+        body: AttestRequest(
+          keyId: keyId,
+          attestation: attestation.base64EncodedString(),
+          challenge: challenge
+        )
+      ) as AttestResponse
 
     cachedKeyId = keyId
     cachedToken = response.token
@@ -110,14 +112,15 @@ actor AppAttestClient: TokenProvider {
 
     let assertion = try await service.generateAssertion(keyId, clientDataHash: clientDataHash)
 
-    let response = try await postJSON(
-      path: "v1/attest/refresh",
-      body: AttestRefreshRequest(
-        keyId: keyId,
-        assertion: assertion.base64EncodedString(),
-        challenge: challenge
-      )
-    ) as AttestResponse
+    let response =
+      try await postJSON(
+        path: "v1/attest/refresh",
+        body: AttestRefreshRequest(
+          keyId: keyId,
+          assertion: assertion.base64EncodedString(),
+          challenge: challenge
+        )
+      ) as AttestResponse
 
     cachedToken = response.token
     Self.saveKeychain(account: Self.tokenAccount, value: response.token)
@@ -161,7 +164,8 @@ actor AppAttestClient: TokenProvider {
 
   /// Converts a base64url string (used in JWTs) to standard base64 with padding.
   nonisolated private static func base64urlToBase64(_ string: String) -> String {
-    var result = string
+    var result =
+      string
       .replacingOccurrences(of: "-", with: "+")
       .replacingOccurrences(of: "_", with: "/")
     let remainder = result.count % 4

@@ -11,20 +11,15 @@ struct DetailPaneView: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 18) {
-        DetailHeroSection(result: result)
-
-        DetailPrimaryActionSection(
+      VStack(alignment: .leading, spacing: 22) {
+        DetailSummaryPanel(
           result: result,
+          showFeedbackSheet: $showFeedbackSheet,
           showInstallWarning: $showInstallWarning,
           showBrewBypassWarning: $showBrewBypassWarning
         )
 
-        DetailQuickActionsSection(
-          result: result,
-          showFeedbackSheet: $showFeedbackSheet
-        )
-
+        DetailFactsSection(result: result)
         DetailReleaseNotesSection(result: result)
       }
       .padding(24)
@@ -58,12 +53,50 @@ struct DetailPaneView: View {
   }
 }
 
-// MARK: - Hero Section
+// MARK: - Summary Panel
 
-private struct DetailHeroSection: View {
+private struct DetailSummaryPanel: View {
   @Environment(AppState.self) private var appState
+  @Environment(InstallCoordinator.self) private var installCoordinator
+  @Environment(\.undoManager) private var undoManager
 
   let result: AppDecision
+
+  @Binding var showFeedbackSheet: Bool
+  @Binding var showInstallWarning: Bool
+  @Binding var showBrewBypassWarning: Bool
+
+  private var installState: InstallCoordinator.OperationState {
+    installCoordinator.state(for: result)
+  }
+
+  private var installPresentation: InstallPresentation {
+    InstallPresentation.make(result: result, state: installState)
+  }
+
+  private var installedApp: InstalledApp? {
+    appState.installedApp(for: result)
+  }
+
+  private var isUserIgnored: Bool {
+    appState.isUserIgnored(result)
+  }
+
+  private var isBrewApp: Bool {
+    appState.isHomebrewInstalled(for: result)
+  }
+
+  private var isMasUpgradeable: Bool {
+    appState.isMasUpgradeable(for: result)
+  }
+
+  private var hasAppPath: Bool {
+    appState.appPathText(for: result) != nil
+  }
+
+  private var manualUpdateAction: (title: String, detail: String, url: URL)? {
+    appState.manualUpdateAction(for: result)
+  }
 
   private var decisionTitle: String {
     if result.isLocalOnly {
@@ -102,257 +135,27 @@ private struct DetailHeroSection: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      HStack(alignment: .top, spacing: 16) {
-        Image(nsImage: appState.appIcon(for: result))
-          .resizable()
-          .aspectRatio(contentMode: .fit)
-          .frame(width: 56, height: 56)
-
-        VStack(alignment: .leading, spacing: 6) {
-          Text(result.matchedAppName ?? result.appName)
-            .font(.title3.weight(.semibold))
-            .lineLimit(2)
-
-          if result.decision == .updateAvailable,
-            let installed = result.installedVersion,
-            let latest = result.latestVersion
-          {
-            VersionDiffLabel(
-              installed: VersionFormatting.displayVersion(installed),
-              latest: VersionFormatting.displayVersion(latest)
-            )
-          } else {
-            Text(VersionFormatting.displayVersion(result.installedVersion))
-              .font(.callout.monospacedDigit())
-              .foregroundStyle(.secondary)
-          }
+    VStack(alignment: .leading, spacing: 16) {
+      ViewThatFits(in: .horizontal) {
+        HStack(alignment: .top, spacing: 18) {
+          identityBlock
+          Spacer(minLength: 16)
+          actionCluster
         }
 
-        Spacer(minLength: 0)
-
-        MetadataPopoverButton(result: result)
-      }
-
-      HStack(spacing: 8) {
-        StatusChip(
-          title: decisionTitle,
-          tint: decisionTint,
-          systemImage: decisionSymbol
-        )
-
-        if appState.isHomebrewInstalled(for: result) {
-          StatusChip(
-            title: "Homebrew",
-            tint: .green,
-            systemImage: "mug.fill"
-          )
-        }
-
-        if result.matchedAppId != nil {
-          ChannelPicker(result: result)
-        }
-
-        if let confidence = result.matchConfidence {
-          StatusChip(
-            title: VersionFormatting.confidenceLabel(confidence),
-            tint: .secondary,
-            systemImage: "scope"
-          )
-        }
-
-        if let releasedAt = result.releasedAt {
-          Text(VersionFormatting.relativeDate(from: releasedAt))
-            .font(.caption)
-            .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 16) {
+          identityBlock
+          actionCluster
         }
       }
 
-      if result.isLocalOnly {
-        GlassBanner(
-          title: result.localOnlyStatusTitle,
-          detail: result.localOnlyDescription,
-          tint: result.decision == .updateAvailable ? .orange : .secondary
-        )
-      }
-    }
-    .contextMenu {
-      AppContextMenuItems(result: result)
-    }
-  }
-}
-
-// MARK: - Primary Action Section
-
-private struct DetailPrimaryActionSection: View {
-  @Environment(AppState.self) private var appState
-  @Environment(InstallCoordinator.self) private var installCoordinator
-  @Environment(\.undoManager) private var undoManager
-
-  let result: AppDecision
-
-  @Binding var showInstallWarning: Bool
-  @Binding var showBrewBypassWarning: Bool
-
-  private var installState: InstallCoordinator.OperationState {
-    installCoordinator.state(for: result)
-  }
-
-  private var installPresentation: InstallPresentation {
-    InstallPresentation.make(result: result, state: installState)
-  }
-
-  private var isUserIgnored: Bool {
-    appState.isUserIgnored(result)
-  }
-
-  private var isBrewApp: Bool {
-    appState.isHomebrewInstalled(for: result)
-  }
-
-  private var isMasUpgradeable: Bool {
-    appState.isMasUpgradeable(for: result)
-  }
-
-  private var manualUpdateAction: (title: String, detail: String, url: URL)? {
-    appState.manualUpdateAction(for: result)
-  }
-
-  @ViewBuilder
-  var body: some View {
-    if isUserIgnored {
-      ignoredActionCard
-    } else if isMasUpgradeable && result.decision == .updateAvailable {
-      masUpgradeCard
-    } else if isBrewApp && result.decision == .updateAvailable {
-      brewUpgradeCard
-    } else if result.canInstall {
-      standardInstallCard
-    } else if let action = manualUpdateAction, result.decision == .updateAvailable {
-      manualUpdateCard(action: action)
-    } else if result.decision == .updateAvailable {
-      unavailableInstallCard
-    }
-  }
-
-  // MARK: - Action Cards
-
-  private var ignoredActionCard: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      SectionHeader(
-        title: "Ignored",
-        subtitle:
-          "This app stays out of normal result sections and bulk updates until you remove its rule."
-      )
-
-      Button("Stop Ignoring") {
-        appState.unignore(result, undoManager: undoManager)
-      }
-      .buttonStyle(.glassProminent)
-      .controlSize(.large)
-    }
-    .glassCard(interactive: true, cornerRadius: 18, padding: 16)
-  }
-
-  private var masUpgradeCard: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      ActionCardStatusSection(
-        installState: installState,
-        installPresentation: installPresentation,
-        sourceLabel: "Mac App Store"
-      )
-
-      Button {
-        Task { await appState.masUpgrade(result) }
-      } label: {
-        Label("Update via Mac App Store", systemImage: "apple.logo")
-          .font(.body.weight(.semibold))
-          .frame(maxWidth: .infinity)
-      }
-      .buttonStyle(.glassProminent)
-      .controlSize(.large)
-      .disabled(installState.isRunning)
-
-      Label(
-        "Updating through the Mac App Store keeps store metadata in sync.",
-        systemImage: "info.circle"
-      )
-      .font(.caption)
-      .foregroundStyle(.secondary)
-    }
-    .glassCard(interactive: true, cornerRadius: 18, padding: 16)
-  }
-
-  private var brewUpgradeCard: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      ActionCardStatusSection(
-        installState: installState,
-        installPresentation: installPresentation,
-        sourceLabel: "Homebrew"
-      )
-
-      Button {
-        Task { await appState.brewUpgrade(result) }
-      } label: {
-        Label("Update via Homebrew", systemImage: "mug.fill")
-          .font(.body.weight(.semibold))
-          .frame(maxWidth: .infinity)
-      }
-      .buttonStyle(.glassProminent)
-      .controlSize(.large)
-      .disabled(installState.isRunning)
-
-      if result.canInstall {
-        Button {
-          showBrewBypassWarning = true
-        } label: {
-          Text("Install directly instead")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        .buttonStyle(.link)
+      if installState.isRunning, let progress = installPresentation.progress {
+        DetailInlineProgressView(progress: progress, detail: installPresentation.statusDetail)
       }
 
-      Label(
-        "Updating through Homebrew keeps cask metadata in sync.",
-        systemImage: "info.circle"
-      )
-      .font(.caption)
-      .foregroundStyle(.secondary)
-    }
-    .glassCard(interactive: true, cornerRadius: 18, padding: 16)
-  }
-
-  private var standardInstallCard: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      ForEach(installPresentation.banners) { banner in
-        GlassBanner(
-          title: banner.title,
-          detail: banner.detail,
-          tint: tint(for: banner.tone)
-        )
+      if !callouts.isEmpty {
+        DetailCalloutGroup(callouts: callouts)
       }
-
-      if let progress = installPresentation.progress {
-        InstallProgressView(progress: progress)
-      }
-
-      if let statusDetail = installPresentation.statusDetail,
-        !statusDetail.isEmpty
-      {
-        Text(statusDetail)
-          .font(.callout)
-          .foregroundStyle(.secondary)
-      }
-
-      Button(action: handlePrimaryInstallAction) {
-        Text(installPresentation.primaryActionTitle)
-          .font(.body.weight(.semibold))
-          .frame(maxWidth: .infinity)
-      }
-      .buttonStyle(.glassProminent)
-      .controlSize(.large)
-      .disabled(installPresentation.primaryActionDisabled)
 
       if let recoveryAction = installPresentation.recoveryAction {
         Button(installCoordinator.recoveryActionTitle(recoveryAction)) {
@@ -360,187 +163,654 @@ private struct DetailPrimaryActionSection: View {
         }
         .buttonStyle(.link)
       }
+    }
+    .glassCard(interactive: true, cornerRadius: 18, padding: 18)
+    .contextMenu {
+      AppContextMenuItems(result: result)
+    }
+  }
 
-      if !installPresentation.trustSummary.isEmpty {
-        VStack(alignment: .leading, spacing: 6) {
-          ForEach(installPresentation.trustSummary, id: \.self) { item in
-            Label(item, systemImage: "checkmark.seal")
-              .font(.caption)
-              .foregroundStyle(.secondary)
+  private var identityBlock: some View {
+    HStack(alignment: .top, spacing: 16) {
+      Image(nsImage: appState.appIcon(for: result))
+        .resizable()
+        .aspectRatio(contentMode: .fit)
+        .frame(width: 60, height: 60)
+
+      VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 5) {
+          Text(result.matchedAppName ?? result.appName)
+            .font(.title2.weight(.semibold))
+            .lineLimit(2)
+
+          versionLine
+        }
+
+        statusRow
+      }
+      .layoutPriority(1)
+    }
+  }
+
+  @ViewBuilder
+  private var versionLine: some View {
+    if result.decision == .updateAvailable,
+      let installed = result.installedVersion,
+      let latest = result.latestVersion
+    {
+      VersionDiffLabel(
+        installed: VersionFormatting.displayVersion(installed),
+        latest: VersionFormatting.displayVersion(latest)
+      )
+    } else {
+      Text(VersionFormatting.displayVersion(result.installedVersion))
+        .font(.callout.monospacedDigit())
+        .foregroundStyle(.secondary)
+    }
+  }
+
+  private var statusRow: some View {
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: 8) {
+        primaryStatusChips
+        secondaryStatusChips
+      }
+
+      VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 8) {
+          primaryStatusChips
+        }
+
+        if hasSecondaryStatusChips {
+          HStack(spacing: 8) {
+            secondaryStatusChips
           }
         }
       }
     }
-    .glassCard(interactive: true, cornerRadius: 18, padding: 16)
   }
-
-  private func manualUpdateCard(
-    action: (title: String, detail: String, url: URL)
-  ) -> some View {
-    VStack(alignment: .leading, spacing: 14) {
-      SectionHeader(
-        title: "Manual Update",
-        subtitle: action.detail
-      )
-
-      Button {
-        appState.openManualUpdate(result)
-      } label: {
-        Label(action.title, systemImage: "arrow.up.forward.app")
-          .font(.body.weight(.semibold))
-          .frame(maxWidth: .infinity)
-      }
-      .buttonStyle(.glassProminent)
-      .controlSize(.large)
-      .disabled(installState.isRunning)
-
-      Text(action.url.absoluteString)
-        .font(.caption.monospaced())
-        .foregroundStyle(.secondary)
-        .textSelection(.enabled)
-    }
-    .glassCard(interactive: true, cornerRadius: 18, padding: 16)
-  }
-
-  private var unavailableInstallCard: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("Install Unavailable")
-        .font(.subheadline.weight(.semibold))
-      Text(
-        result.installStrategy == nil
-          ? "Versioneer does not currently have an install path for this update."
-          : "Versioneer is ready to run the install flow for this update."
-      )
-      .font(.callout)
-      .foregroundStyle(.secondary)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .glassCard(cornerRadius: 18, padding: 16)
-  }
-
-  // MARK: - Helpers
-
-  private func tint(for tone: InstallPresentation.Tone) -> Color {
-    switch tone {
-    case .neutral: .secondary
-    case .progress: .accentColor
-    case .success: .green
-    case .warning: .orange
-    case .failure: .red
-    }
-  }
-
-  private func handlePrimaryInstallAction() {
-    guard result.canInstall else { return }
-    if !result.isVerified {
-      showInstallWarning = true
-    } else {
-      Task { await appState.install(result) }
-    }
-  }
-}
-
-// MARK: - Action Card Status Section
-
-private struct ActionCardStatusSection: View {
-  let installState: InstallCoordinator.OperationState
-  let installPresentation: InstallPresentation
-  let sourceLabel: String
 
   @ViewBuilder
-  var body: some View {
-    if installState.isRunning {
-      if let progress = installPresentation.progress {
-        InstallProgressView(progress: progress)
+  private var primaryStatusChips: some View {
+    StatusChip(
+      title: decisionTitle,
+      tint: decisionTint,
+      systemImage: decisionSymbol
+    )
+
+    if let sourceChip {
+      StatusChip(
+        title: sourceChip.title,
+        tint: sourceChip.tint,
+        systemImage: sourceChip.systemImage
+      )
+    }
+  }
+
+  @ViewBuilder
+  private var secondaryStatusChips: some View {
+    if result.matchedAppId != nil {
+      ChannelPicker(result: result)
+    }
+
+    if let confidence = result.matchConfidence {
+      StatusChip(
+        title: VersionFormatting.confidenceLabel(confidence),
+        tint: .secondary,
+        systemImage: "scope"
+      )
+    }
+  }
+
+  private var hasSecondaryStatusChips: Bool {
+    result.matchedAppId != nil || result.matchConfidence != nil
+  }
+
+  private var sourceChip: (title: String, tint: Color, systemImage: String)? {
+    if isBrewApp {
+      return ("Homebrew", .green, "mug.fill")
+    }
+    if installedApp?.isMasApp == true {
+      return ("Mac App Store", .secondary, "apple.logo")
+    }
+    return nil
+  }
+
+  private var actionCluster: some View {
+    VStack(alignment: .trailing, spacing: 8) {
+      HStack(spacing: 8) {
+        if showsSecondaryOpenButton {
+          secondaryOpenAppButton
+        }
+
+        moreMenu
+
+        if !installState.isRunning {
+          primaryActionButton
+        }
       }
-      if let statusDetail = installPresentation.statusDetail, !statusDetail.isEmpty {
-        Text(statusDetail)
-          .font(.callout)
+
+      if installState.isRunning {
+        Text(installPresentation.statusTitle ?? installState.phase.rawValue.capitalized)
+          .font(.caption.weight(.semibold))
           .foregroundStyle(.secondary)
       }
     }
+  }
 
+  private var showsSecondaryOpenButton: Bool {
+    !installState.isRunning && hasUpdateAction && hasAppPath && !isUserIgnored
+  }
+
+  private var hasUpdateAction: Bool {
+    result.decision == .updateAvailable
+      && (isMasUpgradeable || isBrewApp || result.canInstall || manualUpdateAction != nil)
+  }
+
+  private var primaryActionTitle: String {
+    if isUserIgnored {
+      return "Stop Ignoring"
+    }
     if installState.phase == .completed {
-      Label("Updated via \(sourceLabel)", systemImage: "checkmark.circle.fill")
-        .font(.callout.weight(.semibold))
-        .foregroundStyle(.green)
-    } else if installState.phase == .failed {
-      VStack(alignment: .leading, spacing: 4) {
-        Label("\(sourceLabel) upgrade failed", systemImage: "xmark.circle.fill")
-          .font(.callout.weight(.semibold))
-          .foregroundStyle(.red)
-        if let error = installState.errorMessage {
-          Text(error)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .textSelection(.enabled)
-        }
-      }
+      return "Open App"
     }
-  }
-}
-
-// MARK: - Actions Section
-
-private struct DetailQuickActionsSection: View {
-  @Environment(AppState.self) private var appState
-
-  let result: AppDecision
-
-  @Binding var showFeedbackSheet: Bool
-
-  private var hasAppPath: Bool {
-    appState.appPathText(for: result) != nil
-  }
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      SectionHeader(title: "Actions")
-
-      ViewThatFits(in: .horizontal) {
-        HStack(spacing: 10) {
-          openAppButton
-          showInFinderButton
-          reportIssueButton
-        }
-
-        VStack(alignment: .leading, spacing: 10) {
-          openAppButton
-          showInFinderButton
-          reportIssueButton
-        }
-      }
+    if installState.phase == .failed && hasUpdateAction {
+      return "Retry Install"
     }
-    .glassCard(cornerRadius: 18, padding: 16)
+    if result.decision == .updateAvailable {
+      if isMasUpgradeable {
+        return "Update via Mac App Store"
+      }
+      if isBrewApp {
+        return "Update via Homebrew"
+      }
+      if result.canInstall {
+        return installPresentation.primaryActionTitle
+      }
+      if let manualUpdateAction {
+        return manualUpdateAction.title
+      }
+      return "Install Unavailable"
+    }
+    return "Open App"
   }
 
-  private var openAppButton: some View {
+  private var primaryActionSystemImage: String {
+    if isUserIgnored {
+      return "minus.circle"
+    }
+    if installState.phase == .failed && hasUpdateAction {
+      return "arrow.clockwise"
+    }
+    if installState.phase == .completed || result.decision != .updateAvailable {
+      return "macwindow"
+    }
+    if isMasUpgradeable {
+      return "apple.logo"
+    }
+    if isBrewApp {
+      return "mug.fill"
+    }
+    if manualUpdateAction != nil && !result.canInstall {
+      return "arrow.up.forward.app"
+    }
+    return "arrow.down.circle"
+  }
+
+  private var primaryActionDisabled: Bool {
+    if isUserIgnored {
+      return false
+    }
+    if installState.isRunning {
+      return true
+    }
+    if installState.phase == .failed {
+      return !hasUpdateAction
+    }
+    if installState.phase == .completed || result.decision != .updateAvailable {
+      return !hasAppPath
+    }
+    if result.decision == .updateAvailable {
+      return !(isMasUpgradeable || isBrewApp || result.canInstall || manualUpdateAction != nil)
+    }
+    return false
+  }
+
+  private var primaryActionButton: some View {
+    Button(action: performPrimaryAction) {
+      Label(primaryActionTitle, systemImage: primaryActionSystemImage)
+        .font(.body.weight(.semibold))
+        .lineLimit(1)
+        .frame(minWidth: 150)
+    }
+    .buttonStyle(.glassProminent)
+    .controlSize(.large)
+    .disabled(primaryActionDisabled)
+  }
+
+  private var secondaryOpenAppButton: some View {
     Button {
       appState.openApp(result)
     } label: {
       Label("Open App", systemImage: "macwindow")
+        .lineLimit(1)
+        .font(.callout.weight(.medium))
     }
     .buttonStyle(.glass)
+    .controlSize(.regular)
     .disabled(!hasAppPath)
   }
 
-  private var showInFinderButton: some View {
-    Button {
-      appState.revealAppInFinder(result)
+  private var moreMenu: some View {
+    Menu {
+      Button("Show in Finder") {
+        appState.revealAppInFinder(result)
+      }
+      .disabled(!hasAppPath)
+
+      Button("Report Issue") {
+        showFeedbackSheet = true
+      }
+
+      Divider()
+
+      Button("Copy Bundle ID") {
+        appState.copyBundleId(result)
+      }
+      .disabled(appState.bundleIdText(for: result) == nil)
+
+      Button("Copy Path") {
+        appState.copyAppPath(result)
+      }
+      .disabled(!hasAppPath)
+
+      if isBrewApp && result.canInstall && result.decision == .updateAvailable {
+        Divider()
+
+        Button("Install Directly…") {
+          showBrewBypassWarning = true
+        }
+        .disabled(installState.isRunning)
+      }
     } label: {
-      Label("Show in Finder", systemImage: "folder")
+      Label("More", systemImage: "ellipsis.circle")
+        .labelStyle(.iconOnly)
+        .frame(width: 26, height: 22)
     }
+    .menuStyle(.button)
     .buttonStyle(.glass)
-    .disabled(!hasAppPath)
+    .controlSize(.regular)
+    .help("More actions")
+    .accessibilityLabel("More actions")
   }
 
-  private var reportIssueButton: some View {
-    Button {
-      showFeedbackSheet = true
-    } label: {
-      Label("Report Issue", systemImage: "exclamationmark.bubble")
+  private var callouts: [DetailCallout] {
+    var callouts: [DetailCallout] = []
+
+    if isUserIgnored {
+      callouts.append(
+        DetailCallout(
+          id: "ignored",
+          title: "Ignored",
+          detail: "This app stays out of normal result sections and bulk updates.",
+          tone: .neutral
+        )
+      )
     }
-    .buttonStyle(.glass)
+
+    switch installState.phase {
+    case .failed:
+      callouts.append(
+        DetailCallout(
+          id: "failed",
+          title: "Install Failed",
+          detail: installState.errorMessage ?? installState.detail,
+          tone: .failure
+        )
+      )
+    case .completed:
+      callouts.append(
+        DetailCallout(
+          id: "completed",
+          title: "Install Complete",
+          detail: installPresentation.statusDetail ?? "Versioneer finished the update flow.",
+          tone: .success
+        )
+      )
+    default:
+      break
+    }
+
+    if result.isLocalOnly {
+      callouts.append(
+        DetailCallout(
+          id: "local-only",
+          title: result.localOnlyStatusTitle,
+          detail: result.localOnlyDescription,
+          tone: result.decision == .updateAvailable ? .warning : .neutral
+        )
+      )
+    }
+
+    if let manualUpdateAction,
+      result.decision == .updateAvailable,
+      !result.canInstall,
+      !isMasUpgradeable,
+      !isBrewApp
+    {
+      callouts.append(
+        DetailCallout(
+          id: "manual",
+          title: "Manual Update",
+          detail: manualUpdateAction.detail,
+          tone: .neutral
+        )
+      )
+    }
+
+    if result.decision == .updateAvailable
+      && !isMasUpgradeable
+      && !isBrewApp
+      && !result.canInstall
+      && manualUpdateAction == nil
+    {
+      callouts.append(
+        DetailCallout(
+          id: "unavailable",
+          title: "Install Unavailable",
+          detail: "Versioneer does not currently have an install path for this update.",
+          tone: .neutral
+        )
+      )
+    }
+
+    for banner in installPresentation.banners {
+      callouts.append(
+        DetailCallout(
+          id: banner.id,
+          title: banner.title,
+          detail: banner.detail,
+          tone: DetailCallout.Tone(banner.tone)
+        )
+      )
+    }
+
+    return callouts
+  }
+
+  private func performPrimaryAction() {
+    if isUserIgnored {
+      appState.unignore(result, undoManager: undoManager)
+      return
+    }
+
+    if installState.phase == .completed || result.decision != .updateAvailable {
+      appState.openApp(result)
+      return
+    }
+
+    if isMasUpgradeable {
+      Task { await appState.masUpgrade(result) }
+    } else if isBrewApp {
+      Task { await appState.brewUpgrade(result) }
+    } else if result.canInstall {
+      if !result.isVerified {
+        showInstallWarning = true
+      } else {
+        Task { await appState.install(result) }
+      }
+    } else if manualUpdateAction != nil {
+      appState.openManualUpdate(result)
+    }
+  }
+}
+
+private struct DetailCallout: Identifiable {
+  enum Tone {
+    case neutral
+    case progress
+    case success
+    case warning
+    case failure
+
+    init(_ tone: InstallPresentation.Tone) {
+      switch tone {
+      case .neutral: self = .neutral
+      case .progress: self = .progress
+      case .success: self = .success
+      case .warning: self = .warning
+      case .failure: self = .failure
+      }
+    }
+
+    var tint: Color {
+      switch self {
+      case .neutral: .secondary
+      case .progress: .accentColor
+      case .success: .green
+      case .warning: .orange
+      case .failure: .red
+      }
+    }
+
+    var systemImage: String {
+      switch self {
+      case .neutral: "info.circle.fill"
+      case .progress: "arrow.trianglehead.2.clockwise"
+      case .success: "checkmark.circle.fill"
+      case .warning: "exclamationmark.triangle.fill"
+      case .failure: "xmark.circle.fill"
+      }
+    }
+  }
+
+  let id: String
+  let title: String
+  let detail: String
+  let tone: Tone
+}
+
+private struct DetailCalloutGroup: View {
+  let callouts: [DetailCallout]
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      ForEach(callouts) { callout in
+        HStack(alignment: .top, spacing: 10) {
+          Image(systemName: callout.tone.systemImage)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(callout.tone.tint)
+            .frame(width: 18)
+
+          VStack(alignment: .leading, spacing: 2) {
+            Text(callout.title)
+              .font(.callout.weight(.semibold))
+            Text(callout.detail)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+
+          Spacer(minLength: 0)
+        }
+      }
+    }
+    .padding(12)
+    .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 14))
+    .overlay {
+      RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+    }
+  }
+}
+
+private struct DetailInlineProgressView: View {
+  let progress: InstallPresentation.Progress
+  let detail: String?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text(progress.title)
+          .font(.callout.weight(.semibold))
+        Spacer()
+        Text("Step \(progress.currentStep) of \(progress.totalSteps)")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+
+      ProgressView(value: Double(progress.currentStep), total: Double(progress.totalSteps))
+        .progressViewStyle(.linear)
+        .tint(.accentColor)
+
+      if let detail, !detail.isEmpty {
+        Text(detail)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
+  }
+}
+
+// MARK: - Details Section
+
+private struct DetailFactsSection: View {
+  @Environment(AppState.self) private var appState
+
+  let result: AppDecision
+
+  private var installedApp: InstalledApp? {
+    appState.installedApp(for: result)
+  }
+
+  private var manualUpdateAction: (title: String, detail: String, url: URL)? {
+    appState.manualUpdateAction(for: result)
+  }
+
+  private var facts: [DetailFact] {
+    var facts: [DetailFact] = [
+      DetailFact(label: "Source", value: sourceDescription),
+      DetailFact(label: "Install Route", value: installRouteDescription),
+      DetailFact(label: "Path", value: appState.appPathText(for: result) ?? "Unavailable"),
+      DetailFact(label: "Bundle ID", value: appState.bundleIdText(for: result) ?? "Unavailable"),
+      DetailFact(label: "Released", value: VersionFormatting.relativeDate(from: result.releasedAt)),
+    ]
+
+    if let matchConfidence = result.matchConfidence {
+      facts.append(
+        DetailFact(label: "Match", value: VersionFormatting.confidenceLabel(matchConfidence)))
+    }
+
+    if shouldShowChannel {
+      facts.append(DetailFact(label: "Channel", value: currentChannel.capitalized))
+    }
+
+    if let artifact = result.artifact {
+      if let sizeBytes = artifact.sizeBytes {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        facts.append(
+          DetailFact(label: "Download", value: formatter.string(fromByteCount: Int64(sizeBytes)))
+        )
+      }
+      if let minOS = artifact.minOsVersion {
+        facts.append(DetailFact(label: "Minimum macOS", value: minOS))
+      }
+    }
+
+    return facts
+  }
+
+  var body: some View {
+    DetailPlainSection(title: "Details") {
+      VStack(alignment: .leading, spacing: 8) {
+        ForEach(facts) { fact in
+          DetailFactRowView(fact: fact)
+        }
+      }
+    }
+  }
+
+  private var sourceDescription: String {
+    if appState.isUserIgnored(result) {
+      return "Ignored"
+    }
+    if appState.isHomebrewInstalled(for: result) {
+      return "Homebrew"
+    }
+    if installedApp?.isMasApp == true {
+      return "Mac App Store"
+    }
+    if installedApp?.isSparkleApp == true {
+      return "Sparkle"
+    }
+    if installedApp?.isElectronApp == true {
+      return "Electron"
+    }
+    return result.isVerified ? "Versioneer Catalog" : "Local Metadata"
+  }
+
+  private var installRouteDescription: String {
+    if result.decision != .updateAvailable {
+      return "No update required"
+    }
+    if appState.isMasUpgradeable(for: result) {
+      return "Mac App Store"
+    }
+    if appState.isHomebrewInstalled(for: result) {
+      return "Homebrew"
+    }
+    if let strategy = result.installStrategy {
+      var parts = [strategy.displayTitle]
+      if strategy.requiresAdmin {
+        parts.append("admin required")
+      }
+      if strategy.requiresQuit {
+        parts.append("quits app first")
+      }
+      return parts.joined(separator: " · ")
+    }
+    if manualUpdateAction != nil {
+      return "Manual"
+    }
+    return "Unavailable"
+  }
+
+  private var shouldShowChannel: Bool {
+    result.matchedAppId != nil
+      && ((result.availableChannels?.count ?? 0) > 1 || result.channel != nil)
+  }
+
+  private var currentChannel: String {
+    guard let appId = result.matchedAppId else { return result.channel ?? "stable" }
+    return appState.settings.channel(forAppId: appId)
+  }
+}
+
+private struct DetailFact: Identifiable {
+  let label: String
+  let value: String
+
+  var id: String { label }
+}
+
+private struct DetailFactRowView: View {
+  let fact: DetailFact
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 14) {
+      Text(fact.label)
+        .foregroundStyle(.secondary)
+        .frame(width: 112, alignment: .leading)
+
+      Text(fact.value)
+        .foregroundStyle(.primary)
+        .lineLimit(2)
+        .truncationMode(.middle)
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .font(.callout)
   }
 }
 
@@ -556,11 +826,8 @@ private struct DetailReleaseNotesSection: View {
 
   @ViewBuilder
   var body: some View {
-    if result.latestReleaseId != nil {
+    DetailPlainSection(title: "What's New") {
       VStack(alignment: .leading, spacing: 12) {
-        Text("What's New")
-          .font(.subheadline.weight(.semibold))
-
         if releaseNotesLoading {
           HStack(spacing: 8) {
             ProgressView()
@@ -574,6 +841,10 @@ private struct DetailReleaseNotesSection: View {
             ReleaseNotesWebView(html: html)
               .frame(minHeight: 100, maxHeight: 300)
               .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+              .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                  .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+              }
               .mask {
                 VStack(spacing: 0) {
                   Rectangle().fill(.black)
@@ -597,22 +868,58 @@ private struct DetailReleaseNotesSection: View {
             .foregroundStyle(.secondary)
         }
       }
-      .glassCard(cornerRadius: 18, padding: 16)
-      .task(id: result.latestReleaseId) {
-        await loadReleaseNotes()
-      }
+    }
+    .task(id: result.latestReleaseId) {
+      await loadReleaseNotes()
     }
   }
 
   private func loadReleaseNotes() async {
     guard let releaseId = result.latestReleaseId else {
       releaseNotes = nil
+      releaseNotesLoading = false
       return
     }
     releaseNotesLoading = true
     releaseNotes = nil
-    releaseNotes = await appState.fetchReleaseNotes(releaseId: releaseId)
+    let notes = await appState.fetchReleaseNotes(releaseId: releaseId)
+    guard !Task.isCancelled else { return }
+    releaseNotes = notes
     releaseNotesLoading = false
+  }
+}
+
+private struct DetailPlainSection<Content: View>: View {
+  let title: String
+  @ViewBuilder let content: Content
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text(title)
+        .font(.subheadline.weight(.semibold))
+
+      content
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+extension InstallStrategy {
+  fileprivate nonisolated var displayTitle: String {
+    switch self {
+    case .sparkle:
+      "Sparkle"
+    case .zipReplace:
+      "Zip Replace"
+    case .dmgCopyReplace:
+      "DMG Copy"
+    case .pkgInstall:
+      "Package Installer"
+    case .macAppStore:
+      "Mac App Store"
+    case .manualOnly:
+      "Manual"
+    }
   }
 }
 

@@ -64,8 +64,8 @@ struct AppListRowView: View {
         isSelected: isSelected,
         isRowHovered: isHovered
       )
-        .fixedSize()
-        .motionAwareAnimation(.spring(duration: 0.25), value: installState.phase)
+      .fixedSize()
+      .motionAwareAnimation(.spring(duration: 0.25), value: installState.phase)
     }
     .padding(.vertical, 7)
     .padding(.horizontal, 6)
@@ -256,7 +256,8 @@ private struct AppListRowTrailingContent: View {
         }
         .buttonStyle(SidebarRowActionButtonStyle(isSelected: isSelected))
         .accessibilityLabel("\(appState.primaryActionTitle(for: result)) \(row.appName)")
-        .transition(.motionAware(.opacity.combined(with: .scale(scale: 0.96)), reduceMotion: reduceMotion))
+        .transition(
+          .motionAware(.opacity.combined(with: .scale(scale: 0.96)), reduceMotion: reduceMotion))
       }
     } else {
       StatusChip(
