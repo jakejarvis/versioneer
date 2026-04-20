@@ -20,6 +20,7 @@ export function useDiscoveredApps(params: UseDiscoveredAppsParams = {}) {
   return useQuery({
     queryKey: ["discovered-apps", params],
     queryFn: () => listDiscoveredApps({ data: params }),
+    refetchInterval: 60_000,
   });
 }
 

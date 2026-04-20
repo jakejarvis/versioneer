@@ -1,6 +1,6 @@
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { discoveredApps } from "@versioneer/db";
@@ -48,6 +48,26 @@ async function postInventory(
   );
   await waitOnExecutionContext(ctx);
   return res;
+}
+
+async function selectDiscoveredByLookupKeys(lookupKeys: string[]) {
+  const db = getDb(env.DB);
+  const rows = [];
+  for (let i = 0; i < lookupKeys.length; i += 100) {
+    rows.push(
+      ...(await db
+        .select({
+          lookupKey: discoveredApps.lookupKey,
+          appName: discoveredApps.appName,
+          bundleId: discoveredApps.bundleId,
+          sightingCount: discoveredApps.sightingCount,
+        })
+        .from(discoveredApps)
+        .where(inArray(discoveredApps.lookupKey, lookupKeys.slice(i, i + 100)))
+        .all()),
+    );
+  }
+  return rows;
 }
 
 let catalog: Awaited<ReturnType<typeof seedInventoryCatalog>>;
@@ -199,6 +219,52 @@ describe("POST /v1/inventory/check", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.appName).toBe("Brand New App");
     expect(rows[0]!.bundleId).toBe(uniqueBundle);
+  });
+
+  it("persists every unmatched app beyond the D1 lookup parameter chunk size", async () => {
+    const prefix = `com.test.bulk.${Date.now()}`;
+    const submittedApps = Array.from({ length: 125 }, (_, index) => ({
+      appName: `Bulk Unknown ${index}`,
+      bundleId: `${prefix}.${index}`,
+      version: `1.0.${index}`,
+    }));
+
+    const res = await postInventory({ client: {}, apps: submittedApps });
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as InventoryResponse;
+    expect(body.results).toHaveLength(submittedApps.length);
+    expect(body.skipped ?? []).toHaveLength(0);
+
+    const lookupKeys = submittedApps.map((submitted) => `bid:${submitted.bundleId}`);
+    const rows = await selectDiscoveredByLookupKeys(lookupKeys);
+    expect(rows).toHaveLength(submittedApps.length);
+    expect(new Set(rows.map((row) => row.lookupKey)).size).toBe(submittedApps.length);
+  });
+
+  it("handles duplicate unmatched submissions without partial writes or lookup-key conflicts", async () => {
+    const prefix = `com.test.race.${Date.now()}`;
+    const submittedApps = Array.from({ length: 8 }, (_, index) => ({
+      appName: `Race Unknown ${index}`,
+      bundleId: `${prefix}.${index}`,
+      version: "1.0.0",
+    }));
+    const request = { client: {}, apps: submittedApps };
+
+    const responses = await Promise.all([postInventory(request), postInventory(request)]);
+    expect(responses.map((res) => res.status)).toEqual([200, 200]);
+
+    for (const res of responses) {
+      const body = (await res.json()) as InventoryResponse;
+      expect(body.results).toHaveLength(submittedApps.length);
+      expect(body.skipped ?? []).toHaveLength(0);
+    }
+
+    const lookupKeys = submittedApps.map((submitted) => `bid:${submitted.bundleId}`);
+    const rows = await selectDiscoveredByLookupKeys(lookupKeys);
+    expect(rows).toHaveLength(submittedApps.length);
+    expect(new Set(rows.map((row) => row.lookupKey)).size).toBe(submittedApps.length);
+    expect(rows.every((row) => row.sightingCount >= 2)).toBe(true);
   });
 
   it("handles multiple apps in a single request", async () => {

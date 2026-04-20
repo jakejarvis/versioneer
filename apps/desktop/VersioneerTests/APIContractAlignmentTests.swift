@@ -84,6 +84,78 @@ struct APIContractAlignmentTests {
     #expect(response.skipped == nil)
   }
 
+  @Test func inventoryCompletenessAcceptsResultsPlusSkipped() throws {
+    let json = """
+      {
+        "processedAt": "2026-04-07T12:00:00Z",
+        "results": [
+          {
+            "appName": "Found App",
+            "bundleId": "com.example.found",
+            "installedVersion": "1.0",
+            "matchedAppId": null,
+            "matchedAppName": null,
+            "matchConfidence": null,
+            "decision": "local_only",
+            "trackingState": "local_only",
+            "localReasonCode": "not_found",
+            "latestVersion": null,
+            "latestVersionRaw": null,
+            "releasedAt": null,
+            "artifact": null
+          }
+        ],
+        "skipped": [
+          {
+            "index": 1,
+            "appName": "Broken App",
+            "reasons": ["appName: Required"]
+          }
+        ]
+      }
+      """
+
+    let response = try JSONDecoder().decode(InventoryCheckResponse.self, from: Data(json.utf8))
+    try InventoryAPIClient.validateInventoryResponseCompleteness(response, submittedAppCount: 2)
+  }
+
+  @Test func inventoryCompletenessRejectsTruncatedResponse() throws {
+    let json = """
+      {
+        "processedAt": "2026-04-07T12:00:00Z",
+        "results": [
+          {
+            "appName": "Only App",
+            "bundleId": "com.example.only",
+            "installedVersion": "1.0",
+            "matchedAppId": null,
+            "matchedAppName": null,
+            "matchConfidence": null,
+            "decision": "local_only",
+            "trackingState": "local_only",
+            "localReasonCode": "not_found",
+            "latestVersion": null,
+            "latestVersionRaw": null,
+            "releasedAt": null,
+            "artifact": null
+          }
+        ]
+      }
+      """
+
+    let response = try JSONDecoder().decode(InventoryCheckResponse.self, from: Data(json.utf8))
+
+    do {
+      try InventoryAPIClient.validateInventoryResponseCompleteness(response, submittedAppCount: 2)
+      Issue.record("Expected truncated inventory response to fail validation")
+    } catch APIError.incompleteInventoryResponse(let expected, let received) {
+      #expect(expected == 2)
+      #expect(received == 1)
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
+    }
+  }
+
   @Test func preflightResponseDecodesDismissedBundleIds() throws {
     let json = """
       {
