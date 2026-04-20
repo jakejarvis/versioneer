@@ -103,7 +103,7 @@ function DiscoveredAppsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
 
-  const { data, isLoading } = useDiscoveredApps({
+  const { data, isLoading, isFetching, refetch } = useDiscoveredApps({
     status: searchState.status,
     enrichmentStatus:
       searchState.enrichmentStatus === "all" ? undefined : searchState.enrichmentStatus,
@@ -443,6 +443,16 @@ function DiscoveredAppsPage() {
             <SelectItem value="skipped">Skipped</SelectItem>
           </SelectContent>
         </Select>
+
+        <Button
+          variant="outline"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+          className="w-full sm:w-auto"
+        >
+          <RefreshCw className={isFetching ? "animate-spin" : undefined} />
+          Refresh
+        </Button>
       </div>
 
       <div className="mt-4">

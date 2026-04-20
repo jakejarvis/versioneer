@@ -93,10 +93,24 @@ nonisolated struct InventoryAPIClient: Sendable {
 
     let decoder = JSONDecoder()
     do {
-      return try decoder.decode(InventoryCheckResponse.self, from: data)
+      let response = try decoder.decode(InventoryCheckResponse.self, from: data)
+      try Self.validateInventoryResponseCompleteness(response, submittedAppCount: apps.count)
+      return response
+    } catch let error as APIError {
+      throw error
     } catch {
       Logger.api.error("Failed to decode response: \(error.localizedDescription)")
       throw APIError.decodingFailed(error.localizedDescription)
+    }
+  }
+
+  static func validateInventoryResponseCompleteness(
+    _ response: InventoryCheckResponse,
+    submittedAppCount: Int
+  ) throws {
+    let handledCount = response.results.count + (response.skipped?.count ?? 0)
+    guard handledCount == submittedAppCount else {
+      throw APIError.incompleteInventoryResponse(expected: submittedAppCount, received: handledCount)
     }
   }
 
@@ -356,6 +370,7 @@ nonisolated enum APIError: LocalizedError, Sendable {
   case invalidRequest(String)
   case httpError(statusCode: Int, body: String)
   case decodingFailed(String)
+  case incompleteInventoryResponse(expected: Int, received: Int)
 
   var errorDescription: String? {
     switch self {
@@ -367,6 +382,8 @@ nonisolated enum APIError: LocalizedError, Sendable {
       "Server returned status \(statusCode)"
     case .decodingFailed(let message):
       "Failed to decode response: \(message)"
+    case .incompleteInventoryResponse(let expected, let received):
+      "Inventory response handled \(received) of \(expected) submitted apps"
     }
   }
 }
