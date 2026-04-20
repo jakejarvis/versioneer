@@ -139,23 +139,13 @@ struct AppListRowView: View {
 
   @ViewBuilder
   private func contextMenuUpdateAction(for result: AppDecision) -> some View {
-    if appState.isMasUpgradeable(for: result) {
-      Button("Update via Mac App Store") {
-        Task { await appState.masUpgrade(result) }
-      }
-    } else if appState.isHomebrewInstalled(for: result) {
-      Button("Update via Homebrew") {
-        Task { await appState.brewUpgrade(result) }
-      }
-    } else if result.canInstall {
-      Button("Update") {
-        Task { await appState.install(result) }
-      }
-    } else {
-      Button(appState.primaryActionTitle(for: result)) {
-        appState.openManualUpdate(result)
-      }
+    let actionPresentation = appState.primaryActionPresentation(
+      for: result, installState: installState)
+
+    Button(appState.primaryActionTitle(for: result)) {
+      Task { await appState.performPrimaryUpdate(for: result) }
     }
+    .disabled(actionPresentation.isDisabled)
   }
 }
 

@@ -1073,24 +1073,42 @@ final class AppState {
     for result: AppDecision,
     installState: InstallCoordinator.OperationState? = nil
   ) -> Bool {
-    guard result.decision == .updateAvailable else { return false }
     let currentState = installState ?? installCoordinator.state(for: result)
-    guard currentState.phase == .idle else { return false }
-    return result.canInstall
-      || isMasUpgradeable(for: result)
-      || isHomebrewInstalled(for: result)
-      || manualUpdateAction(for: result) != nil
+    guard result.decision == .updateAvailable, currentState.phase == .idle else { return false }
+    let presentation = primaryActionPresentation(for: result, installState: currentState)
+    return presentation.kind.performsUpdate && !presentation.isDisabled
+  }
+
+  func primaryActionPresentation(
+    for result: AppDecision,
+    installState: InstallCoordinator.OperationState? = nil
+  ) -> PrimaryAppActionPresentation {
+    let currentState = installState ?? installCoordinator.state(for: result)
+    return PrimaryAppActionPresentation.make(
+      result: result,
+      installState: currentState,
+      isUserIgnored: isUserIgnored(result),
+      isHomebrewInstalled: isHomebrewInstalled(for: result),
+      isMasUpgradeable: isMasUpgradeable(for: result),
+      hasAppPath: appPathText(for: result) != nil,
+      manualUpdateAction: manualUpdateAction(for: result)
+    )
   }
 
   func performPrimaryUpdate(for result: AppDecision) async {
-    if isMasUpgradeable(for: result) {
+    let presentation = primaryActionPresentation(for: result)
+    guard presentation.kind.performsUpdate, !presentation.isDisabled else { return }
+    switch presentation.kind {
+    case .masUpgrade:
       await masUpgrade(result)
-    } else if isHomebrewInstalled(for: result) {
+    case .brewUpgrade:
       await brewUpgrade(result)
-    } else if result.canInstall {
+    case .install:
       await install(result)
-    } else {
+    case .manualUpdate:
       openManualUpdate(result)
+    case .stopIgnoring, .openApp, .unavailable:
+      return
     }
   }
 
@@ -1160,26 +1178,14 @@ final class AppState {
   }
 
   func primaryActionTitle(for result: AppDecision) -> String {
-    if isMasUpgradeable(for: result) {
-      return "Update via Mac App Store"
-    }
-    if isHomebrewInstalled(for: result) {
-      return "Update via Homebrew"
-    }
-    if result.canInstall {
-      return "Update"
-    }
-    return manualUpdateAction(for: result)?.title ?? "Update"
+    primaryActionPresentation(for: result).title
   }
 
   func primaryActionCompactTitle(for result: AppDecision) -> String {
-    if result.canInstall || isMasUpgradeable(for: result) || isHomebrewInstalled(for: result) {
-      return "Update"
-    }
-    return manualUpdateAction(for: result) == nil ? "Update" : "Open"
+    primaryActionPresentation(for: result).compactTitle
   }
 
-  func manualUpdateAction(for result: AppDecision) -> (title: String, detail: String, url: URL)? {
+  func manualUpdateAction(for result: AppDecision) -> ManualUpdateAction? {
     guard result.decision == .updateAvailable else { return nil }
     guard let installedApp = installedApp(for: result) else { return nil }
 
@@ -1188,40 +1194,43 @@ final class AppState {
       !settings.isMasCliAvailable,
       let storeURL = URL(string: "https://apps.apple.com/app/id\(masAppId)")
     {
-      return (
-        "Open App Store Listing",
-        "Versioneer found an App Store update, but `mas` is not configured on this Mac.",
-        storeURL
+      return ManualUpdateAction(
+        title: "Open App Store Listing",
+        detail: "Versioneer found an App Store update, but `mas` is not configured on this Mac.",
+        url: storeURL
       )
     }
 
     if let downloadURLString = result.artifact?.downloadUrl,
       let downloadURL = URL(string: downloadURLString)
     {
-      return (
-        "Open Download",
-        "Versioneer found a downloadable update, but this Mac does not meet the trust requirements for one-click install.",
-        downloadURL
+      return ManualUpdateAction(
+        title: "Open Download",
+        detail:
+          "Versioneer found a downloadable update, but this Mac does not meet the trust requirements for one-click install.",
+        url: downloadURL
       )
     }
 
     if let updateURLString = installedApp.electronUpdateUrl,
       let updateURL = URL(string: updateURLString)
     {
-      return (
-        "Open Update Feed",
-        "Versioneer found a local Electron update source but could not derive a trusted automatic install route.",
-        updateURL
+      return ManualUpdateAction(
+        title: "Open Update Feed",
+        detail:
+          "Versioneer found a local Electron update source but could not derive a trusted automatic install route.",
+        url: updateURL
       )
     }
 
     if let feedURLString = installedApp.sparkleFeedUrl,
       let feedURL = URL(string: feedURLString)
     {
-      return (
-        "Open Appcast",
-        "Versioneer found a Sparkle feed for this app but could not use it for an automatic install.",
-        feedURL
+      return ManualUpdateAction(
+        title: "Open Appcast",
+        detail:
+          "Versioneer found a Sparkle feed for this app but could not use it for an automatic install.",
+        url: feedURL
       )
     }
 

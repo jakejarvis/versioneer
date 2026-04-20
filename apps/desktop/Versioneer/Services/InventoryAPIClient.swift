@@ -110,7 +110,8 @@ nonisolated struct InventoryAPIClient: Sendable {
   ) throws {
     let handledCount = response.results.count + (response.skipped?.count ?? 0)
     guard handledCount == submittedAppCount else {
-      throw APIError.incompleteInventoryResponse(expected: submittedAppCount, received: handledCount)
+      throw APIError.incompleteInventoryResponse(
+        expected: submittedAppCount, received: handledCount)
     }
   }
 

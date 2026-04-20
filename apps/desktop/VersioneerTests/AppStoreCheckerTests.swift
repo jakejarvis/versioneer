@@ -21,7 +21,7 @@ struct AppStoreCheckerTests {
       }
       """
     let data = json.data(using: .utf8)!
-    let result = await checker.parseResponse(data)
+    let result = checker.parseResponse(data)
     #expect(result != nil)
     #expect(result?.masAppId == "497799835")
     #expect(result?.latestVersion == "16.0")
@@ -37,13 +37,13 @@ struct AppStoreCheckerTests {
       }
       """
     let data = json.data(using: .utf8)!
-    let result = await checker.parseResponse(data)
+    let result = checker.parseResponse(data)
     #expect(result == nil)
   }
 
   @Test func returnsNilForMalformedJSON() async {
     let data = "not json at all".data(using: .utf8)!
-    let result = await checker.parseResponse(data)
+    let result = checker.parseResponse(data)
     #expect(result == nil)
   }
 
@@ -57,7 +57,7 @@ struct AppStoreCheckerTests {
       }
       """
     let data = json.data(using: .utf8)!
-    let result = await checker.parseResponse(data)
+    let result = checker.parseResponse(data)
     #expect(result == nil)
   }
 
@@ -73,7 +73,7 @@ struct AppStoreCheckerTests {
       }
       """
     let data = json.data(using: .utf8)!
-    let result = await checker.parseResponse(data)
+    let result = checker.parseResponse(data)
     #expect(result != nil)
     #expect(result?.masAppId == "883878097")
     #expect(result?.latestVersion == "5.8.0")
