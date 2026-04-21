@@ -1,6 +1,9 @@
+import Foundation
 import Testing
 
 @testable import Versioneer
+
+private let versionFormattingTestNow = Date(timeIntervalSince1970: 1_774_960_000)
 
 struct VersionFormattingTests {
   @Test func statusLabelsAreReadable() {
@@ -23,12 +26,16 @@ struct VersionFormattingTests {
   }
 
   @Test func relativeDateHandlesNil() {
-    #expect(VersionFormatting.relativeDate(from: nil) == "—")
+    #expect(
+      VersionFormatting.relativeDate(from: nil, relativeTo: versionFormattingTestNow) == "—")
   }
 
   @Test func relativeDateParsesISO8601() {
     // A date far in the past should produce a relative string, not the raw ISO string
-    let result = VersionFormatting.relativeDate(from: "2020-01-01T00:00:00Z")
+    let result = VersionFormatting.relativeDate(
+      from: "2020-01-01T00:00:00Z",
+      relativeTo: versionFormattingTestNow
+    )
     #expect(result != "2020-01-01T00:00:00Z")
     #expect(!result.isEmpty)
   }

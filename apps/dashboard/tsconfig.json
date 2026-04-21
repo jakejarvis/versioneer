@@ -1,7 +1,7 @@
 {
   "extends": "@versioneer/tsconfig/react-vite.json",
   "compilerOptions": {
-    "types": ["./worker-configuration.d.ts", "vite/client"],
+    "types": ["./worker-configuration.d.ts", "vite/client", "@testing-library/jest-dom"],
     "paths": {
       "@/*": ["./src/*"]
     }

@@ -41,19 +41,21 @@ describe("installedAppSchema", () => {
   });
 
   it("rejects missing appName", () => {
-    expect(() => installedAppSchema.parse({})).toThrow();
+    expect(installedAppSchema.safeParse({}).success).toBe(false);
   });
 
   it("rejects empty appName", () => {
-    expect(() => installedAppSchema.parse({ appName: "" })).toThrow();
+    expect(installedAppSchema.safeParse({ appName: "" }).success).toBe(false);
   });
 
   it("rejects appName exceeding max length", () => {
-    expect(() => installedAppSchema.parse({ appName: "x".repeat(501) })).toThrow();
+    expect(installedAppSchema.safeParse({ appName: "x".repeat(501) }).success).toBe(false);
   });
 
   it("rejects bundleId exceeding max length", () => {
-    expect(() => installedAppSchema.parse({ appName: "Foo", bundleId: "x".repeat(501) })).toThrow();
+    expect(
+      installedAppSchema.safeParse({ appName: "Foo", bundleId: "x".repeat(501) }).success,
+    ).toBe(false);
   });
 });
 
@@ -73,12 +75,12 @@ describe("inventoryRequestEnvelopeSchema", () => {
   });
 
   it("rejects apps array exceeding 5000", () => {
-    expect(() =>
-      inventoryRequestEnvelopeSchema.parse({
+    expect(
+      inventoryRequestEnvelopeSchema.safeParse({
         client: {},
         apps: Array.from({ length: 5001 }, () => ({})),
-      }),
-    ).toThrow();
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts optional scanDurationMs", () => {

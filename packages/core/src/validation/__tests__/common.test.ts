@@ -16,19 +16,19 @@ describe("paginationSchema", () => {
   });
 
   it("rejects limit below 1", () => {
-    expect(() => paginationSchema.parse({ limit: 0 })).toThrow();
+    expect(paginationSchema.safeParse({ limit: 0 }).success).toBe(false);
   });
 
   it("rejects limit above 100", () => {
-    expect(() => paginationSchema.parse({ limit: 101 })).toThrow();
+    expect(paginationSchema.safeParse({ limit: 101 }).success).toBe(false);
   });
 
   it("rejects negative offset", () => {
-    expect(() => paginationSchema.parse({ offset: -1 })).toThrow();
+    expect(paginationSchema.safeParse({ offset: -1 }).success).toBe(false);
   });
 
   it("rejects non-integer values", () => {
-    expect(() => paginationSchema.parse({ limit: 1.5 })).toThrow();
+    expect(paginationSchema.safeParse({ limit: 1.5 }).success).toBe(false);
   });
 });
 
@@ -39,7 +39,7 @@ describe("idParamSchema", () => {
   });
 
   it("rejects empty ID", () => {
-    expect(() => idParamSchema.parse({ id: "" })).toThrow();
+    expect(idParamSchema.safeParse({ id: "" }).success).toBe(false);
   });
 });
 
@@ -51,23 +51,23 @@ describe("channelSchema", () => {
   });
 
   it("rejects uppercase characters", () => {
-    expect(() => channelSchema.parse("Beta")).toThrow();
+    expect(channelSchema.safeParse("Beta").success).toBe(false);
   });
 
   it("rejects spaces", () => {
-    expect(() => channelSchema.parse("my channel")).toThrow();
+    expect(channelSchema.safeParse("my channel").success).toBe(false);
   });
 
   it("rejects empty string", () => {
-    expect(() => channelSchema.parse("")).toThrow();
+    expect(channelSchema.safeParse("").success).toBe(false);
   });
 
   it("rejects special characters", () => {
-    expect(() => channelSchema.parse("beta.1")).toThrow();
-    expect(() => channelSchema.parse("beta/1")).toThrow();
+    expect(channelSchema.safeParse("beta.1").success).toBe(false);
+    expect(channelSchema.safeParse("beta/1").success).toBe(false);
   });
 
   it("rejects strings over 50 characters", () => {
-    expect(() => channelSchema.parse("a".repeat(51))).toThrow();
+    expect(channelSchema.safeParse("a".repeat(51)).success).toBe(false);
   });
 });

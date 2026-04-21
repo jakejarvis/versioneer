@@ -1,10 +1,16 @@
 import { env } from "cloudflare:workers";
 import { sign } from "hono/jwt";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import app from "../../index";
 
 const TEST_SECRET = "test-jwt-secret-for-attestation";
+const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(TEST_NOW);
+});
 
 /**
  * Helper to make a request to a protected route.
@@ -89,7 +95,7 @@ describe("requireAttestation middleware", () => {
 
   it("passes through with a valid JWT", async () => {
     const token = await sign(
-      { sub: "device_123", exp: Math.floor(Date.now() / 1000) + 3600 },
+      { sub: "device_123", exp: Math.floor(TEST_NOW.getTime() / 1000) + 3600 },
       TEST_SECRET,
     );
     const res = await protectedRequest(

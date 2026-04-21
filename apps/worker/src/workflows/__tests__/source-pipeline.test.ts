@@ -1,11 +1,14 @@
 import { env, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SourceFetchJob } from "@versioneer/core/pipeline";
 import { createDb, generateId, idPrefixes, sourceFetches, sources } from "@versioneer/db";
 
 import { SourcePipelineWorkflow } from "../source-pipeline";
+
+const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
+const TEST_NOW_ISO = TEST_NOW.toISOString();
 
 function createWorkflowInstance() {
   const instance = Object.create(SourcePipelineWorkflow.prototype);
@@ -35,6 +38,11 @@ function createMockStep(): MockWorkflowStep {
   return step as MockWorkflowStep;
 }
 
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(TEST_NOW);
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -50,8 +58,8 @@ describe("SourcePipelineWorkflow", () => {
       slug: `wf-test-${appId.slice(-8)}`,
       canonicalName: "Workflow Test",
       status: "public",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
     });
 
     const sourceId = generateId(idPrefixes.source);
@@ -65,8 +73,8 @@ describe("SourcePipelineWorkflow", () => {
       status: "active",
       pollIntervalMinutes: 60,
       ordinal: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
     });
 
     // Mock fetch to return 304 Not Modified — the pipeline treats this as "nothing to parse"
@@ -76,7 +84,7 @@ describe("SourcePipelineWorkflow", () => {
     const step = createMockStep();
     const event: WorkflowEvent<SourceFetchJob> = {
       payload: { sourceId, reason: "scheduled" as const, force: false },
-      timestamp: new Date(),
+      timestamp: TEST_NOW,
       instanceId: `wf_304_${sourceId}`,
     };
 
@@ -98,8 +106,8 @@ describe("SourcePipelineWorkflow", () => {
       slug: `wf-idempotent-${appId.slice(-8)}`,
       canonicalName: "Idempotent Workflow Test",
       status: "public",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
     });
 
     const sourceId = generateId(idPrefixes.source);
@@ -113,8 +121,8 @@ describe("SourcePipelineWorkflow", () => {
       status: "active",
       pollIntervalMinutes: 60,
       ordinal: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
     });
 
     const fetchSpy = vi
@@ -122,7 +130,7 @@ describe("SourcePipelineWorkflow", () => {
       .mockResolvedValue(new Response(null, { status: 304 }));
     const event: WorkflowEvent<SourceFetchJob> = {
       payload: { sourceId, reason: "scheduled" as const, force: false },
-      timestamp: new Date(),
+      timestamp: TEST_NOW,
       instanceId: `wf_retry_${sourceId}`,
     };
 
@@ -153,8 +161,8 @@ describe("SourcePipelineWorkflow", () => {
       slug: `wf-full-${appId.slice(-8)}`,
       canonicalName: "Full Pipeline App",
       status: "public",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
     });
 
     const sourceId = generateId(idPrefixes.source);
@@ -168,8 +176,8 @@ describe("SourcePipelineWorkflow", () => {
       status: "active",
       pollIntervalMinutes: 60,
       ordinal: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
     });
 
     // Mock fetch to return a minimal Sparkle appcast with one release
@@ -197,7 +205,7 @@ describe("SourcePipelineWorkflow", () => {
     const step = createMockStep();
     const event: WorkflowEvent<SourceFetchJob> = {
       payload: { sourceId, reason: "scheduled" as const, force: false },
-      timestamp: new Date(),
+      timestamp: TEST_NOW,
       instanceId: `wf_full_${sourceId}`,
     };
 

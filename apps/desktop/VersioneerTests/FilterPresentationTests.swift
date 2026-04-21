@@ -3,6 +3,8 @@ import Testing
 
 @testable import Versioneer
 
+private let filterPresentationTestDate = Date(timeIntervalSince1970: 1_774_960_000)
+
 @MainActor
 struct FilterPresentationTests {
   @Test func chipsReflectSummaryCounts() {
@@ -12,7 +14,7 @@ struct FilterPresentationTests {
       localOnlyCount: 2,
       needsReviewCount: 1,
       ignoredCount: 4,
-      lastCompletedAt: Date()
+      lastCompletedAt: filterPresentationTestDate
     )
 
     let presentation = FilterPresentation.make(summary: summary, selectedSection: .all)
@@ -37,7 +39,7 @@ struct FilterPresentationTests {
       localOnlyCount: 0,
       needsReviewCount: 0,
       ignoredCount: 2,
-      lastCompletedAt: Date()
+      lastCompletedAt: filterPresentationTestDate
     )
 
     let allSelected = FilterPresentation.make(summary: summary, selectedSection: .all)
@@ -56,7 +58,7 @@ struct FilterPresentationTests {
       localOnlyCount: 0,
       needsReviewCount: 0,
       ignoredCount: 0,
-      lastCompletedAt: Date()
+      lastCompletedAt: filterPresentationTestDate
     )
 
     let presentation = FilterPresentation.make(summary: summary, selectedSection: .all)
@@ -72,7 +74,7 @@ struct FilterPresentationTests {
       localOnlyCount: 2,
       needsReviewCount: 1,
       ignoredCount: 1,
-      lastCompletedAt: Date()
+      lastCompletedAt: filterPresentationTestDate
     )
 
     let localOnlySelected = FilterPresentation.make(

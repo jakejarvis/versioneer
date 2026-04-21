@@ -29,20 +29,20 @@ describe("clientFeedbackSubmitSchema", () => {
   });
 
   it("rejects invalid feedbackType", () => {
-    expect(() => clientFeedbackSubmitSchema.parse({ feedbackType: "invalid" })).toThrow();
+    expect(clientFeedbackSubmitSchema.safeParse({ feedbackType: "invalid" }).success).toBe(false);
   });
 
   it("rejects missing feedbackType", () => {
-    expect(() => clientFeedbackSubmitSchema.parse({})).toThrow();
+    expect(clientFeedbackSubmitSchema.safeParse({}).success).toBe(false);
   });
 
   it("rejects bundleId exceeding max length", () => {
-    expect(() =>
-      clientFeedbackSubmitSchema.parse({
+    expect(
+      clientFeedbackSubmitSchema.safeParse({
         feedbackType: "general",
         bundleId: "x".repeat(501),
-      }),
-    ).toThrow();
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -55,6 +55,6 @@ describe("feedbackUpdateSchema", () => {
   });
 
   it("rejects invalid status", () => {
-    expect(() => feedbackUpdateSchema.parse({ status: "invalid" })).toThrow();
+    expect(feedbackUpdateSchema.safeParse({ status: "invalid" }).success).toBe(false);
   });
 });

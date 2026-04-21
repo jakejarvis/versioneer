@@ -2,13 +2,16 @@ import { env } from "cloudflare:workers";
 import { desc, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createDb, generateId, idPrefixes, sources } from "@versioneer/db";
+import { createDb, cronJobRuns, generateId, idPrefixes, sources } from "@versioneer/db";
 
 // Import the default export — it's a WorkerEntrypoint class
 import PipelineWorker from "../index";
 
 // Stub SOURCE_PIPELINE so `scheduled()` doesn't trigger real workflow instances
 // (which run in separate miniflare isolates and produce uncaught exceptions).
+const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
+const TEST_NOW_ISO = TEST_NOW.toISOString();
+
 type MockWorkflowCreateOptions = {
   params?: { sourceId: string; reason: string; force: boolean };
 };
@@ -36,7 +39,6 @@ async function disableExistingSources(db: ReturnType<typeof createDb>) {
 }
 
 async function latestPollRun(db: ReturnType<typeof createDb>) {
-  const { cronJobRuns } = await import("@versioneer/db");
   return db
     .select()
     .from(cronJobRuns)
@@ -53,8 +55,8 @@ async function insertTestApp(db: ReturnType<typeof createDb>, name: string) {
     slug: `${name}-${appId.slice(-8)}`,
     canonicalName: name,
     status: "public",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: TEST_NOW_ISO,
+    updatedAt: TEST_NOW_ISO,
   });
   return appId;
 }
@@ -76,15 +78,21 @@ async function insertActiveSource(
     status: "active",
     pollIntervalMinutes: 15,
     ordinal: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: TEST_NOW_ISO,
+    updatedAt: TEST_NOW_ISO,
     ...values,
   });
   return sourceId;
 }
 
 describe("scheduled handler", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(TEST_NOW);
+    await env.CONFIG_KV.put("cask-index-last-sync", TEST_NOW_ISO);
+    await createDb(env.DB)
+      .delete(cronJobRuns)
+      .where(sql`1 = 1`);
     mockWorkflowBinding.create.mockReset();
     mockWorkflowBinding.createBatch.mockReset();
     mockWorkflowBinding.create.mockResolvedValue({ id: "wf_mock" });
@@ -100,7 +108,7 @@ describe("scheduled handler", () => {
     await insertActiveSource(db, appId);
 
     const worker = createWorkerInstance();
-    const event = { scheduledTime: Date.now(), cron: "*/15 * * * *" } as ScheduledEvent;
+    const event = { scheduledTime: TEST_NOW.getTime(), cron: "*/15 * * * *" } as ScheduledEvent;
     await worker.scheduled(event);
 
     const pollRun = await latestPollRun(db);
@@ -120,11 +128,11 @@ describe("scheduled handler", () => {
     await insertActiveSource(db, appId, {
       appId,
       pollIntervalMinutes: 60,
-      lastFetchedAt: new Date().toISOString(),
+      lastFetchedAt: TEST_NOW_ISO,
     });
 
     const worker = createWorkerInstance();
-    const event = { scheduledTime: Date.now(), cron: "*/15 * * * *" } as ScheduledEvent;
+    const event = { scheduledTime: TEST_NOW.getTime(), cron: "*/15 * * * *" } as ScheduledEvent;
     await worker.scheduled(event);
 
     const pollRun = await latestPollRun(db);
@@ -146,7 +154,7 @@ describe("scheduled handler", () => {
     }
 
     const worker = createWorkerInstance();
-    const event = { scheduledTime: Date.now(), cron: "*/15 * * * *" } as ScheduledEvent;
+    const event = { scheduledTime: TEST_NOW.getTime(), cron: "*/15 * * * *" } as ScheduledEvent;
     await worker.scheduled(event);
 
     const pollRun = await latestPollRun(db);
@@ -172,7 +180,7 @@ describe("scheduled handler", () => {
     mockWorkflowBinding.createBatch.mockRejectedValueOnce(new Error("batch unavailable"));
 
     const worker = createWorkerInstance();
-    const event = { scheduledTime: Date.now(), cron: "*/15 * * * *" } as ScheduledEvent;
+    const event = { scheduledTime: TEST_NOW.getTime(), cron: "*/15 * * * *" } as ScheduledEvent;
     await worker.scheduled(event);
 
     const pollRun = await latestPollRun(db);

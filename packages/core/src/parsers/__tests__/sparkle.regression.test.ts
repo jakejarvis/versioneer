@@ -4,14 +4,12 @@ import { sparkleParser } from "../sparkle";
 import { sparkleFixtures } from "./fixtures/sparkle.fixtures";
 
 describe("Sparkle parser regression fixtures", () => {
-  for (const fixture of sparkleFixtures) {
-    it(fixture.name, () => {
-      const result = sparkleParser.parse(fixture.xml);
-      expect(result.releases).toHaveLength(fixture.expectedReleaseCount);
-      expect(result.confidence).toBe(fixture.expectedConfidence);
-      if (fixture.expectedFirstVersion && result.releases.length > 0) {
-        expect(result.releases[0]!.versionRaw).toBe(fixture.expectedFirstVersion);
-      }
-    });
-  }
+  it.each(sparkleFixtures)("$name", (fixture) => {
+    const result = sparkleParser.parse(fixture.xml);
+    expect(result.releases).toHaveLength(fixture.expectedReleaseCount);
+    expect(result.confidence).toBe(fixture.expectedConfidence);
+    expect(fixture.expectedFirstVersion ? result.releases[0]?.versionRaw : undefined).toBe(
+      fixture.expectedFirstVersion,
+    );
+  });
 });

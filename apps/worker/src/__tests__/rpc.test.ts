@@ -1,9 +1,12 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDb, generateId, idPrefixes, sources, sourceFetches } from "@versioneer/db";
 
 import PipelineWorker from "../index";
+
+const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
+const TEST_NOW_ISO = TEST_NOW.toISOString();
 
 function createWorkerInstance() {
   const instance = Object.create(PipelineWorker.prototype);
@@ -14,6 +17,11 @@ function createWorkerInstance() {
   };
   return instance as InstanceType<typeof PipelineWorker>;
 }
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(TEST_NOW);
+});
 
 describe("recomputeLatest RPC", () => {
   it("executes without error for a valid app", async () => {
@@ -26,8 +34,8 @@ describe("recomputeLatest RPC", () => {
       slug: `rpc-recompute-${appId.slice(-8)}`,
       canonicalName: "Recompute Test",
       status: "public",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
     });
 
     const worker = createWorkerInstance();
@@ -47,8 +55,8 @@ describe("reparse RPC", () => {
       slug: `rpc-reparse-${appId.slice(-8)}`,
       canonicalName: "Reparse Test",
       status: "public",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
     });
 
     const sourceId = generateId(idPrefixes.source);
@@ -61,8 +69,8 @@ describe("reparse RPC", () => {
       status: "active",
       pollIntervalMinutes: 60,
       ordinal: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
     });
 
     const fetchId = generateId(idPrefixes.sourceFetch);
@@ -71,7 +79,7 @@ describe("reparse RPC", () => {
       sourceId,
       fetchStatus: "success",
       r2Key: "raw/test-fetch.xml",
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: TEST_NOW_ISO,
     });
 
     // Put a minimal body in R2 so the parser doesn't fail on missing content

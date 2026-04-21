@@ -207,7 +207,7 @@ describe("manual descriptor", () => {
 
 describe("default descriptor (web_page, regex, json, xml)", () => {
   for (const type of ["web_page", "regex", "json", "xml"] as const) {
-    describe(type, () => {
+    describe(`${type} descriptor`, () => {
       const d = getDescriptor(type);
 
       it("passes through URL", () => {

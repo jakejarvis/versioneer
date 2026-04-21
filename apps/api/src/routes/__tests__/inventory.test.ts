@@ -1,7 +1,7 @@
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { eq, inArray } from "drizzle-orm";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { discoveredApps } from "@versioneer/db";
 
@@ -85,10 +85,16 @@ async function selectDiscoveredByLookupKeys(lookupKeys: string[]) {
 }
 
 let catalog: Awaited<ReturnType<typeof seedInventoryCatalog>>;
+const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
 
 beforeAll(async () => {
   const db = getDb(env.DB);
   catalog = await seedInventoryCatalog(db);
+});
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(TEST_NOW);
 });
 
 describe("POST /v1/inventory/check", () => {
@@ -286,7 +292,7 @@ describe("POST /v1/inventory/check", () => {
   });
 
   it("persists unmatched apps to discoveredApps", async () => {
-    const uniqueBundle = `com.test.discovered.${Date.now()}`;
+    const uniqueBundle = "com.test.discovered.single";
     const res = await postInventory({
       client: {},
       apps: [{ appName: "Brand New App", bundleId: uniqueBundle, version: "1.0.0" }],
@@ -306,7 +312,7 @@ describe("POST /v1/inventory/check", () => {
   });
 
   it("persists every unmatched app beyond the D1 lookup parameter chunk size", async () => {
-    const prefix = `com.test.bulk.${Date.now()}`;
+    const prefix = "com.test.bulk.deterministic";
     const submittedApps = Array.from({ length: 125 }, (_, index) => ({
       appName: `Bulk Unknown ${index}`,
       bundleId: `${prefix}.${index}`,
@@ -327,7 +333,7 @@ describe("POST /v1/inventory/check", () => {
   });
 
   it("handles duplicate unmatched submissions without partial writes or lookup-key conflicts", async () => {
-    const prefix = `com.test.race.${Date.now()}`;
+    const prefix = "com.test.race.deterministic";
     const submittedApps = Array.from({ length: 8 }, (_, index) => ({
       appName: `Race Unknown ${index}`,
       bundleId: `${prefix}.${index}`,

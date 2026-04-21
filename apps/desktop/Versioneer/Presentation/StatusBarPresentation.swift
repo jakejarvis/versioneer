@@ -8,13 +8,14 @@ nonisolated struct StatusBarPresentation: Equatable, Sendable {
   @MainActor
   static func make(
     summary: AppState.ScanSummary,
-    loadState: AppState.LoadState
+    loadState: AppState.LoadState,
+    now: Date = Date()
   ) -> StatusBarPresentation {
     let lastChecked: String =
       if let date = summary.lastCompletedAt {
-        abs(date.timeIntervalSinceNow) < 5
+        abs(date.timeIntervalSince(now)) < 5
           ? "just now"
-          : RelativeDateFormatter.shared.localizedString(for: date, relativeTo: Date())
+          : RelativeDateFormatter.shared.localizedString(for: date, relativeTo: now)
       } else {
         "Never"
       }

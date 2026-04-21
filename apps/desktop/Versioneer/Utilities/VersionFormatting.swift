@@ -24,12 +24,12 @@ nonisolated enum VersionFormatting {
   }
 
   /// Formats a date string (ISO-8601 or RFC 2822) into a relative or short date.
-  static func relativeDate(from dateString: String?) -> String {
+  static func relativeDate(from dateString: String?, relativeTo now: Date = Date()) -> String {
     guard let dateString else { return "—" }
     guard let date = parseDate(dateString) else { return dateString }
     let relative = RelativeDateTimeFormatter()
     relative.unitsStyle = .abbreviated
-    return relative.localizedString(for: date, relativeTo: .now)
+    return relative.localizedString(for: date, relativeTo: now)
   }
 
   /// Attempts to parse a date string in ISO-8601 or RFC 2822 format.

@@ -3,6 +3,8 @@ import Testing
 
 @testable import Versioneer
 
+private let statusBarTestNow = Date(timeIntervalSince1970: 1_774_960_000)
+
 @MainActor
 struct StatusBarPresentationTests {
   @Test func displaysFreshnessAndAppCount() {
@@ -12,15 +14,18 @@ struct StatusBarPresentationTests {
       localOnlyCount: 1,
       needsReviewCount: 0,
       ignoredCount: 2,
-      lastCompletedAt: Date()
+      lastCompletedAt: statusBarTestNow
     )
 
-    let presentation = StatusBarPresentation.make(summary: summary, loadState: .done)
+    let presentation = StatusBarPresentation.make(
+      summary: summary,
+      loadState: .done,
+      now: statusBarTestNow
+    )
 
     #expect(presentation.appCountText == "52 apps")
     #expect(!presentation.isScanning)
-    #expect(!presentation.lastCheckedText.isEmpty)
-    #expect(presentation.lastCheckedText != "Never")
+    #expect(presentation.lastCheckedText == "just now")
   }
 
   @Test func showsNeverWhenNoScanCompleted() {
@@ -66,10 +71,14 @@ struct StatusBarPresentationTests {
       localOnlyCount: 0,
       needsReviewCount: 0,
       ignoredCount: 0,
-      lastCompletedAt: Date()
+      lastCompletedAt: statusBarTestNow
     )
 
-    let presentation = StatusBarPresentation.make(summary: summary, loadState: .done)
+    let presentation = StatusBarPresentation.make(
+      summary: summary,
+      loadState: .done,
+      now: statusBarTestNow
+    )
 
     #expect(presentation.appCountText == "1 app")
   }

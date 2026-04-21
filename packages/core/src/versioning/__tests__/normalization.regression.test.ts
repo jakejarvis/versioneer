@@ -13,13 +13,12 @@ describe("normalizeVersion regression fixtures", () => {
       const result = normalizeVersion(fixture.input);
       const parsed = parseVersion(fixture.input);
 
-      if (fixture.expectedValid) {
-        expect(parsed.valid).toBe(true);
-        // Normalized form should not equal the raw input (it's zero-padded)
-        expect(result).not.toBe("");
-      } else {
-        expect(parsed.valid).toBe(false);
-      }
+      expect({
+        normalizedEmpty: result === "",
+        valid: parsed.valid,
+      }).toMatchObject(
+        fixture.expectedValid ? { normalizedEmpty: false, valid: true } : { valid: false },
+      );
     });
   }
 });

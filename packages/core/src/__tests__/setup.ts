@@ -1,8 +1,4 @@
-import { applyD1Migrations } from "cloudflare:test";
-import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, vi } from "vitest";
-
-await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
 
 function describeFetchInput(input: unknown): string {
   if (typeof input === "string") return input;

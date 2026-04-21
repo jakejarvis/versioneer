@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { computeStaleSince, isArchCompatible, isOsVersionCompatible } from "../helpers";
+
+const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(TEST_NOW);
+});
 
 describe("isOsVersionCompatible", () => {
   it("returns true when no minimum is set", () => {
@@ -65,12 +72,12 @@ describe("computeStaleSince", () => {
   });
 
   it("returns null for recent success", () => {
-    const recent = new Date().toISOString();
+    const recent = TEST_NOW.toISOString();
     expect(computeStaleSince(recent)).toBeNull();
   });
 
   it("returns the date for stale source (>30 days)", () => {
-    const old = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    const old = new Date(TEST_NOW.getTime() - 31 * 24 * 60 * 60 * 1000).toISOString();
     expect(computeStaleSince(old)).toBe(old);
   });
 });

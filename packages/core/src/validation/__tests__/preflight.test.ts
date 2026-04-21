@@ -16,10 +16,12 @@ describe("clientPreflightResponseSchema", () => {
   });
 
   it("rejects missing dismissedBundleIds", () => {
-    expect(() => clientPreflightResponseSchema.parse({})).toThrow();
+    expect(clientPreflightResponseSchema.safeParse({}).success).toBe(false);
   });
 
   it("rejects non-string array elements", () => {
-    expect(() => clientPreflightResponseSchema.parse({ dismissedBundleIds: [123] })).toThrow();
+    expect(clientPreflightResponseSchema.safeParse({ dismissedBundleIds: [123] }).success).toBe(
+      false,
+    );
   });
 });

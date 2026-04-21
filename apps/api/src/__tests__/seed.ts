@@ -15,7 +15,9 @@ import {
   sources,
 } from "@versioneer/db";
 
-const now = () => new Date().toISOString();
+export const TEST_NOW_ISO = "2026-03-31T12:00:00.000Z";
+
+const now = () => TEST_NOW_ISO;
 
 export function getDb(d1: D1Database): Database {
   return createDb(d1);
@@ -181,11 +183,12 @@ export async function seedDeviceAttestation(
   db: Database,
   overrides: Partial<typeof deviceAttestations.$inferInsert> = {},
 ) {
+  const id = overrides.id ?? generateId(idPrefixes.deviceAttestation);
   const [row] = await db
     .insert(deviceAttestations)
     .values({
-      id: overrides.id ?? generateId(idPrefixes.deviceAttestation),
-      keyId: overrides.keyId ?? `key-${Date.now()}`,
+      id,
+      keyId: overrides.keyId ?? `key-${id.slice(-8)}`,
       publicKey: "test-public-key",
       counter: 0,
       createdAt: now(),

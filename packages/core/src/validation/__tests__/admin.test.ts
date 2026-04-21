@@ -22,15 +22,19 @@ describe("appCreateSchema", () => {
   });
 
   it("rejects uppercase slugs", () => {
-    expect(() => appCreateSchema.parse({ slug: "Foo-Bar", canonicalName: "Foo" })).toThrow();
+    expect(appCreateSchema.safeParse({ slug: "Foo-Bar", canonicalName: "Foo" }).success).toBe(
+      false,
+    );
   });
 
   it("rejects slugs with spaces", () => {
-    expect(() => appCreateSchema.parse({ slug: "foo bar", canonicalName: "Foo" })).toThrow();
+    expect(appCreateSchema.safeParse({ slug: "foo bar", canonicalName: "Foo" }).success).toBe(
+      false,
+    );
   });
 
   it("rejects empty slug", () => {
-    expect(() => appCreateSchema.parse({ slug: "", canonicalName: "Foo" })).toThrow();
+    expect(appCreateSchema.safeParse({ slug: "", canonicalName: "Foo" }).success).toBe(false);
   });
 
   it("accepts optional fields", () => {
@@ -46,9 +50,10 @@ describe("appCreateSchema", () => {
   });
 
   it("rejects invalid URL for homepageUrl", () => {
-    expect(() =>
-      appCreateSchema.parse({ slug: "foo", canonicalName: "Foo", homepageUrl: "not-a-url" }),
-    ).toThrow();
+    expect(
+      appCreateSchema.safeParse({ slug: "foo", canonicalName: "Foo", homepageUrl: "not-a-url" })
+        .success,
+    ).toBe(false);
   });
 });
 
@@ -93,13 +98,13 @@ describe("aliasCreateSchema", () => {
   });
 
   it("rejects confidenceWeight over 100", () => {
-    expect(() =>
-      aliasCreateSchema.parse({
+    expect(
+      aliasCreateSchema.safeParse({
         aliasType: "bundle_id",
         value: "test",
         confidenceWeight: 101,
-      }),
-    ).toThrow();
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -122,14 +127,14 @@ describe("sourceCreateSchema", () => {
   });
 
   it("rejects pollIntervalMinutes below 5", () => {
-    expect(() =>
-      sourceCreateSchema.parse({
+    expect(
+      sourceCreateSchema.safeParse({
         appId: "app_123",
         sourceType: "sparkle",
         parserKey: "sparkle",
         pollIntervalMinutes: 1,
-      }),
-    ).toThrow();
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts all source types", () => {
@@ -169,7 +174,7 @@ describe("releaseCreateSchema", () => {
   });
 
   it("rejects empty versionRaw", () => {
-    expect(() => releaseCreateSchema.parse({ appId: "app_123", versionRaw: "" })).toThrow();
+    expect(releaseCreateSchema.safeParse({ appId: "app_123", versionRaw: "" }).success).toBe(false);
   });
 });
 
