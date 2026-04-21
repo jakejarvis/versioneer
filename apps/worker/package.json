@@ -6,12 +6,12 @@
   "scripts": {
     "dev": "wrangler dev --persist-to ../../.wrangler/state",
     "deploy": "wrangler deploy --env=production",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
-    "fmt": "oxfmt --config ../../.oxfmtrc.json",
-    "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "fmt": "vp fmt",
+    "fmt:check": "vp fmt --check",
     "check-types": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vp test",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
@@ -23,7 +23,10 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
     "@versioneer/tsconfig": "workspace:*",
+    "@vitest/runner": "catalog:",
+    "@vitest/snapshot": "catalog:",
     "typescript": "catalog:",
+    "vite-plus": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"
   }

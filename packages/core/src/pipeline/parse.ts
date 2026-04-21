@@ -12,7 +12,6 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
-import type { SourceType } from "@versioneer/schemas/sources";
 
 import { inferReleasedAt, toISODate } from "../dates";
 import { createLogger } from "../logger";
@@ -105,7 +104,7 @@ export async function handleSourceParse(
 
   try {
     const artifactBase = source.baseUrl
-      ? getDescriptor(source.sourceType as SourceType).resolveArtifactBase(source.baseUrl)
+      ? getDescriptor(source.sourceType).resolveArtifactBase(source.baseUrl)
       : source.baseUrl;
     const output = parser.parse(body, {
       ...config,

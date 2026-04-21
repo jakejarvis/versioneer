@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vite-plus/test";
 
 function describeFetchInput(input: unknown): string {
   if (typeof input === "string") return input;

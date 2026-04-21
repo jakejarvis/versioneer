@@ -655,7 +655,7 @@ async function storeIcon(bucket: R2Bucket, iconBase64: string): Promise<string |
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i)!;
     }
-    const body = bytes.buffer as ArrayBuffer;
+    const body = bytes.buffer;
 
     if (body.byteLength > 512 * 1024) return null;
 
@@ -1006,7 +1006,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 .innerJoin(artifacts, eq(artifacts.releaseId, releases.id))
                 .where(
                   and(
-                    eq(releases.appId, matchResult.appId!),
+                    eq(releases.appId, matchResult.appId),
                     eq(releases.status, "active"),
                     eq(releases.channel, latest.channel),
                   ),

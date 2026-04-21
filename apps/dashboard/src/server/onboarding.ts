@@ -17,7 +17,6 @@ import {
   idPrefixes,
 } from "@versioneer/db";
 import { aliasTypeSchema } from "@versioneer/schemas/catalog";
-import type { SourceType } from "@versioneer/schemas/sources";
 import {
   defaultRoleForSourceType,
   defaultRuntimeStatusForSourceType,
@@ -121,7 +120,7 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
 
     for (const src of allSources) {
       if (!src.baseUrl) continue;
-      const derived = getDescriptor(src.sourceType as SourceType).derivedAlias(src.baseUrl);
+      const derived = getDescriptor(src.sourceType).derivedAlias(src.baseUrl);
       if (!derived) continue;
 
       try {
@@ -187,9 +186,7 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     const sourceIds: string[] = [];
     for (let i = 0; i < allSources.length; i++) {
       const src = allSources[i]!;
-      const normalizedBaseUrl = src.baseUrl
-        ? normalizeBaseUrl(src.sourceType as SourceType, src.baseUrl)
-        : null;
+      const normalizedBaseUrl = src.baseUrl ? normalizeBaseUrl(src.sourceType, src.baseUrl) : null;
       const sourceId = generateId(idPrefixes.source);
       const isPrimary = i === 0;
       const defaultRole = defaultRoleForSourceType(src.sourceType);

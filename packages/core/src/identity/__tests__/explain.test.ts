@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vite-plus/test";
 
 import { generateMatchExplanation } from "../explain";
 import type { AliasRecord, MatchInput, MatchResult } from "../types";

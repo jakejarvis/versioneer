@@ -1,5 +1,5 @@
 import { load } from "cheerio";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { discoverHomepageSourceCandidates } from "../scrape-html";
 

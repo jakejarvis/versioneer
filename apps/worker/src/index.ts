@@ -56,7 +56,7 @@ async function createSourcePipelineBatch(
   return queued;
 }
 
-export default class PipelineWorker extends WorkerEntrypoint<Env> {
+export default class PipelineWorker extends WorkerEntrypoint {
   /**
    * RPC: recompute the latest release for an app (optionally a specific channel).
    * Called via service binding from the dashboard.

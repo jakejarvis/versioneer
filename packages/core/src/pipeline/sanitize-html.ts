@@ -103,13 +103,13 @@ export function sanitizeHtml(html: string): string {
 
         // Recurse into children
         if (node.children.length > 0) {
-          walk(node.children as ChildNode[]);
+          walk(node.children);
         }
       }
     }
   }
 
-  walk(doc.children as ChildNode[]);
+  walk(doc.children);
   return render(doc);
 }
 

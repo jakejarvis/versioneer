@@ -6,7 +6,7 @@ import { inferArtifactType, resolveUrl } from "./utils";
 
 function queryJsonPath(path: string, json: object): unknown[] {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-  return JSONPath({ path, json, wrap: true }) as never;
+  return JSONPath({ path, json, wrap: true });
 }
 
 export const jsonParser: SourceParser = {
@@ -150,7 +150,7 @@ function parseMultiRelease(
 
     let versionRaw: string;
     try {
-      const results = queryJsonPath(versionPath, element as object);
+      const results = queryJsonPath(versionPath, element);
       const first = results[0];
       if (first === undefined || first === null) {
         errors.push(`versionPath "${versionPath}" matched no value in element [${i}]`);
@@ -173,7 +173,7 @@ function parseMultiRelease(
     const artifacts: ParsedArtifact[] = [];
     if (downloadPath) {
       try {
-        const results = queryJsonPath(downloadPath, element as object);
+        const results = queryJsonPath(downloadPath, element);
         const first = results[0];
         if (first !== undefined && first !== null) {
           const rawUrl = String(first).trim();

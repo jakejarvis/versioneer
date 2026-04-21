@@ -32,7 +32,7 @@ export function parseVersion(raw: string): ParsedVersion {
   // "beta-1.0" would lose its pre-release meaning.
   const namePrefixMatch = working.match(/^([a-zA-Z]+)[-_](?=\d)/);
   if (namePrefixMatch && !(namePrefixMatch[1]!.toLowerCase() in PRE_RELEASE_TAGS)) {
-    working = working.slice(namePrefixMatch[0]!.length);
+    working = working.slice(namePrefixMatch[0].length);
   }
 
   // Extract build metadata after '+'

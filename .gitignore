@@ -145,8 +145,7 @@ vite.config.ts.timestamp-*
 .wrangler/
 .dev.vars
 
-# Turborepo
-.turbo/
-
-.tanstack
-.build
+# Tanstack
+.tanstack/
+.build/
+.output/

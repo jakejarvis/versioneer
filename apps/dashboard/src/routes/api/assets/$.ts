@@ -16,7 +16,7 @@ export const Route = createFileRoute("/api/assets/$")({
           return new Response("Not found", { status: 404 });
         }
 
-        return new Response(object.body as ReadableStream, {
+        return new Response(object.body, {
           headers: {
             "Content-Type": object.httpMetadata?.contentType ?? "application/octet-stream",
             "Cache-Control": object.httpMetadata?.cacheControl ?? "public, max-age=86400",

@@ -1,29 +1,24 @@
 {
   "name": "versioneer-mono",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "turbo run build",
-    "deploy": "turbo run deploy --concurrency=1",
-    "dev": "turbo run dev --filter=@versioneer/api --filter=@versioneer/dashboard",
-    "lint": "turbo run lint",
-    "lint:fix": "turbo run lint:fix",
-    "fmt": "turbo run fmt",
-    "fmt:check": "turbo run fmt:check",
-    "check-types": "turbo run check-types",
-    "test": "turbo run test",
-    "db:generate": "pnpm --filter @versioneer/db db:generate",
-    "db:migrate:local": "pnpm --filter @versioneer/db db:migrate:local",
-    "db:migrate:remote": "pnpm --filter @versioneer/db db:migrate:remote",
-    "cf-typegen": "turbo run cf-typegen"
+    "build": "vp run -r build",
+    "deploy": "vp run -r deploy",
+    "dev": "vp run --filter @versioneer/api --filter @versioneer/dashboard dev",
+    "lint": "vp lint",
+    "fmt": "vp fmt",
+    "test": "vp test",
+    "db:generate": "vp run @versioneer/db#db:generate",
+    "db:migrate:local": "vp run @versioneer/db#db:migrate:local",
+    "db:migrate:remote": "vp run @versioneer/db#db:migrate:remote",
+    "cf-typegen": "vp run -r cf-typegen",
+    "prepare": "vp config"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "@vitest/coverage-v8": "catalog:",
-    "oxfmt": "^0.46.0",
-    "oxlint": "^1.61.0",
-    "tsx": "^4.21.0",
-    "turbo": "^2.9.6",
     "typescript": "catalog:",
+    "vite-plus": "catalog:",
     "vitest": "catalog:"
   },
   "packageManager": "pnpm@10.33.0"

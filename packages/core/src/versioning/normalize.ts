@@ -21,7 +21,7 @@ export function displayVersion(raw: string): string {
   // Keep the prefix when it is a known pre-release tag ("beta-1.0").
   const m = s.match(/^([a-zA-Z]+)[-_](?=\d)/);
   if (m && !(m[1]!.toLowerCase() in PRE_RELEASE_TAGS)) {
-    s = s.slice(m[0]!.length);
+    s = s.slice(m[0].length);
   }
 
   return s;

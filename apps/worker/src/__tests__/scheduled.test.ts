@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { desc, sql } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createDb, cronJobRuns, generateId, idPrefixes, sources } from "@versioneer/db";
 

@@ -4,14 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "deploy": "vite build && wrangler pages deploy",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
-    "fmt": "oxfmt --config ../../.oxfmtrc.json",
-    "fmt:check": "oxfmt --check --config ../../.oxfmtrc.json",
+    "dev": "vp dev",
+    "build": "vp build",
+    "preview": "vp preview",
+    "deploy": "vp build && wrangler pages deploy",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "fmt": "vp fmt",
+    "fmt:check": "vp fmt --check",
     "check-types": "tsc --noEmit",
     "cf-typegen": "wrangler types"
   },
@@ -39,7 +39,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "tailwindcss": "^4.2.4",
     "typescript": "catalog:",
-    "vite": "^8.0.9",
+    "vite-plus": "catalog:",
     "wrangler": "catalog:"
   }
 }

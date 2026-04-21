@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vite-plus/test";
 
 import { matchApp } from "../matcher";
 import type { AliasRecord, TrustAssertionRecord } from "../types";

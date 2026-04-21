@@ -16,7 +16,6 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
-import type { SourceType } from "@versioneer/schemas/sources";
 import {
   defaultRoleForSourceType,
   defaultRuntimeStatusForSourceType,
@@ -352,7 +351,7 @@ export const updateSource = createServerFn({ method: "POST" })
     const nextBaseUrl =
       fields.baseUrl !== undefined
         ? fields.baseUrl
-          ? normalizeBaseUrl(existing.sourceType as SourceType, fields.baseUrl)
+          ? normalizeBaseUrl(existing.sourceType, fields.baseUrl)
           : null
         : existing.baseUrl;
     const nextReviewStatus = fields.reviewStatus ?? existing.reviewStatus;
@@ -395,7 +394,7 @@ export const updateSource = createServerFn({ method: "POST" })
         : (fields.status ?? (fields.reviewStatus !== undefined ? "disabled" : existing.status));
 
     const derivedAlias = nextBaseUrl
-      ? getDescriptor(existing.sourceType as SourceType).derivedAlias(nextBaseUrl)
+      ? getDescriptor(existing.sourceType).derivedAlias(nextBaseUrl)
       : null;
     if (nextReviewStatus === "approved" && derivedAlias) {
       try {
