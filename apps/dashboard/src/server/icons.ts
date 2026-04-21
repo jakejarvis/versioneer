@@ -56,7 +56,7 @@ export const uploadAppIcon = createServerFn({ method: "POST" })
     const ext = CONTENT_TYPE_TO_EXT[data.contentType];
     const r2Key = `icons/${hash}.${ext}`;
 
-    await (env as unknown as { ASSETS_BUCKET: R2Bucket }).ASSETS_BUCKET.put(r2Key, body, {
+    await env.ASSETS_BUCKET.put(r2Key, body, {
       httpMetadata: {
         contentType: data.contentType,
         cacheControl: "public, max-age=31536000, immutable",
@@ -69,7 +69,7 @@ export const uploadAppIcon = createServerFn({ method: "POST" })
     await db.update(apps).set({ iconR2Key: r2Key, updatedAt: now }).where(eq(apps.id, data.appId));
 
     if (previousKey && previousKey !== r2Key) {
-      await (env as unknown as { ASSETS_BUCKET: R2Bucket }).ASSETS_BUCKET.delete(previousKey);
+      await env.ASSETS_BUCKET.delete(previousKey);
     }
 
     await db.insert(auditLog).values({
@@ -96,7 +96,7 @@ export const deleteAppIcon = createServerFn({ method: "POST" })
     if (!app) throw new Error("App not found");
     if (!app.iconR2Key) throw new Error("App has no icon");
 
-    await (env as unknown as { ASSETS_BUCKET: R2Bucket }).ASSETS_BUCKET.delete(app.iconR2Key);
+    await env.ASSETS_BUCKET.delete(app.iconR2Key);
 
     const now = new Date().toISOString();
     await db.update(apps).set({ iconR2Key: null, updatedAt: now }).where(eq(apps.id, data.appId));

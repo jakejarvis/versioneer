@@ -7,6 +7,7 @@ import { discoveredApps } from "@versioneer/db";
 
 import { getDb } from "../../__tests__/seed";
 import app from "../../index";
+import { MAX_INVENTORY_GZIP_BYTES, MAX_INVENTORY_JSON_BYTES } from "../../lib/constants";
 import { seedInventoryCatalog } from "./fixtures/inventory-seed";
 
 type InventoryResponse = {
@@ -31,8 +32,8 @@ type InventoryResponse = {
   processedAt: string;
 };
 
-async function postInventory(
-  body: { client: Record<string, unknown>; apps: unknown[]; scanDurationMs?: number },
+async function postInventoryRequest(
+  init: { body: BodyInit; headers?: HeadersInit },
   extraEnv?: Partial<Env>,
 ) {
   const ctx = createExecutionContext();
@@ -40,14 +41,27 @@ async function postInventory(
     "/v1/inventory/check",
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json", ...init.headers },
+      body: init.body,
     },
     { ...env, ...extraEnv },
     ctx,
   );
   await waitOnExecutionContext(ctx);
   return res;
+}
+
+async function postInventory(
+  body: { client: Record<string, unknown>; apps: unknown[]; scanDurationMs?: number },
+  extraEnv?: Partial<Env>,
+) {
+  return postInventoryRequest({ body: JSON.stringify(body) }, extraEnv);
+}
+
+async function gzipText(text: string): Promise<ArrayBuffer> {
+  return new Response(
+    new Blob([text]).stream().pipeThrough(new CompressionStream("gzip")),
+  ).arrayBuffer();
 }
 
 async function selectDiscoveredByLookupKeys(lookupKeys: string[]) {
@@ -84,6 +98,76 @@ describe("POST /v1/inventory/check", () => {
     const body = (await res.json()) as InventoryResponse;
     expect(body.results).toEqual([]);
     expect(body.processedAt).toBeDefined();
+  });
+
+  it("accepts gzip-compressed inventory JSON", async () => {
+    const body = JSON.stringify({
+      client: { osVersion: "15.0", systemArchitecture: "arm64" },
+      apps: [{ appName: "Firefox", bundleId: "org.mozilla.firefox", version: "130.0" }],
+    });
+    const res = await postInventoryRequest({
+      headers: { "Content-Encoding": "gzip" },
+      body: await gzipText(body),
+    });
+
+    expect(res.status).toBe(200);
+    const responseBody = (await res.json()) as InventoryResponse;
+    expect(responseBody.results[0]!.decision).toBe("up_to_date");
+  });
+
+  it("rejects raw inventory bodies over the decoded JSON limit", async () => {
+    const res = await postInventoryRequest({
+      body: new Uint8Array(MAX_INVENTORY_JSON_BYTES + 1),
+    });
+
+    expect(res.status).toBe(413);
+  });
+
+  it("rejects gzip inventory bodies over the compressed limit", async () => {
+    const res = await postInventoryRequest({
+      headers: { "Content-Encoding": "gzip" },
+      body: new Uint8Array(MAX_INVENTORY_GZIP_BYTES + 1),
+    });
+
+    expect(res.status).toBe(413);
+  });
+
+  it("rejects gzip inventory bodies over the decoded JSON limit", async () => {
+    const body = JSON.stringify({
+      client: {},
+      apps: [],
+      padding: "x".repeat(MAX_INVENTORY_JSON_BYTES),
+    });
+    const res = await postInventoryRequest({
+      headers: { "Content-Encoding": "gzip" },
+      body: await gzipText(body),
+    });
+
+    expect(res.status).toBe(413);
+  });
+
+  it("rejects invalid gzip inventory bodies", async () => {
+    const res = await postInventoryRequest({
+      headers: { "Content-Encoding": "gzip" },
+      body: "not gzip",
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects malformed inventory JSON", async () => {
+    const res = await postInventoryRequest({ body: "{" });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects unsupported inventory content encodings", async () => {
+    const res = await postInventoryRequest({
+      headers: { "Content-Encoding": "br" },
+      body: JSON.stringify({ client: {}, apps: [] }),
+    });
+
+    expect(res.status).toBe(415);
   });
 
   it("matches an app by bundle_id — up to date", async () => {

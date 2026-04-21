@@ -8,15 +8,29 @@ import { createLogger } from "../logger";
 import { getDescriptor } from "../sources/registry";
 import type { SourceTypeDescriptor } from "../sources/types";
 import { readResponseTextLimited } from "./response-body";
-import type { Env, FetchStepResult, SourceFetchJob } from "./types";
+import type { FetchStepResult, SourceFetchEnv, SourceFetchJob } from "./types";
 
 const MAX_SOURCE_FETCH_BODY_BYTES = 5 * 1024 * 1024;
+
+async function deterministicSourceFetchId(sourceId: string, idempotencyKey?: string) {
+  if (!idempotencyKey) return generateId(idPrefixes.sourceFetch);
+
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest(
+    "SHA-256",
+    encoder.encode(`${sourceId}:${idempotencyKey}`),
+  );
+  const digest = [...new Uint8Array(hashBuffer)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return `${idPrefixes.sourceFetch}_${digest.slice(0, 20)}`;
+}
 
 async function fetchWithCandidates(
   descriptor: SourceTypeDescriptor,
   baseUrl: string,
   conditionalHeaders: Record<string, string>,
-  env: Env,
+  env: SourceFetchEnv,
 ): Promise<Response> {
   const candidates = descriptor.buildFetchUrls(baseUrl);
   if (candidates.length === 0) {
@@ -37,7 +51,10 @@ async function fetchWithCandidates(
   return lastResponse!;
 }
 
-export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<FetchStepResult> {
+export async function handleSourceFetch(
+  job: SourceFetchJob,
+  env: SourceFetchEnv,
+): Promise<FetchStepResult> {
   const db = createDb(env.DB);
   const log = createLogger({ fn: "handleSourceFetch", sourceId: job.sourceId });
   const now = new Date().toISOString();
@@ -59,7 +76,29 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
     throw new Error(`Source ${job.sourceId} has no base URL`);
   }
 
-  const fetchId = generateId(idPrefixes.sourceFetch);
+  const fetchId = await deterministicSourceFetchId(source.id, job.idempotencyKey);
+  if (job.idempotencyKey) {
+    const existingFetch = await db
+      .select()
+      .from(sourceFetches)
+      .where(eq(sourceFetches.id, fetchId))
+      .get();
+
+    if (existingFetch) {
+      log.info("returning existing fetch for idempotency key", {
+        fetchId,
+        fetchStatus: existingFetch.fetchStatus,
+      });
+      if (existingFetch.fetchStatus === "error" || existingFetch.fetchStatus === "timeout") {
+        throw new Error(existingFetch.errorMessage ?? `Source fetch failed: ${fetchId}`);
+      }
+      return {
+        sourceFetchId: existingFetch.id,
+        shouldParse: existingFetch.fetchStatus === "success" && !!existingFetch.r2Key,
+        appId: source.appId,
+      };
+    }
+  }
 
   // Sources that skip HTTP fetch (e.g. manual)
   if (descriptor.skipsFetch) {
@@ -194,13 +233,21 @@ export async function handleSourceFetch(job: SourceFetchJob, env: Env): Promise<
     log.error("fetch failed", { fetchId, error });
     const errorMsg = error instanceof Error ? error.message : String(error);
 
-    await db.insert(sourceFetches).values({
-      id: fetchId,
-      sourceId: source.id,
-      fetchStatus: "error",
-      errorMessage: errorMsg,
-      fetchedAt: now,
-    });
+    const existingFetch = await db
+      .select({ id: sourceFetches.id })
+      .from(sourceFetches)
+      .where(eq(sourceFetches.id, fetchId))
+      .get();
+
+    if (!existingFetch) {
+      await db.insert(sourceFetches).values({
+        id: fetchId,
+        sourceId: source.id,
+        fetchStatus: "error",
+        errorMessage: errorMsg,
+        fetchedAt: now,
+      });
+    }
 
     await db
       .update(sources)

@@ -25,7 +25,10 @@ export class SourcePipelineWorkflow extends WorkflowEntrypoint<Env, SourceFetchJ
           const stepLog = log.child({ step: "fetch-source" });
           const start = Date.now();
           try {
-            const result = await handleSourceFetch({ sourceId, reason, force }, this.env as never);
+            const result = await handleSourceFetch(
+              { sourceId, reason, force, idempotencyKey: event.instanceId },
+              this.env,
+            );
             stepLog.info("step completed", {
               durationMs: Date.now() - start,
               shouldParse: result.shouldParse,
@@ -53,7 +56,7 @@ export class SourcePipelineWorkflow extends WorkflowEntrypoint<Env, SourceFetchJ
           try {
             const result = await handleSourceParse(
               { sourceFetchId: fetchResult.sourceFetchId! },
-              this.env as never,
+              this.env,
             );
             stepLog.info("step completed", {
               durationMs: Date.now() - start,
@@ -71,7 +74,7 @@ export class SourcePipelineWorkflow extends WorkflowEntrypoint<Env, SourceFetchJ
         const stepLog = log.child({ step: "recompute-latest" });
         const start = Date.now();
         try {
-          await handleRecomputeLatest({ appId: parseResult.appId }, this.env as never);
+          await handleRecomputeLatest({ appId: parseResult.appId }, this.env);
           stepLog.info("step completed", { durationMs: Date.now() - start });
         } catch (err) {
           stepLog.error("step failed", { durationMs: Date.now() - start, error: err });

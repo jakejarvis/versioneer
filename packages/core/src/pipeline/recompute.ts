@@ -14,7 +14,7 @@ import type { InstallStrategy } from "@versioneer/schemas/releases";
 
 import { setCachedLatest, recentReleasesKey } from "../cache";
 import type { CacheKV } from "../cache";
-import type { Env, RecomputeLatestJob } from "./types";
+import type { RecomputeLatestEnv, RecomputeLatestJob } from "./types";
 
 /**
  * Infer install strategy from source type and artifact type.
@@ -32,7 +32,10 @@ function inferInstallStrategy(
   return "manual_only";
 }
 
-export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): Promise<void> {
+export async function handleRecomputeLatest(
+  job: RecomputeLatestJob,
+  env: RecomputeLatestEnv,
+): Promise<void> {
   const db = createDb(env.DB);
   const now = new Date().toISOString();
 
@@ -181,7 +184,7 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
     }
 
     // Update KV cache
-    const cacheKV = env.CACHE_KV as unknown as CacheKV;
+    const cacheKV: CacheKV = env.CACHE_KV;
     await setCachedLatest(cacheKV, {
       appId: job.appId,
       releaseId: winningRelease.id,
@@ -194,6 +197,6 @@ export async function handleRecomputeLatest(job: RecomputeLatestJob, env: Env): 
   }
 
   // Bust the recent-releases cache so the marketing page updates promptly
-  const cacheKV = env.CACHE_KV as unknown as CacheKV;
+  const cacheKV: CacheKV = env.CACHE_KV;
   await cacheKV.delete(recentReleasesKey());
 }

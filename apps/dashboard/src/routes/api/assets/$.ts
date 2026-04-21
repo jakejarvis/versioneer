@@ -10,8 +10,7 @@ export const Route = createFileRoute("/api/assets/$")({
           return new Response("Not found", { status: 404 });
         }
 
-        const bucket = env.ASSETS_BUCKET as unknown as R2Bucket;
-        const object = await bucket.get(key);
+        const object = await env.ASSETS_BUCKET.get(key);
 
         if (!object) {
           return new Response("Not found", { status: 404 });

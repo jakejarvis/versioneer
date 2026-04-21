@@ -1,7 +1,9 @@
-import { env } from "cloudflare:workers";
+import { env, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
+import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createDb, generateId, idPrefixes, sources } from "@versioneer/db";
+import type { SourceFetchJob } from "@versioneer/core/pipeline";
+import { createDb, generateId, idPrefixes, sourceFetches, sources } from "@versioneer/db";
 
 import { SourcePipelineWorkflow } from "../source-pipeline";
 
@@ -15,19 +17,22 @@ function createWorkflowInstance() {
   return instance as InstanceType<typeof SourcePipelineWorkflow>;
 }
 
-function createMockStep() {
+type MockWorkflowStep = WorkflowStep & { calls: string[] };
+
+function createMockStep(): MockWorkflowStep {
   const calls: string[] = [];
-  return {
-    calls,
-    do: vi
-      .fn<(name: string, options: unknown, callback: () => Promise<unknown>) => Promise<unknown>>()
-      .mockImplementation(async (name, _options, callback) => {
-        calls.push(name);
-        return callback();
-      }),
-    sleep: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    sleepUntil: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-  };
+  const step = Object.create(null);
+  step.calls = calls;
+  step.do = vi
+    .fn<(name: string, options: unknown, callback: () => Promise<unknown>) => Promise<unknown>>()
+    .mockImplementation(async (name, _options, callback) => {
+      calls.push(name);
+      return callback();
+    });
+  step.sleep = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+  step.sleepUntil = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+  step.waitForEvent = vi.fn<() => Promise<never>>();
+  return step as MockWorkflowStep;
 }
 
 afterEach(() => {
@@ -69,17 +74,73 @@ describe("SourcePipelineWorkflow", () => {
 
     const workflow = createWorkflowInstance();
     const step = createMockStep();
-    const event = {
+    const event: WorkflowEvent<SourceFetchJob> = {
       payload: { sourceId, reason: "scheduled" as const, force: false },
       timestamp: new Date(),
+      instanceId: `wf_304_${sourceId}`,
     };
 
-    const result = await workflow.run(event as never, step as never);
+    const result = await workflow.run(event, step);
 
     expect(step.calls).toContain("fetch-source");
     expect(result).toHaveProperty("status", "completed");
     // 304 means nothing new → shouldParse=false → early exit, no parse or recompute steps
     expect(step.calls).not.toContain("parse-source");
+  });
+
+  it("uses the workflow instance id as a stable source fetch idempotency seed", async () => {
+    const db = createDb(env.DB);
+    const { apps } = await import("@versioneer/db");
+
+    const appId = generateId(idPrefixes.app);
+    await db.insert(apps).values({
+      id: appId,
+      slug: `wf-idempotent-${appId.slice(-8)}`,
+      canonicalName: "Idempotent Workflow Test",
+      status: "public",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const sourceId = generateId(idPrefixes.source);
+    await db.insert(sources).values({
+      id: sourceId,
+      appId,
+      sourceType: "sparkle",
+      parserKey: "sparkle",
+      baseUrl: "https://test-sparkle.example.com/idempotent-appcast.xml",
+      reviewStatus: "approved",
+      status: "active",
+      pollIntervalMinutes: 60,
+      ordinal: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 304 }));
+    const event: WorkflowEvent<SourceFetchJob> = {
+      payload: { sourceId, reason: "scheduled" as const, force: false },
+      timestamp: new Date(),
+      instanceId: `wf_retry_${sourceId}`,
+    };
+
+    const workflow = createWorkflowInstance();
+    const firstStep = createMockStep();
+    const secondStep = createMockStep();
+
+    await workflow.run(event, firstStep);
+    await workflow.run(event, secondStep);
+
+    const rows = await db
+      .select()
+      .from(sourceFetches)
+      .where(eq(sourceFetches.sourceId, sourceId))
+      .all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.fetchStatus).toBe("not_modified");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   it("runs all 3 steps when source returns new content", async () => {
@@ -134,12 +195,13 @@ describe("SourcePipelineWorkflow", () => {
 
     const workflow = createWorkflowInstance();
     const step = createMockStep();
-    const event = {
+    const event: WorkflowEvent<SourceFetchJob> = {
       payload: { sourceId, reason: "scheduled" as const, force: false },
       timestamp: new Date(),
+      instanceId: `wf_full_${sourceId}`,
     };
 
-    const result = await workflow.run(event as never, step as never);
+    const result = await workflow.run(event, step);
 
     // All 3 steps should have run
     expect(step.calls).toEqual(["fetch-source", "parse-source", "recompute-latest"]);

@@ -1,10 +1,30 @@
-export interface Env {
+export interface SourceFetchEnv {
   DB: D1Database;
   RAW_BUCKET: R2Bucket;
-  CACHE_KV: KVNamespace;
-  CONFIG_KV: KVNamespace;
-  ENVIRONMENT: string;
   GITHUB_TOKEN?: string;
+}
+
+export interface SourceParseEnv {
+  DB: D1Database;
+  RAW_BUCKET: R2Bucket;
+}
+
+export interface RecomputeLatestEnv {
+  DB: D1Database;
+  CACHE_KV: KVNamespace;
+}
+
+export interface CaskIndexSyncEnv {
+  DB: D1Database;
+  CONFIG_KV: KVNamespace;
+}
+
+export interface CaskSyncDueEnv {
+  CONFIG_KV: KVNamespace;
+}
+
+export interface Env extends SourceFetchEnv, SourceParseEnv, RecomputeLatestEnv, CaskIndexSyncEnv {
+  ENVIRONMENT: string;
 }
 
 export interface FetchStepResult {
@@ -40,6 +60,7 @@ export interface SourceFetchJob {
   sourceId: string;
   reason: string;
   force?: boolean;
+  idempotencyKey?: string;
 }
 
 export interface SourceParseJob {

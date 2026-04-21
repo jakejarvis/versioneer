@@ -161,7 +161,7 @@ export const triggerCaskSync = createServerFn({ method: "POST" })
     const startedAt = new Date().toISOString();
 
     try {
-      await handleCaskIndexSync({ reason: "manual", force: true }, env as never);
+      await handleCaskIndexSync({ reason: "manual", force: true }, env);
 
       await db.insert(cronJobRuns).values({
         id: runId,

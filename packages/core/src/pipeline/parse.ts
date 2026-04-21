@@ -20,9 +20,12 @@ import { getParser } from "../parsers";
 import { getDescriptor } from "../sources/registry";
 import { normalizeVersion, inferChannel } from "../versioning";
 import { normalizeReleaseNotes } from "./release-notes";
-import type { Env, ParseStepResult, SourceParseJob } from "./types";
+import type { ParseStepResult, SourceParseEnv, SourceParseJob } from "./types";
 
-export async function handleSourceParse(job: SourceParseJob, env: Env): Promise<ParseStepResult> {
+export async function handleSourceParse(
+  job: SourceParseJob,
+  env: SourceParseEnv,
+): Promise<ParseStepResult> {
   const db = createDb(env.DB);
   const log = createLogger({ fn: "handleSourceParse", sourceFetchId: job.sourceFetchId });
   const now = new Date().toISOString();

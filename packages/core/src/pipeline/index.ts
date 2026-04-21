@@ -1,5 +1,10 @@
 export type {
   Env,
+  SourceFetchEnv,
+  SourceParseEnv,
+  RecomputeLatestEnv,
+  CaskIndexSyncEnv,
+  CaskSyncDueEnv,
   SourceFetchJob,
   SourceParseJob,
   RecomputeLatestJob,

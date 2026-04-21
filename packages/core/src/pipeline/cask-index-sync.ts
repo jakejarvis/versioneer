@@ -5,7 +5,7 @@ import { appAliases, discoveredApps, generateId, idPrefixes } from "@versioneer/
 
 import { msElapsedSince } from "../dates";
 import { createLogger } from "../logger";
-import { VERSIONEER_USER_AGENT, type Env } from "./types";
+import { VERSIONEER_USER_AGENT, type CaskIndexSyncEnv, type CaskSyncDueEnv } from "./types";
 
 const CASK_INDEX_URL = "https://formulae.brew.sh/api/cask.json";
 const ETAG_KV_KEY = "cask-index-etag";
@@ -135,7 +135,10 @@ function extractAppcastUrl(cask: CaskIndexEntry): string | undefined {
   return undefined;
 }
 
-export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Promise<void> {
+export async function handleCaskIndexSync(
+  job: CaskIndexSyncJob,
+  env: CaskIndexSyncEnv,
+): Promise<void> {
   const db = createDb(env.DB);
   const log = createLogger({ fn: "handleCaskIndexSync" });
   const now = new Date().toISOString();
@@ -318,7 +321,7 @@ export async function handleCaskIndexSync(job: CaskIndexSyncJob, env: Env): Prom
 /**
  * Check if a cask index sync is due (used by the scheduled handler).
  */
-export async function isCaskSyncDue(env: Env): Promise<boolean> {
+export async function isCaskSyncDue(env: CaskSyncDueEnv): Promise<boolean> {
   const lastSync = await env.CONFIG_KV.get(LAST_SYNC_KV_KEY);
   if (!lastSync) return true;
   const elapsed = msElapsedSince(lastSync);

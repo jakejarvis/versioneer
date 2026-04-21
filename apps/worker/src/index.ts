@@ -19,13 +19,50 @@ import "@versioneer/core/parsers";
 // Re-export the Workflow class so wrangler can discover it
 export { SourcePipelineWorkflow } from "./workflows/source-pipeline";
 
+const SOURCE_PIPELINE_BATCH_SIZE = 100;
+
+type SourcePipelineBinding = Env["SOURCE_PIPELINE"];
+type SourcePipelineCreateOptions = NonNullable<Parameters<SourcePipelineBinding["create"]>[0]>;
+type Logger = ReturnType<typeof createLogger>;
+
+async function createSourcePipelineBatch(
+  sourcePipeline: SourcePipelineBinding,
+  jobs: SourcePipelineCreateOptions[],
+  log: Logger,
+): Promise<number> {
+  let queued = 0;
+
+  for (let index = 0; index < jobs.length; index += SOURCE_PIPELINE_BATCH_SIZE) {
+    const chunk = jobs.slice(index, index + SOURCE_PIPELINE_BATCH_SIZE);
+    try {
+      const instances = await sourcePipeline.createBatch(chunk);
+      queued += instances.length;
+    } catch (error) {
+      log.error("failed to queue source pipeline batch", { batchSize: chunk.length, error });
+      for (const job of chunk) {
+        try {
+          await sourcePipeline.create(job);
+          queued++;
+        } catch (sourceError) {
+          log.error("failed to queue source pipeline", {
+            sourceId: job.params?.sourceId,
+            error: sourceError,
+          });
+        }
+      }
+    }
+  }
+
+  return queued;
+}
+
 export default class PipelineWorker extends WorkerEntrypoint<Env> {
   /**
    * RPC: recompute the latest release for an app (optionally a specific channel).
    * Called via service binding from the dashboard.
    */
   async recomputeLatest(params: RecomputeLatestJob): Promise<void> {
-    await handleRecomputeLatest(params, this.env as never);
+    await handleRecomputeLatest(params, this.env);
   }
 
   /**
@@ -33,7 +70,7 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
    * Called via service binding from the dashboard.
    */
   async reparse(params: SourceParseJob): Promise<void> {
-    await handleSourceParse(params, this.env as never);
+    await handleSourceParse(params, this.env);
     // Also recompute after reparse, since that's the pipeline contract
     const db = createDb(this.env.DB);
     const { sourceFetches, sources } = await import("@versioneer/db");
@@ -49,7 +86,7 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
         .where(eq(sources.id, fetch.sourceId))
         .get();
       if (source) {
-        await handleRecomputeLatest({ appId: source.appId }, this.env as never);
+        await handleRecomputeLatest({ appId: source.appId }, this.env);
       }
     }
   }
@@ -74,25 +111,21 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
           .from(sources)
           .where(eq(sources.status, "active"))
           .all();
-        let queued = 0;
+        const jobs: SourcePipelineCreateOptions[] = [];
         for (const source of activeSources) {
           const elapsed = msElapsedSince(source.lastFetchedAt, now.getTime());
           const intervalMs = source.pollIntervalMinutes * 60 * 1000;
           if (elapsed === null || elapsed >= intervalMs) {
-            try {
-              await this.env.SOURCE_PIPELINE.create({
-                params: {
-                  sourceId: source.id,
-                  reason: "scheduled",
-                  force: false,
-                },
-              });
-              queued++;
-            } catch (error) {
-              log.error("failed to queue source pipeline", { sourceId: source.id, error });
-            }
+            jobs.push({
+              params: {
+                sourceId: source.id,
+                reason: "scheduled",
+                force: false,
+              },
+            });
           }
         }
+        const queued = await createSourcePipelineBatch(this.env.SOURCE_PIPELINE, jobs, log);
         log.info("poll sources completed", { queued, total: activeSources.length });
         await db.insert(cronJobRuns).values({
           id: runId,
@@ -123,8 +156,8 @@ export default class PipelineWorker extends WorkerEntrypoint<Env> {
       const runId = generateId(idPrefixes.cronJobRun);
       const startedAt = new Date().toISOString();
       try {
-        if (await isCaskSyncDue(this.env as never)) {
-          await handleCaskIndexSync({ reason: "scheduled", force: false }, this.env as never);
+        if (await isCaskSyncDue(this.env)) {
+          await handleCaskIndexSync({ reason: "scheduled", force: false }, this.env);
           await db.insert(cronJobRuns).values({
             id: runId,
             jobType: "cask_index_sync",

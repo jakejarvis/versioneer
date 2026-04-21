@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 
 import { pipelineWorker, sourcePipeline } from "@/lib/pipeline";
+import { createLogger } from "@versioneer/core/logger";
 import { createDb } from "@versioneer/db";
 import { generateId, idPrefixes, jobFailures } from "@versioneer/db";
 
@@ -12,6 +13,8 @@ type FollowupResult = {
   ok: boolean;
   errorMessage?: string;
 };
+
+const log = createLogger({ component: "dashboard", module: "followup-jobs" });
 
 function nullableStringClause(
   column: typeof jobFailures.jobKey | typeof jobFailures.relatedId,
@@ -122,10 +125,12 @@ async function runFollowupJob(params: {
     return { ok: true };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(
-      `Follow-up job failed (${params.jobType}, relatedId=${params.relatedId ?? "none"}, jobKey=${jobKey ?? "none"}):`,
+    log.error("follow-up job failed", {
+      jobType: params.jobType,
+      relatedId: params.relatedId,
+      jobKey,
       error,
-    );
+    });
     await recordJobFailure({
       db: params.db,
       jobType: params.jobType,
