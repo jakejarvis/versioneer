@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { createMockKV } from "../../__tests__/test-utils";
 import type { CachedLatestRelease, CachedRecentRelease } from "../helpers";
 import {
+  deleteCachedLatest,
   getCachedBundleLookup,
   getCachedDismissedBundleIds,
   getCachedLatest,
@@ -59,6 +60,23 @@ describe("cached latest release", () => {
     await setCachedLatest(kv, data);
     const result = await getCachedLatest(kv, "app_123");
     expect(result).toEqual(data);
+  });
+
+  it("deletes architecture-specific latest entries", async () => {
+    const kv = createMockKV();
+    const data: CachedLatestRelease = {
+      appId: "app_123",
+      releaseId: "rel_456",
+      versionNormalized: "0000001.0000000.0000000",
+      versionRaw: "1.0.0",
+      channel: "beta",
+      targetArchitecture: "x86_64",
+      releasedAt: null,
+      updatedAt: "2026-01-01T00:00:00Z",
+    };
+    await setCachedLatest(kv, data);
+    await deleteCachedLatest(kv, "app_123", "beta", "x86_64");
+    expect(await getCachedLatest(kv, "app_123", "beta", "x86_64")).toBeNull();
   });
 });
 

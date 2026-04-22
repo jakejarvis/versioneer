@@ -48,6 +48,15 @@ export async function setCachedLatest(
   );
 }
 
+export async function deleteCachedLatest(
+  kv: CacheKV,
+  appId: string,
+  channel: string,
+  targetArchitecture: string,
+): Promise<void> {
+  await kv.delete(latestReleaseKey(appId, channel, targetArchitecture));
+}
+
 export interface CachedRecentRelease {
   appId: string;
   appName: string;

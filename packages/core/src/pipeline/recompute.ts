@@ -17,7 +17,7 @@ import {
 } from "@versioneer/schemas/architecture";
 import type { InstallStrategy } from "@versioneer/schemas/releases";
 
-import { setCachedLatest, recentReleasesKey } from "../cache";
+import { deleteCachedLatest, setCachedLatest, recentReleasesKey } from "../cache";
 import type { CacheKV } from "../cache";
 import type { RecomputeLatestEnv, RecomputeLatestJob } from "./types";
 
@@ -91,12 +91,22 @@ export async function handleRecomputeLatest(
   if (job.channel) {
     channels = [job.channel];
   } else {
-    const rows = await db
+    const activeReleaseChannels = await db
       .selectDistinct({ channel: releases.channel })
       .from(releases)
       .where(and(eq(releases.appId, job.appId), eq(releases.status, "active")))
       .all();
-    channels = rows.map((r) => r.channel);
+    const existingLatestChannels = await db
+      .selectDistinct({ channel: appLatestReleases.channel })
+      .from(appLatestReleases)
+      .where(eq(appLatestReleases.appId, job.appId))
+      .all();
+    channels = [
+      ...new Set([
+        ...activeReleaseChannels.map((row) => row.channel),
+        ...existingLatestChannels.map((row) => row.channel),
+      ]),
+    ];
     if (channels.length === 0) channels = ["stable"];
   }
 
@@ -201,6 +211,7 @@ export async function handleRecomputeLatest(
       if (!winning || !candidateIds.has(winning.release.id)) {
         if (existingLatest) {
           await db.delete(appLatestReleases).where(eq(appLatestReleases.id, existingLatest.id));
+          await deleteCachedLatest(env.CACHE_KV, job.appId, channel, targetArchitecture);
         }
         continue;
       }

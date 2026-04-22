@@ -154,7 +154,11 @@ export const getRelease = createServerFn({ method: "GET" })
     const latestArtifactRows =
       latestArtifactIds.length > 0
         ? await db
-            .select({ id: artifacts.id, sha256: artifacts.sha256 })
+            .select({
+              id: artifacts.id,
+              sha256: artifacts.sha256,
+              architecture: artifacts.architecture,
+            })
             .from(artifacts)
             .where(inArray(artifacts.id, latestArtifactIds))
             .all()
@@ -175,6 +179,7 @@ export const getRelease = createServerFn({ method: "GET" })
       const trustWarnings = latestReleaseTrustWarnings({
         installStrategy: row.installStrategy,
         artifact: row.artifactId ? artifactById.get(row.artifactId) : undefined,
+        targetArchitecture: row.targetArchitecture,
         trustTypes: new Set(trustRows.map((trustRow) => trustRow.assertionType)),
         aliasTypes: new Set(aliasRows.map((aliasRow) => aliasRow.aliasType)),
       });

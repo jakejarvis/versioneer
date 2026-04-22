@@ -33,6 +33,7 @@ import {
   trustAssertions,
 } from "@versioneer/db";
 import {
+  artifactCompatibilityIsKnown,
   artifactSupportsTarget,
   normalizeArtifactArchitecture,
   normalizeTargetArchitecture,
@@ -110,12 +111,26 @@ type CompatibleReleaseCandidate = {
   versionRaw: string;
   releasedAt: string | null;
   artifact: AppDecision["artifact"];
+  installStrategy: InstallStrategy | null;
 };
+
+function inferInstallStrategy(
+  sourceType: string | null,
+  artifactType: string | null,
+): InstallStrategy {
+  if (sourceType === "sparkle") return "sparkle";
+  if (sourceType === "mac_app_store") return "mac_app_store";
+  if (artifactType === "dmg") return "dmg_copy_replace";
+  if (artifactType === "zip") return "zip_replace";
+  if (artifactType === "pkg") return "pkg_install";
+  return "manual_only";
+}
 
 function deriveInstallTrust(params: {
   decision: AppDecision["decision"];
   resolvedStrategy: InstallStrategy | null;
   artifact: AppDecision["artifact"];
+  targetArchitecture: TargetArchitecture | null;
   installedApp: InstalledApp;
   homebrewCaskToken: string | null;
   hasApprovedSparklePublicKey: boolean;
@@ -145,6 +160,21 @@ function deriveInstallTrust(params: {
       status: "manual_only",
       resolvedStrategy: params.resolvedStrategy,
       reasons: ["manual_only"],
+    };
+  }
+
+  if (
+    (params.resolvedStrategy === "sparkle" ||
+      params.resolvedStrategy === "zip_replace" ||
+      params.resolvedStrategy === "dmg_copy_replace" ||
+      params.resolvedStrategy === "pkg_install") &&
+    params.artifact?.architecture &&
+    !artifactCompatibilityIsKnown(params.artifact.architecture, params.targetArchitecture)
+  ) {
+    return {
+      status: "manual_only",
+      resolvedStrategy: params.resolvedStrategy,
+      reasons: ["unknown_architecture"],
     };
   }
 
@@ -550,9 +580,11 @@ async function findCompatibleReleaseCandidate(params: {
       artifactSize: artifacts.sizeBytes,
       artifactSha256: artifacts.sha256,
       artifactCreatedAt: artifacts.createdAt,
+      sourceType: sources.sourceType,
     })
     .from(releases)
     .innerJoin(artifacts, eq(artifacts.releaseId, releases.id))
+    .leftJoin(sources, eq(sources.id, releases.publishedBySourceId))
     .where(
       and(
         eq(releases.appId, params.appId),
@@ -587,6 +619,7 @@ async function findCompatibleReleaseCandidate(params: {
         sizeBytes: row.artifactSize,
         sha256: row.artifactSha256,
       },
+      installStrategy: inferInstallStrategy(row.sourceType, row.artifactType),
     };
   };
 
@@ -1395,6 +1428,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 versionRaw: latest.versionRaw,
                 releasedAt: latest.releasedAt,
                 artifact: artifactForDecision(latestArtifact),
+                installStrategy: latest.installStrategy,
               };
               resolvedInstallStrategy = latest.installStrategy;
               resolvedChannel = latest.channel;
@@ -1406,7 +1440,8 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 targetArchitecture: clientTargetArchitecture,
                 clientOs,
               });
-              resolvedInstallStrategy = latest.installStrategy;
+              resolvedInstallStrategy =
+                compatibleCandidate?.installStrategy ?? latest.installStrategy;
               resolvedChannel = selectedChannel.channel;
             }
 
@@ -1457,6 +1492,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         decision,
         resolvedStrategy: resolvedInstallStrategy,
         artifact: matchedArtifact,
+        targetArchitecture: clientTargetArchitecture,
         installedApp,
         homebrewCaskToken,
         hasApprovedSparklePublicKey: matchResult.appId

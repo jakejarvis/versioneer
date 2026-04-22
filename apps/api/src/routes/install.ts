@@ -22,6 +22,7 @@ import {
   trustAssertions,
 } from "@versioneer/db";
 import {
+  artifactCompatibilityIsKnown,
   artifactSupportsTarget,
   normalizeTargetArchitecture,
   type TargetArchitecture,
@@ -37,6 +38,7 @@ async function validateInstallTarget(
     appId: string;
     releaseId: string;
     artifactId?: string | null;
+    installStrategy: string;
     targetArchitecture?: TargetArchitecture | null;
     client: {
       systemArchitecture?: string | null;
@@ -67,12 +69,22 @@ async function validateInstallTarget(
     .from(releases)
     .where(eq(releases.id, params.releaseId))
     .get();
-  if (!release || release.appId !== params.appId || release.status === "draft") {
+  if (!release || release.appId !== params.appId || release.status !== "active") {
     throw new HTTPException(404, { message: "Release not found" });
   }
 
   const targetArchitecture =
     params.targetArchitecture ?? normalizeTargetArchitecture(params.client.systemArchitecture);
+  if (
+    (params.installStrategy === "zip_replace" ||
+      params.installStrategy === "dmg_copy_replace" ||
+      params.installStrategy === "pkg_install") &&
+    !params.artifactId
+  ) {
+    throw new HTTPException(400, {
+      message: "Artifact is required for this install strategy",
+    });
+  }
   let artifact: {
     id: string;
     releaseId: string;
@@ -96,6 +108,11 @@ async function validateInstallTarget(
     if (targetArchitecture && !artifactSupportsTarget(artifact.architecture, targetArchitecture)) {
       throw new HTTPException(409, {
         message: "Artifact is not compatible with target architecture",
+      });
+    }
+    if (!artifactCompatibilityIsKnown(artifact.architecture, targetArchitecture)) {
+      throw new HTTPException(409, {
+        message: "Artifact architecture compatibility is not established",
       });
     }
   }

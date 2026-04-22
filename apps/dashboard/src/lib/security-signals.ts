@@ -58,6 +58,11 @@ export const installTrustReasonCopy: Record<string, SecuritySignalCopy> = {
     description: "This install strategy is not executable by the desktop app.",
     tone: "warning",
   },
+  unknown_architecture: {
+    label: "Unknown architecture",
+    description: "One-click install needs confirmed processor compatibility.",
+    tone: "danger",
+  },
 };
 
 export const sourceAnomalyCopy: Record<string, SecuritySignalCopy> = {

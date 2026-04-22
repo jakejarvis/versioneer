@@ -3,9 +3,18 @@ import { env } from "cloudflare:workers";
 import { eq, inArray } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { normalizeVersion } from "@versioneer/core/versioning";
 import { discoveredApps } from "@versioneer/db";
 
-import { getDb } from "../../__tests__/seed";
+import {
+  getDb,
+  seedAlias,
+  seedApp,
+  seedArtifact,
+  seedLatestRelease,
+  seedRelease,
+  seedSource,
+} from "../../__tests__/seed";
 import app from "../../index";
 import { MAX_INVENTORY_GZIP_BYTES, MAX_INVENTORY_JSON_BYTES } from "../../lib/constants";
 import { seedInventoryCatalog } from "./fixtures/inventory-seed";
@@ -24,7 +33,12 @@ type InventoryResponse = {
     latestReleaseId: string | null;
     targetArchitecture: string | null;
     homebrewCaskToken?: string | null;
-    artifact: { id: string; downloadUrl: string; architecture: string | null } | null;
+    artifact: {
+      id: string;
+      downloadUrl: string;
+      architecture: string | null;
+      artifactType: string | null;
+    } | null;
     installStrategy: string | null;
     installTrust: {
       status: "one_click" | "manual_only" | "external" | "none";
@@ -338,6 +352,86 @@ describe("POST /v1/inventory/check", () => {
     expect(result.localReasonCode).toBe("no_compatible_release");
   });
 
+  it("uses the fallback artifact install strategy when latest is unusable", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db, {
+      canonicalName: "Fallback Strategy App",
+      status: "public",
+    });
+    await seedAlias(db, testApp.id, {
+      aliasType: "bundle_id",
+      value: "com.example.fallbackstrategy",
+      normalizedValue: "com.example.fallbackstrategy",
+    });
+    const source = await seedSource(db, testApp.id, {
+      sourceType: "github_releases",
+      parserKey: "github_releases",
+      reviewStatus: "approved",
+      role: "authority",
+      status: "active",
+      lastSuccessAt: TEST_NOW.toISOString(),
+    });
+    const latestRelease = await seedRelease(db, testApp.id, {
+      versionRaw: "3.0.0",
+      versionNormalized: normalizeVersion("3.0.0"),
+      channel: "stable",
+      status: "active",
+      publishedBySourceId: source.id,
+      releasedAt: "2026-03-20T00:00:00Z",
+    });
+    const latestArtifact = await seedArtifact(db, latestRelease.id, {
+      artifactType: "pkg",
+      url: "https://example.com/fallback-3.0.0.pkg",
+      architecture: "arm64",
+      minOsVersion: "16.0",
+      sha256: "pkghash",
+    });
+    const fallbackRelease = await seedRelease(db, testApp.id, {
+      versionRaw: "2.0.0",
+      versionNormalized: normalizeVersion("2.0.0"),
+      channel: "stable",
+      status: "active",
+      publishedBySourceId: source.id,
+      releasedAt: "2026-02-20T00:00:00Z",
+    });
+    const fallbackArtifact = await seedArtifact(db, fallbackRelease.id, {
+      artifactType: "dmg",
+      url: "https://example.com/fallback-2.0.0.dmg",
+      architecture: "arm64",
+      sha256: "dmghash",
+    });
+    await seedLatestRelease(db, {
+      appId: testApp.id,
+      releaseId: latestRelease.id,
+      authoritySourceId: source.id,
+      artifactId: latestArtifact.id,
+      targetArchitecture: "arm64",
+      versionNormalized: latestRelease.versionNormalized,
+      versionRaw: latestRelease.versionRaw,
+      releasedAt: latestRelease.releasedAt!,
+      installStrategy: "pkg_install",
+    });
+
+    const res = await postInventory({
+      client: { osVersion: "15.0", systemArchitecture: "arm64" },
+      apps: [
+        {
+          appName: "Fallback Strategy App",
+          bundleId: "com.example.fallbackstrategy",
+          teamId: "TEAM123456",
+          version: "1.0.0",
+        },
+      ],
+    });
+    const body = await readInventoryResponse(res);
+    const result = body.results[0]!;
+    expect(result.latestReleaseId).toBe(fallbackRelease.id);
+    expect(result.artifact?.id).toBe(fallbackArtifact.id);
+    expect(result.artifact?.artifactType).toBe("dmg");
+    expect(result.installStrategy).toBe("dmg_copy_replace");
+    expect(result.installTrust.resolvedStrategy).toBe("dmg_copy_replace");
+  });
+
   it("returns different latest compatible releases for split arm64 and x86 clients", async () => {
     const [armRes, x86Res] = await Promise.all([
       postInventory({
@@ -361,6 +455,26 @@ describe("POST /v1/inventory/check", () => {
     expect(x86Body.results[0]!.latestReleaseId).toBe(catalog.releaseEX86.id);
     expect(x86Body.results[0]!.targetArchitecture).toBe("x86_64");
     expect(x86Body.results[0]!.artifact?.architecture).toBe("x86_64");
+  });
+
+  it("keeps unknown-architecture updates visible but disables one-click install", async () => {
+    const res = await postInventory({
+      client: { osVersion: "15.0", systemArchitecture: "arm64" },
+      apps: [
+        { appName: "Unknown Arch App", bundleId: "com.example.unknownarch", version: "1.0.0" },
+      ],
+    });
+    const body = await readInventoryResponse(res);
+    const result = body.results[0]!;
+    expect(result.decision).toBe("update_available");
+    expect(result.latestReleaseId).toBe(catalog.releaseF.id);
+    expect(result.artifact?.architecture).toBe("unknown");
+    expect(result.installStrategy).toBeNull();
+    expect(result.installTrust).toEqual({
+      status: "manual_only",
+      resolvedStrategy: "dmg_copy_replace",
+      reasons: ["unknown_architecture"],
+    });
   });
 
   it("reports skipped apps for invalid entries", async () => {

@@ -147,7 +147,11 @@ export const getApp = createServerFn({ method: "GET" })
     const latestArtifacts =
       latestArtifactIds.length > 0
         ? await db
-            .select({ id: artifacts.id, sha256: artifacts.sha256 })
+            .select({
+              id: artifacts.id,
+              sha256: artifacts.sha256,
+              architecture: artifacts.architecture,
+            })
             .from(artifacts)
             .where(inArray(artifacts.id, latestArtifactIds))
             .all()
@@ -170,6 +174,7 @@ export const getApp = createServerFn({ method: "GET" })
         trustWarnings: latestReleaseTrustWarnings({
           installStrategy: row.installStrategy,
           artifact: row.artifactId ? artifactById.get(row.artifactId) : undefined,
+          targetArchitecture: row.targetArchitecture,
           trustTypes,
           aliasTypes,
         }),
@@ -398,7 +403,11 @@ export const getAppLatest = createServerFn({ method: "GET" })
     const artifactRows =
       artifactIds.length > 0
         ? await db
-            .select({ id: artifacts.id, sha256: artifacts.sha256 })
+            .select({
+              id: artifacts.id,
+              sha256: artifacts.sha256,
+              architecture: artifacts.architecture,
+            })
             .from(artifacts)
             .where(inArray(artifacts.id, artifactIds))
             .all()
@@ -421,6 +430,7 @@ export const getAppLatest = createServerFn({ method: "GET" })
         trustWarnings: latestReleaseTrustWarnings({
           installStrategy: row.installStrategy,
           artifact: row.artifactId ? artifactById.get(row.artifactId) : undefined,
+          targetArchitecture: row.targetArchitecture,
           trustTypes,
           aliasTypes,
         }),

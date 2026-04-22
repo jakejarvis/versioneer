@@ -1,12 +1,23 @@
+import {
+  artifactCompatibilityIsKnown,
+  normalizeTargetArchitecture,
+} from "@versioneer/schemas/architecture";
+
 export function latestReleaseTrustWarnings(params: {
   installStrategy: string | null;
-  artifact: { sha256: string | null } | undefined;
+  artifact: { sha256: string | null; architecture?: string | null } | undefined;
+  targetArchitecture?: string | null;
   trustTypes: Set<string>;
   aliasTypes: Set<string>;
 }) {
   const warnings: string[] = [];
   const hasBundleId = params.trustTypes.has("bundle_id") || params.aliasTypes.has("bundle_id");
   const hasTeamId = params.trustTypes.has("team_id") || params.aliasTypes.has("team_id");
+  const requiresArchitectureTrust =
+    params.installStrategy === "sparkle" ||
+    params.installStrategy === "zip_replace" ||
+    params.installStrategy === "dmg_copy_replace" ||
+    params.installStrategy === "pkg_install";
 
   switch (params.installStrategy) {
     case "zip_replace":
@@ -32,6 +43,17 @@ export function latestReleaseTrustWarnings(params: {
     default:
       warnings.push("unsupported_strategy");
       break;
+  }
+
+  if (
+    requiresArchitectureTrust &&
+    params.artifact?.architecture &&
+    !artifactCompatibilityIsKnown(
+      params.artifact.architecture,
+      normalizeTargetArchitecture(params.targetArchitecture),
+    )
+  ) {
+    warnings.push("unknown_architecture");
   }
 
   return warnings;

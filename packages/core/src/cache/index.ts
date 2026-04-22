@@ -9,6 +9,7 @@ export type { CachedLatestRelease, CachedRecentRelease } from "./helpers";
 export {
   getCachedLatest,
   setCachedLatest,
+  deleteCachedLatest,
   getCachedBundleLookup,
   setCachedBundleLookup,
   getCachedRecentReleases,

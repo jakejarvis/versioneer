@@ -26,6 +26,7 @@ export const installTrustReasonValues = [
   "homebrew_external",
   "manual_only",
   "unsupported_strategy",
+  "unknown_architecture",
 ] as const;
 export const installTrustReasonSchema = z.enum(installTrustReasonValues);
 

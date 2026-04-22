@@ -33,13 +33,14 @@ describe("POST /v1/install/prepare", () => {
     const testApp = await seedApp(db);
     const source = await seedSource(db, testApp.id);
     const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
+    const artifact = await seedArtifact(db, release.id, { architecture: "universal" });
 
     const res = await app.request(
       "/v1/install/prepare",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(prepareBody(testApp.id, release.id)),
+        body: JSON.stringify(prepareBody(testApp.id, release.id, artifact.id)),
       },
       env,
     );
@@ -60,6 +61,45 @@ describe("POST /v1/install/prepare", () => {
       env,
     );
     expect(res.status).toBe(404);
+  });
+
+  it("rejects inactive releases", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db);
+    const source = await seedSource(db, testApp.id);
+    const release = await seedRelease(db, testApp.id, {
+      publishedBySourceId: source.id,
+      status: "withdrawn",
+    });
+
+    const res = await app.request(
+      "/v1/install/prepare",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prepareBody(testApp.id, release.id)),
+      },
+      env,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects artifact-based installs without an artifact", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db);
+    const source = await seedSource(db, testApp.id);
+    const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
+
+    const res = await app.request(
+      "/v1/install/prepare",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prepareBody(testApp.id, release.id)),
+      },
+      env,
+    );
+    expect(res.status).toBe(400);
   });
 
   it("rejects artifacts incompatible with the target architecture", async () => {
@@ -91,6 +131,26 @@ describe("POST /v1/install/prepare", () => {
 
     expect(res.status).toBe(409);
   });
+
+  it("rejects artifacts whose architecture compatibility is unknown", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db);
+    const source = await seedSource(db, testApp.id);
+    const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
+    const artifact = await seedArtifact(db, release.id, { architecture: "unknown" });
+
+    const res = await app.request(
+      "/v1/install/prepare",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prepareBody(testApp.id, release.id, artifact.id)),
+      },
+      env,
+    );
+
+    expect(res.status).toBe(409);
+  });
 });
 
 describe("POST /v1/install/executions/:id/status", () => {
@@ -99,7 +159,7 @@ describe("POST /v1/install/executions/:id/status", () => {
     const testApp = await seedApp(db);
     const source = await seedSource(db, testApp.id);
     const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
-    const artifact = await seedArtifact(db, release.id);
+    const artifact = await seedArtifact(db, release.id, { architecture: "universal" });
 
     // First, prepare
     const prepRes = await app.request(
@@ -149,6 +209,7 @@ describe("POST /v1/install/executions/:id/status", () => {
     const testApp = await seedApp(db);
     const source = await seedSource(db, testApp.id);
     const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
+    const artifact = await seedArtifact(db, release.id, { architecture: "universal" });
 
     const res = await app.request(
       `/v1/install/executions/exec_new123/status`,
@@ -156,7 +217,7 @@ describe("POST /v1/install/executions/:id/status", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...prepareBody(testApp.id, release.id),
+          ...prepareBody(testApp.id, release.id, artifact.id),
           status: "failed",
           errorMessage: "Signature verification failed",
         }),

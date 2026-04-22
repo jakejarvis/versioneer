@@ -64,6 +64,7 @@ struct DetailSummaryPanel: View {
       case .homebrewExternal: "Homebrew route"
       case .manualOnly: "manual install policy"
       case .unsupportedStrategy: "supported install strategy"
+      case .unknownArchitecture: "confirmed processor compatibility"
       }
     }
     return "One-click install is disabled until Versioneer has: \(labels.joined(separator: ", "))."

@@ -177,6 +177,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       case homebrewExternal = "homebrew_external"
       case manualOnly = "manual_only"
       case unsupportedStrategy = "unsupported_strategy"
+      case unknownArchitecture = "unknown_architecture"
     }
 
     static func `default`(for installStrategy: InstallStrategy?) -> InstallTrust {

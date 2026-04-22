@@ -2,9 +2,24 @@ import { env, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { handleSourceFetch, type SourceFetchJob } from "@versioneer/core/pipeline";
+import { getCachedLatest, setCachedLatest } from "@versioneer/core/cache";
+import {
+  handleRecomputeLatest,
+  handleSourceFetch,
+  type SourceFetchJob,
+} from "@versioneer/core/pipeline";
 import { normalizeVersion } from "@versioneer/core/versioning";
-import { createDb, generateId, idPrefixes, sourceFetches, sources } from "@versioneer/db";
+import {
+  appLatestReleases,
+  apps,
+  artifacts,
+  createDb,
+  generateId,
+  idPrefixes,
+  releases,
+  sourceFetches,
+  sources,
+} from "@versioneer/db";
 
 import { SourcePipelineWorkflow } from "../source-pipeline";
 
@@ -54,7 +69,6 @@ afterEach(() => {
 describe("SourcePipelineWorkflow", () => {
   it("blocks unsafe source URLs before fetching and records failure metadata", async () => {
     const db = createDb(env.DB);
-    const { apps } = await import("@versioneer/db");
 
     const appId = generateId(idPrefixes.app);
     await db.insert(apps).values({
@@ -110,7 +124,6 @@ describe("SourcePipelineWorkflow", () => {
 
   it("runs fetch step and exits early when source returns 304 Not Modified", async () => {
     const db = createDb(env.DB);
-    const { apps } = await import("@versioneer/db");
 
     const appId = generateId(idPrefixes.app);
     await db.insert(apps).values({
@@ -158,7 +171,6 @@ describe("SourcePipelineWorkflow", () => {
 
   it("uses the workflow instance id as a stable source fetch idempotency seed", async () => {
     const db = createDb(env.DB);
-    const { apps } = await import("@versioneer/db");
 
     const appId = generateId(idPrefixes.app);
     await db.insert(apps).values({
@@ -213,7 +225,7 @@ describe("SourcePipelineWorkflow", () => {
 
   it("runs all 3 steps when source returns new content", async () => {
     const db = createDb(env.DB);
-    const { apps, artifacts, jobFailures, releases } = await import("@versioneer/db");
+    const { jobFailures } = await import("@versioneer/db");
 
     const appId = generateId(idPrefixes.app);
     await db.insert(apps).values({
@@ -320,5 +332,98 @@ describe("SourcePipelineWorkflow", () => {
     expect(parsedRelease?.releaseNotesMarkdown).toContain("## Changes");
     expect(parsedRelease?.releaseNotesMarkdown).toContain("- Added Markdown release notes");
     expect(parsedRelease?.releaseNotesHtml).toBeNull();
+  });
+
+  it("clears latest rows and cache for channels without active releases", async () => {
+    const db = createDb(env.DB);
+
+    const appId = generateId(idPrefixes.app);
+    await db.insert(apps).values({
+      id: appId,
+      slug: `wf-stale-latest-${appId.slice(-8)}`,
+      canonicalName: "Stale Latest App",
+      status: "public",
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
+    });
+
+    const stableReleaseId = generateId(idPrefixes.release);
+    await db.insert(releases).values({
+      id: stableReleaseId,
+      appId,
+      versionRaw: "2.0.0",
+      versionNormalized: normalizeVersion("2.0.0"),
+      channel: "stable",
+      status: "active",
+      isPrerelease: false,
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
+    });
+    const stableArtifactId = generateId(idPrefixes.artifact);
+    await db.insert(artifacts).values({
+      id: stableArtifactId,
+      releaseId: stableReleaseId,
+      artifactType: "dmg",
+      url: "https://example.com/stale-latest-2.0.0.dmg",
+      architecture: "universal",
+      isPrimary: true,
+      createdAt: TEST_NOW_ISO,
+    });
+
+    const betaReleaseId = generateId(idPrefixes.release);
+    await db.insert(releases).values({
+      id: betaReleaseId,
+      appId,
+      versionRaw: "3.0.0-beta",
+      versionNormalized: normalizeVersion("3.0.0-beta"),
+      channel: "beta",
+      status: "withdrawn",
+      isPrerelease: true,
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
+    });
+
+    await db.insert(appLatestReleases).values({
+      id: generateId(idPrefixes.appLatestRelease),
+      appId,
+      channel: "beta",
+      targetArchitecture: "arm64",
+      releaseId: betaReleaseId,
+      versionNormalized: normalizeVersion("3.0.0-beta"),
+      versionRaw: "3.0.0-beta",
+      updatedAt: TEST_NOW_ISO,
+    });
+    await setCachedLatest(env.CACHE_KV, {
+      appId,
+      channel: "beta",
+      targetArchitecture: "arm64",
+      releaseId: betaReleaseId,
+      versionNormalized: normalizeVersion("3.0.0-beta"),
+      versionRaw: "3.0.0-beta",
+      releasedAt: null,
+      updatedAt: TEST_NOW_ISO,
+    });
+
+    await handleRecomputeLatest({ appId }, env);
+
+    const latestRows = await db
+      .select({
+        channel: appLatestReleases.channel,
+        targetArchitecture: appLatestReleases.targetArchitecture,
+        releaseId: appLatestReleases.releaseId,
+      })
+      .from(appLatestReleases)
+      .where(eq(appLatestReleases.appId, appId))
+      .all();
+    expect(latestRows.some((row) => row.channel === "beta")).toBe(false);
+    expect(
+      latestRows.some(
+        (row) =>
+          row.channel === "stable" &&
+          row.targetArchitecture === "arm64" &&
+          row.releaseId === stableReleaseId,
+      ),
+    ).toBe(true);
+    expect(await getCachedLatest(env.CACHE_KV, appId, "beta", "arm64")).toBeNull();
   });
 });

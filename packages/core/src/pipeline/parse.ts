@@ -12,7 +12,10 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
-import { normalizeArtifactArchitecture } from "@versioneer/schemas/architecture";
+import {
+  mergeArtifactArchitectures,
+  normalizeArtifactArchitecture,
+} from "@versioneer/schemas/architecture";
 
 import { inferReleasedAt, toISODate } from "../dates";
 import { createLogger } from "../logger";
@@ -294,7 +297,11 @@ export async function handleSourceParse(
 
       // Upsert artifacts — query once, then insert only new URLs
       const existingArtifacts = await db
-        .select({ id: artifacts.id, url: artifacts.url })
+        .select({
+          id: artifacts.id,
+          url: artifacts.url,
+          architecture: artifacts.architecture,
+        })
         .from(artifacts)
         .where(eq(artifacts.releaseId, releaseId))
         .all();
@@ -309,7 +316,7 @@ export async function handleSourceParse(
             .set({
               sha256: parsedArtifact.sha256 ?? undefined,
               sizeBytes: parsedArtifact.sizeBytes ?? undefined,
-              architecture,
+              architecture: mergeArtifactArchitectures(existingArtifact.architecture, architecture),
               minOsVersion: parsedArtifact.minOsVersion ?? undefined,
             })
             .where(eq(artifacts.id, existingArtifact.id));

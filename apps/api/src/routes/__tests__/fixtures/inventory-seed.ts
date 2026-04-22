@@ -18,6 +18,7 @@ import {
  * - App C (Draft App): draft status, bundle_id alias — matched but not public
  * - App D (No Source App): public, bundle_id alias — no approved authority source, no latest release
  * - App E (Split App): public, bundle_id alias, separate arm64 and x86_64 latest rows
+ * - App F (Unknown Arch App): public, bundle_id alias, unknown artifact architecture
  */
 export async function seedInventoryCatalog(db: Database) {
   // --- App A: Firefox (fully tracked, sparkle) ---
@@ -216,22 +217,72 @@ export async function seedInventoryCatalog(db: Database) {
     installStrategy: "dmg_copy_replace",
   });
 
+  // --- App F: Unknown Arch App (update visible, one-click suppressed) ---
+  const appF = await seedApp(db, {
+    canonicalName: "Unknown Arch App",
+    vendorName: "Unknown Vendor",
+    status: "public",
+  });
+  await seedAlias(db, appF.id, {
+    aliasType: "bundle_id",
+    value: "com.example.unknownarch",
+    normalizedValue: "com.example.unknownarch",
+  });
+  const sourceF = await seedSource(db, appF.id, {
+    sourceType: "github_releases",
+    parserKey: "github_releases",
+    reviewStatus: "approved",
+    role: "authority",
+    status: "active",
+    lastSuccessAt: new Date().toISOString(),
+  });
+  const releaseF = await seedRelease(db, appF.id, {
+    versionRaw: "2.0.0",
+    versionNormalized: normalizeVersion("2.0.0"),
+    channel: "stable",
+    status: "active",
+    publishedBySourceId: sourceF.id,
+    releasedAt: "2026-03-11T00:00:00Z",
+  });
+  const artifactF = await seedArtifact(db, releaseF.id, {
+    artifactType: "dmg",
+    url: "https://example.com/unknown-2.0.0.dmg",
+    sha256: "unknownhash",
+    architecture: "unknown",
+    isPrimary: true,
+  });
+  await seedLatestRelease(db, {
+    appId: appF.id,
+    releaseId: releaseF.id,
+    authoritySourceId: sourceF.id,
+    artifactId: artifactF.id,
+    targetArchitecture: "arm64",
+    versionNormalized: releaseF.versionNormalized,
+    versionRaw: releaseF.versionRaw,
+    releasedAt: releaseF.releasedAt!,
+    installStrategy: "dmg_copy_replace",
+  });
+
   return {
     appA,
     appB,
     appC,
     appD,
     appE,
+    appF,
     releaseA,
     releaseB,
     releaseEArm,
     releaseEX86,
+    releaseF,
     artifactA,
     artifactB,
     artifactEArm,
     artifactEX86,
+    artifactF,
     sourceA,
     sourceB,
     sourceE,
+    sourceF,
   };
 }
