@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { listFeedback, getFeedbackDetail, updateFeedback } from "@/server/feedback";
 
@@ -16,6 +16,7 @@ export function useFeedback(params: UseFeedbackParams = {}) {
   return useQuery({
     queryKey: ["feedback", params],
     queryFn: () => listFeedback({ data: params }),
+    placeholderData: keepPreviousData,
   });
 }
 

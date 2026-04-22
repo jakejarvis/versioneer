@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { listAuditLog } from "@/server/audit-log";
 
@@ -16,5 +16,6 @@ export function useAuditLog(params: UseAuditLogParams = {}) {
   return useQuery({
     queryKey: ["audit-log", params],
     queryFn: () => listAuditLog({ data: params }),
+    placeholderData: keepPreviousData,
   });
 }

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { updateAlias, deleteAlias } from "@/server/aliases";
 import {
@@ -30,6 +30,7 @@ export function useApps(params: UseAppsParams = {}) {
   return useQuery({
     queryKey: ["apps", params],
     queryFn: () => listApps({ data: params }),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -149,6 +150,7 @@ export function useAppReleases(appId: string, params: UseAppReleasesParams = {})
     queryKey: ["apps", appId, "releases", params],
     queryFn: () => getAppReleases({ data: { appId, ...params } }),
     enabled: !!appId,
+    placeholderData: keepPreviousData,
   });
 }
 

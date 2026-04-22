@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   dismissDiscoveredApp,
@@ -21,6 +21,7 @@ export function useDiscoveredApps(params: UseDiscoveredAppsParams = {}) {
     queryKey: ["discovered-apps", params],
     queryFn: () => listDiscoveredApps({ data: params }),
     refetchInterval: 60_000,
+    placeholderData: keepPreviousData,
   });
 }
 

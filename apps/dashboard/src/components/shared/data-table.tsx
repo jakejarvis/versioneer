@@ -236,6 +236,43 @@ export function DataTable<T>({
     setRowSelection({});
   };
 
+  const renderToolbar = () => (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">{toolbar}</div>
+      {enableColumnVisibility && table.getAllLeafColumns().length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Settings2 />
+              Columns
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {table
+              .getAllLeafColumns()
+              .filter((column) => column.getCanHide())
+              .map((column) => (
+                <DropdownMenuCheckboxItem
+                  key={column.id}
+                  className="capitalize"
+                  checked={column.getIsVisible()}
+                  onCheckedChange={(value) => column.toggleVisibility(value)}
+                >
+                  {typeof column.columnDef.meta === "object" &&
+                  column.columnDef.meta &&
+                  "label" in column.columnDef.meta
+                    ? String(column.columnDef.meta.label)
+                    : column.id}
+                </DropdownMenuCheckboxItem>
+              ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+
   const renderTable = (tableInstance: TableInstance<T>) => (
     <div className="overflow-x-auto rounded-md border">
       <Table>
@@ -278,6 +315,7 @@ export function DataTable<T>({
   if (isLoading) {
     return (
       <div className="space-y-4">
+        {renderToolbar()}
         <div className="overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
@@ -310,40 +348,7 @@ export function DataTable<T>({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">{toolbar}</div>
-        {enableColumnVisibility && table.getAllLeafColumns().length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Settings2 />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {table
-                .getAllLeafColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    className="capitalize"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) => column.toggleVisibility(value)}
-                  >
-                    {typeof column.columnDef.meta === "object" &&
-                    column.columnDef.meta &&
-                    "label" in column.columnDef.meta
-                      ? String(column.columnDef.meta.label)
-                      : column.id}
-                  </DropdownMenuCheckboxItem>
-                ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
+      {renderToolbar()}
 
       {selectedRows.length > 0 && bulkActions && bulkActions.length > 0 && (
         <div className="flex flex-col gap-3 rounded-md border bg-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">

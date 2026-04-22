@@ -73,6 +73,20 @@ describe("DataTable", () => {
     expect(screen.getAllByRole("row")).toHaveLength(6);
   });
 
+  it("keeps toolbar controls mounted while loading", () => {
+    render(
+      <DataTable
+        columns={basicColumns}
+        data={[]}
+        isLoading
+        emptyMessage="No rows."
+        toolbar={<input aria-label="Search rows" />}
+      />,
+    );
+
+    expect(screen.getByRole("textbox", { name: "Search rows" })).toBeInTheDocument();
+  });
+
   it("renders the configured empty state", () => {
     render(<DataTable columns={basicColumns} data={[]} emptyMessage="No rows." />);
 

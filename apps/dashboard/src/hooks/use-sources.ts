@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { validateSource } from "@/server/source-validation";
 import {
@@ -29,6 +29,7 @@ export function useSources(params: UseSourcesParams = {}) {
   return useQuery({
     queryKey: ["sources", params],
     queryFn: () => listSources({ data: params }),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -85,6 +86,7 @@ export function useSourceFetches(
     queryKey: ["sources", sourceId, "fetches", params],
     queryFn: () => getSourceFetches({ data: { sourceId, ...params } }),
     enabled: !!sourceId,
+    placeholderData: keepPreviousData,
   });
 }
 

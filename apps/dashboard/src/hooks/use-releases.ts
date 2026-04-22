@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
   listReleases,
@@ -25,6 +25,7 @@ export function useReleases(params: UseReleasesParams = {}) {
   return useQuery({
     queryKey: ["releases", params],
     queryFn: () => listReleases({ data: params }),
+    placeholderData: keepPreviousData,
   });
 }
 

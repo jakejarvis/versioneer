@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
   listJobFailures,
@@ -22,6 +22,7 @@ export function useJobFailures(params: UseJobFailuresParams = {}) {
   return useQuery({
     queryKey: ["job-failures", params],
     queryFn: () => listJobFailures({ data: params }),
+    placeholderData: keepPreviousData,
   });
 }
 

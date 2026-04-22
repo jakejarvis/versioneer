@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   listCronJobRuns,
@@ -22,6 +22,7 @@ export function useCronJobRuns(params: UseCronJobRunsParams = {}) {
     queryKey: ["cron-job-runs", params],
     queryFn: () => listCronJobRuns({ data: params }),
     refetchInterval: params.status === "running" ? 5_000 : undefined,
+    placeholderData: keepPreviousData,
   });
 }
 

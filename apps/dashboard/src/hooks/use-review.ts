@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   approveCatalogSuggestion,
@@ -26,6 +26,7 @@ export function useCatalogSuggestions(
   return useQuery({
     queryKey: ["catalog-suggestions", params],
     queryFn: () => listCatalogSuggestions({ data: params }),
+    placeholderData: keepPreviousData,
   });
 }
 
