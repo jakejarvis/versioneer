@@ -20,6 +20,8 @@ export default defineConfig({
         bindings: { TEST_MIGRATIONS: migrations },
       },
       additionalExports: {
+        EnrichmentDrainWorkflow: "WorkflowEntrypoint",
+        InventoryFollowupWorkflow: "WorkflowEntrypoint",
         SourcePipelineWorkflow: "WorkflowEntrypoint",
       },
     }),

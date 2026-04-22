@@ -8,6 +8,7 @@ import {
   cronTriggerValues,
   executionRouteValues,
   installExecutionStatusValues,
+  inventoryFollowupJobStatusValues,
   jobFailureStatusValues,
 } from "@versioneer/schemas/ops";
 import { installStrategyValues } from "@versioneer/schemas/releases";
@@ -86,6 +87,31 @@ export const cronJobRuns = sqliteTable(
       table.trigger,
       table.startedAt,
     ),
+  ],
+);
+
+export const inventoryFollowupJobs = sqliteTable(
+  "inventory_followup_jobs",
+  {
+    id: text("id").primaryKey(),
+    status: text("status", { enum: inventoryFollowupJobStatusValues }).notNull().default("pending"),
+    payloadR2Key: text("payload_r2_key").notNull(),
+    workflowInstanceId: text("workflow_instance_id"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    itemsTotal: integer("items_total"),
+    itemsSucceeded: integer("items_succeeded"),
+    itemsFailed: integer("items_failed"),
+    errorMessage: text("error_message"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    queuedAt: text("queued_at"),
+    startedAt: text("started_at"),
+    completedAt: text("completed_at"),
+  },
+  (table) => [
+    index("idx_inventory_followup_jobs_status").on(table.status),
+    index("idx_inventory_followup_jobs_status_updated").on(table.status, table.updatedAt),
+    index("idx_inventory_followup_jobs_created").on(table.createdAt),
   ],
 );
 

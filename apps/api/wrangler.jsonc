@@ -40,12 +40,17 @@
     {
       "binding": "RAW_BUCKET",
       "bucket_name": "versioneer-raw-dev"
-    },
-    {
-      "binding": "ASSETS_BUCKET",
-      "bucket_name": "versioneer-assets-dev"
     }
   ],
+
+  "queues": {
+    "producers": [
+      {
+        "binding": "INVENTORY_FOLLOWUP_QUEUE",
+        "queue": "versioneer-inventory-followup-dev"
+      }
+    ]
+  },
 
   "kv_namespaces": [
     {
@@ -98,12 +103,16 @@
         {
           "binding": "RAW_BUCKET",
           "bucket_name": "versioneer-raw-production"
-        },
-        {
-          "binding": "ASSETS_BUCKET",
-          "bucket_name": "versioneer-assets-production"
         }
       ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "INVENTORY_FOLLOWUP_QUEUE",
+            "queue": "versioneer-inventory-followup-production"
+          }
+        ]
+      },
       "kv_namespaces": [
         {
           "binding": "CACHE_KV",

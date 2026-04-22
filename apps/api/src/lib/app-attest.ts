@@ -40,6 +40,12 @@ function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
+function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   for (let i = 0; i < bytes.length; i++) {
@@ -184,7 +190,7 @@ async function verifyCertChain(x5c: Uint8Array[]): Promise<Certificate> {
   const intermediateValid = await crypto.subtle.verify(
     { name: "ECDSA", hash: getSignatureHash(intermediateCert) },
     rootKey,
-    getSignatureBytes(intermediateCert),
+    copyToArrayBuffer(getSignatureBytes(intermediateCert)),
     getTBS(intermediateCert),
   );
   if (!intermediateValid) {
@@ -196,7 +202,7 @@ async function verifyCertChain(x5c: Uint8Array[]): Promise<Certificate> {
   const leafValid = await crypto.subtle.verify(
     { name: "ECDSA", hash: getSignatureHash(leafCert) },
     intermediateKey,
-    getSignatureBytes(leafCert),
+    copyToArrayBuffer(getSignatureBytes(leafCert)),
     getTBS(leafCert),
   );
   if (!leafValid) {
@@ -295,7 +301,9 @@ export async function verifyAttestation(
 
   // 4. Verify the public key hash matches the keyId (X9.62 uncompressed point, per Apple docs)
   const rawPublicKey = getRawPublicKey(leafCert);
-  const keyHash = new Uint8Array(await crypto.subtle.digest("SHA-256", rawPublicKey));
+  const keyHash = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", copyToArrayBuffer(rawPublicKey)),
+  );
   const keyIdBytes = base64ToBytes(keyId);
   if (!arraysEqual(keyHash, keyIdBytes)) {
     throw new Error("Public key hash does not match keyId");
@@ -393,8 +401,8 @@ export async function verifyAssertion(
   const valid = await crypto.subtle.verify(
     { name: "ECDSA", hash: "SHA-256" },
     publicKey,
-    signature,
-    signedData,
+    copyToArrayBuffer(signature),
+    copyToArrayBuffer(signedData),
   );
   if (!valid) {
     throw new Error("Assertion signature verification failed");

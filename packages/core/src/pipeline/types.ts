@@ -81,3 +81,7 @@ export interface EnrichmentDrainJob {
   actorId?: string | null;
   failureJobKey?: string | null;
 }
+
+export interface InventoryFollowupJob {
+  jobId: string;
+}

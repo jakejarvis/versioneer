@@ -11,7 +11,8 @@ export type TrackedJobFailureType =
   | "recompute-latest"
   | "poll_sources"
   | "cask_index_sync"
-  | "enrich_discovered_apps";
+  | "enrich_discovered_apps"
+  | "inventory_followup";
 
 export type TrackedJobResult = {
   ok: boolean;

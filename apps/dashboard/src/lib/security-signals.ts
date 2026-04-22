@@ -163,6 +163,7 @@ export const failureJobTypeLabels: Record<string, string> = {
   poll_sources: "Poll Sources",
   cask_index_sync: "Cask Index Sync",
   enrich_discovered_apps: "Enrich Discoveries",
+  inventory_followup: "Inventory Follow-up",
 };
 
 export const failureJobTypeOptions = [
@@ -174,6 +175,7 @@ export const failureJobTypeOptions = [
   { value: "poll_sources", label: "Poll Sources" },
   { value: "cask_index_sync", label: "Cask Index Sync" },
   { value: "enrich_discovered_apps", label: "Enrich Discoveries" },
+  { value: "inventory_followup", label: "Inventory Follow-up" },
 ] as const;
 
 export type FailureJobTypeFilter = (typeof failureJobTypeOptions)[number]["value"];
@@ -208,7 +210,8 @@ export function canRetryJobFailure(jobType: string): boolean {
     jobType === "recompute-latest" ||
     jobType === "poll_sources" ||
     jobType === "cask_index_sync" ||
-    jobType === "enrich_discovered_apps"
+    jobType === "enrich_discovered_apps" ||
+    jobType === "inventory_followup"
   );
 }
 

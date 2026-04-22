@@ -89,6 +89,7 @@ const failureJobTypeSchema = z.enum([
   "poll_sources",
   "cask_index_sync",
   "enrich_discovered_apps",
+  "inventory_followup",
 ]);
 
 const jobsSearchDefaults = {

@@ -9,6 +9,7 @@ export type {
   SourceParseJob,
   RecomputeLatestJob,
   EnrichmentDrainJob,
+  InventoryFollowupJob,
   FetchStepResult,
   ParseStepResult,
 } from "./types";
@@ -50,3 +51,24 @@ export {
 } from "./job-failures";
 export type { TrackedJobFailureType, TrackedJobResult } from "./job-failures";
 export { handleCaskIndexSync, isCaskSyncDue } from "./cask-index-sync";
+export {
+  createInventoryFollowupSuggestions,
+  inventoryFollowupPayloadR2Key,
+  inventoryFollowupPayloadSchema,
+  inventoryFollowupQueueMessageSchema,
+  inventoryFollowupWorkflowPayloadSchema,
+  loadInventoryFollowupAppsByIds,
+  parseInventoryFollowupPayload,
+  storeCatalogInventoryIcons,
+  storeClientIcon,
+  storeDiscoveredInventoryIcons,
+} from "./inventory-followup";
+export type {
+  InventoryCatalogIconResult,
+  InventoryFollowupDiscoveredIconCandidate,
+  InventoryFollowupMatchedAppCandidate,
+  InventoryFollowupPayload,
+  InventoryFollowupQueueMessage,
+  InventoryFollowupStepResult,
+  InventoryFollowupWorkflowPayload,
+} from "./inventory-followup";

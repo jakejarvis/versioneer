@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { pipelineWorker } from "@/lib/pipeline";
 import { markJobFailureRetrying } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
 import { jobFailures } from "@versioneer/db";
@@ -94,6 +95,11 @@ async function retryFailure(
         trigger: "manual",
         failureJobKey: failure.jobKey ?? "manual",
       });
+      await markJobFailureRetrying({ db, id: failure.id });
+      return "retrying";
+    case "inventory_followup":
+      if (!failure.relatedId) return null;
+      await pipelineWorker.retryInventoryFollowup({ jobId: failure.relatedId });
       await markJobFailureRetrying({ db, id: failure.id });
       return "retrying";
     default:

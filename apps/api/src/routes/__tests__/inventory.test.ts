@@ -4,8 +4,12 @@ import { eq, inArray } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { inventoryMatchSnapshotKey } from "@versioneer/core/cache";
+import {
+  inventoryFollowupPayloadSchema,
+  type InventoryFollowupQueueMessage,
+} from "@versioneer/core/pipeline";
 import { normalizeVersion } from "@versioneer/core/versioning";
-import { discoveredApps } from "@versioneer/db";
+import { discoveredApps, inventoryFollowupJobs, jobFailures } from "@versioneer/db";
 
 import {
   getDb,
@@ -111,6 +115,19 @@ async function selectDiscoveredByLookupKeys(lookupKeys: string[]) {
 
 let catalog: Awaited<ReturnType<typeof seedInventoryCatalog>>;
 const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
+const TEST_ICON_BASE64 = btoa("test-icon");
+
+function createInventoryFollowupQueueMock() {
+  const send = vi.fn<(message: InventoryFollowupQueueMessage) => Promise<QueueSendResponse>>(
+    async () => ({
+      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+    }),
+  );
+  return {
+    queue: { send } as unknown as Queue<InventoryFollowupQueueMessage>,
+    send,
+  };
+}
 
 beforeAll(async () => {
   const db = getDb(env.DB);
@@ -513,6 +530,112 @@ describe("POST /v1/inventory/check", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.appName).toBe("Brand New App");
     expect(rows[0]!.bundleId).toBe(uniqueBundle);
+  });
+
+  it("creates a durable inventory follow-up payload, job row, and queue message", async () => {
+    const { queue, send } = createInventoryFollowupQueueMock();
+    const uniqueBundle = "com.test.followup.payload";
+
+    const res = await postInventory(
+      {
+        client: { osVersion: "15.0", systemArchitecture: "arm64" },
+        apps: [
+          {
+            appName: "Follow-up Unknown",
+            bundleId: uniqueBundle,
+            version: "1.0.0",
+            iconBase64: TEST_ICON_BASE64,
+          },
+          {
+            appName: "Firefox",
+            bundleId: "org.mozilla.firefox",
+            teamId: "MOZILLA123",
+            version: "130.0",
+            iconBase64: TEST_ICON_BASE64,
+          },
+        ],
+      },
+      { INVENTORY_FOLLOWUP_QUEUE: queue } as Partial<Env>,
+    );
+    expect(res.status).toBe(200);
+    const body = await readInventoryResponse(res);
+    expect(body.results).toHaveLength(2);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const message = send.mock.calls[0]![0];
+    const job = await getDb(env.DB)
+      .select()
+      .from(inventoryFollowupJobs)
+      .where(eq(inventoryFollowupJobs.id, message.jobId))
+      .get();
+    expect(job).toBeDefined();
+    expect(job!.status).toBe("pending");
+    expect(job!.attemptCount).toBe(0);
+    expect(job!.payloadR2Key).toContain(message.jobId);
+
+    const payloadObject = await env.RAW_BUCKET.get(job!.payloadR2Key);
+    expect(payloadObject).not.toBeNull();
+    const payload = inventoryFollowupPayloadSchema.parse(JSON.parse(await payloadObject!.text()));
+    expect(payload.discoveredIconCandidates).toEqual([
+      expect.objectContaining({
+        lookupKey: `bid:${uniqueBundle}`,
+        iconBase64: TEST_ICON_BASE64,
+      }),
+    ]);
+    expect(payload.matchedAppCandidates).toEqual([
+      expect.objectContaining({
+        appId: catalog.appA.id,
+        lookupKey: "bid:org.mozilla.firefox",
+        createSuggestions: true,
+        iconBase64: TEST_ICON_BASE64,
+        teamId: "MOZILLA123",
+      }),
+    ]);
+  });
+
+  it("returns the inventory response when follow-up queue send fails", async () => {
+    const send = vi.fn<(message: InventoryFollowupQueueMessage) => Promise<QueueSendResponse>>(
+      async () => {
+        throw new Error("queue unavailable");
+      },
+    );
+    const queue = { send } as unknown as Queue<InventoryFollowupQueueMessage>;
+    const res = await postInventory(
+      {
+        client: { osVersion: "15.0", systemArchitecture: "arm64" },
+        apps: [
+          {
+            appName: "Firefox",
+            bundleId: "org.mozilla.firefox",
+            teamId: "QUEUEFAIL",
+            version: "130.0",
+          },
+        ],
+      },
+      { INVENTORY_FOLLOWUP_QUEUE: queue } as Partial<Env>,
+    );
+
+    expect(res.status).toBe(200);
+    const body = await readInventoryResponse(res);
+    expect(body.results).toHaveLength(1);
+    expect(send).toHaveBeenCalledTimes(1);
+    const jobId = send.mock.calls[0]![0].jobId;
+
+    const job = await getDb(env.DB)
+      .select()
+      .from(inventoryFollowupJobs)
+      .where(eq(inventoryFollowupJobs.id, jobId))
+      .get();
+    expect(job?.status).toBe("pending");
+
+    const failure = await getDb(env.DB)
+      .select()
+      .from(jobFailures)
+      .where(eq(jobFailures.relatedId, jobId))
+      .get();
+    expect(failure?.jobType).toBe("inventory_followup");
+    expect(failure?.jobKey).toBe("enqueue");
+    expect(failure?.errorMessage).toContain("queue unavailable");
   });
 
   it("persists every unmatched app beyond the D1 lookup parameter chunk size", async () => {

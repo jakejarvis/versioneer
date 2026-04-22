@@ -4,9 +4,16 @@ import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 
 import { clientRateLimit } from "@/middleware/rate-limit";
-import { deleteInventoryMatchSnapshot, getInventoryMatchSnapshot } from "@versioneer/core/cache";
-import { matchApp, normalizeAliasValue } from "@versioneer/core/identity";
-import { normalizeBaseUrl, resolveSourceUrl } from "@versioneer/core/sources";
+import { getInventoryMatchSnapshot } from "@versioneer/core/cache";
+import { matchApp } from "@versioneer/core/identity";
+import {
+  inventoryFollowupPayloadR2Key,
+  recordJobFailure,
+  type InventoryFollowupDiscoveredIconCandidate,
+  type InventoryFollowupMatchedAppCandidate,
+  type InventoryFollowupPayload,
+  type InventoryFollowupQueueMessage,
+} from "@versioneer/core/pipeline";
 import { installedAppSchema, inventoryRequestEnvelopeSchema } from "@versioneer/core/validation";
 import type {
   AppDecision,
@@ -19,18 +26,14 @@ import type {
 import { displayVersion, normalizeVersion } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
 import {
-  apps,
-  appAliases,
   appLatestReleases,
   artifacts,
-  catalogSuggestions,
   releases,
   sources,
   discoveredApps,
   generateId,
   idPrefixes,
-  suggestionEvidence,
-  trustAssertions,
+  inventoryFollowupJobs,
 } from "@versioneer/db";
 import {
   artifactCompatibilityIsKnown,
@@ -40,13 +43,7 @@ import {
   rankArtifactForTarget,
   type TargetArchitecture,
 } from "@versioneer/schemas/architecture";
-import type { AliasType } from "@versioneer/schemas/catalog";
 import type { InstallStrategy } from "@versioneer/schemas/releases";
-import type { SourceType, SourceRole } from "@versioneer/schemas/sources";
-import {
-  defaultParserKeyForSourceType,
-  defaultRoleForSourceType,
-} from "@versioneer/schemas/sources";
 
 import {
   D1_PARAM_LIMIT,
@@ -91,10 +88,6 @@ type PersistedDiscovery = {
 
 type LatestReleaseRow = typeof appLatestReleases.$inferSelect;
 type ArtifactRow = typeof artifacts.$inferSelect;
-type InventoryFollowupAppRow = Pick<
-  typeof apps.$inferSelect,
-  "id" | "slug" | "canonicalName" | "vendorName" | "homepageUrl" | "status" | "iconR2Key"
->;
 type LatestByAppChannel = Map<string, Map<string, Map<TargetArchitecture, LatestReleaseRow>>>;
 type InventoryAppInfo = NonNullable<
   Awaited<ReturnType<typeof getInventoryMatchSnapshot>>["appsById"][string]
@@ -274,6 +267,12 @@ function isGzipBody(bytes: Uint8Array): boolean {
   return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
 }
 
+function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 async function readInventoryJson(request: Request): Promise<unknown> {
   const contentEncoding = request.headers.get("content-encoding")?.trim().toLowerCase();
   const contentLength = request.headers.get("content-length") ?? undefined;
@@ -294,7 +293,7 @@ async function readInventoryJson(request: Request): Promise<unknown> {
   if (!isGzipBody(compressed)) {
     throw new Error("Invalid gzip body");
   }
-  const decompressedStream = new Blob([compressed])
+  const decompressedStream = new Blob([copyToArrayBuffer(compressed)])
     .stream()
     .pipeThrough(new DecompressionStream("gzip"));
   const decoded = await readStreamBytesLimited(decompressedStream, MAX_INVENTORY_JSON_BYTES);
@@ -356,31 +355,6 @@ async function selectArtifactsByIds(
     if (chunk.length === 0) continue;
 
     rows.push(...(await db.select().from(artifacts).where(inArray(artifacts.id, chunk)).all()));
-  }
-  return rows;
-}
-
-async function selectInventoryFollowupAppsByIds(
-  db: ReturnType<typeof createDb>,
-  appIds: string[],
-): Promise<InventoryFollowupAppRow[]> {
-  const rows: InventoryFollowupAppRow[] = [];
-  for (const appChunk of chunkStrings(appIds, Math.max(1, D1_PARAM_LIMIT))) {
-    rows.push(
-      ...(await db
-        .select({
-          id: apps.id,
-          slug: apps.slug,
-          canonicalName: apps.canonicalName,
-          vendorName: apps.vendorName,
-          homepageUrl: apps.homepageUrl,
-          status: apps.status,
-          iconR2Key: apps.iconR2Key,
-        })
-        .from(apps)
-        .where(inArray(apps.id, appChunk))
-        .all()),
-    );
   }
   return rows;
 }
@@ -825,329 +799,131 @@ async function upsertDiscoveredApps(params: {
   return persistedByKey;
 }
 
-async function upsertSuggestion(params: {
-  db: ReturnType<typeof createDb>;
-  queueType:
-    | "new_app"
-    | "new_source"
-    | "metadata_change"
-    | "authority_handoff"
-    | "merge_proposal"
-    | "release_discrepancy";
-  dedupeKey: string;
-  title: string;
-  proposedChangeJson: string;
-  canonicalSnapshotJson?: string | null;
-  appId?: string | null;
-  sourceId?: string | null;
-  bundleKey?: string | null;
-  evidenceType: "scan" | "crawl" | "fetch_parse" | "install_verify" | "homebrew" | "manual";
-  evidenceFingerprint: string;
-  evidencePayloadJson: string;
-  now: string;
-}): Promise<void> {
-  const {
-    db,
-    queueType,
-    dedupeKey,
-    title,
-    proposedChangeJson,
-    canonicalSnapshotJson,
-    appId,
-    sourceId,
-    bundleKey,
-    evidenceType,
-    evidenceFingerprint,
-    evidencePayloadJson,
-    now,
-  } = params;
+function candidateHasSuggestionData(app: InstalledApp): boolean {
+  return Boolean(
+    app.bundleId ||
+    app.teamId ||
+    app.masAppId ||
+    app.homebrewCaskToken ||
+    app.electronUpdateUrl ||
+    app.sparkleFeedUrl ||
+    (app.isMasApp && app.bundleId) ||
+    (app.sparklePublicKey && app.sparkleFeedUrl),
+  );
+}
 
-  // Atomic upsert — avoids TOCTOU race on the dedupeKey unique index
-  await db
-    .insert(catalogSuggestions)
-    .values({
-      id: generateId(idPrefixes.catalogSuggestion),
-      queueType,
-      status: "pending",
-      appId: appId ?? null,
-      sourceId: sourceId ?? null,
-      bundleKey: bundleKey ?? null,
-      dedupeKey,
-      title,
-      canonicalSnapshotJson: canonicalSnapshotJson ?? null,
-      proposedChangeJson,
-      evidenceSummaryJson: evidencePayloadJson,
-      evidenceCount: 1,
-      firstSeenAt: now,
-      lastSeenAt: now,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: catalogSuggestions.dedupeKey,
-      set: {
-        appId: sql`coalesce(${appId ?? null}, ${catalogSuggestions.appId})`,
-        sourceId: sql`coalesce(${sourceId ?? null}, ${catalogSuggestions.sourceId})`,
-        title,
-        canonicalSnapshotJson: sql`coalesce(${canonicalSnapshotJson ?? null}, ${catalogSuggestions.canonicalSnapshotJson})`,
-        proposedChangeJson,
-        evidenceSummaryJson: evidencePayloadJson,
-        evidenceCount: sql`${catalogSuggestions.evidenceCount} + 1`,
-        lastSeenAt: now,
-        updatedAt: now,
-      },
+function buildInventoryFollowupPayload(params: {
+  requestApps: InstalledApp[];
+  resultsByLookupKey: ReadonlyMap<string, AppDecision>;
+  unmatchedByKey: ReadonlyMap<string, DiscoveryCandidate>;
+  persistedDiscoveries: ReadonlyMap<string, PersistedDiscovery>;
+  processedAt: string;
+}): InventoryFollowupPayload {
+  const discoveredIconCandidates: InventoryFollowupDiscoveredIconCandidate[] = [];
+  for (const [lookupKey, app] of params.unmatchedByKey) {
+    if (!app.iconBase64) continue;
+    const persisted = params.persistedDiscoveries.get(lookupKey);
+    if (!persisted || persisted.iconR2Key) continue;
+    discoveredIconCandidates.push({
+      discoveredAppId: persisted.id,
+      lookupKey,
+      iconBase64: app.iconBase64,
     });
+  }
 
-  const suggestion = await db
-    .select()
-    .from(catalogSuggestions)
-    .where(eq(catalogSuggestions.dedupeKey, dedupeKey))
-    .get();
-  if (!suggestion) return;
+  const matchedAppCandidates: InventoryFollowupMatchedAppCandidate[] = [];
+  for (const installedApp of params.requestApps) {
+    const lookupKey = computeLookupKey(installedApp.appName, installedApp.bundleId);
+    const result = params.resultsByLookupKey.get(lookupKey);
+    if (!result?.matchedAppId) continue;
 
-  // Atomic evidence insert — avoids TOCTOU race on the fingerprint unique index
-  await db
-    .insert(suggestionEvidence)
-    .values({
-      id: generateId(idPrefixes.suggestionEvidence),
-      suggestionId: suggestion.id,
-      appId: appId ?? null,
-      sourceId: sourceId ?? null,
-      evidenceType,
-      fingerprint: evidenceFingerprint,
-      payloadJson: evidencePayloadJson,
-      observedAt: now,
-      createdAt: now,
-    })
-    .onConflictDoNothing();
+    const createSuggestions =
+      result.trackingState === "public" && candidateHasSuggestionData(installedApp);
+    if (!installedApp.iconBase64 && !createSuggestions) continue;
+
+    matchedAppCandidates.push({
+      appId: result.matchedAppId,
+      lookupKey,
+      createSuggestions,
+      iconBase64: installedApp.iconBase64 ?? null,
+      bundleId: installedApp.bundleId ?? null,
+      teamId: installedApp.teamId ?? null,
+      sparkleFeedUrl: installedApp.sparkleFeedUrl ?? null,
+      sparklePublicKey: installedApp.sparklePublicKey ?? null,
+      isMasApp: installedApp.isMasApp ?? null,
+      masAppId: installedApp.masAppId ?? null,
+      electronUpdateProvider: installedApp.electronUpdateProvider ?? null,
+      electronUpdateUrl: installedApp.electronUpdateUrl ?? null,
+      homebrewCaskToken: installedApp.homebrewCaskToken ?? null,
+    });
+  }
+
+  return {
+    version: 1,
+    processedAt: params.processedAt,
+    discoveredIconCandidates,
+    matchedAppCandidates,
+  };
 }
 
-async function findExistingAlias(params: {
-  db: ReturnType<typeof createDb>;
-  appId: string;
-  aliasType: AliasType;
-  value: string;
-}) {
-  return params.db
-    .select({ id: appAliases.id })
-    .from(appAliases)
-    .where(
-      and(
-        eq(appAliases.appId, params.appId),
-        eq(appAliases.aliasType, params.aliasType),
-        eq(appAliases.normalizedValue, normalizeAliasValue(params.aliasType, params.value)),
-      ),
-    )
-    .get();
+function inventoryFollowupItemCount(payload: InventoryFollowupPayload): number {
+  return payload.discoveredIconCandidates.length + payload.matchedAppCandidates.length;
 }
 
-async function findExistingSource(params: {
+async function persistAndEnqueueInventoryFollowup(params: {
   db: ReturnType<typeof createDb>;
-  appId: string;
-  sourceType: SourceType;
-  baseUrl: string;
-}) {
-  const normalizedUrl = normalizeBaseUrl(params.sourceType, params.baseUrl);
-  return params.db
-    .select({
-      id: sources.id,
-      sourceType: sources.sourceType,
-      baseUrl: sources.baseUrl,
-      role: sources.role,
-      reviewStatus: sources.reviewStatus,
-      channel: sources.channel,
-    })
-    .from(sources)
-    .where(
-      and(
-        eq(sources.appId, params.appId),
-        eq(sources.sourceType, params.sourceType),
-        eq(sources.baseUrl, normalizedUrl),
-      ),
-    )
-    .get();
-}
-
-async function createSourceSuggestion(params: {
-  db: ReturnType<typeof createDb>;
-  appId: string;
-  appName: string;
-  lookupKey: string;
-  sourceType: SourceType;
-  baseUrl: string;
-  role?: SourceRole;
-  title?: string;
-  canonicalSnapshotJson?: string | null;
-  evidenceType: "scan" | "crawl" | "fetch_parse" | "install_verify" | "homebrew" | "manual";
-  evidenceFingerprint: string;
-  evidencePayloadJson: string;
+  env: Env;
+  payload: InventoryFollowupPayload;
   now: string;
 }): Promise<void> {
-  const existing = await findExistingSource({
-    db: params.db,
-    appId: params.appId,
-    sourceType: params.sourceType,
-    baseUrl: params.baseUrl,
-  });
-  if (existing) return;
+  const itemsTotal = inventoryFollowupItemCount(params.payload);
+  if (itemsTotal === 0) return;
 
-  const normalizedUrl = normalizeBaseUrl(params.sourceType, params.baseUrl);
-  await upsertSuggestion({
-    db: params.db,
-    queueType: "new_source",
-    dedupeKey: `source:${params.appId}:${params.sourceType}:${normalizedUrl}`,
-    title:
-      params.title ??
-      `Review ${params.sourceType.replaceAll("_", " ")} source for ${params.appName}`,
-    canonicalSnapshotJson: params.canonicalSnapshotJson ?? null,
-    proposedChangeJson: JSON.stringify({
-      appId: params.appId,
-      sourceType: params.sourceType,
-      baseUrl: normalizedUrl,
-      role: params.role ?? defaultRoleForSourceType(params.sourceType),
-      parserKey: defaultParserKeyForSourceType(params.sourceType),
-    }),
-    appId: params.appId,
-    bundleKey: params.lookupKey,
-    evidenceType: params.evidenceType,
-    evidenceFingerprint: params.evidenceFingerprint,
-    evidencePayloadJson: params.evidencePayloadJson,
-    now: params.now,
-  });
-}
+  const jobId = generateId(idPrefixes.inventoryFollowupJob);
+  const payloadR2Key = inventoryFollowupPayloadR2Key(jobId, new Date(params.now));
 
-async function createAliasSuggestion(params: {
-  db: ReturnType<typeof createDb>;
-  appId: string;
-  appName: string;
-  lookupKey: string;
-  aliasType: AliasType;
-  value: string;
-  canonicalSnapshotJson?: string | null;
-  evidenceType: "scan" | "crawl" | "fetch_parse" | "install_verify" | "homebrew" | "manual";
-  evidenceFingerprint: string;
-  evidencePayloadJson: string;
-  now: string;
-}): Promise<void> {
-  const existing = await findExistingAlias({
-    db: params.db,
-    appId: params.appId,
-    aliasType: params.aliasType,
-    value: params.value,
-  });
-  if (existing) return;
-
-  await upsertSuggestion({
-    db: params.db,
-    queueType: "metadata_change",
-    dedupeKey: `alias:${params.appId}:${params.aliasType}:${normalizeAliasValue(params.aliasType, params.value)}`,
-    title: `Review ${params.aliasType.replaceAll("_", " ")} for ${params.appName}`,
-    canonicalSnapshotJson: params.canonicalSnapshotJson ?? null,
-    proposedChangeJson: JSON.stringify({
-      changeType: "alias",
-      appId: params.appId,
-      aliasType: params.aliasType,
-      value: params.value,
-    }),
-    appId: params.appId,
-    bundleKey: params.lookupKey,
-    evidenceType: params.evidenceType,
-    evidenceFingerprint: params.evidenceFingerprint,
-    evidencePayloadJson: params.evidencePayloadJson,
-    now: params.now,
-  });
-}
-
-async function createTrustAssertionSuggestion(params: {
-  db: ReturnType<typeof createDb>;
-  appId: string;
-  appName: string;
-  lookupKey: string;
-  sourceId?: string | null;
-  assertionType:
-    | "sparkle_public_key"
-    | "bundle_id"
-    | "team_id"
-    | "notarization_expectation"
-    | "signature_requirement";
-  value: string;
-  canonicalSnapshotJson?: string | null;
-  evidenceFingerprint: string;
-  evidencePayloadJson: string;
-  now: string;
-}): Promise<void> {
-  const existingAssertion = await params.db
-    .select({ id: trustAssertions.id })
-    .from(trustAssertions)
-    .where(
-      and(
-        eq(trustAssertions.appId, params.appId),
-        params.sourceId
-          ? eq(trustAssertions.sourceId, params.sourceId)
-          : sql`${trustAssertions.sourceId} is null`,
-        eq(trustAssertions.assertionType, params.assertionType),
-        eq(trustAssertions.value, params.value),
-      ),
-    )
-    .get();
-  if (existingAssertion) return;
-
-  await upsertSuggestion({
-    db: params.db,
-    queueType: "metadata_change",
-    dedupeKey: `trust:${params.appId}:${params.sourceId ?? "none"}:${params.assertionType}:${params.value}`,
-    title: `Review ${params.assertionType.replaceAll("_", " ")} for ${params.appName}`,
-    canonicalSnapshotJson: params.canonicalSnapshotJson ?? null,
-    proposedChangeJson: JSON.stringify({
-      changeType: "trust_assertion",
-      appId: params.appId,
-      sourceId: params.sourceId ?? null,
-      assertionType: params.assertionType,
-      value: params.value,
-    }),
-    appId: params.appId,
-    sourceId: params.sourceId ?? null,
-    bundleKey: params.lookupKey,
-    evidenceType: "scan",
-    evidenceFingerprint: params.evidenceFingerprint,
-    evidencePayloadJson: params.evidencePayloadJson,
-    now: params.now,
-  });
-}
-
-/**
- * Decodes base64 icon data, hashes it, and stores it in R2.
- * Returns the R2 key or null on failure.
- */
-async function storeIcon(bucket: R2Bucket, iconBase64: string): Promise<string | null> {
   try {
-    const binaryString = atob(iconBase64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i)!;
-    }
-    const body = bytes.buffer;
-
-    if (body.byteLength > 512 * 1024) return null;
-
-    const contentDigest = await crypto.subtle.digest("SHA-256", body);
-    const contentHash = Array.from(new Uint8Array(contentDigest))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-      .slice(0, 12);
-
-    const r2Key = `icons/${contentHash}.png`;
-
-    await bucket.put(r2Key, body, {
-      httpMetadata: {
-        contentType: "image/png",
-        cacheControl: "public, max-age=31536000, immutable",
-      },
+    await params.env.RAW_BUCKET.put(payloadR2Key, JSON.stringify(params.payload), {
+      httpMetadata: { contentType: "application/json" },
     });
 
-    return r2Key;
-  } catch {
-    return null;
+    await params.db.insert(inventoryFollowupJobs).values({
+      id: jobId,
+      status: "pending",
+      payloadR2Key,
+      attemptCount: 0,
+      itemsTotal,
+      createdAt: params.now,
+      updatedAt: params.now,
+    });
+
+    try {
+      await params.env.INVENTORY_FOLLOWUP_QUEUE.send({
+        jobId,
+      } satisfies InventoryFollowupQueueMessage);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      await recordJobFailure({
+        db: params.db,
+        jobType: "inventory_followup",
+        relatedId: jobId,
+        jobKey: "enqueue",
+        errorMessage,
+      });
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    try {
+      await recordJobFailure({
+        db: params.db,
+        jobType: "inventory_followup",
+        relatedId: jobId,
+        jobKey: "handoff",
+        errorMessage,
+      });
+    } catch {
+      // Inventory decisions are still useful even if best-effort failure tracking fails.
+    }
   }
 }
 
@@ -1484,243 +1260,19 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       now,
     });
 
-    // Non-critical follow-up work runs after the response. The discovered app rows
-    // themselves are already persisted above so the dashboard cannot show a partial batch.
-    c.executionCtx.waitUntil(
-      (async () => {
-        const matchedFollowupAppIds = uniqueStrings(results.map((result) => result.matchedAppId));
-        const followupAppRows = await selectInventoryFollowupAppsByIds(db, matchedFollowupAppIds);
-        const followupAppById = new Map(
-          followupAppRows.map((appRow) => [appRow.id, appRow] as const),
-        );
-
-        for (const [key, app] of unmatchedByKey) {
-          if (!app.iconBase64) continue;
-          const persisted = persistedDiscoveries.get(key);
-          if (!persisted || persisted.iconR2Key) continue;
-
-          const iconKey = await storeIcon(c.env.ASSETS_BUCKET, app.iconBase64);
-          if (iconKey) {
-            await db
-              .update(discoveredApps)
-              .set({ iconR2Key: iconKey })
-              .where(eq(discoveredApps.id, persisted.id));
-          }
-        }
-
-        // Backfill icons for matched catalog apps that are missing them
-        for (const installedApp of request.apps) {
-          if (!installedApp.iconBase64) continue;
-          const key = computeLookupKey(installedApp.appName, installedApp.bundleId);
-          const result = resultByLookupKey.get(key);
-          if (!result?.matchedAppId) continue;
-
-          const appRow = followupAppById.get(result.matchedAppId);
-          if (!appRow || appRow.iconR2Key) continue;
-
-          try {
-            const iconKey = await storeIcon(c.env.ASSETS_BUCKET, installedApp.iconBase64);
-            if (iconKey) {
-              await db
-                .update(apps)
-                .set({ iconR2Key: iconKey, updatedAt: now })
-                .where(eq(apps.id, appRow.id));
-              followupAppById.set(appRow.id, { ...appRow, iconR2Key: iconKey });
-              await deleteInventoryMatchSnapshot(c.env.CACHE_KV);
-            }
-          } catch {
-            // Non-critical — continue
-          }
-        }
-
-        // Keep approved apps accruing alias, source, and trust suggestions instead of icons only
-        for (const installedApp of request.apps) {
-          const lookupKey = computeLookupKey(installedApp.appName, installedApp.bundleId);
-          const result = resultByLookupKey.get(lookupKey);
-          if (!result?.matchedAppId || result.trackingState !== "public") continue;
-
-          const appRow = followupAppById.get(result.matchedAppId);
-          if (!appRow) continue;
-
-          const canonicalSnapshotJson = JSON.stringify({
-            canonicalName: appRow.canonicalName,
-            vendorName: appRow.vendorName,
-            homepageUrl: appRow.homepageUrl,
-            status: appRow.status,
-          });
-
-          if (installedApp.bundleId) {
-            await createAliasSuggestion({
-              db,
-              appId: appRow.id,
-              appName: appRow.canonicalName,
-              lookupKey,
-              aliasType: "bundle_id",
-              value: installedApp.bundleId,
-              canonicalSnapshotJson,
-              evidenceType: "scan",
-              evidenceFingerprint: `public-bundle:${lookupKey}:${installedApp.bundleId}`,
-              evidencePayloadJson: JSON.stringify({ bundleId: installedApp.bundleId }),
-              now,
-            });
-          }
-
-          if (installedApp.teamId) {
-            await createAliasSuggestion({
-              db,
-              appId: appRow.id,
-              appName: appRow.canonicalName,
-              lookupKey,
-              aliasType: "team_id",
-              value: installedApp.teamId,
-              canonicalSnapshotJson,
-              evidenceType: "scan",
-              evidenceFingerprint: `public-team:${lookupKey}:${installedApp.teamId}`,
-              evidencePayloadJson: JSON.stringify({ teamId: installedApp.teamId }),
-              now,
-            });
-          }
-
-          if (installedApp.masAppId) {
-            await createAliasSuggestion({
-              db,
-              appId: appRow.id,
-              appName: appRow.canonicalName,
-              lookupKey,
-              aliasType: "mas_app_id",
-              value: installedApp.masAppId,
-              canonicalSnapshotJson,
-              evidenceType: "scan",
-              evidenceFingerprint: `public-mas-id:${lookupKey}:${installedApp.masAppId}`,
-              evidencePayloadJson: JSON.stringify({ masAppId: installedApp.masAppId }),
-              now,
-            });
-          }
-
-          if (installedApp.homebrewCaskToken) {
-            await createAliasSuggestion({
-              db,
-              appId: appRow.id,
-              appName: appRow.canonicalName,
-              lookupKey,
-              aliasType: "homebrew_cask",
-              value: installedApp.homebrewCaskToken,
-              canonicalSnapshotJson,
-              evidenceType: "scan",
-              evidenceFingerprint: `public-homebrew:${lookupKey}:${installedApp.homebrewCaskToken}`,
-              evidencePayloadJson: JSON.stringify({
-                homebrewCaskToken: installedApp.homebrewCaskToken,
-              }),
-              now,
-            });
-          }
-
-          if (installedApp.electronUpdateUrl) {
-            await createAliasSuggestion({
-              db,
-              appId: appRow.id,
-              appName: appRow.canonicalName,
-              lookupKey,
-              aliasType: "electron_update_url",
-              value: installedApp.electronUpdateUrl,
-              canonicalSnapshotJson,
-              evidenceType: "scan",
-              evidenceFingerprint: `public-electron-alias:${lookupKey}:${installedApp.electronUpdateUrl}`,
-              evidencePayloadJson: JSON.stringify({
-                electronUpdateUrl: installedApp.electronUpdateUrl,
-                electronUpdateProvider: installedApp.electronUpdateProvider ?? null,
-              }),
-              now,
-            });
-          }
-
-          if (installedApp.sparkleFeedUrl) {
-            await createSourceSuggestion({
-              db,
-              appId: appRow.id,
-              appName: appRow.canonicalName,
-              lookupKey,
-              sourceType: "sparkle",
-              baseUrl: installedApp.sparkleFeedUrl,
-              canonicalSnapshotJson,
-              evidenceType: "scan",
-              evidenceFingerprint: `public-sparkle:${lookupKey}:${installedApp.sparkleFeedUrl}`,
-              evidencePayloadJson: JSON.stringify({
-                sparkleFeedUrl: installedApp.sparkleFeedUrl,
-                sparklePublicKey: installedApp.sparklePublicKey ?? null,
-              }),
-              now,
-            });
-          }
-
-          if (installedApp.electronUpdateUrl) {
-            await createSourceSuggestion({
-              db,
-              appId: appRow.id,
-              appName: appRow.canonicalName,
-              lookupKey,
-              sourceType: "electron_generic",
-              baseUrl: installedApp.electronUpdateUrl,
-              canonicalSnapshotJson,
-              evidenceType: "scan",
-              evidenceFingerprint: `public-electron:${lookupKey}:${installedApp.electronUpdateUrl}`,
-              evidencePayloadJson: JSON.stringify({
-                electronUpdateUrl: installedApp.electronUpdateUrl,
-                electronUpdateProvider: installedApp.electronUpdateProvider ?? null,
-              }),
-              now,
-            });
-          }
-
-          if (installedApp.isMasApp && installedApp.bundleId) {
-            const lookupUrl = resolveSourceUrl("mac_app_store", installedApp.bundleId)!;
-            await createSourceSuggestion({
-              db,
-              appId: appRow.id,
-              appName: appRow.canonicalName,
-              lookupKey,
-              sourceType: "mac_app_store",
-              baseUrl: lookupUrl,
-              canonicalSnapshotJson,
-              evidenceType: "scan",
-              evidenceFingerprint: `public-mas:${lookupKey}:${lookupUrl}`,
-              evidencePayloadJson: JSON.stringify({
-                bundleId: installedApp.bundleId,
-                lookupUrl,
-              }),
-              now,
-            });
-          }
-
-          if (installedApp.sparklePublicKey && installedApp.sparkleFeedUrl) {
-            const sparkleSource = await findExistingSource({
-              db,
-              appId: appRow.id,
-              sourceType: "sparkle",
-              baseUrl: installedApp.sparkleFeedUrl,
-            });
-            if (sparkleSource) {
-              await createTrustAssertionSuggestion({
-                db,
-                appId: appRow.id,
-                appName: appRow.canonicalName,
-                lookupKey,
-                sourceId: sparkleSource.id,
-                assertionType: "sparkle_public_key",
-                value: installedApp.sparklePublicKey,
-                canonicalSnapshotJson,
-                evidenceFingerprint: `public-sparkle-key:${lookupKey}:${installedApp.sparklePublicKey}`,
-                evidencePayloadJson: JSON.stringify({
-                  sparkleFeedUrl: installedApp.sparkleFeedUrl,
-                  sparklePublicKey: installedApp.sparklePublicKey,
-                }),
-                now,
-              });
-            }
-          }
-        }
-      })(),
-    );
+    const followupPayload = buildInventoryFollowupPayload({
+      requestApps: request.apps,
+      resultsByLookupKey: resultByLookupKey,
+      unmatchedByKey,
+      persistedDiscoveries,
+      processedAt: now,
+    });
+    await persistAndEnqueueInventoryFollowup({
+      db,
+      env: c.env,
+      payload: followupPayload,
+      now,
+    });
 
     const skippedApps = c.get("skippedApps");
     return c.json({

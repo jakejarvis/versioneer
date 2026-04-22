@@ -52,7 +52,7 @@ export async function listEnrichmentCandidates(
 
 export async function runEnrichmentBatch(params: {
   db: Db;
-  env: Pick<Env, "GITHUB_TOKEN" | "RAW_BUCKET" | "CONFIG_KV">;
+  env: Pick<Env, "GITHUB_TOKEN" | "ASSETS_BUCKET" | "CONFIG_KV">;
   limit?: number;
 }): Promise<EnrichmentBatchResult> {
   const candidates = await listEnrichmentCandidates(params.db, params.limit);
@@ -72,7 +72,7 @@ export async function runEnrichmentBatch(params: {
       discoveredAppId: candidate.id,
       db: params.db,
       githubToken: params.env.GITHUB_TOKEN,
-      assetsBucket: params.env.RAW_BUCKET,
+      assetsBucket: params.env.ASSETS_BUCKET,
       configKv: params.env.CONFIG_KV,
     });
 

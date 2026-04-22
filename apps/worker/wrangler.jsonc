@@ -20,6 +20,11 @@
       "name": "versioneer-enrichment-drain-dev",
       "binding": "ENRICHMENT_DRAIN",
       "class_name": "EnrichmentDrainWorkflow"
+    },
+    {
+      "name": "versioneer-inventory-followup-dev",
+      "binding": "INVENTORY_FOLLOWUP",
+      "class_name": "InventoryFollowupWorkflow"
     }
   ],
 
@@ -44,8 +49,31 @@
     {
       "binding": "RAW_BUCKET",
       "bucket_name": "versioneer-raw-dev"
+    },
+    {
+      "binding": "ASSETS_BUCKET",
+      "bucket_name": "versioneer-assets-dev"
     }
   ],
+
+  "queues": {
+    "producers": [
+      {
+        "binding": "INVENTORY_FOLLOWUP_QUEUE",
+        "queue": "versioneer-inventory-followup-dev"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "versioneer-inventory-followup-dev",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "versioneer-inventory-followup-dlq-dev",
+        "retry_delay": 60
+      }
+    ]
+  },
 
   "kv_namespaces": [
     {
@@ -78,6 +106,11 @@
           "name": "versioneer-enrichment-drain-production",
           "binding": "ENRICHMENT_DRAIN",
           "class_name": "EnrichmentDrainWorkflow"
+        },
+        {
+          "name": "versioneer-inventory-followup-production",
+          "binding": "INVENTORY_FOLLOWUP",
+          "class_name": "InventoryFollowupWorkflow"
         }
       ],
       "vars": {
@@ -94,8 +127,30 @@
         {
           "binding": "RAW_BUCKET",
           "bucket_name": "versioneer-raw-production"
+        },
+        {
+          "binding": "ASSETS_BUCKET",
+          "bucket_name": "versioneer-assets-production"
         }
       ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "INVENTORY_FOLLOWUP_QUEUE",
+            "queue": "versioneer-inventory-followup-production"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "versioneer-inventory-followup-production",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "dead_letter_queue": "versioneer-inventory-followup-dlq-production",
+            "retry_delay": 60
+          }
+        ]
+      },
       "kv_namespaces": [
         {
           "binding": "CACHE_KV",

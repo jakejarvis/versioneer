@@ -1,5 +1,5 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
-import { and, eq, isNull, lte, or } from "drizzle-orm";
+import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 
 import { createLogger } from "@versioneer/core/logger";
 import {
@@ -10,23 +10,49 @@ import {
   recordJobFailure,
   resolveJobFailure,
   computeNextPollAt,
+  inventoryFollowupQueueMessageSchema,
 } from "@versioneer/core/pipeline";
-import type { SourceParseJob, RecomputeLatestJob } from "@versioneer/core/pipeline";
+import type {
+  InventoryFollowupQueueMessage,
+  SourceParseJob,
+  RecomputeLatestJob,
+} from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
-import { cronJobRuns, generateId, idPrefixes } from "@versioneer/db";
+import { cronJobRuns, generateId, idPrefixes, inventoryFollowupJobs } from "@versioneer/db";
 // Import parsers to trigger auto-registration
 import "@versioneer/core/parsers";
 import { runEnrichmentBatch } from "./enrichment";
 
 // Re-export the Workflow class so wrangler can discover it
 export { EnrichmentDrainWorkflow } from "./workflows/enrichment-drain";
+export { InventoryFollowupWorkflow } from "./workflows/inventory-followup";
 export { SourcePipelineWorkflow } from "./workflows/source-pipeline";
 
 const SOURCE_PIPELINE_BATCH_SIZE = 100;
+const INVENTORY_FOLLOWUP_MAX_ATTEMPTS = 5;
+const INVENTORY_FOLLOWUP_RETRY_DELAY_SECONDS = 60;
+const INVENTORY_FOLLOWUP_REPAIR_BATCH_SIZE = 50;
+const INVENTORY_FOLLOWUP_REPAIR_STALE_MS = 5 * 60 * 1000;
 
 type SourcePipelineBinding = Env["SOURCE_PIPELINE"];
 type SourcePipelineCreateOptions = NonNullable<Parameters<SourcePipelineBinding["create"]>[0]>;
+type InventoryFollowupWorkflowBinding = Env["INVENTORY_FOLLOWUP"];
+type InventoryFollowupWorkflowCreateOptions = NonNullable<
+  Parameters<InventoryFollowupWorkflowBinding["create"]>[0]
+>;
 type Logger = ReturnType<typeof createLogger>;
+
+type Db = ReturnType<typeof createDb>;
+
+type InventoryFollowupClaim =
+  | {
+      status: "claimed";
+      jobId: string;
+      attemptCount: number;
+      workflowInstanceId: string;
+      createOptions: InventoryFollowupWorkflowCreateOptions;
+    }
+  | { status: "skipped"; reason: string };
 
 async function createSourcePipelineBatch(
   sourcePipeline: SourcePipelineBinding,
@@ -57,6 +83,157 @@ async function createSourcePipelineBatch(
   }
 
   return queued;
+}
+
+async function claimInventoryFollowupJob(params: {
+  db: Db;
+  jobId: string;
+  now: string;
+}): Promise<InventoryFollowupClaim> {
+  const job = await params.db
+    .select({
+      id: inventoryFollowupJobs.id,
+      status: inventoryFollowupJobs.status,
+      attemptCount: inventoryFollowupJobs.attemptCount,
+    })
+    .from(inventoryFollowupJobs)
+    .where(eq(inventoryFollowupJobs.id, params.jobId))
+    .get();
+
+  if (!job) return { status: "skipped", reason: "missing-job" };
+  if (job.status === "completed" || job.status === "running" || job.status === "queued") {
+    return { status: "skipped", reason: job.status };
+  }
+  if (job.status === "failed" && job.attemptCount >= INVENTORY_FOLLOWUP_MAX_ATTEMPTS) {
+    return { status: "skipped", reason: "attempts-exhausted" };
+  }
+
+  const attemptCount = job.attemptCount + 1;
+  const workflowInstanceId = `${params.jobId}-${attemptCount}`;
+  const claimed = await params.db
+    .update(inventoryFollowupJobs)
+    .set({
+      status: "queued",
+      attemptCount,
+      workflowInstanceId,
+      queuedAt: params.now,
+      startedAt: null,
+      completedAt: null,
+      errorMessage: null,
+      updatedAt: params.now,
+    })
+    .where(
+      and(
+        eq(inventoryFollowupJobs.id, params.jobId),
+        or(eq(inventoryFollowupJobs.status, "pending"), eq(inventoryFollowupJobs.status, "failed")),
+      ),
+    )
+    .returning({
+      jobId: inventoryFollowupJobs.id,
+      attemptCount: inventoryFollowupJobs.attemptCount,
+      workflowInstanceId: inventoryFollowupJobs.workflowInstanceId,
+    });
+
+  const row = claimed[0];
+  if (!row?.workflowInstanceId) return { status: "skipped", reason: "already-claimed" };
+
+  return {
+    status: "claimed",
+    jobId: row.jobId,
+    attemptCount: row.attemptCount,
+    workflowInstanceId: row.workflowInstanceId,
+    createOptions: {
+      id: row.workflowInstanceId,
+      params: { jobId: row.jobId },
+    },
+  };
+}
+
+async function markInventoryFollowupQueueFailure(params: {
+  db: Db;
+  jobId: string;
+  errorMessage: string;
+  now: string;
+}) {
+  await params.db
+    .update(inventoryFollowupJobs)
+    .set({
+      status: "failed",
+      errorMessage: params.errorMessage,
+      updatedAt: params.now,
+      completedAt: params.now,
+    })
+    .where(eq(inventoryFollowupJobs.id, params.jobId));
+  await recordJobFailure({
+    db: params.db,
+    jobType: "inventory_followup",
+    relatedId: params.jobId,
+    jobKey: "queue",
+    errorMessage: params.errorMessage,
+  });
+}
+
+export async function repairInventoryFollowupQueue(params: {
+  db: Db;
+  queue: Queue<InventoryFollowupQueueMessage>;
+  log: Logger;
+  now: Date;
+}): Promise<number> {
+  const staleBefore = new Date(params.now.getTime() - INVENTORY_FOLLOWUP_REPAIR_STALE_MS);
+  const nowIso = params.now.toISOString();
+  const staleBeforeIso = staleBefore.toISOString();
+  const jobs = await params.db
+    .select({ id: inventoryFollowupJobs.id, status: inventoryFollowupJobs.status })
+    .from(inventoryFollowupJobs)
+    .where(
+      or(
+        and(
+          eq(inventoryFollowupJobs.status, "pending"),
+          lte(inventoryFollowupJobs.updatedAt, staleBeforeIso),
+        ),
+        and(
+          eq(inventoryFollowupJobs.status, "failed"),
+          lte(inventoryFollowupJobs.updatedAt, staleBeforeIso),
+          sql`${inventoryFollowupJobs.attemptCount} < ${INVENTORY_FOLLOWUP_MAX_ATTEMPTS}`,
+        ),
+      ),
+    )
+    .limit(INVENTORY_FOLLOWUP_REPAIR_BATCH_SIZE)
+    .all();
+
+  let enqueued = 0;
+  for (const job of jobs) {
+    try {
+      await params.queue.send({ jobId: job.id });
+      await params.db
+        .update(inventoryFollowupJobs)
+        .set({ updatedAt: nowIso })
+        .where(eq(inventoryFollowupJobs.id, job.id));
+      await resolveJobFailure({
+        db: params.db,
+        jobType: "inventory_followup",
+        relatedId: job.id,
+        jobKey: "repair",
+      });
+      enqueued++;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      params.log.error("failed to repair inventory follow-up queue", {
+        jobId: job.id,
+        status: job.status,
+        error,
+      });
+      await recordJobFailure({
+        db: params.db,
+        jobType: "inventory_followup",
+        relatedId: job.id,
+        jobKey: "repair",
+        errorMessage,
+      });
+    }
+  }
+
+  return enqueued;
 }
 
 export default class PipelineWorker extends WorkerEntrypoint {
@@ -95,6 +272,83 @@ export default class PipelineWorker extends WorkerEntrypoint {
   }
 
   /**
+   * RPC: re-enqueue a durable inventory follow-up job.
+   * Called via service binding from the dashboard failure queue.
+   */
+  async retryInventoryFollowup(params: InventoryFollowupQueueMessage): Promise<void> {
+    const message = inventoryFollowupQueueMessageSchema.parse(params);
+    await this.env.INVENTORY_FOLLOWUP_QUEUE.send(message);
+  }
+
+  async queue(batch: MessageBatch<InventoryFollowupQueueMessage>): Promise<void> {
+    const db = createDb(this.env.DB);
+    const log = createLogger({ handler: "inventory_followup_queue", queue: batch.queue });
+
+    for (const message of batch.messages) {
+      const parsed = inventoryFollowupQueueMessageSchema.safeParse(message.body);
+      if (!parsed.success) {
+        log.error("invalid inventory follow-up queue message", {
+          messageId: message.id,
+          issues: parsed.error.issues,
+        });
+        message.ack();
+        continue;
+      }
+
+      const { jobId } = parsed.data;
+      try {
+        const now = new Date().toISOString();
+        const claim = await claimInventoryFollowupJob({ db, jobId, now });
+        if (claim.status === "skipped") {
+          if (claim.reason === "missing-job") {
+            await recordJobFailure({
+              db,
+              jobType: "inventory_followup",
+              relatedId: jobId,
+              jobKey: "queue",
+              errorMessage: `Inventory follow-up job ${jobId} does not exist`,
+            });
+          }
+          log.info("inventory follow-up queue message skipped", {
+            jobId,
+            reason: claim.reason,
+          });
+          message.ack();
+          continue;
+        }
+
+        await this.env.INVENTORY_FOLLOWUP.create(claim.createOptions);
+        await resolveJobFailure({
+          db,
+          jobType: "inventory_followup",
+          relatedId: jobId,
+          jobKey: "queue",
+        });
+        log.info("inventory follow-up workflow queued", {
+          jobId,
+          attemptCount: claim.attemptCount,
+          workflowInstanceId: claim.workflowInstanceId,
+        });
+        message.ack();
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        log.error("failed to start inventory follow-up workflow", { jobId, error });
+        try {
+          await markInventoryFollowupQueueFailure({
+            db,
+            jobId,
+            errorMessage,
+            now: new Date().toISOString(),
+          });
+        } catch (markError) {
+          log.error("failed to mark inventory follow-up queue failure", { jobId, markError });
+        }
+        message.retry({ delaySeconds: INVENTORY_FOLLOWUP_RETRY_DELAY_SECONDS });
+      }
+    }
+  }
+
+  /**
    * Cron-triggered handler: polls sources and runs cask index sync.
    */
   async scheduled(_event: ScheduledEvent): Promise<void> {
@@ -103,6 +357,23 @@ export default class PipelineWorker extends WorkerEntrypoint {
     const log = createLogger({ handler: "scheduled" });
 
     const now = new Date();
+
+    // --- Inventory Follow-up Queue Repair ---
+    {
+      try {
+        const repaired = await repairInventoryFollowupQueue({
+          db,
+          queue: this.env.INVENTORY_FOLLOWUP_QUEUE,
+          log,
+          now,
+        });
+        if (repaired > 0) {
+          log.info("inventory follow-up repair enqueued jobs", { repaired });
+        }
+      } catch (error) {
+        log.error("inventory follow-up repair failed", { error });
+      }
+    }
 
     // --- Poll Sources ---
     {
