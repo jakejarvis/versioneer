@@ -1,14 +1,16 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
-import { Search } from "lucide-react";
+import { FileJson, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
+import { ActionIconButton } from "@/components/shared/action-icon-button";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { EntityReferenceLink } from "@/components/shared/entity-link";
 import { JsonViewer } from "@/components/shared/json-viewer";
 import { TimeAgo } from "@/components/shared/time-ago";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -26,6 +28,8 @@ import type { AuditLogListItem } from "@/lib/types";
 const auditLogSearchDefaults = {
   ...paginatedSearchDefaults,
   eventType: "",
+  targetType: "",
+  targetId: "",
 };
 
 const auditLogSearchSchema = z.object({
@@ -34,6 +38,14 @@ const auditLogSearchSchema = z.object({
     .string()
     .default(auditLogSearchDefaults.eventType)
     .catch(auditLogSearchDefaults.eventType),
+  targetType: z
+    .string()
+    .default(auditLogSearchDefaults.targetType)
+    .catch(auditLogSearchDefaults.targetType),
+  targetId: z
+    .string()
+    .default(auditLogSearchDefaults.targetId)
+    .catch(auditLogSearchDefaults.targetId),
 });
 
 export const Route = createFileRoute("/audit-log/")({
@@ -51,6 +63,8 @@ function AuditLogPage() {
 
   const { data, isLoading } = useAuditLog({
     eventType: searchState.eventType || undefined,
+    targetType: searchState.targetType || undefined,
+    targetId: searchState.targetId || undefined,
     limit: pagination.pageSize,
     offset: pagination.pageIndex * pagination.pageSize,
     sortBy: searchState.sortBy,
@@ -99,9 +113,11 @@ function AuditLogPage() {
         enableHiding: false,
         cell: ({ row }) =>
           row.original.payloadJson ? (
-            <Button variant="ghost" size="sm" onClick={() => setSelectedEntry(row.original)}>
-              Payload
-            </Button>
+            <ActionIconButton
+              label="View payload"
+              icon={FileJson}
+              onClick={() => setSelectedEntry(row.original)}
+            />
           ) : null,
       },
     ],
@@ -116,23 +132,50 @@ function AuditLogPage() {
       <p className="mt-1 text-muted-foreground">Immutable event log for state changes.</p>
 
       <div className="mt-4">
-        <div className="relative w-full sm:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Filter by event type..."
-            value={searchState.eventType}
-            onChange={(e) =>
-              void navigate({
-                to: "/audit-log",
-                search: {
-                  ...searchState,
-                  page: 1,
-                  eventType: e.target.value,
-                },
-              })
-            }
-            className="pl-9"
-          />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Filter by event type..."
+              value={searchState.eventType}
+              onChange={(e) =>
+                void navigate({
+                  to: "/audit-log",
+                  search: {
+                    ...searchState,
+                    page: 1,
+                    eventType: e.target.value,
+                  },
+                })
+              }
+              className="pl-9"
+            />
+          </div>
+          {searchState.targetType && searchState.targetId ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="rounded-md">
+                {searchState.targetType}: {searchState.targetId}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  void navigate({
+                    to: "/audit-log",
+                    search: {
+                      ...searchState,
+                      page: 1,
+                      targetType: "",
+                      targetId: "",
+                    },
+                  })
+                }
+              >
+                <X data-icon="inline-start" />
+                Clear target
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
 

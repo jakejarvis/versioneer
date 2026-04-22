@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { AppSummary } from "@/lib/types";
 
 import {
+  buildAppSourceHealth,
   buildAtRiskSources,
   OVERDUE_GRACE_MULTIPLIER,
   type AtRiskSourceCandidate,
@@ -155,5 +156,110 @@ describe("buildAtRiskSources", () => {
 
     expect(OVERDUE_GRACE_MULTIPLIER).toBe(1.5);
     expect(item?.overdueMinutes).toBe(1);
+  });
+});
+
+describe("buildAppSourceHealth", () => {
+  const now = new Date("2026-03-29T12:00:00.000Z");
+
+  it("returns no_sources when an app has no source rows", () => {
+    expect(buildAppSourceHealth([], now)).toEqual({
+      total: 0,
+      active: 0,
+      error: 0,
+      stale: 0,
+      disabled: 0,
+      latestFetchAt: null,
+      latestSuccessAt: null,
+      latestFailureAt: null,
+      status: "no_sources",
+    });
+  });
+
+  it("classifies active sources inside the grace window as fresh", () => {
+    const health = buildAppSourceHealth(
+      [
+        candidate({
+          id: "src_fresh",
+          lastFetchedAt: "2026-03-29T11:00:00.000Z",
+          lastSuccessAt: "2026-03-29T11:00:10.000Z",
+        }),
+      ],
+      now,
+    );
+
+    expect(health).toMatchObject({
+      total: 1,
+      active: 1,
+      stale: 0,
+      error: 0,
+      status: "fresh",
+      latestFetchAt: "2026-03-29T11:00:00.000Z",
+      latestSuccessAt: "2026-03-29T11:00:10.000Z",
+    });
+  });
+
+  it("classifies overdue active sources as attention", () => {
+    const health = buildAppSourceHealth(
+      [
+        candidate({
+          id: "src_stale",
+          lastFetchedAt: "2026-03-29T10:29:00.000Z",
+        }),
+      ],
+      now,
+    );
+
+    expect(health).toMatchObject({
+      total: 1,
+      active: 1,
+      stale: 1,
+      status: "attention",
+    });
+  });
+
+  it("classifies error sources as attention and keeps latest failure", () => {
+    const health = buildAppSourceHealth(
+      [
+        candidate({
+          id: "src_error_old",
+          status: "error",
+          lastFailureAt: "2026-03-29T09:00:00.000Z",
+        }),
+        candidate({
+          id: "src_error_new",
+          status: "error",
+          lastFailureAt: "2026-03-29T11:30:00.000Z",
+        }),
+      ],
+      now,
+    );
+
+    expect(health).toMatchObject({
+      total: 2,
+      error: 2,
+      status: "attention",
+      latestFailureAt: "2026-03-29T11:30:00.000Z",
+    });
+  });
+
+  it("classifies disabled-only source sets as unknown", () => {
+    const health = buildAppSourceHealth(
+      [
+        candidate({
+          id: "src_disabled",
+          status: "disabled",
+          lastFetchedAt: "2026-03-29T11:45:00.000Z",
+        }),
+      ],
+      now,
+    );
+
+    expect(health).toMatchObject({
+      total: 1,
+      active: 0,
+      disabled: 1,
+      status: "unknown",
+    });
   });
 });

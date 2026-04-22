@@ -35,6 +35,7 @@ export const listAuditLog = createServerFn({ method: "GET" })
       offset: z.number().optional(),
       eventType: z.string().optional(),
       targetType: z.string().optional(),
+      targetId: z.string().optional(),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,
     }),
@@ -47,6 +48,7 @@ export const listAuditLog = createServerFn({ method: "GET" })
     const conditions = [];
     if (data.eventType) conditions.push(eq(auditLog.eventType, data.eventType));
     if (data.targetType) conditions.push(eq(auditLog.targetType, data.targetType));
+    if (data.targetId) conditions.push(eq(auditLog.targetId, data.targetId));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 

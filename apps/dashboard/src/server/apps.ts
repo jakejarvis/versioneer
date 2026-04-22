@@ -21,6 +21,7 @@ import {
 } from "@versioneer/db";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import { buildAppSourceHealth } from "./homepage-helpers";
 import { latestReleaseTrustWarnings } from "./install-trust";
 import { buildAppSortDescriptors } from "./list-helpers";
 import { authMiddleware } from "./middleware";
@@ -178,11 +179,13 @@ export const getApp = createServerFn({ method: "GET" })
       .select({ count: sql<number>`count(*)` })
       .from(sources)
       .where(eq(sources.appId, id));
+    const sourceRows = await db.select().from(sources).where(eq(sources.appId, id)).all();
 
     return {
       ...app,
       latestReleases: latest,
       sourceCount: sourceCount?.count ?? 0,
+      sourceHealth: buildAppSourceHealth(sourceRows),
     };
   });
 

@@ -215,6 +215,24 @@ export interface AppListItem extends App {
   sourceCount: number;
 }
 
+export interface AppSourceHealth {
+  total: number;
+  active: number;
+  error: number;
+  stale: number;
+  disabled: number;
+  latestFetchAt: string | null;
+  latestSuccessAt: string | null;
+  latestFailureAt: string | null;
+  status: "fresh" | "attention" | "no_sources" | "unknown";
+}
+
+export interface AppDetail extends App {
+  sourceCount: number;
+  latestReleases: AppLatestRelease[];
+  sourceHealth: AppSourceHealth;
+}
+
 export interface AppAlias {
   id: string;
   appId: string;

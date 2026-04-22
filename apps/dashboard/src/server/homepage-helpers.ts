@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import type { AppSummary, AtRiskSourceItem, Source } from "@/lib/types";
+import type { AppSourceHealth, AppSummary, AtRiskSourceItem, Source } from "@/lib/types";
 import { toEpochMs } from "@versioneer/core/dates";
 import { sources } from "@versioneer/db";
 
@@ -67,6 +67,57 @@ function computeOverdueMinutes(source: AtRiskSourceCandidate, now: Date): number
   const minutesSinceBase = Math.floor((now.getTime() - baseTime) / 60_000);
   const gracedInterval = Math.floor(source.pollIntervalMinutes * OVERDUE_GRACE_MULTIPLIER);
   return Math.max(minutesSinceBase - gracedInterval, 0);
+}
+
+export function isActiveSourceOverdue(source: AtRiskSourceCandidate, now = new Date()): boolean {
+  if (source.status !== "active") return false;
+  const baseTimestamp = source.lastFetchedAt ?? source.createdAt;
+  const baseTime = new Date(baseTimestamp).getTime();
+  if (Number.isNaN(baseTime)) return false;
+
+  const minutesSinceBase = Math.floor((now.getTime() - baseTime) / 60_000);
+  const gracedInterval = Math.floor(source.pollIntervalMinutes * OVERDUE_GRACE_MULTIPLIER);
+  return minutesSinceBase >= gracedInterval;
+}
+
+function maxTimestamp(values: Array<string | null>): string | null {
+  return (
+    values
+      .filter((value): value is string => Boolean(value))
+      .sort((left, right) => (toEpochMs(right) ?? 0) - (toEpochMs(left) ?? 0))[0] ?? null
+  );
+}
+
+export function buildAppSourceHealth(
+  candidates: AtRiskSourceCandidate[],
+  now = new Date(),
+): AppSourceHealth {
+  const total = candidates.length;
+  const active = candidates.filter((source) => source.status === "active").length;
+  const error = candidates.filter((source) => source.status === "error").length;
+  const stale = candidates.filter((source) => isActiveSourceOverdue(source, now)).length;
+  const disabled = candidates.filter((source) => source.status === "disabled").length;
+
+  const status: AppSourceHealth["status"] =
+    total === 0
+      ? "no_sources"
+      : error > 0 || stale > 0
+        ? "attention"
+        : active > 0
+          ? "fresh"
+          : "unknown";
+
+  return {
+    total,
+    active,
+    error,
+    stale,
+    disabled,
+    latestFetchAt: maxTimestamp(candidates.map((source) => source.lastFetchedAt)),
+    latestSuccessAt: maxTimestamp(candidates.map((source) => source.lastSuccessAt)),
+    latestFailureAt: maxTimestamp(candidates.map((source) => source.lastFailureAt)),
+    status,
+  };
 }
 
 export function buildAtRiskSources(

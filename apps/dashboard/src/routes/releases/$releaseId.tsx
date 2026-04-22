@@ -4,8 +4,10 @@ import { ArrowLeft, ExternalLink, Inbox, Pencil, Save, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { ActionIconButton } from "@/components/shared/action-icon-button";
 import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { EntityAuditPanel } from "@/components/shared/entity-audit-panel";
 import { AppEntityLink } from "@/components/shared/entity-link";
 import { IdDisplay } from "@/components/shared/id-display";
 import {
@@ -102,11 +104,11 @@ function ReleaseDetailPage() {
         enableSorting: false,
         enableHiding: false,
         cell: ({ row }) => (
-          <Button asChild variant="ghost" size="sm">
+          <ActionIconButton label="Open artifact" icon={ExternalLink} asChild>
             <a href={row.original.url} target="_blank" rel="noopener noreferrer">
-              Open
+              <ExternalLink data-icon="inline-start" />
             </a>
-          </Button>
+          </ActionIconButton>
         ),
       },
     ],
@@ -359,6 +361,10 @@ function ReleaseDetailPage() {
             This release is not selected as the latest release for its channel.
           </p>
         )}
+      </div>
+
+      <div className="mt-6">
+        <EntityAuditPanel targetType="release" targetId={releaseId} />
       </div>
 
       <div className="mt-6">

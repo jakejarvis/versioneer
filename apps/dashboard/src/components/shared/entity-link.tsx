@@ -96,8 +96,12 @@ function entityHref(ref: LinkedEntityRef) {
       return `/sources/${ref.id}`;
     case "release":
       return `/releases/${ref.id}`;
-    case "job_failure":
-      return `/job-failures`;
+    case "job_failure": {
+      const status = ["open", "retrying", "resolved", "abandoned"].includes(ref.description ?? "")
+        ? ref.description
+        : "open";
+      return `/jobs?tab=failures&page=1&pageSize=25&jobType=all&failureJobType=all&failureStatus=${status}&failureId=${ref.id}`;
+    }
     case "feedback":
       return `/feedback`;
     default:

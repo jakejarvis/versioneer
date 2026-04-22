@@ -69,6 +69,7 @@ const failureSearch = {
   failureStatus: "open",
   jobType: "all",
   failureJobType: "all",
+  failureId: "",
 } as const;
 const atRiskSourceSearch = { page: 1, pageSize: 25, status: "at_risk", type: "all" } as const;
 const jobsSearch = {
@@ -78,6 +79,7 @@ const jobsSearch = {
   jobType: "all",
   failureJobType: "all",
   failureStatus: "open",
+  failureId: "",
 } as const;
 const releasesSearch = {
   page: 1,
@@ -780,8 +782,17 @@ function AtRiskSourceRow({ item }: { item: AtRiskSourceItem }) {
 function JobFailureRow({ item }: { item: JobFailureListItem }) {
   const search =
     item.jobType === "source-anomaly"
-      ? { ...failureSearch, failureJobType: "source-anomaly" as const }
-      : failureSearch;
+      ? {
+          ...failureSearch,
+          failureStatus: item.status,
+          failureJobType: "source-anomaly" as const,
+          failureId: item.id,
+        }
+      : {
+          ...failureSearch,
+          failureStatus: item.status,
+          failureId: item.id,
+        };
 
   return (
     <Link

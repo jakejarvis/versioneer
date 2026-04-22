@@ -5,6 +5,7 @@ import { listAuditLog } from "@/server/audit-log";
 interface UseAuditLogParams {
   eventType?: string;
   targetType?: string;
+  targetId?: string;
   limit?: number;
   offset?: number;
   sortBy?: string;

@@ -13,6 +13,7 @@ import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { Toaster } from "sonner";
 
 import { AppSidebar } from "@/components/layout/sidebar";
+import { DashboardRouteError } from "@/components/shared/dashboard-route-error";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemeProvider, themeInitScript } from "@/lib/theme";
@@ -25,6 +26,7 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 30_000,
       retry: 1,
+      throwOnError: (_error, query) => query.state.data === undefined,
     },
   },
 });
@@ -56,6 +58,7 @@ export const Route = createRootRoute({
     ],
   }),
   component: RootComponent,
+  errorComponent: DashboardRouteError,
 });
 
 function AppShell() {

@@ -141,7 +141,10 @@ export const getJobFailure = createServerFn({ method: "GET" })
     const db = createDb(env.DB);
     const item = await db.select().from(jobFailures).where(eq(jobFailures.id, id)).get();
     if (!item) throw new Error("Not found");
-    return item;
+    const relatedRefMap = await loadEntityRefsByIds(db, [item.relatedId]);
+    return Object.assign({}, item, {
+      relatedRef: item.relatedId ? (relatedRefMap.get(item.relatedId) ?? null) : null,
+    });
   });
 
 // PATCH /job-failures/:id - update status

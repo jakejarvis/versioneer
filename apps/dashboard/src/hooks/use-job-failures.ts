@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
   listJobFailures,
+  getJobFailure,
   updateJobFailure,
   retryJobFailure,
   retryAllJobFailures,
@@ -21,6 +22,14 @@ export function useJobFailures(params: UseJobFailuresParams = {}) {
   return useQuery({
     queryKey: ["job-failures", params],
     queryFn: () => listJobFailures({ data: params }),
+  });
+}
+
+export function useJobFailure(id?: string) {
+  return useQuery({
+    queryKey: ["job-failures", id],
+    queryFn: () => getJobFailure({ data: { id: id! } }),
+    enabled: Boolean(id),
   });
 }
 

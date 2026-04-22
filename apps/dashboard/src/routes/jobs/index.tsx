@@ -1,10 +1,11 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
-import { Ban, CheckCircle, MoreHorizontal, Package, Radio, RefreshCw } from "lucide-react";
+import { Ban, CheckCircle, Eye, Package, Radio, RefreshCw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { ActionIconButton } from "@/components/shared/action-icon-button";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { EntityReferenceLink } from "@/components/shared/entity-link";
@@ -15,12 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -31,7 +26,12 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useJobFailures, useRetryJobFailure, useUpdateJobFailure } from "@/hooks/use-job-failures";
+import {
+  useJobFailure,
+  useJobFailures,
+  useRetryJobFailure,
+  useUpdateJobFailure,
+} from "@/hooks/use-job-failures";
 import { useCronJobRuns, useTriggerCaskSync, useTriggerPollSources } from "@/hooks/use-jobs";
 import {
   applyPaginationToSearch,
@@ -41,6 +41,7 @@ import {
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
+import { formatDuration } from "@/lib/format-duration";
 import {
   canRetryJobFailure,
   failureJobTypeOptions,
@@ -54,6 +55,7 @@ const jobsSearchDefaults = {
   jobType: "all" as const,
   failureJobType: "all" as const,
   failureStatus: "open" as const,
+  failureId: "",
 };
 
 const jobsSearchSchema = z.object({
@@ -80,6 +82,7 @@ const jobsSearchSchema = z.object({
     .enum(["open", "retrying", "resolved", "abandoned"])
     .default(jobsSearchDefaults.failureStatus)
     .catch(jobsSearchDefaults.failureStatus),
+  failureId: z.string().default(jobsSearchDefaults.failureId).catch(jobsSearchDefaults.failureId),
 });
 
 export const Route = createFileRoute("/jobs/")({
@@ -112,8 +115,6 @@ const jobTypeLabels: Record<string, string> = {
   enrich_discovered_apps: "Enrich Discoveries",
 };
 
-import { formatDuration } from "@/lib/format-duration";
-
 // ---------------------------------------------------------------------------
 // Root page
 // ---------------------------------------------------------------------------
@@ -121,6 +122,7 @@ import { formatDuration } from "@/lib/format-duration";
 function JobsPage() {
   const navigate = Route.useNavigate();
   const search = Route.useSearch();
+  const activeTab = search.failureId ? "failures" : search.tab;
 
   return (
     <div>
@@ -130,11 +132,16 @@ function JobsPage() {
       </p>
 
       <Tabs
-        value={search.tab}
+        value={activeTab}
         onValueChange={(tab) =>
           void navigate({
             to: "/jobs",
-            search: { ...search, tab: tab as "runs" | "failures", page: 1 },
+            search: {
+              ...search,
+              tab: tab as "runs" | "failures",
+              page: 1,
+              failureId: tab === "failures" ? search.failureId : "",
+            },
           })
         }
         className="mt-4"
@@ -350,10 +357,11 @@ function FailuresTab() {
   const search = Route.useSearch();
   const pagination = paginationFromSearch(search);
   const sorting = sortingFromSearch(search);
-  const [selectedFailure, setSelectedFailure] = useState<JobFailureListItem | null>(null);
+  const selectedFailureId = search.failureId || undefined;
 
   const updateFailure = useUpdateJobFailure();
   const retryFailure = useRetryJobFailure();
+  const selectedFailureQuery = useJobFailure(selectedFailureId);
 
   const { data, isLoading } = useJobFailures({
     status: search.failureStatus,
@@ -363,6 +371,19 @@ function FailuresTab() {
     sortBy: search.sortBy,
     sortDir: search.sortDir,
   });
+  const selectedFailure =
+    selectedFailureQuery.data ?? data?.items.find((item) => item.id === selectedFailureId) ?? null;
+
+  const openFailure = useCallback(
+    (id: string) => {
+      void navigate({ to: "/jobs", search: { ...search, tab: "failures", failureId: id } });
+    },
+    [navigate, search],
+  );
+
+  const closeFailure = useCallback(() => {
+    void navigate({ to: "/jobs", search: { ...search, tab: "failures", failureId: "" } });
+  }, [navigate, search]);
 
   const handleRetry = useCallback(
     (id: string) => {
@@ -422,7 +443,7 @@ function FailuresTab() {
             <button
               type="button"
               className="block max-w-56 cursor-pointer truncate text-left text-xs text-red-600 dark:text-red-400"
-              onClick={() => setSelectedFailure(row.original)}
+              onClick={() => openFailure(row.original.id)}
             >
               {row.original.errorMessage}
             </button>
@@ -453,35 +474,42 @@ function FailuresTab() {
         meta: { label: "" },
         enableSorting: false,
         enableHiding: false,
-        cell: ({ row }) =>
-          row.original.status === "open" || row.original.status === "retrying" ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canRetryJobFailure(row.original.jobType) ? (
-                  <DropdownMenuItem onClick={() => handleRetry(row.original.id)}>
-                    <RefreshCw />
-                    Retry
-                  </DropdownMenuItem>
-                ) : null}
-                <DropdownMenuItem onClick={() => handleStatusChange(row.original.id, "resolved")}>
-                  <CheckCircle />
-                  Resolve
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleStatusChange(row.original.id, "abandoned")}>
-                  <Ban />
-                  Abandon
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null,
+        cell: ({ row }) => {
+          const canUpdate = row.original.status === "open" || row.original.status === "retrying";
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <ActionIconButton
+                label="View details"
+                icon={Eye}
+                onClick={() => openFailure(row.original.id)}
+              />
+              {canUpdate && canRetryJobFailure(row.original.jobType) ? (
+                <ActionIconButton
+                  label="Retry"
+                  icon={RefreshCw}
+                  onClick={() => handleRetry(row.original.id)}
+                />
+              ) : null}
+              {canUpdate ? (
+                <>
+                  <ActionIconButton
+                    label="Resolve"
+                    icon={CheckCircle}
+                    onClick={() => handleStatusChange(row.original.id, "resolved")}
+                  />
+                  <ActionIconButton
+                    label="Abandon"
+                    icon={Ban}
+                    onClick={() => handleStatusChange(row.original.id, "abandoned")}
+                  />
+                </>
+              ) : null}
+            </div>
+          );
+        },
       },
     ],
-    [handleRetry, handleStatusChange],
+    [handleRetry, handleStatusChange, openFailure],
   );
 
   const bulkActions: BulkAction<JobFailureListItem>[] = [
@@ -588,12 +616,14 @@ function FailuresTab() {
         }
       />
 
-      <Dialog open={!!selectedFailure} onOpenChange={(open) => !open && setSelectedFailure(null)}>
+      <Dialog open={Boolean(selectedFailureId)} onOpenChange={(open) => !open && closeFailure()}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Error Detail</DialogTitle>
           </DialogHeader>
-          {selectedFailure && (
+          {selectedFailureQuery.isLoading && !selectedFailure ? (
+            <div className="text-sm text-muted-foreground">Loading failure detail...</div>
+          ) : selectedFailure ? (
             <div className="space-y-3">
               <div className="text-sm">
                 <span className="text-muted-foreground">Job Type: </span>
@@ -616,6 +646,8 @@ function FailuresTab() {
                 </pre>
               </div>
             </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">Job failure not found.</div>
           )}
         </DialogContent>
       </Dialog>

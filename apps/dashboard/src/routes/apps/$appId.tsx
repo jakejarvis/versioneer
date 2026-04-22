@@ -6,7 +6,9 @@ import { type ColumnDef, type PaginationState, type SortingState } from "@tansta
 import {
   ArrowLeft,
   ExternalLink,
+  Gauge,
   GripVertical,
+  History,
   Inbox,
   Pencil,
   Plus,
@@ -16,7 +18,7 @@ import {
   Upload,
   Zap,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -25,6 +27,7 @@ import { CreateSourceDialog } from "@/components/shared/create-source-dialog";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { EditAppDialog } from "@/components/shared/edit-app-dialog";
+import { EntityAuditPanel } from "@/components/shared/entity-audit-panel";
 import { SourceEntityLink } from "@/components/shared/entity-link";
 import { FormField } from "@/components/shared/form-field";
 import { IdDisplay } from "@/components/shared/id-display";
@@ -35,7 +38,16 @@ import {
 } from "@/components/shared/security-signals";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -69,7 +81,7 @@ import {
   useUploadAppIcon,
 } from "@/hooks/use-apps";
 import { useReorderSources } from "@/hooks/use-sources";
-import type { AppAlias, AppLatestRelease, Release, Source } from "@/lib/types";
+import type { AppAlias, AppDetail, AppLatestRelease, Release, Source } from "@/lib/types";
 import type { AliasType } from "@versioneer/schemas/catalog";
 
 const appDetailSearchDefaults = {
@@ -260,45 +272,66 @@ function AppDetailPage() {
   );
 }
 
-function OverviewTab({
-  appId,
-  app,
-}: {
-  appId: string;
-  app: { notes: string | null; sourceCount: number; latestReleases: AppLatestRelease[] };
-}) {
+function OverviewTab({ appId, app }: { appId: string; app: AppDetail }) {
   const recomputeLatest = useRecomputeLatest();
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-lg border p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div>
-            <h3 className="font-medium">Latest Releases</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Cross-linked publication decisions for each channel.
-            </p>
-          </div>
+      <ReleaseReadinessSection
+        appId={appId}
+        releases={app.latestReleases}
+        recomputeLatest={(id) => {
+          recomputeLatest.mutate(
+            { appId: id },
+            {
+              onSuccess: () => toast.success("Recompute queued"),
+              onError: (error) => toast.error(error.message),
+            },
+          );
+        }}
+        recomputePending={recomputeLatest.isPending}
+      />
+
+      <OperationalSnapshotSection app={app} />
+
+      <EntityAuditPanel targetType="app" targetId={appId} />
+    </div>
+  );
+}
+
+function ReleaseReadinessSection({
+  appId,
+  releases,
+  recomputeLatest,
+  recomputePending,
+}: {
+  appId: string;
+  releases: AppLatestRelease[];
+  recomputeLatest: (appId: string) => void;
+  recomputePending: boolean;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Release Readiness</CardTitle>
+        <CardDescription>
+          Latest release decisions and one-click trust state by channel.
+        </CardDescription>
+        <CardAction>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => {
-              recomputeLatest.mutate(
-                { appId },
-                {
-                  onSuccess: () => toast.success("Recompute queued"),
-                  onError: (error) => toast.error(error.message),
-                },
-              );
-            }}
-            disabled={recomputeLatest.isPending}
+            onClick={() => recomputeLatest(appId)}
+            disabled={recomputePending}
           >
-            <RefreshCw />
+            <RefreshCw data-icon="inline-start" />
             Recompute Latest
           </Button>
-        </div>
-        {app.latestReleases.length === 0 ? (
-          <Empty className="mt-3">
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        {releases.length === 0 ? (
+          <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <Upload />
@@ -307,93 +340,105 @@ function OverviewTab({
             </EmptyHeader>
           </Empty>
         ) : (
-          <div className="mt-3 flex flex-col gap-2">
-            {app.latestReleases.map((latestRelease) => (
+          <div className="flex flex-col gap-3">
+            {releases.map((release) => (
               <Link
-                key={latestRelease.id}
+                key={release.id}
                 to="/releases/$releaseId"
-                params={{ releaseId: latestRelease.releaseId }}
-                className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-3 hover:bg-muted/50"
+                params={{ releaseId: release.releaseId }}
+                className="grid gap-3 rounded-md border bg-muted/20 px-3 py-3 hover:bg-muted/40 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]"
               >
-                <div className="flex min-w-0 flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={latestRelease.channel} />
-                    <span className="font-mono text-sm font-medium">
-                      {latestRelease.versionRaw}
-                    </span>
-                    <IdDisplay id={latestRelease.releaseId} />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge status={release.channel} />
+                    <span className="font-mono text-sm font-medium">{release.versionRaw}</span>
+                    <IdDisplay id={release.releaseId} />
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <InstallStrategyBadge
-                      strategy={latestRelease.installStrategy}
-                      reasons={latestRelease.trustWarnings}
+                      strategy={release.installStrategy}
+                      reasons={release.trustWarnings}
                     />
-                    {latestRelease.pinnedReleaseId ? <span>Pinned</span> : null}
-                    <InstallTrustBadges reasons={latestRelease.trustWarnings} />
+                    {release.pinnedReleaseId ? <StatusBadge status="pinned" /> : null}
+                    <InstallTrustBadges reasons={release.trustWarnings} />
                   </div>
                 </div>
-                <TimeAgo
-                  date={latestRelease.releasedAt}
-                  className="text-sm text-muted-foreground"
-                />
+                <InstallTrustReasonList reasons={release.trustWarnings} />
+                <TimeAgo date={release.releasedAt} className="text-sm text-muted-foreground" />
               </Link>
             ))}
           </div>
         )}
-      </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-      <InstallTrustReadinessCard releases={app.latestReleases} />
+function OperationalSnapshotSection({ app }: { app: AppDetail }) {
+  const health = app.sourceHealth;
 
-      <div className="rounded-lg border p-4">
-        <h3 className="font-medium">Info</h3>
-        <dl className="mt-3 flex flex-col gap-2 text-sm">
-          <div className="flex gap-2">
-            <dt className="w-32 text-muted-foreground">Sources:</dt>
-            <dd>{app.sourceCount}</dd>
-          </div>
-          {app.notes ? (
-            <div className="flex gap-2">
-              <dt className="w-32 text-muted-foreground">Notes:</dt>
-              <dd className="whitespace-pre-wrap">{app.notes}</dd>
-            </div>
-          ) : null}
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Operational Snapshot</CardTitle>
+        <CardDescription>Source coverage, freshness, and latest source failures.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <SnapshotMetric
+            label="Freshness"
+            value={
+              <span className="inline-flex items-center gap-2">
+                <Gauge />
+                <SourceHealthBadge status={health.status} />
+              </span>
+            }
+          />
+          <SnapshotMetric
+            label="Sources"
+            value={`${health.active} active / ${health.total} total`}
+          />
+          <SnapshotMetric label="Stale" value={health.stale} />
+          <SnapshotMetric label="Errors" value={health.error} />
+          <SnapshotMetric label="Disabled" value={health.disabled} />
+          <SnapshotMetric label="Latest fetch" value={<TimeAgo date={health.latestFetchAt} />} />
+          <SnapshotMetric
+            label="Latest success"
+            value={<TimeAgo date={health.latestSuccessAt} />}
+          />
+          <SnapshotMetric
+            label="Latest failure"
+            value={<TimeAgo date={health.latestFailureAt} />}
+          />
         </dl>
-      </div>
+        {app.notes ? (
+          <div className="rounded-md border bg-muted/20 px-3 py-3 text-sm">
+            <div className="mb-1 flex items-center gap-2 font-medium">
+              <History />
+              Notes
+            </div>
+            <div className="whitespace-pre-wrap text-muted-foreground">{app.notes}</div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SnapshotMetric({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-md border bg-muted/20 px-3 py-3">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 font-medium">{value}</dd>
     </div>
   );
 }
 
-function InstallTrustReadinessCard({ releases }: { releases: AppLatestRelease[] }) {
-  if (releases.length === 0) return null;
-
-  return (
-    <div className="rounded-lg border p-4">
-      <h3 className="font-medium">Install Trust Readiness</h3>
-      <div className="mt-3 grid gap-3">
-        {releases.map((release) => (
-          <div
-            key={release.id}
-            className="grid gap-3 rounded-md border bg-muted/20 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
-          >
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={release.channel} />
-                <span className="font-mono text-sm font-medium">{release.versionRaw}</span>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <InstallStrategyBadge
-                  strategy={release.installStrategy}
-                  reasons={release.trustWarnings}
-                />
-                {release.pinnedReleaseId ? <StatusBadge status="pinned" /> : null}
-              </div>
-            </div>
-            <InstallTrustReasonList reasons={release.trustWarnings} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function SourceHealthBadge({ status }: { status: AppDetail["sourceHealth"]["status"] }) {
+  if (status === "attention") return <Badge variant="destructive">Attention</Badge>;
+  if (status === "fresh") return <Badge>Fresh</Badge>;
+  if (status === "no_sources") return <Badge variant="secondary">No sources</Badge>;
+  return <Badge variant="outline">Unknown</Badge>;
 }
 
 function AliasesTab({ appId }: { appId: string }) {

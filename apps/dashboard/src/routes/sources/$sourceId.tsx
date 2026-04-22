@@ -1,13 +1,25 @@
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
-import { ArrowLeft, Ban, CheckCircle, Inbox, RefreshCw, RotateCcw, Save, Zap } from "lucide-react";
+import {
+  ArrowLeft,
+  Ban,
+  CheckCircle,
+  FileText,
+  Inbox,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Zap,
+} from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { ActionIconButton } from "@/components/shared/action-icon-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
+import { EntityAuditPanel } from "@/components/shared/entity-audit-panel";
 import { AppEntityLink } from "@/components/shared/entity-link";
 import { FormField } from "@/components/shared/form-field";
 import { IdDisplay } from "@/components/shared/id-display";
@@ -233,6 +245,10 @@ function SourceDetailPage() {
 
       <SourceEditForm sourceId={sourceId} sourceType={source.sourceType} source={source} />
 
+      <div className="mt-6">
+        <EntityAuditPanel targetType="source" targetId={sourceId} />
+      </div>
+
       <ConfirmDialog
         open={disableConfirmOpen}
         onOpenChange={setDisableConfirmOpen}
@@ -335,6 +351,7 @@ function SourceAnomaliesPanel({
             jobType: "all",
             failureJobType: "source-anomaly",
             failureStatus: "open",
+            failureId: "",
           }}
           className="text-xs text-muted-foreground hover:text-foreground"
         >
@@ -691,13 +708,17 @@ function FetchHistoryTable({
         enableHiding: false,
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => onToggleFetch(row.original.id)}>
-              {expandedFetch === row.original.id ? "Hide Runs" : "Parser Runs"}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => queueReparse(row.original.id)}>
-              <RefreshCw />
-              Reparse
-            </Button>
+            <ActionIconButton
+              label={expandedFetch === row.original.id ? "Hide parser runs" : "Show parser runs"}
+              icon={FileText}
+              onClick={() => onToggleFetch(row.original.id)}
+            />
+            <ActionIconButton
+              label="Reparse fetch"
+              icon={RefreshCw}
+              variant="outline"
+              onClick={() => queueReparse(row.original.id)}
+            />
           </div>
         ),
       },
