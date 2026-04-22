@@ -35,7 +35,7 @@ struct RootView: View {
     }
     .frame(minWidth: 680, minHeight: 500)
     .background(TranslucentWindowBackground())
-    .versioneerAnalyticsScreen(name: "main_window", class: "RootView")
+    .versioneerTelemetryScreen(name: "main_window", screenClass: "RootView")
     .task {
       appState.windowUndoManager = undoManager
       guard !isRunningPreview else { return }

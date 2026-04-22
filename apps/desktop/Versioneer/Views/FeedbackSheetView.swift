@@ -140,8 +140,31 @@ struct FeedbackSheetView: View {
       success = true
     } catch {
       self.error = error.localizedDescription
+      PostHogTelemetry.capture(
+        "desktop_feedback_failed",
+        properties: [
+          "feedback_type": feedbackType.telemetryName
+        ]
+      )
+      PostHogTelemetry.captureException(
+        error,
+        properties: [
+          "operation": "submit_feedback",
+          "feedback_type": feedbackType.telemetryName,
+        ]
+      )
     }
 
     isSubmitting = false
+  }
+}
+
+extension FeedbackType {
+  var telemetryName: String {
+    switch self {
+    case .wrongMatch: "wrong_match"
+    case .wrongVersion: "wrong_version"
+    case .missingApp: "missing_app"
+    }
   }
 }

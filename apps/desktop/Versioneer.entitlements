@@ -2,12 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Required for Firebase on macOS: https://github.com/firebase/firebase-ios-sdk/issues/13934 -->
-	<key>keychain-access-groups</key>
-	<array>
-		<string>$(AppIdentifierPrefix)com.jakejarvis.versioneer</string>
-	</array>
-	<!-- Required for App Attest device verification -->
 	<key>com.apple.developer.devicecheck.appattest-environment</key>
 	<string>development</string>
 </dict>

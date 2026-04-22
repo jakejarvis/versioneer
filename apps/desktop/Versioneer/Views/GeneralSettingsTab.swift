@@ -59,10 +59,10 @@ struct GeneralSettingsTab: View {
     )
   }
 
-  private var crashlyticsEnabledBinding: Binding<Bool> {
+  private var crashReportingEnabledBinding: Binding<Bool> {
     Binding(
-      get: { appState.settings.crashlyticsEnabled },
-      set: { appState.setCrashlyticsEnabled($0) }
+      get: { appState.settings.crashReportingEnabled },
+      set: { appState.setCrashReportingEnabled($0) }
     )
   }
 
@@ -154,12 +154,12 @@ struct GeneralSettingsTab: View {
 
       Section {
         Toggle("Analytics collection", isOn: analyticsEnabledBinding)
-        Toggle("Crash report collection", isOn: crashlyticsEnabledBinding)
+        Toggle("Crash report collection", isOn: crashReportingEnabledBinding)
       } header: {
         Text("Privacy")
       } footer: {
         Text(
-          "Control whether Versioneer reports anonymized analytics and crash reports via Firebase."
+          "Control whether Versioneer reports anonymized analytics and crash reports."
         )
       }
     }

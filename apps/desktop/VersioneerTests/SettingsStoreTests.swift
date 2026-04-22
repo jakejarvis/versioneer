@@ -108,6 +108,33 @@ struct SettingsStoreTests {
     #expect(settings.masCliPathOverride == nil)
   }
 
+  @Test func analyticsAndCrashReportingTogglesPersistIndependently() throws {
+    let (settings, suiteName) = try makeSettings()
+    defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+
+    #expect(settings.analyticsEnabled)
+    #expect(settings.crashReportingEnabled)
+
+    settings.analyticsEnabled = false
+    settings.crashReportingEnabled = true
+
+    let reloadedDefaults = try #require(UserDefaults(suiteName: suiteName))
+    #expect(reloadedDefaults.bool(forKey: "versioneer_analytics_enabled") == false)
+    #expect(reloadedDefaults.bool(forKey: "versioneer_crashlytics_enabled") == true)
+
+    let reloaded = SettingsStore(defaults: reloadedDefaults)
+
+    #expect(!reloaded.analyticsEnabled)
+    #expect(reloaded.crashReportingEnabled)
+
+    reloaded.crashReportingEnabled = false
+    reloaded.analyticsEnabled = true
+
+    let secondReload = SettingsStore(defaults: reloadedDefaults)
+    #expect(secondReload.analyticsEnabled)
+    #expect(!secondReload.crashReportingEnabled)
+  }
+
   @Test func defaultScanRootsIncludeSharedApplicationsAndExtras() throws {
     let (settings, suiteName) = try makeSettings()
     defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }

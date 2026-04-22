@@ -175,6 +175,14 @@ final class InstallCoordinator {
           Logger.api.error(
             "Failed to prepare install execution for \(installedApp.name): \(error.localizedDescription)"
           )
+          PostHogTelemetry.captureException(
+            error,
+            properties: telemetryProperties(
+              for: result,
+              route: route.rawValue,
+              operation: "prepare_install_execution"
+            )
+          )
         }
       } else {
         executionId = installPlan.localId
@@ -380,10 +388,28 @@ final class InstallCoordinator {
           verification: verificationSummary
         )
       }
+      PostHogTelemetry.capture(
+        "desktop_install_completed",
+        properties: telemetryProperties(
+          for: result,
+          route: executionRouteUsed?.rawValue,
+          operation: "install",
+          status: "succeeded",
+          used_privileged_helper: usedPrivilegedHelper
+        )
+      )
       cleanupStagingDirectory(stagedDirectory)
       return true
     } catch {
       Logger.install.error("Install failed for \(installedApp.name): \(error.localizedDescription)")
+      PostHogTelemetry.captureException(
+        error,
+        properties: telemetryProperties(
+          for: result,
+          route: executionRouteUsed?.rawValue,
+          operation: "install"
+        )
+      )
 
       updateState(
         for: operationKey,
@@ -409,6 +435,16 @@ final class InstallCoordinator {
           verification: verificationSummary
         )
       }
+      PostHogTelemetry.capture(
+        "desktop_install_failed",
+        properties: telemetryProperties(
+          for: result,
+          route: executionRouteUsed?.rawValue,
+          operation: "install",
+          status: installStatusString(for: error),
+          used_privileged_helper: usedPrivilegedHelper
+        )
+      )
       cleanupStagingDirectory(stagedDirectory)
       return false
     }
@@ -455,7 +491,59 @@ final class InstallCoordinator {
       Logger.api.error(
         "Failed to report install execution \(executionId) for \(installedApp.name): \(error.localizedDescription)"
       )
+      PostHogTelemetry.captureException(
+        error,
+        properties: telemetryProperties(
+          for: plan,
+          route: executionRoute.rawValue,
+          operation: "report_install_execution"
+        )
+      )
     }
+  }
+
+  private func telemetryProperties(
+    for result: AppDecision,
+    route: String?,
+    operation: String,
+    status: String? = nil,
+    used_privileged_helper: Bool? = nil
+  ) -> [String: Any] {
+    var properties: [String: Any] = [
+      "operation": operation,
+      "decision": result.decision.rawValue,
+      "tracking_state": result.trackingState.rawValue,
+      "install_strategy": result.installStrategy?.rawValue ?? "none",
+      "install_trust": result.installTrust.status.rawValue,
+      "requires_admin": result.installStrategy?.requiresAdmin ?? false,
+      "has_catalog_match": result.matchedAppId != nil,
+      "has_artifact": result.artifact != nil,
+    ]
+    if let route {
+      properties["execution_route"] = route
+    }
+    if let status {
+      properties["status"] = status
+    }
+    if let used_privileged_helper {
+      properties["used_privileged_helper"] = used_privileged_helper
+    }
+    return properties
+  }
+
+  private func telemetryProperties(
+    for plan: InstallPlan,
+    route: String,
+    operation: String
+  ) -> [String: Any] {
+    [
+      "operation": operation,
+      "execution_route": route,
+      "install_strategy": plan.strategy.rawValue,
+      "has_catalog_app_id": plan.appId != nil,
+      "has_release_id": plan.releaseId != nil,
+      "has_artifact": plan.artifact != nil,
+    ]
   }
 
   private func updateState(
@@ -558,6 +646,16 @@ final class InstallCoordinator {
         installedVersion: nil,
         recoveryAction: nil
       )
+      PostHogTelemetry.capture(
+        "desktop_install_completed",
+        properties: telemetryProperties(
+          for: result,
+          route: ExecutionRoute.brewUpgrade.rawValue,
+          operation: "brew_upgrade",
+          status: "succeeded",
+          used_privileged_helper: true
+        )
+      )
       return true
     } catch {
       updateState(
@@ -568,6 +666,24 @@ final class InstallCoordinator {
         errorMessage: error.localizedDescription,
         installedVersion: nil,
         recoveryAction: nil
+      )
+      PostHogTelemetry.captureException(
+        error,
+        properties: telemetryProperties(
+          for: result,
+          route: ExecutionRoute.brewUpgrade.rawValue,
+          operation: "brew_upgrade"
+        )
+      )
+      PostHogTelemetry.capture(
+        "desktop_install_failed",
+        properties: telemetryProperties(
+          for: result,
+          route: ExecutionRoute.brewUpgrade.rawValue,
+          operation: "brew_upgrade",
+          status: installStatusString(for: error),
+          used_privileged_helper: true
+        )
       )
       return false
     }
@@ -646,6 +762,16 @@ final class InstallCoordinator {
         recoveryAction: nil,
         helperStatus: .ready
       )
+      PostHogTelemetry.capture(
+        "desktop_install_completed",
+        properties: telemetryProperties(
+          for: result,
+          route: ExecutionRoute.masUpgrade.rawValue,
+          operation: "mas_upgrade",
+          status: "succeeded",
+          used_privileged_helper: true
+        )
+      )
       return true
     } catch {
       let errorDetail =
@@ -664,6 +790,24 @@ final class InstallCoordinator {
         installedVersion: nil,
         recoveryAction: recoveryAction(for: error),
         helperStatus: helperSetupState(for: error) ?? .notNeeded
+      )
+      PostHogTelemetry.captureException(
+        error,
+        properties: telemetryProperties(
+          for: result,
+          route: ExecutionRoute.masUpgrade.rawValue,
+          operation: "mas_upgrade"
+        )
+      )
+      PostHogTelemetry.capture(
+        "desktop_install_failed",
+        properties: telemetryProperties(
+          for: result,
+          route: ExecutionRoute.masUpgrade.rawValue,
+          operation: "mas_upgrade",
+          status: installStatusString(for: error),
+          used_privileged_helper: true
+        )
       )
       return false
     }

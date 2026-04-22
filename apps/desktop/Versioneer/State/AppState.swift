@@ -163,9 +163,15 @@ final class AppState {
     }
 
     configureDirectoryWatcher()
-    FirebaseBootstrapper.configureIfNeeded(
+    PostHogTelemetry.configureIfNeeded(
       analyticsEnabled: settings.analyticsEnabled,
-      crashlyticsEnabled: settings.crashlyticsEnabled
+      crashReportingEnabled: settings.crashReportingEnabled
+    )
+    PostHogTelemetry.capture(
+      "desktop_app_launched",
+      properties: [
+        "has_cached_results": hasCachedResults
+      ]
     )
   }
 
@@ -332,6 +338,43 @@ final class AppState {
 
   // MARK: - Actions
 
+  private func telemetryProperties(for result: AppDecision) -> [String: Any] {
+    [
+      "decision": result.decision.rawValue,
+      "tracking_state": result.trackingState.rawValue,
+      "install_strategy": result.installStrategy?.rawValue ?? "none",
+      "install_trust": result.installTrust.status.rawValue,
+      "requires_admin": result.installStrategy?.requiresAdmin ?? false,
+      "has_catalog_match": result.matchedAppId != nil,
+      "has_artifact": result.artifact != nil,
+      "is_local_only": result.isLocalOnly,
+    ]
+  }
+
+  private func telemetryActionKind(_ kind: PrimaryAppActionKind) -> String {
+    switch kind {
+    case .stopIgnoring: "stop_ignoring"
+    case .openApp: "open_app"
+    case .install: "install"
+    case .masUpgrade: "mas_upgrade"
+    case .brewUpgrade: "brew_upgrade"
+    case .manualUpdate: "manual_update"
+    case .unavailable: "unavailable"
+    }
+  }
+
+  private func scanTelemetryProperties(scanDurationMs: Int) -> [String: Any] {
+    [
+      "scan_duration_ms": scanDurationMs,
+      "installed_app_count": installedApps.count,
+      "result_count": inventoryResults.count,
+      "updates_available_count": scanSummary.updatesAvailableCount,
+      "local_only_count": scanSummary.localOnlyCount,
+      "needs_review_count": scanSummary.needsReviewCount,
+      "ignored_count": scanSummary.ignoredCount,
+    ]
+  }
+
   func setSelectedSection(_ section: FilterSection) {
     selectedSection = section
     rebuildResultsBrowserRows()
@@ -348,6 +391,14 @@ final class AppState {
   func requestInstallAll() {
     guard !updatableResults.isEmpty else { return }
 
+    PostHogTelemetry.capture(
+      "desktop_bulk_install_requested",
+      properties: [
+        "update_count": updatableResults.count,
+        "confirmation_required": settings.confirmInstallAll,
+      ]
+    )
+
     if settings.confirmInstallAll {
       pendingInstallConfirmation = .installAll
     } else {
@@ -357,6 +408,11 @@ final class AppState {
 
   func requestPrimaryUpdate(for result: AppDecision) {
     guard canPerformPrimaryUpdate(for: result) else { return }
+
+    var properties = telemetryProperties(for: result)
+    properties["confirmation_required"] =
+      settings.confirmPrivilegedInstall && (result.installStrategy?.requiresAdmin ?? false)
+    PostHogTelemetry.capture("desktop_install_requested", properties: properties)
 
     if settings.confirmPrivilegedInstall, result.installStrategy?.requiresAdmin ?? false {
       pendingInstallConfirmation = .installResult(result.id)
@@ -429,17 +485,31 @@ final class AppState {
 
   func setAnalyticsEnabled(_ enabled: Bool) {
     settings.analyticsEnabled = enabled
-    FirebaseBootstrapper.configureIfNeeded(
+    PostHogTelemetry.configureIfNeeded(
       analyticsEnabled: settings.analyticsEnabled,
-      crashlyticsEnabled: settings.crashlyticsEnabled
+      crashReportingEnabled: settings.crashReportingEnabled
+    )
+    PostHogTelemetry.capture(
+      "desktop_privacy_setting_changed",
+      properties: [
+        "setting": "analytics",
+        "enabled": enabled,
+      ]
     )
   }
 
-  func setCrashlyticsEnabled(_ enabled: Bool) {
-    settings.crashlyticsEnabled = enabled
-    FirebaseBootstrapper.configureIfNeeded(
+  func setCrashReportingEnabled(_ enabled: Bool) {
+    settings.crashReportingEnabled = enabled
+    PostHogTelemetry.configureIfNeeded(
       analyticsEnabled: settings.analyticsEnabled,
-      crashlyticsEnabled: settings.crashlyticsEnabled
+      crashReportingEnabled: settings.crashReportingEnabled
+    )
+    PostHogTelemetry.capture(
+      "desktop_privacy_setting_changed",
+      properties: [
+        "setting": "crash_reporting",
+        "enabled": enabled,
+      ]
     )
   }
 
@@ -520,6 +590,7 @@ final class AppState {
   func ignore(_ result: AppDecision, undoManager: UndoManager? = nil) {
     guard let installedApp = installedApp(for: result) else { return }
     let rule = IgnoredAppRule.make(from: installedApp)
+    PostHogTelemetry.capture("desktop_result_ignored", properties: telemetryProperties(for: result))
 
     withUndo("Ignore \(result.appName)", undoManager: undoManager) { state in
       state.settings.addIgnoredAppRule(rule)
@@ -534,6 +605,7 @@ final class AppState {
     let rules = ignoredAppRules(matching: result)
     let ruleIDs = Set(rules.map(\.id))
     guard !ruleIDs.isEmpty else { return }
+    PostHogTelemetry.capture("desktop_result_unignored", properties: telemetryProperties(for: result))
 
     withUndo("Unignore \(result.appName)", undoManager: undoManager) { state in
       state.settings.ignoredAppRules = state.settings.ignoredAppRules.filter {
@@ -585,6 +657,14 @@ final class AppState {
     ) { _, error in
       if let error {
         Logger.app.error("Failed to open app \(installedApp.name): \(error.localizedDescription)")
+        Task { @MainActor in
+          PostHogTelemetry.captureException(
+            error,
+            properties: [
+              "operation": "open_app"
+            ]
+          )
+        }
       }
     }
   }
@@ -615,10 +695,23 @@ final class AppState {
       }
     } catch {
       Logger.api.warning("Failed to fetch preflight config: \(error.localizedDescription)")
+      PostHogTelemetry.captureException(
+        error,
+        properties: [
+          "operation": "load_preflight"
+        ]
+      )
     }
   }
 
   func scanAndSubmit() async {
+    PostHogTelemetry.capture(
+      "desktop_scan_started",
+      properties: [
+        "root_count": settings.allScanRootURLs.count,
+        "has_cached_results": hasCachedResults,
+      ]
+    )
     loadState = .scanning
     let previousSelectionID = selectedAppID
     if !hasCachedResults {
@@ -694,6 +787,10 @@ final class AppState {
       loadState = .done
       lastScanCompletedAt = Date()
       refreshDisplayedResults(preservingSelectionID: previousSelectionID)
+      PostHogTelemetry.capture(
+        "desktop_scan_completed",
+        properties: scanTelemetryProperties(scanDurationMs: scanMs)
+      )
       cacheStore.save(
         ScanCacheStore.CachedScanData(
           installedApps: installedApps,
@@ -703,11 +800,25 @@ final class AppState {
       // Backend failed — fall back to local results if we have any
       Logger.api.warning(
         "API request failed, using local results only: \(error.localizedDescription)")
+      PostHogTelemetry.captureException(
+        error,
+        properties: [
+          "operation": "scan_submit",
+          "scan_duration_ms": scanMs,
+          "local_result_count": localResults.count,
+        ]
+      )
       if !localResults.isEmpty {
         rawInventoryResults = buildLocalOnlyResults(local: localResults, apps: installedApps)
         loadState = .done
         lastScanCompletedAt = Date()
         refreshDisplayedResults(preservingSelectionID: previousSelectionID)
+        PostHogTelemetry.capture(
+          "desktop_scan_fell_back_to_local_results",
+          properties: scanTelemetryProperties(scanDurationMs: scanMs).merging(
+            ["local_result_count": localResults.count]
+          ) { _, new in new }
+        )
         cacheStore.save(
           ScanCacheStore.CachedScanData(
             installedApps: installedApps,
@@ -715,6 +826,12 @@ final class AppState {
           ))
       } else {
         loadState = .error(error.localizedDescription)
+        PostHogTelemetry.capture(
+          "desktop_scan_failed",
+          properties: [
+            "scan_duration_ms": scanMs
+          ]
+        )
       }
     }
   }
@@ -1138,6 +1255,12 @@ final class AppState {
     } catch {
       Logger.api.error(
         "Failed to fetch release notes for \(releaseId): \(error.localizedDescription)")
+      PostHogTelemetry.captureException(
+        error,
+        properties: [
+          "operation": "fetch_release_notes"
+        ]
+      )
       releaseNotesCache[releaseId] = nil
       return nil
     }
@@ -1152,6 +1275,13 @@ final class AppState {
       comment: comment
     )
     try await feedbackClient.submitWrongMatch(feedback)
+    PostHogTelemetry.capture(
+      "desktop_feedback_submitted",
+      properties: [
+        "feedback_type": "wrong_match",
+        "has_comment": comment?.isEmpty == false,
+      ]
+    )
   }
 
   func submitWrongVersion(for result: AppDecision, reportedVersion: String?, comment: String?)
@@ -1166,6 +1296,14 @@ final class AppState {
       comment: comment
     )
     try await feedbackClient.submitWrongVersion(feedback)
+    PostHogTelemetry.capture(
+      "desktop_feedback_submitted",
+      properties: [
+        "feedback_type": "wrong_version",
+        "has_comment": comment?.isEmpty == false,
+        "has_reported_version": reportedVersion?.isEmpty == false,
+      ]
+    )
   }
 
   func submitMissingApp(for result: AppDecision, homepageUrl: String?, comment: String?)
@@ -1178,6 +1316,14 @@ final class AppState {
       comment: comment
     )
     try await feedbackClient.submitMissingApp(feedback)
+    PostHogTelemetry.capture(
+      "desktop_feedback_submitted",
+      properties: [
+        "feedback_type": "missing_app",
+        "has_comment": comment?.isEmpty == false,
+        "has_homepage_url": homepageUrl?.isEmpty == false,
+      ]
+    )
   }
 
   func openDetail(id: String) {
@@ -1223,6 +1369,9 @@ final class AppState {
   func performPrimaryUpdate(for result: AppDecision) async {
     let presentation = primaryActionPresentation(for: result)
     guard presentation.kind.performsUpdate, !presentation.isDisabled else { return }
+    var properties = telemetryProperties(for: result)
+    properties["action_kind"] = telemetryActionKind(presentation.kind)
+    PostHogTelemetry.capture("desktop_install_started", properties: properties)
     switch presentation.kind {
     case .masUpgrade:
       await masUpgrade(result)

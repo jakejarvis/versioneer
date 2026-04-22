@@ -15,7 +15,7 @@ final class SettingsStore {
     static let confirmPrivilegedInstall = "versioneer_confirm_privileged_install"
     static let directoryWatcherEnabled = "versioneer_directory_watcher_enabled"
     static let analyticsEnabled = "versioneer_analytics_enabled"
-    static let crashlyticsEnabled = "versioneer_crashlytics_enabled"
+    static let crashReportingEnabled = "versioneer_crashlytics_enabled"
     static let resultsSortMode = "versioneer_results_sort_mode"
     static let defaultChannel = "versioneer_default_channel"
     static let perAppChannels = "versioneer_per_app_channels"
@@ -102,15 +102,15 @@ final class SettingsStore {
     }
   }
 
-  var crashlyticsEnabled: Bool {
+  var crashReportingEnabled: Bool {
     get {
-      if let value = defaults.object(forKey: Keys.crashlyticsEnabled) as? NSNumber {
+      if let value = defaults.object(forKey: Keys.crashReportingEnabled) as? NSNumber {
         return value.boolValue
       }
       return true
     }
     set {
-      defaults.set(newValue, forKey: Keys.crashlyticsEnabled)
+      defaults.set(newValue, forKey: Keys.crashReportingEnabled)
     }
   }
 
