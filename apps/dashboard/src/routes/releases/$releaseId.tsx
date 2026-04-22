@@ -39,6 +39,10 @@ import {
   useUpdateRelease,
 } from "@/hooks/use-releases";
 import type { Artifact, ReleaseObservation } from "@/lib/types";
+import {
+  renderReleaseNotesHtml,
+  renderReleaseNotesMarkdownHtml,
+} from "@versioneer/core/pipeline/release-notes-render";
 
 export const Route = createFileRoute("/releases/$releaseId")({
   component: ReleaseDetailPage,
@@ -338,7 +342,8 @@ function ReleaseDetailPage() {
 
       <ReleaseNotesSection
         releaseId={releaseId}
-        releaseNotesHtml={release.releaseNotesHtml}
+        releaseNotesMarkdown={release.releaseNotesMarkdown}
+        releaseNotesHtml={release.releaseNotesMarkdown ? null : release.releaseNotesHtml}
         releaseNotesUrl={release.releaseNotesUrl}
       />
 
@@ -407,21 +412,32 @@ const NOTES_PROSE_CLASSES =
 
 function ReleaseNotesSection({
   releaseId,
+  releaseNotesMarkdown,
   releaseNotesHtml,
   releaseNotesUrl,
 }: {
   releaseId: string;
+  releaseNotesMarkdown: string | null;
   releaseNotesHtml: string | null;
   releaseNotesUrl: string | null;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draftHtml, setDraftHtml] = useState(releaseNotesHtml ?? "");
+  const [draftMarkdown, setDraftMarkdown] = useState(releaseNotesMarkdown ?? "");
   const [draftUrl, setDraftUrl] = useState(releaseNotesUrl ?? "");
   const updateRelease = useUpdateRelease(releaseId);
+  const renderedReleaseNotesHtml = useMemo(() => {
+    if (releaseNotesMarkdown) {
+      return renderReleaseNotesMarkdownHtml(releaseNotesMarkdown);
+    }
+    if (releaseNotesHtml) {
+      return renderReleaseNotesHtml(releaseNotesHtml);
+    }
+    return null;
+  }, [releaseNotesHtml, releaseNotesMarkdown]);
 
   const handleSave = () => {
     updateRelease.mutate(
-      { releaseNotesHtml: draftHtml || null, releaseNotesUrl: draftUrl || null },
+      { releaseNotesMarkdown: draftMarkdown || null, releaseNotesUrl: draftUrl || null },
       {
         onSuccess: () => {
           toast.success("Release notes updated");
@@ -454,7 +470,7 @@ function ReleaseNotesSection({
               variant="outline"
               size="sm"
               onClick={() => {
-                setDraftHtml(releaseNotesHtml ?? "");
+                setDraftMarkdown(releaseNotesMarkdown ?? "");
                 setDraftUrl(releaseNotesUrl ?? "");
                 setEditing(false);
               }}
@@ -488,21 +504,21 @@ function ReleaseNotesSection({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-muted-foreground">
-              Release Notes HTML
+              Release Notes Markdown
             </label>
             <Textarea
-              value={draftHtml}
-              onChange={(e) => setDraftHtml(e.target.value)}
+              value={draftMarkdown}
+              onChange={(e) => setDraftMarkdown(e.target.value)}
               rows={12}
               className="font-mono text-xs"
-              placeholder="<p>Release notes HTML...</p>"
+              placeholder={"## What's New\n\n- Fixed bugs\n- Improved performance"}
             />
           </div>
         </div>
-      ) : releaseNotesHtml ? (
+      ) : renderedReleaseNotesHtml ? (
         <div
           className={NOTES_PROSE_CLASSES}
-          dangerouslySetInnerHTML={{ __html: releaseNotesHtml }}
+          dangerouslySetInnerHTML={{ __html: renderedReleaseNotesHtml }}
         />
       ) : (
         <p className="text-sm text-muted-foreground">No release notes.</p>

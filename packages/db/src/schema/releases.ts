@@ -25,6 +25,7 @@ export const releases = sqliteTable(
     sourceConfidence: integer("source_confidence"),
     publishedBySourceId: text("published_by_source_id").references(() => sources.id),
     status: text("status", { enum: releaseStatusValues }).notNull().default("active"),
+    releaseNotesMarkdown: text("release_notes_markdown"),
     releaseNotesHtml: text("release_notes_html"),
     releaseNotesUrl: text("release_notes_url"),
     createdAt: text("created_at").notNull(),

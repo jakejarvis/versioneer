@@ -36,6 +36,13 @@
       "when": 1776823749253,
       "tag": "0004_empty_rockslide",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1776870412105,
+      "tag": "0005_wandering_nocturne",
+      "breakpoints": true
     }
   ]
 }

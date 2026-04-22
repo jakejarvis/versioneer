@@ -319,6 +319,7 @@ export interface Release {
   isPrerelease: boolean;
   sourceConfidence: number | null;
   status: ReleaseStatus;
+  releaseNotesMarkdown: string | null;
   releaseNotesHtml: string | null;
   releaseNotesUrl: string | null;
   createdAt: string;

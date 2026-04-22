@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vite-plus/test";
 
 import { normalizeReleaseNotes } from "../release-notes";
+import { renderReleaseNotesHtml, renderReleaseNotesMarkdownHtml } from "../release-notes-render";
 import { sanitizeHtml } from "../sanitize-html";
 
 describe("sanitizeHtml", () => {
@@ -55,37 +56,84 @@ describe("sanitizeHtml", () => {
     const html = '<p>Before</p><iframe src="https://evil.com"></iframe><p>After</p>';
     expect(sanitizeHtml(html)).toBe("<p>Before</p><p>After</p>");
   });
+
+  it("allows only safe checkbox inputs", () => {
+    const html = '<input type="checkbox" checked onclick="evil()"><input type="text" value="bad">';
+    expect(sanitizeHtml(html)).toBe('<input type="checkbox" disabled checked>');
+  });
 });
 
 describe("normalizeReleaseNotes", () => {
-  it("converts markdown to sanitized HTML", () => {
+  it("passes markdown through as canonical release notes", async () => {
     const md = "## Changes\n- New feature\n- Bug fix";
-    const result = normalizeReleaseNotes(md, "markdown");
-    expect(result).toContain("<h2>");
-    expect(result).toContain("Changes");
-    expect(result).toContain("<li>");
-    expect(result).toContain("New feature");
+    const result = await normalizeReleaseNotes(md, "markdown");
+    expect(result).toBe(md);
   });
 
-  it("sanitizes HTML input", () => {
+  it("converts sanitized HTML input to markdown", async () => {
     const html = '<h2>Notes</h2><script>alert("xss")</script><p>Safe content</p>';
-    const result = normalizeReleaseNotes(html, "html");
-    expect(result).toContain("<h2>Notes</h2>");
-    expect(result).toContain("<p>Safe content</p>");
+    const result = await normalizeReleaseNotes(html, "html");
+    expect(result).toContain("## Notes");
+    expect(result).toContain("Safe content");
     expect(result).not.toContain("<script>");
   });
 
-  it("truncates oversized content", () => {
-    const html = "<p>" + "x".repeat(600_000) + "</p>";
-    const result = normalizeReleaseNotes(html, "html");
-    expect(result.length).toBeLessThan(600_000);
+  it("converts GFM tables, task lists, and strikethrough", async () => {
+    const html = `
+      <table>
+        <tr><td>Feature</td><td>Status</td></tr>
+        <tr><td>Markdown notes</td><td>Done</td></tr>
+      </table>
+      <ul>
+        <li><input type="checkbox" checked>Shipped</li>
+        <li><input type="checkbox">Pending</li>
+      </ul>
+      <p><del>Removed</del></p>
+    `;
+    const result = await normalizeReleaseNotes(html, "html");
+
+    expect(result).toContain("|                |        |");
+    expect(result).toContain("| -------------- | ------ |");
+    expect(result).toContain("| Feature        | Status |");
+    expect(result).toContain("| Markdown notes | Done   |");
+    expect(result).toContain("- [x] Shipped");
+    expect(result).toContain("- [ ] Pending");
+    expect(result).toContain("~~Removed~~");
+  });
+
+  it("truncates oversized content", async () => {
+    const markdown = "x".repeat(600_000);
+    const result = await normalizeReleaseNotes(markdown, "markdown");
+    expect(result).not.toBeNull();
+    expect(result!.length).toBeLessThan(600_000);
     expect(result).toContain("<!-- truncated -->");
   });
 
-  it("converts markdown links to sanitized anchors", () => {
-    const md = "[Click here](https://example.com)";
-    const result = normalizeReleaseNotes(md, "markdown");
+  it("returns null when HTML conversion produces no content", async () => {
+    await expect(
+      normalizeReleaseNotes('<script>alert("xss")</script>', "html"),
+    ).resolves.toBeNull();
+  });
+});
+
+describe("release note rendering", () => {
+  it("renders markdown to sanitized HTML", () => {
+    const result = renderReleaseNotesMarkdownHtml("[Click here](https://example.com)");
     expect(result).toContain('href="https://example.com"');
     expect(result).toContain('rel="noopener noreferrer"');
+  });
+
+  it("sanitizes scripts and unsafe links when rendering markdown", () => {
+    const result = renderReleaseNotesMarkdownHtml(
+      '[Bad](javascript:alert("xss"))<script>alert("xss")</script>',
+    );
+    expect(result).not.toContain("javascript:");
+    expect(result).not.toContain("<script>");
+    expect(result).toContain(">Bad</a>");
+  });
+
+  it("sanitizes legacy HTML fallback before display", () => {
+    const result = renderReleaseNotesHtml('<p>Safe</p><script>alert("xss")</script>');
+    expect(result).toBe("<p>Safe</p>");
   });
 });

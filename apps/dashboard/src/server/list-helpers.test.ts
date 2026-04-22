@@ -63,6 +63,7 @@ describe("entity summary shaping", () => {
       isPrerelease: false,
       sourceConfidence: 95,
       status: "active",
+      releaseNotesMarkdown: null,
       releaseNotesHtml: null,
       createdAt: "2026-01-03T00:00:00.000Z",
       updatedAt: "2026-01-03T00:00:00.000Z",

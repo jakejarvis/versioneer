@@ -8,7 +8,7 @@ export interface ParsedRelease {
   publishedAt?: string;
   releaseNotesUrl?: string;
   releaseNotesBody?: string;
-  releaseNotesFormat?: "html" | "markdown";
+  releaseNotesFormat?: "html" | "markdown" | "text";
   downloadUrl?: string;
   artifacts: ParsedArtifact[];
   metadata?: Record<string, unknown>;

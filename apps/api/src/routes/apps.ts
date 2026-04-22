@@ -35,7 +35,13 @@ export const appsRoutes = new Hono<{ Bindings: Env }>()
       .where(and(eq(releases.appId, appId), eq(releases.status, "active")))
       .all();
 
-    return c.json({ releases: appReleases });
+    return c.json({
+      releases: appReleases.map((release) =>
+        Object.assign({}, release, {
+          releaseNotesHtml: release.releaseNotesMarkdown ? null : release.releaseNotesHtml,
+        }),
+      ),
+    });
   })
   // GET /v1/releases/:releaseId/notes
   .get("/releases/:releaseId/notes", async (c) => {
@@ -47,6 +53,7 @@ export const appsRoutes = new Hono<{ Bindings: Env }>()
         id: releases.id,
         appId: releases.appId,
         versionRaw: releases.versionRaw,
+        releaseNotesMarkdown: releases.releaseNotesMarkdown,
         releaseNotesHtml: releases.releaseNotesHtml,
         releaseNotesUrl: releases.releaseNotesUrl,
         appDefaultReleaseNotesUrl: apps.defaultReleaseNotesUrl,
@@ -65,7 +72,8 @@ export const appsRoutes = new Hono<{ Bindings: Env }>()
       releaseId: release.id,
       appId: release.appId,
       versionRaw: release.versionRaw,
-      releaseNotesHtml: release.releaseNotesHtml,
+      releaseNotesMarkdown: release.releaseNotesMarkdown,
+      releaseNotesHtml: release.releaseNotesMarkdown ? null : release.releaseNotesHtml,
       releaseNotesUrl: release.releaseNotesUrl ?? release.appDefaultReleaseNotesUrl,
     });
   });

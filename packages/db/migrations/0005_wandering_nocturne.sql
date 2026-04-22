@@ -1,0 +1,1 @@
+ALTER TABLE `releases` ADD `release_notes_markdown` text;

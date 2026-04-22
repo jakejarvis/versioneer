@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		231159822F9914F3001596CC /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = 231159812F9914F3001596CC /* Textual */; };
 		23472BD82F7DA7E700095A35 /* Versioneer.icon in Resources */ = {isa = PBXBuildFile; fileRef = 23472BD72F7DA7E700095A35 /* Versioneer.icon */; };
 		23EBFEDC2F75F5390026DE17 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 23EBFEDA2F75F5390026DE17 /* GoogleService-Info.plist */; };
 		23EBFEDF2F75F6CF0026DE17 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 23EBFEDE2F75F6CF0026DE17 /* FirebaseAnalytics */; };
@@ -74,6 +75,7 @@
 				23FCB0012F7600010058763E /* Sparkle in Frameworks */,
 				23EBFEE32F75F6CF0026DE17 /* FirebaseCrashlytics in Frameworks */,
 				23EBFEDF2F75F6CF0026DE17 /* FirebaseAnalytics in Frameworks */,
+				231159822F9914F3001596CC /* Textual in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -127,11 +129,6 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		23E0A3AC2F81C0830073C339 /* Products */ = {
-			isa = PBXGroup;
-			name = Products;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -160,6 +157,7 @@
 				23F9791C2F7584620058763E /* Logging */,
 				23EBFEDE2F75F6CF0026DE17 /* FirebaseAnalytics */,
 				23EBFEE22F75F6CF0026DE17 /* FirebaseCrashlytics */,
+				231159812F9914F3001596CC /* Textual */,
 			);
 			productName = Versioneer;
 			productReference = 23A5A6032F74908500245F54 /* Versioneer.app */;
@@ -246,6 +244,7 @@
 				23F9791A2F7583030058763E /* XCRemoteSwiftPackageReference "Sparkle" */,
 				23F9791B2F7584620058763E /* XCRemoteSwiftPackageReference "swift-log" */,
 				23EBFEDD2F75F6CF0026DE17 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				231159802F9914F3001596CC /* XCRemoteSwiftPackageReference "textual" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 23A5A6042F74908500245F54 /* Products */;
@@ -729,6 +728,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		231159802F9914F3001596CC /* XCRemoteSwiftPackageReference "textual" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/textual.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.3.1;
+			};
+		};
 		23EBFEDD2F75F6CF0026DE17 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
@@ -756,6 +763,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		231159812F9914F3001596CC /* Textual */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 231159802F9914F3001596CC /* XCRemoteSwiftPackageReference "textual" */;
+			productName = Textual;
+		};
 		23EBFEDE2F75F6CF0026DE17 /* FirebaseAnalytics */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 23EBFEDD2F75F6CF0026DE17 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

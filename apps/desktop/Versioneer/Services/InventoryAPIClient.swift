@@ -18,11 +18,12 @@ nonisolated struct InventoryAPIClient: Sendable {
     let releaseId: String
     let appId: String
     let versionRaw: String
+    let releaseNotesMarkdown: String?
     let releaseNotesHtml: String?
     let releaseNotesUrl: String?
   }
 
-  /// Fetches release notes HTML for a specific release.
+  /// Fetches release notes for a specific release.
   func fetchReleaseNotes(releaseId: String) async throws -> ReleaseNotesResponse {
     let endpoint = baseURL.appendingPathComponent("v1/releases/\(releaseId)/notes")
     var request = URLRequest(url: endpoint)

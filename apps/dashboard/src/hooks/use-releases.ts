@@ -45,7 +45,7 @@ export function useCreateRelease() {
       buildNumber?: string;
       channel?: string;
       releasedAt?: string;
-      releaseNotesHtml?: string;
+      releaseNotesMarkdown?: string;
       releaseNotesUrl?: string;
     }) => createRelease({ data: input }),
     onSuccess: () => {
@@ -63,7 +63,7 @@ export function useUpdateRelease(id: string) {
     mutationFn: (input: {
       status?: "active" | "superseded" | "draft" | "withdrawn";
       channel?: string;
-      releaseNotesHtml?: string | null;
+      releaseNotesMarkdown?: string | null;
       releaseNotesUrl?: string | null;
     }) => updateRelease({ data: { id, ...input } }),
     onSuccess: () => {

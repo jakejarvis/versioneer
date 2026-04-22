@@ -53,7 +53,7 @@ function CreateReleaseForm({
       buildNumber: "",
       channel: "stable",
       releasedAt: "",
-      releaseNotesHtml: "",
+      releaseNotesMarkdown: "",
       releaseNotesUrl: "",
     },
     onSubmit: async ({ value }) => {
@@ -64,7 +64,7 @@ function CreateReleaseForm({
           buildNumber: value.buildNumber || undefined,
           channel: value.channel,
           releasedAt: value.releasedAt || undefined,
-          releaseNotesHtml: value.releaseNotesHtml || undefined,
+          releaseNotesMarkdown: value.releaseNotesMarkdown || undefined,
           releaseNotesUrl: value.releaseNotesUrl || undefined,
         },
         {
@@ -202,17 +202,17 @@ function CreateReleaseForm({
           )}
         </form.Field>
 
-        <form.Field name="releaseNotesHtml">
+        <form.Field name="releaseNotesMarkdown">
           {(field) => (
             <FormField
               label="Release Notes"
               name={field.name}
               meta={field.state.meta}
-              description="HTML content. Will be displayed as-is on the release detail page."
+              description="Markdown content for the release detail page."
             >
               <Textarea
                 id={field.name}
-                placeholder="<p>What's new in this release...</p>"
+                placeholder={"## What's New\n- Fixed bugs\n- Improved performance"}
                 rows={5}
                 className="font-mono text-xs"
                 value={field.state.value}

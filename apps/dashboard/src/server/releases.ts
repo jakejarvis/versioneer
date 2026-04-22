@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { sanitizeHtml } from "@versioneer/core/pipeline";
+import { normalizeReleaseNotes } from "@versioneer/core/pipeline";
 import { releaseCreateSchema, releaseUpdateSchema } from "@versioneer/core/validation";
 import { normalizeVersion, isPreRelease, inferChannel } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
@@ -190,7 +190,10 @@ export const createRelease = createServerFn({ method: "POST" })
         releasedAt: data.releasedAt ?? now,
         isPrerelease: isPreRelease(data.versionRaw),
         status: "active",
-        releaseNotesHtml: data.releaseNotesHtml ? sanitizeHtml(data.releaseNotesHtml) : null,
+        releaseNotesMarkdown: data.releaseNotesMarkdown
+          ? await normalizeReleaseNotes(data.releaseNotesMarkdown, "markdown")
+          : null,
+        releaseNotesHtml: null,
         releaseNotesUrl: data.releaseNotesUrl ?? null,
         createdAt: now,
         updatedAt: now,
@@ -227,10 +230,12 @@ export const updateRelease = createServerFn({ method: "POST" })
     const updates: Record<string, unknown> = { updatedAt: now };
     if (fields.status !== undefined) updates.status = fields.status;
     if (fields.channel !== undefined) updates.channel = fields.channel;
-    if (fields.releaseNotesHtml !== undefined)
-      updates.releaseNotesHtml = fields.releaseNotesHtml
-        ? sanitizeHtml(fields.releaseNotesHtml)
+    if (fields.releaseNotesMarkdown !== undefined) {
+      updates.releaseNotesMarkdown = fields.releaseNotesMarkdown
+        ? await normalizeReleaseNotes(fields.releaseNotesMarkdown, "markdown")
         : null;
+      updates.releaseNotesHtml = null;
+    }
     if (fields.releaseNotesUrl !== undefined) updates.releaseNotesUrl = fields.releaseNotesUrl;
 
     await db.batch([

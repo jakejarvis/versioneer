@@ -217,11 +217,19 @@ export async function handleSourceParse(
       if (matchingRelease) {
         releaseId = matchingRelease.id;
         // Update if we have newer info; re-activate if previously withdrawn
-        const updatedNotesHtml = parsedRelease.releaseNotesBody
-          ? normalizeReleaseNotes(
+        const parsedNotesMarkdown = parsedRelease.releaseNotesBody
+          ? await normalizeReleaseNotes(
               parsedRelease.releaseNotesBody,
               parsedRelease.releaseNotesFormat ?? "html",
             )
+          : null;
+        const updatedNotesMarkdown = parsedRelease.releaseNotesBody
+          ? (parsedNotesMarkdown ?? matchingRelease.releaseNotesMarkdown)
+          : matchingRelease.releaseNotesMarkdown;
+        const updatedNotesHtml = parsedRelease.releaseNotesBody
+          ? parsedNotesMarkdown
+            ? null
+            : matchingRelease.releaseNotesHtml
           : matchingRelease.releaseNotesHtml;
         await db
           .update(releases)
@@ -229,6 +237,7 @@ export async function handleSourceParse(
             status: "active",
             releasedAt: toISODate(parsedRelease.publishedAt) ?? matchingRelease.releasedAt,
             sourceConfidence: output.confidence,
+            releaseNotesMarkdown: updatedNotesMarkdown,
             releaseNotesHtml: updatedNotesHtml,
             releaseNotesUrl: parsedRelease.releaseNotesUrl ?? matchingRelease.releaseNotesUrl,
             updatedAt: new Date().toISOString(),
@@ -236,6 +245,12 @@ export async function handleSourceParse(
           .where(eq(releases.id, releaseId));
       } else {
         releaseId = generateId(idPrefixes.release);
+        const releaseNotesMarkdown = parsedRelease.releaseNotesBody
+          ? await normalizeReleaseNotes(
+              parsedRelease.releaseNotesBody,
+              parsedRelease.releaseNotesFormat ?? "html",
+            )
+          : null;
         await db.insert(releases).values({
           id: releaseId,
           appId: source.appId,
@@ -247,12 +262,8 @@ export async function handleSourceParse(
           isPrerelease: parsedRelease.isPrerelease,
           sourceConfidence: output.confidence,
           publishedBySourceId: source.id,
-          releaseNotesHtml: parsedRelease.releaseNotesBody
-            ? normalizeReleaseNotes(
-                parsedRelease.releaseNotesBody,
-                parsedRelease.releaseNotesFormat ?? "html",
-              )
-            : null,
+          releaseNotesMarkdown,
+          releaseNotesHtml: null,
           releaseNotesUrl: parsedRelease.releaseNotesUrl ?? null,
           status: "active",
           createdAt: now,

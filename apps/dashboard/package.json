@@ -8,12 +8,6 @@
     "build": "vp build",
     "preview": "vp preview",
     "deploy": "CLOUDFLARE_ENV=production vp build && wrangler deploy --env=production",
-    "lint": "vp lint",
-    "lint:fix": "vp lint --fix",
-    "fmt": "vp fmt",
-    "fmt:check": "vp fmt --check",
-    "check-types": "tsc --noEmit",
-    "test": "vp test",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {

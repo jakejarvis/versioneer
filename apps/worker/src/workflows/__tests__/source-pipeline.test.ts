@@ -271,6 +271,10 @@ describe("SourcePipelineWorkflow", () => {
       <title>Version 2.0.0</title>
       <sparkle:version>2.0.0</sparkle:version>
       <pubDate>Mon, 01 Jan 2026 00:00:00 +0000</pubDate>
+      <description><![CDATA[
+        <h2>Changes</h2>
+        <ul><li>Added Markdown release notes</li></ul>
+      ]]></description>
       <enclosure url="https://example.com/app-2.0.0.dmg" length="10000" type="application/octet-stream" />
     </item>
   </channel>
@@ -308,5 +312,13 @@ describe("SourcePipelineWorkflow", () => {
       ),
     ).toBe(true);
     expect(anomalies.some((row) => row.jobKey === "new_artifact_hostname:example.com")).toBe(true);
+    const parsedRelease = await db
+      .select()
+      .from(releases)
+      .where(eq(releases.versionNormalized, normalizeVersion("2.0.0")))
+      .get();
+    expect(parsedRelease?.releaseNotesMarkdown).toContain("## Changes");
+    expect(parsedRelease?.releaseNotesMarkdown).toContain("- Added Markdown release notes");
+    expect(parsedRelease?.releaseNotesHtml).toBeNull();
   });
 });

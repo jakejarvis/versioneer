@@ -43,6 +43,8 @@ describe("GET /v1/apps/:appId/releases", () => {
       versionRaw: "1.0.0",
       versionNormalized: "0000001.0000000.0000000",
       status: "active",
+      releaseNotesMarkdown: "## 1.0.0",
+      releaseNotesHtml: "<p>Legacy fallback</p>",
       publishedBySourceId: source.id,
     });
     await seedRelease(db, testApp.id, {
@@ -54,8 +56,17 @@ describe("GET /v1/apps/:appId/releases", () => {
 
     const res = await app.request(`/v1/apps/${testApp.id}/releases`, {}, env);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { releases: { versionRaw: string }[] };
+    const body = (await res.json()) as {
+      releases: Array<{
+        versionRaw: string;
+        releaseNotesMarkdown: string | null;
+        releaseNotesHtml: string | null;
+      }>;
+    };
     expect(body.releases).toHaveLength(2);
+    const markdownRelease = body.releases.find((release) => release.versionRaw === "1.0.0");
+    expect(markdownRelease?.releaseNotesMarkdown).toBe("## 1.0.0");
+    expect(markdownRelease?.releaseNotesHtml).toBeNull();
   });
 
   it("returns 404 for non-public app releases", async () => {
@@ -68,7 +79,28 @@ describe("GET /v1/apps/:appId/releases", () => {
 });
 
 describe("GET /v1/releases/:releaseId/notes", () => {
-  it("returns release notes HTML", async () => {
+  it("returns release notes Markdown", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db, { status: "public" });
+    const source = await seedSource(db, testApp.id);
+    const release = await seedRelease(db, testApp.id, {
+      releaseNotesMarkdown: "## Changes\n\n- Bug fixes",
+      releaseNotesHtml: "<p>Legacy fallback</p>",
+      publishedBySourceId: source.id,
+    });
+
+    const res = await app.request(`/v1/releases/${release.id}/notes`, {}, env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      releaseNotesMarkdown: string | null;
+      releaseNotesHtml: string | null;
+      releaseNotesUrl: string | null;
+    };
+    expect(body.releaseNotesMarkdown).toBe("## Changes\n\n- Bug fixes");
+    expect(body.releaseNotesHtml).toBeNull();
+  });
+
+  it("returns legacy release notes HTML", async () => {
     const db = getDb(env.DB);
     const testApp = await seedApp(db, { status: "public" });
     const source = await seedSource(db, testApp.id);
@@ -80,9 +112,11 @@ describe("GET /v1/releases/:releaseId/notes", () => {
     const res = await app.request(`/v1/releases/${release.id}/notes`, {}, env);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
+      releaseNotesMarkdown: string | null;
       releaseNotesHtml: string | null;
       releaseNotesUrl: string | null;
     };
+    expect(body.releaseNotesMarkdown).toBeNull();
     expect(body.releaseNotesHtml).toBe("<p>Bug fixes</p>");
   });
 
@@ -98,9 +132,12 @@ describe("GET /v1/releases/:releaseId/notes", () => {
     const res = await app.request(`/v1/releases/${release.id}/notes`, {}, env);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
+      releaseNotesMarkdown: string | null;
       releaseNotesHtml: string | null;
       releaseNotesUrl: string | null;
     };
+    expect(body.releaseNotesMarkdown).toBeNull();
+    expect(body.releaseNotesHtml).toBeNull();
     expect(body.releaseNotesUrl).toBe("https://example.com/changelog");
   });
 

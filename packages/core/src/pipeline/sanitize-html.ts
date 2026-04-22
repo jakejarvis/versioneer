@@ -26,6 +26,7 @@ const ALLOWED_TAGS = new Set([
   "pre",
   "blockquote",
   "img",
+  "input",
   "table",
   "thead",
   "tbody",
@@ -49,7 +50,6 @@ const STRIP_ENTIRELY = new Set([
   "object",
   "embed",
   "form",
-  "input",
   "textarea",
   "select",
   "button",
@@ -82,6 +82,11 @@ export function sanitizeHtml(html: string): string {
         const tagName = node.tagName.toLowerCase();
 
         if (STRIP_ENTIRELY.has(tagName)) {
+          removeElement(node);
+          continue;
+        }
+
+        if (tagName === "input" && !isSafeCheckboxInput(node)) {
           removeElement(node);
           continue;
         }
@@ -133,7 +138,17 @@ function sanitizeAttributes(el: Element): void {
     if (alt) {
       newAttribs["alt"] = alt;
     }
+  } else if (tagName === "input") {
+    newAttribs["type"] = "checkbox";
+    newAttribs["disabled"] = "";
+    if ("checked" in el.attribs) {
+      newAttribs["checked"] = "";
+    }
   }
 
   el.attribs = newAttribs;
+}
+
+function isSafeCheckboxInput(el: Element): boolean {
+  return el.attribs["type"]?.toLowerCase() === "checkbox";
 }

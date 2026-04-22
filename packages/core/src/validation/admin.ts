@@ -81,14 +81,14 @@ export const releaseCreateSchema = z.object({
   buildNumber: z.string().max(200).optional(),
   channel: channelSchema.default("stable"),
   releasedAt: z.string().max(50).optional(),
-  releaseNotesHtml: z.string().max(500000).optional(),
+  releaseNotesMarkdown: z.string().max(500000).optional(),
   releaseNotesUrl: z.string().url().max(2000).optional(),
 });
 
 export const releaseUpdateSchema = z.object({
   status: releaseStatusSchema.optional(),
   channel: channelSchema.optional(),
-  releaseNotesHtml: z.string().max(500000).nullable().optional(),
+  releaseNotesMarkdown: z.string().max(500000).nullable().optional(),
   releaseNotesUrl: z.string().url().max(2000).nullable().optional(),
 });
 

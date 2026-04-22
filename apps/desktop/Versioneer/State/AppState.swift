@@ -5,6 +5,7 @@ import Observation
 import UniformTypeIdentifiers
 
 nonisolated struct ReleaseNotesContent: Equatable, Sendable {
+  let markdown: String?
   let html: String?
   let url: URL?
 }
@@ -1127,6 +1128,7 @@ final class AppState {
     do {
       let response = try await apiClient.fetchReleaseNotes(releaseId: releaseId)
       let content = ReleaseNotesContent(
+        markdown: response.releaseNotesMarkdown,
         html: response.releaseNotesHtml,
         url: response.releaseNotesUrl.flatMap(URL.init(string:))
       )

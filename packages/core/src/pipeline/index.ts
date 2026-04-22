@@ -17,6 +17,8 @@ export { handleSourceFetch } from "./fetch";
 export { handleSourceParse } from "./parse";
 export { handleRecomputeLatest } from "./recompute";
 export { normalizeReleaseNotes } from "./release-notes";
+export type { ReleaseNotesFormat } from "./release-notes";
+export { renderReleaseNotesHtml, renderReleaseNotesMarkdownHtml } from "./release-notes-render";
 export { sanitizeHtml } from "./sanitize-html";
 export { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
 export {

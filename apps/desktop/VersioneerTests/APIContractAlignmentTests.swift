@@ -186,4 +186,45 @@ struct APIContractAlignmentTests {
     let response = try JSONDecoder().decode(PreflightResponse.self, from: Data(json.utf8))
     #expect(response.dismissedBundleIds.isEmpty)
   }
+
+  @Test func releaseNotesResponseDecodesMarkdownAndLegacyHtml() throws {
+    let json = """
+      {
+        "releaseId": "rel_firefox",
+        "appId": "app_firefox",
+        "versionRaw": "127.0",
+        "releaseNotesMarkdown": "## Changes\\n\\n- Fixed bugs",
+        "releaseNotesHtml": null,
+        "releaseNotesUrl": "https://example.com/releases/127"
+      }
+      """
+
+    let response = try JSONDecoder().decode(
+      InventoryAPIClient.ReleaseNotesResponse.self,
+      from: Data(json.utf8)
+    )
+
+    #expect(response.releaseNotesMarkdown == "## Changes\n\n- Fixed bugs")
+    #expect(response.releaseNotesHtml == nil)
+    #expect(response.releaseNotesUrl == "https://example.com/releases/127")
+
+    let legacyJson = """
+      {
+        "releaseId": "rel_legacy",
+        "appId": "app_legacy",
+        "versionRaw": "1.0",
+        "releaseNotesMarkdown": null,
+        "releaseNotesHtml": "<p>Legacy notes</p>",
+        "releaseNotesUrl": null
+      }
+      """
+
+    let legacyResponse = try JSONDecoder().decode(
+      InventoryAPIClient.ReleaseNotesResponse.self,
+      from: Data(legacyJson.utf8)
+    )
+
+    #expect(legacyResponse.releaseNotesMarkdown == nil)
+    #expect(legacyResponse.releaseNotesHtml == "<p>Legacy notes</p>")
+  }
 }

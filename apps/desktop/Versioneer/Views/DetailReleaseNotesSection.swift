@@ -21,21 +21,12 @@ struct DetailReleaseNotesSection: View {
               .foregroundStyle(.secondary)
           }
         } else if let releaseNotes {
-          if let html = releaseNotes.html, !html.isEmpty {
+          if let markdown = releaseNotes.markdown, !markdown.isEmpty {
+            ReleaseNotesMarkdownView(markdown: markdown)
+              .releaseNotesSurface()
+          } else if let html = releaseNotes.html, !html.isEmpty {
             ReleaseNotesWebView(html: html)
-              .frame(minHeight: 100, maxHeight: 300)
-              .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-              .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                  .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-              }
-              .mask {
-                VStack(spacing: 0) {
-                  Rectangle().fill(.black)
-                  LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 18)
-                }
-              }
+              .releaseNotesSurface()
           } else {
             Text("No release notes available.")
               .font(.callout)
@@ -70,5 +61,23 @@ struct DetailReleaseNotesSection: View {
     guard !Task.isCancelled else { return }
     releaseNotes = notes
     releaseNotesLoading = false
+  }
+}
+
+private extension View {
+  func releaseNotesSurface() -> some View {
+    frame(minHeight: 100, maxHeight: 300)
+      .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+          .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+      }
+      .mask {
+        VStack(spacing: 0) {
+          Rectangle().fill(.black)
+          LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+            .frame(height: 18)
+        }
+      }
   }
 }
