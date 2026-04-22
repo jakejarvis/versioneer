@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import type { PipelineWorkerStub, SourcePipelineWorkflow } from "@/env";
+import type { EnrichmentDrainWorkflow, PipelineWorkerStub, SourcePipelineWorkflow } from "@/env";
 
 /**
  * Typed accessor for the pipeline worker service binding.
@@ -15,3 +15,8 @@ export const pipelineWorker = env.PIPELINE_WORKER as PipelineWorkerStub;
  * this wrapper provides the payload type for `create()` calls.
  */
 export const sourcePipeline = env.SOURCE_PIPELINE as SourcePipelineWorkflow;
+
+/**
+ * Typed accessor for the enrichment drain Workflow binding.
+ */
+export const enrichmentDrain = env.ENRICHMENT_DRAIN as EnrichmentDrainWorkflow;

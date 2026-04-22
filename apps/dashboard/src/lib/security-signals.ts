@@ -197,7 +197,14 @@ export function getJobFailureTypeLabel(jobType: string, jobKey?: string | null):
 }
 
 export function canRetryJobFailure(jobType: string): boolean {
-  return jobType === "source-fetch" || jobType === "source-parse" || jobType === "recompute-latest";
+  return (
+    jobType === "source-fetch" ||
+    jobType === "source-parse" ||
+    jobType === "recompute-latest" ||
+    jobType === "poll_sources" ||
+    jobType === "cask_index_sync" ||
+    jobType === "enrich_discovered_apps"
+  );
 }
 
 export function artifactTrustReasons(artifactType: string, sha256: string | null): string[] {

@@ -72,3 +72,10 @@ export interface RecomputeLatestJob {
   appId: string;
   channel?: string;
 }
+
+export interface EnrichmentDrainJob {
+  runId: string;
+  trigger: "manual" | "scheduled";
+  actorId?: string | null;
+  failureJobKey?: string | null;
+}

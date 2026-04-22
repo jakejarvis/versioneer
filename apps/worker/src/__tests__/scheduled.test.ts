@@ -191,4 +191,33 @@ describe("scheduled handler", () => {
     expect(mockWorkflowBinding.createBatch).toHaveBeenCalledTimes(1);
     expect(mockWorkflowBinding.create).toHaveBeenCalledTimes(3);
   });
+
+  it("mirrors scheduled poll queue failures into job failures", async () => {
+    const db = createDb(env.DB);
+    const { jobFailures } = await import("@versioneer/db");
+    await db.delete(jobFailures).where(sql`1 = 1`);
+    await disableExistingSources(db);
+    const appId = await insertTestApp(db, "Failed Queue App");
+    await insertActiveSource(db, appId);
+
+    mockWorkflowBinding.createBatch.mockRejectedValueOnce(new Error("batch unavailable"));
+    mockWorkflowBinding.create.mockRejectedValueOnce(new Error("create unavailable"));
+
+    const worker = createWorkerInstance();
+    const event = { scheduledTime: TEST_NOW.getTime(), cron: "*/15 * * * *" } as ScheduledEvent;
+    await worker.scheduled(event);
+
+    const pollRun = await latestPollRun(db);
+    expect(pollRun).toBeDefined();
+    expect(pollRun!.status).toBe("failed");
+    expect(pollRun!.errorMessage).toContain("failed to queue");
+
+    const failure = await db
+      .select()
+      .from(jobFailures)
+      .where(sql`${jobFailures.jobType} = 'poll_sources' and ${jobFailures.jobKey} = 'scheduled'`)
+      .get();
+    expect(failure?.status).toBe("open");
+    expect(failure?.errorMessage).toContain("failed to queue");
+  });
 });

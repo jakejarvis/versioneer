@@ -63,20 +63,26 @@ const failedEnrichmentSearch = {
 } as const;
 const feedbackSearch = { page: 1, pageSize: 25, status: "new", type: "all" } as const;
 const failureSearch = {
-  page: 1,
-  pageSize: 25,
-  tab: "failures",
+  runPage: 1,
+  runPageSize: 25,
+  runJobType: "all",
+  runTrigger: "all",
+  runStatus: "all",
+  failurePage: 1,
+  failurePageSize: 25,
   failureStatus: "open",
-  jobType: "all",
   failureJobType: "all",
   failureId: "",
 } as const;
 const atRiskSourceSearch = { page: 1, pageSize: 25, status: "at_risk", type: "all" } as const;
 const jobsSearch = {
-  page: 1,
-  pageSize: 25,
-  tab: "runs",
-  jobType: "all",
+  runPage: 1,
+  runPageSize: 25,
+  runJobType: "all",
+  runTrigger: "all",
+  runStatus: "all",
+  failurePage: 1,
+  failurePageSize: 25,
   failureJobType: "all",
   failureStatus: "open",
   failureId: "",

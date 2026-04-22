@@ -46,6 +46,12 @@
       "binding": "SOURCE_PIPELINE",
       "class_name": "SourcePipelineWorkflow",
       "script_name": "versioneer-worker"
+    },
+    {
+      "name": "versioneer-enrichment-drain-dev",
+      "binding": "ENRICHMENT_DRAIN",
+      "class_name": "EnrichmentDrainWorkflow",
+      "script_name": "versioneer-worker"
     }
   ],
 
@@ -103,6 +109,12 @@
           "name": "versioneer-source-pipeline-production",
           "binding": "SOURCE_PIPELINE",
           "class_name": "SourcePipelineWorkflow",
+          "script_name": "versioneer-worker-production"
+        },
+        {
+          "name": "versioneer-enrichment-drain-production",
+          "binding": "ENRICHMENT_DRAIN",
+          "class_name": "EnrichmentDrainWorkflow",
           "script_name": "versioneer-worker-production"
         }
       ],

@@ -1,4 +1,9 @@
-import type { RecomputeLatestJob, SourceFetchJob, SourceParseJob } from "@versioneer/core/pipeline";
+import type {
+  EnrichmentDrainJob,
+  RecomputeLatestJob,
+  SourceFetchJob,
+  SourceParseJob,
+} from "@versioneer/core/pipeline";
 
 /**
  * Typed facade for the pipeline worker service binding.
@@ -16,3 +21,8 @@ export interface PipelineWorkerStub extends Fetcher {
  * so we declare it here for type-safe `create()` calls.
  */
 export type SourcePipelineWorkflow = Workflow<SourceFetchJob>;
+
+/**
+ * Typed Workflow binding for the enrichment drain workflow.
+ */
+export type EnrichmentDrainWorkflow = Workflow<EnrichmentDrainJob>;

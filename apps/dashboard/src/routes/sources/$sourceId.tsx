@@ -345,10 +345,8 @@ function SourceAnomaliesPanel({
         <Link
           to="/jobs"
           search={{
-            page: 1,
-            pageSize: 25,
-            tab: "failures",
-            jobType: "all",
+            failurePage: 1,
+            failurePageSize: 25,
             failureJobType: "source-anomaly",
             failureStatus: "open",
             failureId: "",

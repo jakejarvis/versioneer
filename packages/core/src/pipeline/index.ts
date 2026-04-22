@@ -8,6 +8,7 @@ export type {
   SourceFetchJob,
   SourceParseJob,
   RecomputeLatestJob,
+  EnrichmentDrainJob,
   FetchStepResult,
   ParseStepResult,
 } from "./types";
@@ -33,4 +34,12 @@ export type {
 export { recordSourceAnomaly } from "./anomalies";
 export type { SourceAnomalyKind } from "./anomalies";
 export { enrichDiscoveredApp, lookupCaskTokenByBundleId } from "./enrich-discovered-app";
+export {
+  findOutstandingJobFailure,
+  markJobFailureRetrying,
+  recordJobFailure,
+  resolveJobFailure,
+  runTrackedJob,
+} from "./job-failures";
+export type { TrackedJobFailureType, TrackedJobResult } from "./job-failures";
 export { handleCaskIndexSync, isCaskSyncDue } from "./cask-index-sync";

@@ -1,5 +1,5 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
-import { desc, eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { msElapsedSince } from "@versioneer/core/dates";
 import { createLogger } from "@versioneer/core/logger";
@@ -7,16 +7,19 @@ import {
   handleSourceParse,
   handleRecomputeLatest,
   handleCaskIndexSync,
-  enrichDiscoveredApp,
   isCaskSyncDue,
+  recordJobFailure,
+  resolveJobFailure,
 } from "@versioneer/core/pipeline";
 import type { SourceParseJob, RecomputeLatestJob } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
-import { cronJobRuns, discoveredApps, generateId, idPrefixes } from "@versioneer/db";
+import { cronJobRuns, generateId, idPrefixes } from "@versioneer/db";
 // Import parsers to trigger auto-registration
 import "@versioneer/core/parsers";
+import { runEnrichmentBatch } from "./enrichment";
 
 // Re-export the Workflow class so wrangler can discover it
+export { EnrichmentDrainWorkflow } from "./workflows/enrichment-drain";
 export { SourcePipelineWorkflow } from "./workflows/source-pipeline";
 
 const SOURCE_PIPELINE_BATCH_SIZE = 100;
@@ -126,27 +129,57 @@ export default class PipelineWorker extends WorkerEntrypoint {
           }
         }
         const queued = await createSourcePipelineBatch(this.env.SOURCE_PIPELINE, jobs, log);
-        log.info("poll sources completed", { queued, total: activeSources.length });
+        const status = queued === jobs.length ? "completed" : "failed";
+        const errorMessage =
+          status === "failed"
+            ? `${jobs.length - queued} source workflow${jobs.length - queued === 1 ? "" : "s"} failed to queue`
+            : null;
+        log.info("poll sources completed", { queued, total: activeSources.length, status });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "poll_sources",
           trigger: "scheduled",
-          status: "completed",
+          status,
           itemsQueued: queued,
           itemsTotal: activeSources.length,
+          errorMessage,
           startedAt,
           completedAt: new Date().toISOString(),
         });
+        if (status === "failed" && errorMessage) {
+          await recordJobFailure({
+            db,
+            jobType: "poll_sources",
+            relatedId: null,
+            jobKey: "scheduled",
+            errorMessage,
+          });
+        } else {
+          await resolveJobFailure({
+            db,
+            jobType: "poll_sources",
+            relatedId: null,
+            jobKey: "scheduled",
+          });
+        }
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         log.error("poll sources job failed", { error });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "poll_sources",
           trigger: "scheduled",
           status: "failed",
-          errorMessage: error instanceof Error ? error.message : String(error),
+          errorMessage,
           startedAt,
           completedAt: new Date().toISOString(),
+        });
+        await recordJobFailure({
+          db,
+          jobType: "poll_sources",
+          relatedId: null,
+          jobKey: "scheduled",
+          errorMessage,
         });
       }
     }
@@ -167,17 +200,31 @@ export default class PipelineWorker extends WorkerEntrypoint {
             startedAt,
             completedAt: new Date().toISOString(),
           });
+          await resolveJobFailure({
+            db,
+            jobType: "cask_index_sync",
+            relatedId: null,
+            jobKey: "scheduled",
+          });
         }
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         log.error("cask index sync failed", { error });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "cask_index_sync",
           trigger: "scheduled",
           status: "failed",
-          errorMessage: error instanceof Error ? error.message : String(error),
+          errorMessage,
           startedAt,
           completedAt: new Date().toISOString(),
+        });
+        await recordJobFailure({
+          db,
+          jobType: "cask_index_sync",
+          relatedId: null,
+          jobKey: "scheduled",
+          errorMessage,
         });
       }
     }
@@ -186,71 +233,51 @@ export default class PipelineWorker extends WorkerEntrypoint {
     {
       const runId = generateId(idPrefixes.cronJobRun);
       const startedAt = new Date().toISOString();
-      const maxBatchSize = 25;
       try {
-        // Push all eligibility checks into SQL so only actionable rows are returned.
-        // Priority: pending (never enriched) → failed (retry) → stuck in_progress → stale success.
-        const candidates = await db
-          .select({ id: discoveredApps.id })
-          .from(discoveredApps)
-          .where(
-            sql`(${discoveredApps.status} = 'pending' OR ${discoveredApps.status} = 'linked')
-              AND (
-                ${discoveredApps.enrichmentStatus} IN ('pending', 'failed')
-                OR (${discoveredApps.enrichmentStatus} = 'in_progress'
-                    AND datetime(${discoveredApps.updatedAt}, '+15 minutes') <= datetime('now'))
-                OR (${discoveredApps.enrichmentStatus} = 'success'
-                    AND datetime(${discoveredApps.enrichedAt}, '+24 hours') <= datetime('now'))
-              )`,
-          )
-          .orderBy(
-            sql`CASE ${discoveredApps.enrichmentStatus}
-              WHEN 'pending' THEN 0
-              WHEN 'failed'  THEN 1
-              WHEN 'in_progress' THEN 2
-              ELSE 3
-            END`,
-            sql`COALESCE(${discoveredApps.enrichedAt}, '1970-01-01') ASC`,
-            desc(discoveredApps.lastSeenAt),
-          )
-          .limit(maxBatchSize)
-          .all();
+        const batch = await runEnrichmentBatch({ db, env: this.env });
 
-        let enriched = 0;
-        for (const candidate of candidates) {
-          await enrichDiscoveredApp({
-            discoveredAppId: candidate.id,
-            db,
-            githubToken: this.env.GITHUB_TOKEN,
-            assetsBucket: this.env.RAW_BUCKET,
-            configKv: this.env.CONFIG_KV,
+        if (batch.candidateCount > 0) {
+          log.info("enrichment batch completed", {
+            enriched: batch.succeeded,
+            failed: batch.failed,
+            candidates: batch.candidateCount,
           });
-          enriched++;
-        }
-
-        if (candidates.length > 0) {
-          log.info("enrichment batch completed", { enriched, candidates: candidates.length });
           await db.insert(cronJobRuns).values({
             id: runId,
             jobType: "enrich_discovered_apps",
             trigger: "scheduled",
             status: "completed",
-            itemsQueued: enriched,
-            itemsTotal: candidates.length,
+            itemsQueued: batch.succeeded,
+            itemsTotal: batch.attempted,
+            resultJson: JSON.stringify(batch),
             startedAt,
             completedAt: new Date().toISOString(),
           });
+          await resolveJobFailure({
+            db,
+            jobType: "enrich_discovered_apps",
+            relatedId: null,
+            jobKey: "scheduled",
+          });
         }
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         log.error("enrichment batch failed", { error });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "enrich_discovered_apps",
           trigger: "scheduled",
           status: "failed",
-          errorMessage: error instanceof Error ? error.message : String(error),
+          errorMessage,
           startedAt,
           completedAt: new Date().toISOString(),
+        });
+        await recordJobFailure({
+          db,
+          jobType: "enrich_discovered_apps",
+          relatedId: null,
+          jobKey: "scheduled",
+          errorMessage,
         });
       }
     }

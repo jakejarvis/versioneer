@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { markJobFailureRetrying } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
 import { jobFailures } from "@versioneer/db";
 
@@ -12,6 +13,7 @@ import {
   scheduleSourceFetch,
   scheduleSourceReparse,
 } from "./followup-jobs";
+import { runCaskIndexSyncJob, runPollSourcesJob, startEnrichmentDrainJob } from "./jobs";
 import { authMiddleware } from "./middleware";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
@@ -35,12 +37,13 @@ function jobFailureOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
 async function retryFailure(
   db: ReturnType<typeof createDb>,
   failure: typeof jobFailures.$inferSelect,
-): Promise<boolean> {
+  actorId: string | null,
+): Promise<"retrying" | "resolved" | null> {
   let result: { ok: boolean } | null = null;
 
   switch (failure.jobType) {
     case "source-fetch":
-      if (!failure.relatedId) return false;
+      if (!failure.relatedId) return null;
       result = await scheduleSourceFetch({
         db,
         sourceId: failure.relatedId,
@@ -50,7 +53,7 @@ async function retryFailure(
       });
       break;
     case "source-parse":
-      if (!failure.relatedId) return false;
+      if (!failure.relatedId) return null;
       result = await scheduleSourceReparse({
         db,
         sourceFetchId: failure.relatedId,
@@ -58,7 +61,7 @@ async function retryFailure(
       });
       break;
     case "recompute-latest":
-      if (!failure.relatedId) return false;
+      if (!failure.relatedId) return null;
       result = await scheduleRecomputeLatest({
         db,
         appId: failure.relatedId,
@@ -66,21 +69,41 @@ async function retryFailure(
         resolveFailureOnSuccess: false,
       });
       break;
+    case "poll_sources": {
+      const retry = await runPollSourcesJob({
+        db,
+        force: true,
+        actorId,
+        trigger: "manual",
+        failureJobKey: failure.jobKey ?? "manual",
+      });
+      return retry.status === "completed" ? "resolved" : null;
+    }
+    case "cask_index_sync":
+      await runCaskIndexSyncJob({
+        db,
+        actorId,
+        trigger: "manual",
+        failureJobKey: failure.jobKey ?? "manual",
+      });
+      return "resolved";
+    case "enrich_discovered_apps":
+      await startEnrichmentDrainJob({
+        db,
+        actorId,
+        trigger: "manual",
+        failureJobKey: failure.jobKey ?? "manual",
+      });
+      await markJobFailureRetrying({ db, id: failure.id });
+      return "retrying";
     default:
-      return false;
+      return null;
   }
 
-  if (!result.ok) return false;
+  if (!result.ok) return null;
 
-  await db
-    .update(jobFailures)
-    .set({
-      status: "retrying",
-      retryCount: sql`${jobFailures.retryCount} + 1`,
-      resolvedAt: null,
-    })
-    .where(eq(jobFailures.id, failure.id));
-  return true;
+  await markJobFailureRetrying({ db, id: failure.id });
+  return "retrying";
 }
 
 // GET /job-failures - list with pagination, default status="open"
@@ -178,13 +201,13 @@ export const updateJobFailure = createServerFn({ method: "POST" })
 export const retryJobFailure = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
-  .handler(async ({ data: { id } }) => {
+  .handler(async ({ data: { id }, context }) => {
     const db = createDb(env.DB);
     const failure = await db.select().from(jobFailures).where(eq(jobFailures.id, id)).get();
     if (!failure) throw new Error("Not found");
 
-    const retried = await retryFailure(db, failure);
-    return { status: retried ? "retrying" : failure.status, count: retried ? 1 : 0 };
+    const status = await retryFailure(db, failure, context.user.email);
+    return { status: status ?? failure.status, count: status ? 1 : 0 };
   });
 
 // POST /job-failures/retry-all - re-enqueue all open failures
@@ -195,7 +218,7 @@ export const retryAllJobFailures = createServerFn({ method: "POST" })
       jobType: z.string().optional(),
     }),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { jobType } = data;
     const db = createDb(env.DB);
 
@@ -210,9 +233,13 @@ export const retryAllJobFailures = createServerFn({ method: "POST" })
     let failed = 0;
 
     for (const failure of matching) {
-      if (await retryFailure(db, failure)) {
-        retried++;
-      } else {
+      try {
+        if (await retryFailure(db, failure, context.user.email)) {
+          retried++;
+        } else {
+          failed++;
+        }
+      } catch {
         failed++;
       }
     }
