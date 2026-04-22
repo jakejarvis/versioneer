@@ -25,20 +25,17 @@ function emit(
   baseCtx: LogContext,
   callCtx?: LogContext,
 ): void {
-  method(
-    JSON.stringify({
-      level,
-      message,
-      ts: new Date().toISOString(),
-      ...baseCtx,
-      ...(callCtx ? serializeError(callCtx) : {}),
-    }),
-  );
+  method(message, {
+    level,
+    ts: new Date().toISOString(),
+    ...baseCtx,
+    ...(callCtx ? serializeError(callCtx) : {}),
+  });
 }
 
 export function createLogger(baseContext: LogContext = {}): Logger {
   return {
-    info: (msg, ctx) => emit(console.log, "info", msg, baseContext, ctx),
+    info: (msg, ctx) => emit(console.info, "info", msg, baseContext, ctx),
     warn: (msg, ctx) => emit(console.warn, "warn", msg, baseContext, ctx),
     error: (msg, ctx) => emit(console.error, "error", msg, baseContext, ctx),
     child: (ctx) => createLogger({ ...baseContext, ...ctx }),

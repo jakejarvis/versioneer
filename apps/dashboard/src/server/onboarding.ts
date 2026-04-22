@@ -24,6 +24,7 @@ import {
 } from "@versioneer/schemas/sources";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import { captureAdminEvent } from "./analytics";
 import { invalidateInventoryMatchSnapshot } from "./cache";
 import { scheduleSourceFetch } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
@@ -277,6 +278,15 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     for (const sourceId of sourceIds) {
       await scheduleSourceFetch({ db, sourceId, reason: "onboarding", force: true });
     }
+    await captureAdminEvent(context.user, "discovery_onboarded", {
+      target_type: "app",
+      target_id: appId,
+      discovered_app_id: data.discoveredAppId,
+      status: appStatus,
+      alias_count: data.aliases.length,
+      source_count: sourceIds.length,
+      source_validated: data.sourceValidated,
+    });
 
     return { id: appId, status: appStatus };
   });

@@ -24,6 +24,7 @@ import {
 } from "@versioneer/schemas/sources";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import { captureAdminEvent } from "./analytics";
 import { invalidateInventoryMatchSnapshot } from "./cache";
 import type { Db } from "./db-types";
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
@@ -341,6 +342,13 @@ export const createSource = createServerFn({ method: "POST" })
     if (shouldQueueFetch) {
       await scheduleSourceFetch({ db, sourceId: id, reason: "source-create", force: true });
     }
+    await captureAdminEvent(context.user, "source_created", {
+      target_type: "source",
+      target_id: id,
+      app_id: data.appId,
+      source_type: data.sourceType,
+      status: runtimeStatus,
+    });
 
     return { id, status: "created" };
   });
@@ -530,6 +538,13 @@ export const updateSource = createServerFn({ method: "POST" })
         force: true,
       });
     }
+    await captureAdminEvent(context.user, "source_updated", {
+      target_type: "source",
+      target_id: id,
+      app_id: existing.appId,
+      source_type: existing.sourceType,
+      status: nextStatus,
+    });
 
     return { status: "updated" };
   });
@@ -544,12 +559,19 @@ export const triggerFetch = createServerFn({ method: "POST" })
       force: z.boolean().default(false),
     }),
   )
-  .handler(async ({ data: { sourceId, reason, force } }) => {
+  .handler(async ({ data: { sourceId, reason, force }, context }) => {
     const db = createDb(env.DB);
     const source = await db.select().from(sources).where(eq(sources.id, sourceId)).get();
     if (!source) throw new Error("Not found");
 
     const result = await scheduleSourceFetch({ db, sourceId, reason, force });
+    await captureAdminEvent(context.user, "manual_job_triggered", {
+      target_type: "source",
+      target_id: sourceId,
+      job_type: "source-fetch",
+      reason,
+      status: result.ok ? "queued" : "failed",
+    });
     return {
       status: result.ok ? "queued" : "failed",
       sourceId,
@@ -603,10 +625,16 @@ export const getSourceFetch = createServerFn({ method: "GET" })
 export const reparse = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ sourceFetchId: z.string().min(1) }))
-  .handler(async ({ data: { sourceFetchId } }) => {
+  .handler(async ({ data: { sourceFetchId }, context }) => {
     const result = await scheduleSourceReparse({
       db: createDb(env.DB),
       sourceFetchId,
+    });
+    await captureAdminEvent(context.user, "manual_job_triggered", {
+      target_type: "source_fetch",
+      target_id: sourceFetchId,
+      job_type: "source-parse",
+      status: result.ok ? "queued" : "failed",
     });
     return {
       status: result.ok ? "queued" : "failed",
@@ -666,6 +694,13 @@ export const reorderSources = createServerFn({ method: "POST" })
       targetId: data.appId,
       payloadJson: JSON.stringify({ sourceIds: data.sourceIds }),
       createdAt: now,
+    });
+
+    await captureAdminEvent(context.user, "sources_reordered", {
+      target_type: "app",
+      target_id: data.appId,
+      count: data.sourceIds.length,
+      status: "reordered",
     });
 
     return { status: "reordered" };

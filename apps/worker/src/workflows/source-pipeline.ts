@@ -1,6 +1,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 
 import { createLogger } from "@versioneer/core/logger";
+import { captureServerEvent, captureServerException } from "@versioneer/core/observability";
 import {
   handleSourceFetch,
   handleSourceParse,
@@ -83,6 +84,20 @@ export class SourcePipelineWorkflow extends WorkflowEntrypoint<Env, SourceFetchJ
       });
 
       log.info("workflow completed", { releaseCount: parseResult.releaseCount });
+      this.ctx.waitUntil(
+        captureServerEvent(this.env, {
+          event: "worker_source_pipeline_completed",
+          properties: {
+            surface: "worker",
+            target_type: "source",
+            target_id: sourceId,
+            reason,
+            force,
+            release_count: parseResult.releaseCount,
+            status: "completed",
+          },
+        }),
+      );
 
       return {
         status: "completed",
@@ -91,6 +106,20 @@ export class SourcePipelineWorkflow extends WorkflowEntrypoint<Env, SourceFetchJ
       };
     } catch (err) {
       log.error("workflow failed", { error: err });
+      this.ctx.waitUntil(
+        captureServerException(this.env, {
+          error: err,
+          properties: {
+            surface: "worker",
+            workflow: "source-pipeline",
+            target_type: "source",
+            target_id: sourceId,
+            reason,
+            force,
+            status: "failed",
+          },
+        }),
+      );
       throw err;
     }
   }

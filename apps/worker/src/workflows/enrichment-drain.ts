@@ -2,6 +2,7 @@ import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloud
 import { eq } from "drizzle-orm";
 
 import { createLogger } from "@versioneer/core/logger";
+import { captureServerEvent, captureServerException } from "@versioneer/core/observability";
 import {
   recordJobFailure,
   resolveJobFailure,
@@ -106,6 +107,20 @@ export class EnrichmentDrainWorkflow extends WorkflowEntrypoint<Env, EnrichmentD
 
       const summary = persistableTotals(totals);
       log.info("enrichment drain completed", summary);
+      this.ctx.waitUntil(
+        captureServerEvent(this.env, {
+          event: "worker_enrichment_drain_completed",
+          properties: {
+            surface: "worker",
+            target_type: "cron_job",
+            target_id: runId,
+            job_type: "enrich_discovered_apps",
+            trigger,
+            status: "completed",
+            ...summary,
+          },
+        }),
+      );
       return { status: "completed", ...summary };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -130,6 +145,20 @@ export class EnrichmentDrainWorkflow extends WorkflowEntrypoint<Env, EnrichmentD
         jobKey,
         errorMessage,
       });
+      this.ctx.waitUntil(
+        captureServerException(this.env, {
+          error,
+          properties: {
+            surface: "worker",
+            workflow: "enrichment-drain",
+            target_type: "cron_job",
+            target_id: runId,
+            job_type: "enrich_discovered_apps",
+            trigger,
+            status: "failed",
+          },
+        }),
+      );
 
       throw error;
     }

@@ -2,6 +2,7 @@ import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloud
 import { eq } from "drizzle-orm";
 
 import { createLogger } from "@versioneer/core/logger";
+import { captureServerEvent, captureServerException } from "@versioneer/core/observability";
 import {
   createInventoryFollowupSuggestions,
   inventoryFollowupWorkflowPayloadSchema,
@@ -211,6 +212,21 @@ export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
       });
 
       log.info("workflow completed", { totals });
+      this.ctx.waitUntil(
+        captureServerEvent(this.env, {
+          event: "worker_inventory_followup_completed",
+          properties: {
+            surface: "worker",
+            target_type: "inventory_followup_job",
+            target_id: jobId,
+            status: "completed",
+            items_total: totals.itemsTotal,
+            discovered_icons_failed: totals.discoveredIcons.failed,
+            catalog_icons_failed: totals.catalogIcons.failed,
+            suggestions_failed: totals.suggestions.failed,
+          },
+        }),
+      );
       return { status: "completed", ...totals };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -245,6 +261,20 @@ export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
       if (payloadR2Key) {
         log.info("preserved follow-up payload after failure", { payloadR2Key });
       }
+
+      this.ctx.waitUntil(
+        captureServerException(this.env, {
+          error,
+          properties: {
+            surface: "worker",
+            workflow: "inventory_followup",
+            target_type: "inventory_followup_job",
+            target_id: jobId,
+            status: "failed",
+            items_total: totals.itemsTotal,
+          },
+        }),
+      );
 
       throw error;
     }

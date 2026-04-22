@@ -16,6 +16,7 @@ import { AppSidebar } from "@/components/layout/sidebar";
 import { DashboardRouteError } from "@/components/shared/dashboard-route-error";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { DashboardPostHogIdentity, DashboardPostHogProvider } from "@/lib/posthog";
 import { ThemeProvider, themeInitScript } from "@/lib/theme";
 import { getSession } from "@/server/auth";
 
@@ -93,13 +94,16 @@ function RootComponent() {
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="antialiased">
-        <QueryClientProvider client={queryClient}>
-          <ThemeProvider>
-            {isLoginPage ? <Outlet /> : <AppShell />}
-            <Toaster position="bottom-right" richColors theme="dark" />
-          </ThemeProvider>
-          <ReactQueryDevtools />
-        </QueryClientProvider>
+        <DashboardPostHogProvider>
+          <QueryClientProvider client={queryClient}>
+            <ThemeProvider>
+              {isLoginPage ? null : <DashboardPostHogIdentity />}
+              {isLoginPage ? <Outlet /> : <AppShell />}
+              <Toaster position="bottom-right" richColors theme="dark" />
+            </ThemeProvider>
+            <ReactQueryDevtools />
+          </QueryClientProvider>
+        </DashboardPostHogProvider>
         <TanStackRouterDevtools />
         <Scripts />
       </body>

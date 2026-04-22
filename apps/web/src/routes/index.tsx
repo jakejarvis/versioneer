@@ -3,6 +3,7 @@ import { HardDriveDownloadIcon } from "lucide-react";
 
 import { RecentReleases } from "@/components/recent-releases";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { captureMarketingEvent } from "@/lib/posthog";
 
 export const Route = createFileRoute("/")({
   component: IndexPage,
@@ -26,6 +27,7 @@ function IndexPage() {
           <TooltipTrigger asChild>
             <span
               // href="https://dl.versioneer.app/latest/Versioneer.zip"
+              onClick={() => captureMarketingEvent("marketing_download_clicked")}
               className="cursor-not-allowed text-foreground hover:text-foreground/80 inline-flex items-center gap-2 underline-offset-4 underline text-sm"
             >
               <HardDriveDownloadIcon className="size-3 text-foreground" />

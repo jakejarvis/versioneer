@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { captureMarketingException } from "@/lib/posthog";
+
 const API_BASE_URL = "https://api.versioneer.app";
 
 interface RecentRelease {
@@ -90,7 +92,10 @@ export function RecentReleases() {
         setItems(data.items);
         setLoading(false);
       })
-      .catch(() => {
+      .catch((catchError) => {
+        captureMarketingException(catchError, {
+          flow: "recent_releases",
+        });
         setError(true);
         setLoading(false);
       });

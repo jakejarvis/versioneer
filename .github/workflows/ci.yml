@@ -53,13 +53,13 @@ jobs:
           cache: true
           run-install: true
 
-      # - name: Apply D1 migrations
-      #   uses: cloudflare/wrangler-action@v3
-      #   with:
-      #     accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      #     apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      #     workingDirectory: packages/db
-      #     command: d1 migrations apply versioneer-db-production --remote --env=production
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v3
+        with:
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: packages/db
+          command: d1 migrations apply versioneer-db-production --remote --env=production
 
       - name: Deploy API worker
         uses: cloudflare/wrangler-action@v3
@@ -81,6 +81,11 @@ jobs:
         run: vp run --filter @versioneer/dashboard build
         env:
           CLOUDFLARE_ENV: production
+          VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ vars.POSTHOG_PROJECT_TOKEN }}
+          VITE_PUBLIC_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
 
       - name: Deploy dashboard
         uses: cloudflare/wrangler-action@v3
@@ -92,6 +97,12 @@ jobs:
 
       - name: Build marketing site
         run: vp run --filter @versioneer/web build
+        env:
+          VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ vars.POSTHOG_PROJECT_TOKEN }}
+          VITE_PUBLIC_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
 
       - name: Deploy marketing site
         uses: cloudflare/wrangler-action@v3

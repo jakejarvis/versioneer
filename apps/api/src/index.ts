@@ -4,6 +4,7 @@ import { HTTPException } from "hono/http-exception";
 
 import { createLogger } from "@versioneer/core/logger";
 
+import { captureApiException } from "./lib/observability";
 import { openRoutes, protectedRoutes } from "./routes";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -36,6 +37,11 @@ app.notFound((c) => {
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) {
+    if (err.status >= 500) {
+      captureApiException(c, err, {
+        status: err.status,
+      });
+    }
     const res = err.getResponse();
     if (res.headers.get("content-type")?.includes("json")) {
       return res;
@@ -48,6 +54,9 @@ app.onError((err, c) => {
     method: c.req.method,
     path: c.req.path,
     error: err,
+  });
+  captureApiException(c, err, {
+    status: 500,
   });
   return c.json({ error: "Internal server error" }, 500);
 });

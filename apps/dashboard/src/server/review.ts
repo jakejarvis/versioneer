@@ -27,6 +27,7 @@ import {
 } from "@versioneer/schemas/sources";
 
 import { assertNoConflictingExactAlias } from "./alias-conflicts";
+import { captureAdminEvent } from "./analytics";
 import { invalidateInventoryMatchSnapshot } from "./cache";
 import { loadAppsByIds, loadSourcesByIds, toAppSummary, toSourceSummary } from "./entity-summaries";
 import { scheduleRecomputeLatest, scheduleSourceFetch } from "./followup-jobs";
@@ -839,6 +840,14 @@ export const approveCatalogSuggestion = createServerFn({ method: "POST" })
       createdAt: now,
     });
     await invalidateInventoryMatchSnapshot(env);
+    await captureAdminEvent(context.user, "review_approved", {
+      target_type: "catalog_suggestion",
+      target_id: id,
+      queue_type: suggestion.queueType,
+      app_id: suggestion.appId ?? null,
+      source_id: suggestion.sourceId ?? null,
+      status: "approved",
+    });
 
     return { status: "approved" };
   });
@@ -882,6 +891,14 @@ export const rejectCatalogSuggestion = createServerFn({ method: "POST" })
         sourceId: suggestion.sourceId,
       }),
       createdAt: now,
+    });
+    await captureAdminEvent(context.user, "review_rejected", {
+      target_type: "catalog_suggestion",
+      target_id: id,
+      queue_type: suggestion.queueType,
+      app_id: suggestion.appId ?? null,
+      source_id: suggestion.sourceId ?? null,
+      status: "rejected",
     });
 
     return { status: "rejected" };

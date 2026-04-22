@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 
+import { captureApiEvent } from "@/lib/observability";
 import { clientRateLimit } from "@/middleware/rate-limit";
 import {
   installExecutionStatusRequestSchema,
@@ -334,6 +335,16 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         }),
         createdAt: now,
       });
+      captureApiEvent(c, "client_install_prepare_requested", {
+        target_type: "install_execution",
+        target_id: executionId,
+        app_id: data.appId,
+        release_id: data.releaseId,
+        artifact_id: data.artifactId ?? null,
+        install_strategy: data.installStrategy,
+        target_architecture: target.targetArchitecture ?? null,
+        status: "prepared",
+      });
 
       return c.json({ executionId, status: "prepared" as const });
     },
@@ -540,6 +551,17 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
           errorMessage: data.errorMessage ?? null,
         }),
         createdAt: now,
+      });
+      captureApiEvent(c, "client_install_status_reported", {
+        target_type: "install_execution",
+        target_id: executionId,
+        app_id: data.appId,
+        release_id: data.releaseId,
+        artifact_id: data.artifactId ?? null,
+        install_strategy: data.installStrategy,
+        target_architecture: target.targetArchitecture ?? null,
+        status: data.status,
+        has_verification: Boolean(data.verification),
       });
 
       return c.json({ executionId, status: "recorded" as const });

@@ -4,6 +4,7 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { env } from "cloudflare:workers";
 
+import { captureServerEvent } from "@versioneer/core/observability";
 import { createDb } from "@versioneer/db";
 import { adminUsers, adminSessions, adminAccounts, adminVerifications } from "@versioneer/db";
 
@@ -41,6 +42,18 @@ export function createAuth(d1: D1Database) {
               message: "Access restricted to authorized users",
             });
           }
+        }
+        if (ctx.context?.newSession) {
+          const user = ctx.context.newSession.user;
+          await captureServerEvent(env, {
+            distinctId: user.id,
+            event: "admin_signed_in",
+            properties: {
+              surface: "dashboard",
+              actor_id: user.id,
+              provider: "github",
+            },
+          });
         }
       }),
     },

@@ -5,6 +5,7 @@
 
   "compatibility_date": "2026-04-22",
   "compatibility_flags": ["nodejs_compat"],
+  "upload_source_maps": true,
 
   "vars": {
     "ENVIRONMENT": "dev",
@@ -67,7 +68,8 @@
           "GITHUB_OAUTH_CLIENT_ID",
           "GITHUB_OAUTH_CLIENT_SECRET",
           "ALLOWED_ADMIN_EMAILS",
-          "GITHUB_TOKEN"
+          "GITHUB_TOKEN",
+          "POSTHOG_PROJECT_TOKEN"
         ]
       },
       "routes": [
@@ -81,7 +83,8 @@
       "preview_urls": false,
       "vars": {
         "ENVIRONMENT": "production",
-        "ASSETS_BASE_URL": "https://assets-prod.versioneer.app"
+        "ASSETS_BASE_URL": "https://assets-prod.versioneer.app",
+        "POSTHOG_HOST": "https://us.i.posthog.com"
       },
       "kv_namespaces": [
         {
@@ -133,7 +136,8 @@
           "enabled": true,
           "head_sampling_rate": 1,
           "persist": true,
-          "invocation_logs": true
+          "invocation_logs": true,
+          "destinations": ["versioneer-posthog-logs"]
         },
         "traces": {
           "enabled": true,

@@ -27,17 +27,37 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
 
-  const upstream = await fetch(GITHUB_API_URL, {
-    headers: {
-      Accept: "application/vnd.github.html+json",
-      "User-Agent": "versioneer-web",
-      ...("GITHUB_TOKEN" in context.env && context.env.GITHUB_TOKEN
-        ? { Authorization: `token ${context.env.GITHUB_TOKEN as string}` }
-        : {}),
-    },
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(GITHUB_API_URL, {
+      headers: {
+        Accept: "application/vnd.github.html+json",
+        "User-Agent": "versioneer-web",
+        ...("GITHUB_TOKEN" in context.env && context.env.GITHUB_TOKEN
+          ? { Authorization: `token ${context.env.GITHUB_TOKEN as string}` }
+          : {}),
+      },
+    });
+  } catch (error) {
+    context.waitUntil(
+      capturePagesEvent(context.env, "marketing_releases_api_failed", {
+        status: "failed",
+        error_message: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    return new Response(JSON.stringify({ error: "Failed to fetch releases" }), {
+      status: 502,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   if (!upstream.ok) {
+    context.waitUntil(
+      capturePagesEvent(context.env, "marketing_releases_api_failed", {
+        status: "failed",
+        upstream_status: upstream.status,
+      }),
+    );
     return new Response(JSON.stringify({ error: "Failed to fetch releases" }), {
       status: 502,
       headers: { "Content-Type": "application/json" },
@@ -68,3 +88,38 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   return response;
 };
+
+async function capturePagesEvent(
+  env: Env,
+  event: string,
+  properties: Record<string, unknown>,
+): Promise<void> {
+  const token = "POSTHOG_PROJECT_TOKEN" in env ? env.POSTHOG_PROJECT_TOKEN : undefined;
+  if (!token) return;
+
+  const host =
+    "POSTHOG_HOST" in env && typeof env.POSTHOG_HOST === "string"
+      ? env.POSTHOG_HOST
+      : "https://us.i.posthog.com";
+  const environment =
+    "ENVIRONMENT" in env && typeof env.ENVIRONMENT === "string" ? env.ENVIRONMENT : "production";
+
+  try {
+    await fetch(`${host}/capture/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: token,
+        distinct_id: "versioneer-web-api",
+        event,
+        properties: {
+          surface: "web",
+          environment,
+          ...properties,
+        },
+      }),
+    });
+  } catch {
+    // Observability must never affect the release API response path.
+  }
+}

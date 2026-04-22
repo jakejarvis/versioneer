@@ -7,6 +7,7 @@ import { feedbackUpdateSchema } from "@versioneer/core/validation";
 import { createDb } from "@versioneer/db";
 import { auditLog, clientFeedback, generateId, idPrefixes } from "@versioneer/db";
 
+import { captureAdminEvent } from "./analytics";
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { authMiddleware } from "./middleware";
 
@@ -130,6 +131,13 @@ export const updateFeedback = createServerFn({ method: "POST" })
       targetId: data.id,
       payloadJson: JSON.stringify({ status: data.status }),
       createdAt: now,
+    });
+    await captureAdminEvent(context.user, "feedback_updated", {
+      target_type: "feedback",
+      target_id: data.id,
+      feedback_type: existing.feedbackType,
+      target_app_id: existing.targetAppId,
+      status: data.status,
     });
 
     return { status: "updated" };

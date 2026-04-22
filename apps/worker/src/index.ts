@@ -2,6 +2,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 
 import { createLogger } from "@versioneer/core/logger";
+import { captureServerEvent, captureServerException } from "@versioneer/core/observability";
 import {
   handleSourceParse,
   handleRecomputeLatest,
@@ -237,12 +238,53 @@ export async function repairInventoryFollowupQueue(params: {
 }
 
 export default class PipelineWorker extends WorkerEntrypoint {
+  private captureWorkerEvent(event: string, properties: Record<string, unknown> = {}) {
+    this.ctx.waitUntil(
+      captureServerEvent(this.env, {
+        event,
+        properties: {
+          surface: "worker",
+          ...properties,
+        },
+      }),
+    );
+  }
+
+  private captureWorkerException(error: unknown, properties: Record<string, unknown> = {}) {
+    this.ctx.waitUntil(
+      captureServerException(this.env, {
+        error,
+        properties: {
+          surface: "worker",
+          ...properties,
+        },
+      }),
+    );
+  }
+
   /**
    * RPC: recompute the latest release for an app (optionally a specific channel).
    * Called via service binding from the dashboard.
    */
   async recomputeLatest(params: RecomputeLatestJob): Promise<void> {
-    await handleRecomputeLatest(params, this.env);
+    try {
+      await handleRecomputeLatest(params, this.env);
+      this.captureWorkerEvent("worker_recompute_latest_completed", {
+        target_type: "app",
+        target_id: params.appId,
+        channel: params.channel ?? null,
+        status: "completed",
+      });
+    } catch (error) {
+      this.captureWorkerException(error, {
+        handler: "recomputeLatest",
+        target_type: "app",
+        target_id: params.appId,
+        channel: params.channel ?? null,
+        status: "failed",
+      });
+      throw error;
+    }
   }
 
   /**
@@ -250,24 +292,39 @@ export default class PipelineWorker extends WorkerEntrypoint {
    * Called via service binding from the dashboard.
    */
   async reparse(params: SourceParseJob): Promise<void> {
-    await handleSourceParse(params, this.env);
-    // Also recompute after reparse, since that's the pipeline contract
-    const db = createDb(this.env.DB);
-    const { sourceFetches, sources } = await import("@versioneer/db");
-    const fetch = await db
-      .select({ sourceId: sourceFetches.sourceId })
-      .from(sourceFetches)
-      .where(eq(sourceFetches.id, params.sourceFetchId))
-      .get();
-    if (fetch) {
-      const source = await db
-        .select({ appId: sources.appId })
-        .from(sources)
-        .where(eq(sources.id, fetch.sourceId))
+    try {
+      await handleSourceParse(params, this.env);
+      // Also recompute after reparse, since that's the pipeline contract
+      const db = createDb(this.env.DB);
+      const { sourceFetches, sources } = await import("@versioneer/db");
+      const fetch = await db
+        .select({ sourceId: sourceFetches.sourceId })
+        .from(sourceFetches)
+        .where(eq(sourceFetches.id, params.sourceFetchId))
         .get();
-      if (source) {
-        await handleRecomputeLatest({ appId: source.appId }, this.env);
+      if (fetch) {
+        const source = await db
+          .select({ appId: sources.appId })
+          .from(sources)
+          .where(eq(sources.id, fetch.sourceId))
+          .get();
+        if (source) {
+          await handleRecomputeLatest({ appId: source.appId }, this.env);
+        }
       }
+      this.captureWorkerEvent("worker_source_reparse_completed", {
+        target_type: "source_fetch",
+        target_id: params.sourceFetchId,
+        status: "completed",
+      });
+    } catch (error) {
+      this.captureWorkerException(error, {
+        handler: "reparse",
+        target_type: "source_fetch",
+        target_id: params.sourceFetchId,
+        status: "failed",
+      });
+      throw error;
     }
   }
 
@@ -277,7 +334,22 @@ export default class PipelineWorker extends WorkerEntrypoint {
    */
   async retryInventoryFollowup(params: InventoryFollowupQueueMessage): Promise<void> {
     const message = inventoryFollowupQueueMessageSchema.parse(params);
-    await this.env.INVENTORY_FOLLOWUP_QUEUE.send(message);
+    try {
+      await this.env.INVENTORY_FOLLOWUP_QUEUE.send(message);
+      this.captureWorkerEvent("worker_inventory_followup_retry_queued", {
+        target_type: "inventory_followup_job",
+        target_id: message.jobId,
+        status: "queued",
+      });
+    } catch (error) {
+      this.captureWorkerException(error, {
+        handler: "retryInventoryFollowup",
+        target_type: "inventory_followup_job",
+        target_id: message.jobId,
+        status: "failed",
+      });
+      throw error;
+    }
   }
 
   async queue(batch: MessageBatch<InventoryFollowupQueueMessage>): Promise<void> {
@@ -329,6 +401,13 @@ export default class PipelineWorker extends WorkerEntrypoint {
           attemptCount: claim.attemptCount,
           workflowInstanceId: claim.workflowInstanceId,
         });
+        this.captureWorkerEvent("worker_inventory_followup_queued", {
+          target_type: "inventory_followup_job",
+          target_id: jobId,
+          attempt_count: claim.attemptCount,
+          workflow_instance_id: claim.workflowInstanceId,
+          status: "queued",
+        });
         message.ack();
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -343,6 +422,12 @@ export default class PipelineWorker extends WorkerEntrypoint {
         } catch (markError) {
           log.error("failed to mark inventory follow-up queue failure", { jobId, markError });
         }
+        this.captureWorkerException(error, {
+          handler: "inventory_followup_queue",
+          target_type: "inventory_followup_job",
+          target_id: jobId,
+          status: "failed",
+        });
         message.retry({ delaySeconds: INVENTORY_FOLLOWUP_RETRY_DELAY_SECONDS });
       }
     }
@@ -372,6 +457,10 @@ export default class PipelineWorker extends WorkerEntrypoint {
         }
       } catch (error) {
         log.error("inventory follow-up repair failed", { error });
+        this.captureWorkerException(error, {
+          handler: "inventory_followup_repair",
+          status: "failed",
+        });
       }
     }
 
@@ -448,6 +537,14 @@ export default class PipelineWorker extends WorkerEntrypoint {
             jobKey: "scheduled",
           });
         }
+        this.captureWorkerEvent("worker_poll_sources_completed", {
+          target_type: "cron_job",
+          target_id: runId,
+          job_type: "poll_sources",
+          status,
+          items_queued: queued,
+          items_total: dueSources.length,
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         log.error("poll sources job failed", { error });
@@ -466,6 +563,13 @@ export default class PipelineWorker extends WorkerEntrypoint {
           relatedId: null,
           jobKey: "scheduled",
           errorMessage,
+        });
+        this.captureWorkerException(error, {
+          handler: "scheduled",
+          target_type: "cron_job",
+          target_id: runId,
+          job_type: "poll_sources",
+          status: "failed",
         });
       }
     }
@@ -492,6 +596,14 @@ export default class PipelineWorker extends WorkerEntrypoint {
             relatedId: null,
             jobKey: "scheduled",
           });
+          this.captureWorkerEvent("worker_cask_index_sync_completed", {
+            target_type: "cron_job",
+            target_id: runId,
+            job_type: "cask_index_sync",
+            status: "completed",
+            items_queued: 1,
+            items_total: 1,
+          });
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -511,6 +623,13 @@ export default class PipelineWorker extends WorkerEntrypoint {
           relatedId: null,
           jobKey: "scheduled",
           errorMessage,
+        });
+        this.captureWorkerException(error, {
+          handler: "scheduled",
+          target_type: "cron_job",
+          target_id: runId,
+          job_type: "cask_index_sync",
+          status: "failed",
         });
       }
     }
@@ -545,6 +664,15 @@ export default class PipelineWorker extends WorkerEntrypoint {
             relatedId: null,
             jobKey: "scheduled",
           });
+          this.captureWorkerEvent("worker_enrichment_batch_completed", {
+            target_type: "cron_job",
+            target_id: runId,
+            job_type: "enrich_discovered_apps",
+            status: "completed",
+            attempted: batch.attempted,
+            succeeded: batch.succeeded,
+            failed: batch.failed,
+          });
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -564,6 +692,13 @@ export default class PipelineWorker extends WorkerEntrypoint {
           relatedId: null,
           jobKey: "scheduled",
           errorMessage,
+        });
+        this.captureWorkerException(error, {
+          handler: "scheduled",
+          target_type: "cron_job",
+          target_id: runId,
+          job_type: "enrich_discovered_apps",
+          status: "failed",
         });
       }
     }

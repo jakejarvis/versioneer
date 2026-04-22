@@ -2,6 +2,7 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import { WebPostHogProvider } from "./lib/posthog";
 import { routeTree } from "./routeTree.gen";
 
 const router = createRouter({
@@ -18,6 +19,8 @@ declare module "@tanstack/react-router" {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <WebPostHogProvider>
+      <RouterProvider router={router} />
+    </WebPostHogProvider>
   </StrictMode>,
 );

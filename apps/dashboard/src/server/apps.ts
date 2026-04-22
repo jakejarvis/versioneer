@@ -21,6 +21,7 @@ import {
 } from "@versioneer/db";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import { captureAdminEvent } from "./analytics";
 import { invalidateInventoryMatchSnapshot } from "./cache";
 import { buildAppSourceHealth } from "./homepage-helpers";
 import { latestReleaseTrustWarnings } from "./install-trust";
@@ -227,6 +228,11 @@ export const createApp = createServerFn({ method: "POST" })
       createdAt: now,
     });
     await invalidateInventoryMatchSnapshot(env);
+    await captureAdminEvent(context.user, "app_created", {
+      target_type: "app",
+      target_id: id,
+      status: "created",
+    });
 
     return { id, status: "created" };
   });
@@ -267,6 +273,11 @@ export const updateApp = createServerFn({ method: "POST" })
       createdAt: now,
     });
     await invalidateInventoryMatchSnapshot(env);
+    await captureAdminEvent(context.user, "app_updated", {
+      target_type: "app",
+      target_id: id,
+      status: fields.status ?? existing.status,
+    });
 
     return { status: "updated" };
   });
@@ -334,6 +345,13 @@ export const createAlias = createServerFn({ method: "POST" })
       createdAt: now,
     });
     await invalidateInventoryMatchSnapshot(env);
+    await captureAdminEvent(context.user, "alias_created", {
+      target_type: "alias",
+      target_id: id,
+      app_id: appId,
+      alias_type: aliasData.aliasType,
+      status: "created",
+    });
 
     return { id, status: "created" };
   });
@@ -452,7 +470,14 @@ export const recomputeLatest = createServerFn({ method: "POST" })
       channel: z.string().optional(),
     }),
   )
-  .handler(async ({ data: { appId, channel } }) => {
+  .handler(async ({ data: { appId, channel }, context }) => {
     await pipelineWorker.recomputeLatest({ appId, channel });
+    await captureAdminEvent(context.user, "manual_job_triggered", {
+      target_type: "app",
+      target_id: appId,
+      job_type: "recompute-latest",
+      channel: channel ?? null,
+      status: "queued",
+    });
     return { status: "queued" };
   });

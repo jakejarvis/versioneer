@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createDb } from "@versioneer/db";
 import { apps, auditLog, generateId, idPrefixes } from "@versioneer/db";
 
+import { captureAdminEvent } from "./analytics";
 import { invalidateInventoryMatchSnapshot } from "./cache";
 import { authMiddleware } from "./middleware";
 
@@ -84,6 +85,13 @@ export const uploadAppIcon = createServerFn({ method: "POST" })
       createdAt: now,
     });
     await invalidateInventoryMatchSnapshot(env);
+    await captureAdminEvent(context.user, "app_icon_uploaded", {
+      target_type: "app",
+      target_id: data.appId,
+      content_type: data.contentType,
+      size_bytes: body.byteLength,
+      status: "uploaded",
+    });
 
     return { iconR2Key: r2Key };
   });
@@ -114,6 +122,11 @@ export const deleteAppIcon = createServerFn({ method: "POST" })
       createdAt: now,
     });
     await invalidateInventoryMatchSnapshot(env);
+    await captureAdminEvent(context.user, "app_icon_deleted", {
+      target_type: "app",
+      target_id: data.appId,
+      status: "deleted",
+    });
 
     return { status: "deleted" };
   });

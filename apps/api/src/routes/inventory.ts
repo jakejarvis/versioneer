@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 
+import { captureApiEvent } from "@/lib/observability";
 import { clientRateLimit } from "@/middleware/rate-limit";
 import { getInventoryMatchSnapshot } from "@versioneer/core/cache";
 import { matchApp } from "@versioneer/core/identity";
@@ -1275,6 +1276,19 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
     });
 
     const skippedApps = c.get("skippedApps");
+    captureApiEvent(c, "client_inventory_submitted", {
+      target_type: "inventory",
+      status: "processed",
+      app_count: request.apps.length,
+      skipped_count: skippedApps.length,
+      result_count: results.length,
+      update_available_count: results.filter((result) => result.decision === "update_available")
+        .length,
+      local_only_count: results.filter((result) => result.trackingState === "local_only").length,
+      discovered_count: unmatchedByKey.size,
+      followup_count: inventoryFollowupItemCount(followupPayload),
+      scan_duration_ms: request.scanDurationMs ?? null,
+    });
     return c.json({
       results,
       ...(skippedApps.length > 0 ? { skipped: skippedApps } : {}),

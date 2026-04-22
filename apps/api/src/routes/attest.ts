@@ -6,6 +6,7 @@ import { sign } from "hono/jwt";
 
 import { verifyAttestation, verifyAssertion } from "@/lib/app-attest";
 import { requireSecret } from "@/lib/env";
+import { captureApiEvent } from "@/lib/observability";
 import { attestRequestSchema, attestRefreshRequestSchema } from "@versioneer/core/validation";
 import { createDb, deviceAttestations, generateId, idPrefixes } from "@versioneer/db";
 
@@ -77,10 +78,19 @@ export const attestRoutes = new Hono<{ Bindings: Env }>()
       result = await verifyAttestation(attestation, keyId, challenge);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Attestation verification failed";
+      captureApiEvent(c, "client_attestation_failed", {
+        target_type: "device_attestation",
+        status: "failed",
+      });
       throw new HTTPException(400, { message });
     }
 
     if (result.environment === "development" && c.env.ENVIRONMENT === "production") {
+      captureApiEvent(c, "client_attestation_failed", {
+        target_type: "device_attestation",
+        status: "rejected",
+        attestation_environment: result.environment,
+      });
       throw new HTTPException(403, {
         message: "Development attestations not accepted in production",
       });
@@ -107,6 +117,13 @@ export const attestRoutes = new Hono<{ Bindings: Env }>()
       throw new HTTPException(500, { message: "Failed to persist attestation" });
     }
 
+    captureApiEvent(c, "client_attestation_succeeded", {
+      target_type: "device_attestation",
+      target_id: device.id,
+      status: "succeeded",
+      attestation_environment: result.environment,
+    });
+
     return c.json(await issueToken(requireSecret(c.env), device.id));
   })
 
@@ -132,14 +149,30 @@ export const attestRoutes = new Hono<{ Bindings: Env }>()
       result = await verifyAssertion(assertion, challenge, device.publicKey, device.counter);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Assertion verification failed";
+      captureApiEvent(c, "client_attestation_failed", {
+        target_type: "device_attestation",
+        target_id: device.id,
+        status: "failed",
+      });
       throw new HTTPException(403, { message });
     }
 
     // Conditional counter update prevents replay: only succeeds if counter < newCounter
     const now = new Date().toISOString();
     if (!(await markAssertionCounterUsed(db, device.id, result.newCounter, now))) {
+      captureApiEvent(c, "client_attestation_failed", {
+        target_type: "device_attestation",
+        target_id: device.id,
+        status: "replay_detected",
+      });
       throw new HTTPException(409, { message: "Assertion replay detected" });
     }
+
+    captureApiEvent(c, "client_attestation_succeeded", {
+      target_type: "device_attestation",
+      target_id: device.id,
+      status: "refreshed",
+    });
 
     return c.json(await issueToken(requireSecret(c.env), device.id));
   });

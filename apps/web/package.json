@@ -13,10 +13,12 @@
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource-variable/geist-mono": "^5.2.7",
+    "@posthog/react": "^1.9.0",
     "@tanstack/react-router": "^1.168.23",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.8.0",
+    "posthog-js": "^1.370.1",
     "radix-ui": "^1.4.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
@@ -24,6 +26,7 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@posthog/rollup-plugin": "^1.4.2",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.2.4",
     "@tanstack/router-plugin": "^1.167.22",

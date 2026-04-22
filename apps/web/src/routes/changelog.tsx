@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ArrowUpRightIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { captureMarketingEvent, captureMarketingException } from "@/lib/posthog";
+
 interface Release {
   tag_name: string;
   name: string | null;
@@ -37,7 +39,10 @@ function ChangelogPage() {
         setReleases(data);
         setLoading(false);
       })
-      .catch(() => {
+      .catch((catchError) => {
+        captureMarketingException(catchError, {
+          flow: "changelog_releases",
+        });
         setError(true);
         setLoading(false);
       });
@@ -105,6 +110,12 @@ function ReleaseEntry({ release }: { release: Release }) {
           href={release.html_url}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={() =>
+            captureMarketingEvent("marketing_release_link_clicked", {
+              target_id: release.tag_name,
+              target_url: release.html_url,
+            })
+          }
           className="text-muted-foreground/60 hover:text-muted-foreground text-xs inline-flex items-center gap-0.5"
         >
           GitHub

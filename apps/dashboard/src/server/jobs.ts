@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createDb } from "@versioneer/db";
 import { cronJobRuns } from "@versioneer/db";
 
+import { captureAdminEvent } from "./analytics";
 import { runCaskIndexSyncJob, runPollSourcesJob, startEnrichmentDrainJob } from "./job-runners";
 import { authMiddleware } from "./middleware";
 
@@ -70,31 +71,56 @@ export const listCronJobRuns = createServerFn({ method: "GET" })
 export const triggerPollSources = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ force: z.boolean().default(false) }))
-  .handler(async ({ data: { force }, context }) =>
-    runPollSourcesJob({
+  .handler(async ({ data: { force }, context }) => {
+    const result = await runPollSourcesJob({
       db: createDb(env.DB),
       force,
       actorId: context.user.email,
       trigger: "manual",
-    }),
-  );
+    });
+    await captureAdminEvent(context.user, "manual_job_triggered", {
+      target_type: "cron_job",
+      target_id: result.id,
+      job_type: "poll_sources",
+      status: result.status,
+      items_queued: result.itemsQueued,
+      items_total: result.itemsTotal,
+    });
+    return result;
+  });
 
 export const triggerCaskSync = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async ({ context }) =>
-    runCaskIndexSyncJob({
+  .handler(async ({ context }) => {
+    const result = await runCaskIndexSyncJob({
       db: createDb(env.DB),
       actorId: context.user.email,
       trigger: "manual",
-    }),
-  );
+    });
+    await captureAdminEvent(context.user, "manual_job_triggered", {
+      target_type: "cron_job",
+      target_id: result.id,
+      job_type: "cask_index_sync",
+      status: result.status,
+      items_queued: result.itemsQueued,
+      items_total: result.itemsTotal,
+    });
+    return result;
+  });
 
 export const triggerEnrichDiscoveries = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async ({ context }) =>
-    startEnrichmentDrainJob({
+  .handler(async ({ context }) => {
+    const result = await startEnrichmentDrainJob({
       db: createDb(env.DB),
       actorId: context.user.email,
       trigger: "manual",
-    }),
-  );
+    });
+    await captureAdminEvent(context.user, "manual_job_triggered", {
+      target_type: "cron_job",
+      target_id: result.id,
+      job_type: "enrich_discovered_apps",
+      status: result.status,
+    });
+    return result;
+  });

@@ -26,7 +26,9 @@ import { getDescriptor } from "@versioneer/core/sources";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { sourceTypeSchema } from "@versioneer/schemas/sources";
 
+import { captureAdminEvent, captureAdminException } from "./analytics";
 import { authMiddleware } from "./middleware";
+
 const MAX_VALIDATION_BODY_BYTES = 2 * 1024 * 1024;
 
 const validatableParsers: Partial<Record<SourceType, SourceParser>> = {
@@ -50,7 +52,7 @@ export const validateSource = createServerFn({ method: "POST" })
       configJson: z.string().max(10_000).optional(),
     }),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { url, sourceType } = data;
 
     const parser = validatableParsers[sourceType];
@@ -90,6 +92,11 @@ export const validateSource = createServerFn({ method: "POST" })
         response = res;
       }
     } catch (error) {
+      await captureAdminException(context.user, error, {
+        flow: "source_validation",
+        source_type: sourceType,
+        status: "failed",
+      });
       const isTimeout = error instanceof DOMException && error.name === "TimeoutError";
       const detail = isTimeout
         ? "Request timed out after 10 s"
@@ -129,6 +136,12 @@ export const validateSource = createServerFn({ method: "POST" })
       ({ text: body } = await readResponseTextLimited(response, MAX_VALIDATION_BODY_BYTES));
     } catch (error) {
       if (error instanceof ResponseBodyTooLargeError) {
+        await captureAdminEvent(context.user, "source_validation_failed", {
+          target_type: "source",
+          source_type: sourceType,
+          status: "failed",
+          error_name: "ResponseBodyTooLargeError",
+        });
         return {
           status: "error" as const,
           releaseCount: 0,
@@ -148,6 +161,12 @@ export const validateSource = createServerFn({ method: "POST" })
         const parsed = JSON.parse(data.configJson) as Record<string, unknown>;
         config = { ...parsed, sourceBaseUrl: artifactBase };
       } catch {
+        await captureAdminEvent(context.user, "source_validation_failed", {
+          target_type: "source",
+          source_type: sourceType,
+          status: "failed",
+          error_name: "ConfigJsonParseError",
+        });
         return {
           status: "error" as const,
           releaseCount: 0,
@@ -168,6 +187,12 @@ export const validateSource = createServerFn({ method: "POST" })
           : [
               `${parser.key} parser found no releases — check that the URL returns the expected format`,
             ];
+      await captureAdminEvent(context.user, "source_validation_failed", {
+        target_type: "source",
+        source_type: sourceType,
+        status: "failed",
+        error_count: hint.length,
+      });
       return {
         status: "error" as const,
         releaseCount: 0,
@@ -180,6 +205,13 @@ export const validateSource = createServerFn({ method: "POST" })
 
     const latest =
       parsed.releases.find((r) => r.channel === "stable" && !r.isPrerelease) ?? parsed.releases[0];
+
+    await captureAdminEvent(context.user, "source_validation_succeeded", {
+      target_type: "source",
+      source_type: sourceType,
+      status: "valid",
+      release_count: parsed.releases.length,
+    });
 
     return {
       status: "valid" as const,

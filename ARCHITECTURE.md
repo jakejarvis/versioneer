@@ -33,7 +33,7 @@ flowchart TB
   subgraph SERVICES["Backend services"]
     direction LR
     API["versioneer-api<br/>Hono HTTP API<br/>/v1/* · /health"]:::service
-    WORKER["versioneer-worker<br/>cron + Workflows"]:::service
+    WORKER["versioneer-worker<br/>cron + queue consumer + Workflows"]:::service
   end
 
   %% Shared packages
@@ -54,10 +54,11 @@ flowchart TB
   %% Data / infra
   subgraph DATA["Cloudflare data + infrastructure"]
     direction LR
-    D1[("D1<br/>catalog · releases · sources · discovery<br/>trust assertions · installs · feedback · audit")]:::store
-    R2[("R2<br/>RAW_BUCKET · ASSETS_BUCKET")]:::store
+    D1[("D1<br/>catalog · releases · sources · discovery<br/>inventory_followup_jobs · job_failures · audit")]:::store
+    R2[("R2<br/>RAW_BUCKET private payloads/source bodies<br/>ASSETS_BUCKET public icons")]:::store
     KV[("KV<br/>CACHE_KV · CONFIG_KV")]:::store
-    WF["Cloudflare Workflows<br/>SourcePipelineWorkflow"]:::infra
+    QUEUE["Cloudflare Queues<br/>INVENTORY_FOLLOWUP_QUEUE<br/>+ environment DLQ"]:::infra
+    WF["Cloudflare Workflows<br/>SourcePipeline · EnrichmentDrain · InventoryFollowup"]:::infra
   end
 
   %% External
@@ -87,6 +88,8 @@ flowchart TB
   API --> DBPKG
   API <--> D1
   API <--> KV
+  API -->|"private inventory follow-up payloads"| R2
+  API -->|"enqueue { jobId }"| QUEUE
 
   %% Worker internals
   WORKER --> PARSERS
@@ -97,6 +100,8 @@ flowchart TB
   WORKER <--> R2
   WORKER <--> KV
   WORKER --> WF
+  QUEUE -->|"consume follow-up messages"| WORKER
+  WORKER -->|"repair stale pending/failed jobs"| QUEUE
 
   %% Worker ingestion
   WORKER -.->|"poll + fetch + parse"| SPARKLE
@@ -104,6 +109,16 @@ flowchart TB
   WORKER -.->|"poll + fetch + parse"| MAS
   WORKER -.->|"cask index sync"| BREW
 ```
+
+## Cloudflare resource ownership
+
+| Surface             | Cloudflare bindings / responsibilities                                                                                                                                                                                                                                     |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `versioneer-api`    | HTTP validation, inventory decisions, synchronous `discovered_apps` writes, `DB`, `CACHE_KV`, `CONFIG_KV`, `RAW_BUCKET`, and producer-only `INVENTORY_FOLLOWUP_QUEUE`. It does not write public icons.                                                                     |
+| `versioneer-worker` | Scheduled source polling, service-binding RPC, queue consumption, `DB`, `RAW_BUCKET`, `ASSETS_BUCKET`, `CACHE_KV`, `CONFIG_KV`, producer + consumer `INVENTORY_FOLLOWUP_QUEUE`, and the `SOURCE_PIPELINE`, `ENRICHMENT_DRAIN`, and `INVENTORY_FOLLOWUP` Workflow bindings. |
+| `versioneer-admin`  | Operational UI over the API plus service-binding RPC to `versioneer-worker`. The failure queue includes `inventory_followup` jobs and can ask the worker to re-enqueue them. Dashboard asset routes read from `ASSETS_BUCKET`.                                             |
+
+`RAW_BUCKET` is for private durable inputs such as fetched source bodies and inventory follow-up payloads. `ASSETS_BUCKET` is for final public assets such as catalog and discovery icons.
 
 ## Update decision → execution flows
 
@@ -192,7 +207,21 @@ flowchart TB
   MERGE <--> CACHE
 ```
 
-## Catalog ingestion pipeline
+## Inventory follow-up handoff
+
+`POST /v1/inventory/check` remains a synchronous inventory decision endpoint from the desktop client's perspective. The API still validates the scan, computes decisions, and persists `discovered_apps` before returning the response. Everything after that becomes a durable private handoff:
+
+1. The API builds a compact follow-up payload containing only discovered-app icon candidates and matched catalog-app suggestion/icon candidates.
+2. The payload is stored in `RAW_BUCKET` under `inventory-followups/YYYY/MM/DD/<jobId>.json`.
+3. D1 records an `inventory_followup_jobs` row with `pending | queued | running | completed | failed`, `payloadR2Key`, `workflowInstanceId`, `attemptCount`, item counters, errors, and timestamps.
+4. The queue message is only `{ jobId }`, keeping Cloudflare Queues payloads small and making D1/R2 the durable source of truth.
+5. If enqueue fails after the D1 row is written, the desktop response still returns, the job stays `pending`, and `job_failures` records `inventory_followup` with the `enqueue` key.
+6. The worker queue handler claims `pending` or retryable `failed` jobs, increments the attempt count, creates deterministic Workflow instance IDs as `<jobId>-<attempt>`, and acks the message only after Workflow creation succeeds. Completed, queued, and running jobs are acked as duplicate-safe no-ops.
+7. The scheduled worker repairs stale `pending` or retryable `failed` jobs by re-enqueuing them. Queue, handoff, repair, and Workflow failures are recorded in `job_failures` as `inventory_followup`.
+
+`InventoryFollowupWorkflow` owns the async work that used to live behind the API route: icon storage, catalog icon backfill, inventory-match snapshot invalidation, alias/source/trust suggestions, and suggestion evidence. Successful runs mark the D1 job completed, resolve related failures, and delete the private R2 payload. Failed runs mark the job failed and keep the payload for retry/debugging.
+
+## Catalog ingestion and follow-up pipeline
 
 ```mermaid
 flowchart TB
@@ -210,6 +239,7 @@ flowchart TB
     direction TB
     CRON["scheduled()<br/>cron trigger every 15 min"]:::worker
     RPC["RPC / service binding calls<br/>from versioneer-admin"]:::ops
+    QUEUE_IN["queue(batch)<br/>INVENTORY_FOLLOWUP_QUEUE"]:::worker
   end
 
   %% Main worker orchestration
@@ -220,6 +250,8 @@ flowchart TB
     POLL["Source polling dispatcher"]:::worker
     ENRICH["Discovery enrichment dispatcher"]:::worker
     CASK["Cask index sync"]:::worker
+    REPAIR["Inventory follow-up repair"]:::worker
+    FOLLOWUP["Inventory follow-up queue handler"]:::worker
   end
 
   %% Workflow pipeline
@@ -233,6 +265,19 @@ flowchart TB
     RECOMP["Recompute appLatestReleases<br/>per app + channel"]:::worker
 
     START --> FETCH --> STORE --> PARSE --> UPSERT --> RECOMP
+  end
+
+  %% Inventory follow-up workflow
+  subgraph IFLOW["InventoryFollowupWorkflow"]
+    direction TB
+    IF_START["Start workflow for claimed jobId"]:::infra
+    IF_LOAD["Load inventory_followup_jobs row<br/>and RAW_BUCKET payload"]:::worker
+    IF_DISC_ICONS["Store discovered-app icons<br/>ASSETS_BUCKET icons/&lt;hash&gt;.png"]:::worker
+    IF_CATALOG_ICONS["Backfill catalog app icons<br/>delete match snapshot if icon changed"]:::worker
+    IF_SUGGEST["Create alias, source,<br/>and trust suggestions + evidence"]:::worker
+    IF_DONE["Mark completed<br/>resolve failure · delete payload"]:::worker
+
+    IF_START --> IF_LOAD --> IF_DISC_ICONS --> IF_CATALOG_ICONS --> IF_SUGGEST --> IF_DONE
   end
 
   %% Discovery enrichment
@@ -257,10 +302,11 @@ flowchart TB
   %% Data / infra
   subgraph DATA["Cloudflare data + infrastructure"]
     direction LR
-    D1[("D1<br/>sources · sourceFetches · parserRuns<br/>releases · artifacts · appLatestReleases<br/>discoveredApps · jobFailures · audit")]:::store
-    R2[("RAW_BUCKET")]:::store
+    D1[("D1<br/>sources · source_fetches · parser_runs<br/>releases · artifacts · app_latest_releases<br/>discovered_apps · inventory_followup_jobs<br/>job_failures · audit")]:::store
+    R2[("RAW_BUCKET · ASSETS_BUCKET")]:::store
     KV[("CONFIG_KV / CACHE_KV<br/>ETags · sync timestamps · cask index")]:::store
-    WF["Cloudflare Workflows"]:::infra
+    Q[["INVENTORY_FOLLOWUP_QUEUE<br/>{ jobId } messages<br/>10 batch · 5s timeout · 5 retries · 60s delay"]]:::infra
+    WF["Cloudflare Workflows<br/>SourcePipeline · EnrichmentDrain · InventoryFollowup"]:::infra
   end
 
   %% External systems
@@ -275,7 +321,9 @@ flowchart TB
 
   %% Scheduling / orchestration edges
   CRON --> DUE --> PICK
+  CRON --> REPAIR
   RPC --> PICK
+  QUEUE_IN --> FOLLOWUP
   PICK -->|"due tracked sources"| POLL
   PICK -->|"pending discovered apps"| ENRICH
   PICK -->|"6h cask refresh"| CASK
@@ -283,6 +331,9 @@ flowchart TB
   %% Polling path
   POLL -->|"dispatch source pipeline"| WF
   WF --> START
+  FOLLOWUP -->|"claim pending/failed job"| D1
+  FOLLOWUP -->|"create deterministic instance"| WF
+  WF --> IF_START
 
   %% Enrichment path
   ENRICH --> LOAD_DISC
@@ -292,12 +343,29 @@ flowchart TB
   CASK --> BREW
   CASK --> KV
 
+  %% Inventory follow-up path
+  REPAIR -->|"re-enqueue stale pending/failed jobs"| Q
+  Q --> QUEUE_IN
+  IF_LOAD <--> D1
+  IF_LOAD --> R2
+  IF_DISC_ICONS <--> D1
+  IF_DISC_ICONS --> R2
+  IF_CATALOG_ICONS <--> D1
+  IF_CATALOG_ICONS --> R2
+  IF_CATALOG_ICONS <--> KV
+  IF_SUGGEST <--> D1
+  IF_DONE <--> D1
+  IF_DONE --> R2
+
   %% Shared package use
   POLL --> PIPELINE
   ENRICH --> PIPELINE
+  FOLLOWUP --> PIPELINE
   FLOW --> PARSERS
   FLOW --> SUPPORT
   FLOW --> DBPKG
+  IFLOW --> SUPPORT
+  IFLOW --> DBPKG
   DISCOVERY --> SUPPORT
 
   %% Data edges

@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 
+import { captureApiEvent } from "@/lib/observability";
 import { clientRateLimit } from "@/middleware/rate-limit";
 import { clientFeedbackSubmitSchema } from "@versioneer/core/validation";
 import { createDb } from "@versioneer/db";
@@ -38,6 +39,13 @@ export const feedbackRoutes = new Hono<{ Bindings: Env }>()
         payloadJson: data.payload ? JSON.stringify(data.payload) : null,
         status: "new",
         createdAt: now,
+      });
+      captureApiEvent(c, "client_feedback_submitted", {
+        target_type: "feedback",
+        target_id: feedbackId,
+        feedback_type: data.feedbackType,
+        target_app_id: data.matchedAppId ?? null,
+        status: "received",
       });
 
       return c.json({ id: feedbackId, status: "received" });

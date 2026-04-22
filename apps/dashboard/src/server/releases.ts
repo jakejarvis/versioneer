@@ -24,6 +24,7 @@ import {
 } from "@versioneer/schemas/architecture";
 import { artifactTypeSchema } from "@versioneer/schemas/releases";
 
+import { captureAdminEvent } from "./analytics";
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { scheduleRecomputeLatest } from "./followup-jobs";
 import { latestReleaseTrustWarnings } from "./install-trust";
@@ -253,6 +254,13 @@ export const createRelease = createServerFn({ method: "POST" })
     ]);
 
     await scheduleRecomputeLatest({ db, appId: data.appId, channel });
+    await captureAdminEvent(context.user, "release_created", {
+      target_type: "release",
+      target_id: id,
+      app_id: data.appId,
+      channel,
+      status: "created",
+    });
 
     return { id, status: "created" };
   });
@@ -302,6 +310,13 @@ export const updateRelease = createServerFn({ method: "POST" })
     for (const channel of recomputeChannels) {
       await scheduleRecomputeLatest({ db, appId: existing.appId, channel });
     }
+    await captureAdminEvent(context.user, "release_updated", {
+      target_type: "release",
+      target_id: id,
+      app_id: existing.appId,
+      channel: fields.channel ?? existing.channel,
+      status: fields.status ?? existing.status,
+    });
 
     return { status: "updated" };
   });
@@ -368,6 +383,15 @@ export const createReleaseArtifact = createServerFn({ method: "POST" })
     ]);
 
     await scheduleRecomputeLatest({ db, appId: release.appId, channel: release.channel });
+    await captureAdminEvent(context.user, "release_artifact_created", {
+      target_type: "artifact",
+      target_id: artifactId,
+      release_id: release.id,
+      app_id: release.appId,
+      artifact_type: data.artifactType,
+      architecture: data.architecture,
+      status: "created",
+    });
     return { id: artifactId, status: "created" };
   });
 
@@ -400,6 +424,13 @@ export const pinRelease = createServerFn({ method: "POST" })
       );
 
     await scheduleRecomputeLatest({ db, appId: release.appId, channel: release.channel });
+    await captureAdminEvent(context.user, "release_pinned", {
+      target_type: "release",
+      target_id: id,
+      app_id: release.appId,
+      target_architecture: targetArchitecture,
+      status: "pinned",
+    });
 
     return { status: "pinned" };
   });
@@ -408,7 +439,7 @@ export const pinRelease = createServerFn({ method: "POST" })
 export const unpinRelease = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1), targetArchitecture: targetArchitectureSchema }))
-  .handler(async ({ data: { id, targetArchitecture } }) => {
+  .handler(async ({ data: { id, targetArchitecture }, context }) => {
     const db = createDb(env.DB);
     const release = await db.select().from(releases).where(eq(releases.id, id)).get();
     if (!release) throw new Error("Not found");
@@ -430,6 +461,13 @@ export const unpinRelease = createServerFn({ method: "POST" })
       );
 
     await scheduleRecomputeLatest({ db, appId: release.appId, channel: release.channel });
+    await captureAdminEvent(context.user, "release_unpinned", {
+      target_type: "release",
+      target_id: id,
+      app_id: release.appId,
+      target_architecture: targetArchitecture,
+      status: "unpinned",
+    });
 
     return { status: "unpinned" };
   });

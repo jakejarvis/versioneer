@@ -8,6 +8,7 @@ import { enrichDiscoveredApp } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
 import { discoveredApps, auditLog, generateId, idPrefixes } from "@versioneer/db";
 
+import { captureAdminEvent } from "./analytics";
 import { authMiddleware } from "./middleware";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
@@ -105,6 +106,11 @@ export const dismissDiscoveredApp = createServerFn({ method: "POST" })
     } catch {
       // Cache will self-heal on next preflight request via TTL expiry
     }
+    await captureAdminEvent(context.user, "discovery_dismissed", {
+      target_type: "discovered_app",
+      target_id: id,
+      status: "dismissed",
+    });
 
     return { status: "dismissed" };
   });
@@ -124,7 +130,7 @@ export const getDiscoveredApp = createServerFn({ method: "GET" })
 export const reEnrichDiscoveredApp = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
-  .handler(async ({ data: { id } }) => {
+  .handler(async ({ data: { id }, context }) => {
     const db = createDb(env.DB);
     const result = await enrichDiscoveredApp({
       discoveredAppId: id,
@@ -132,6 +138,11 @@ export const reEnrichDiscoveredApp = createServerFn({ method: "POST" })
       githubToken: env.GITHUB_TOKEN,
       assetsBucket: env.ASSETS_BUCKET,
       configKv: env.CONFIG_KV,
+    });
+    await captureAdminEvent(context.user, "discovery_reenrich_triggered", {
+      target_type: "discovered_app",
+      target_id: id,
+      status: result.enrichmentStatus,
     });
     return result;
   });

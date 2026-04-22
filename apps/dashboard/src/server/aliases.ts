@@ -8,13 +8,14 @@ import { createDb } from "@versioneer/db";
 import { appAliases, auditLog, generateId, idPrefixes } from "@versioneer/db";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import { captureAdminEvent } from "./analytics";
 import { invalidateInventoryMatchSnapshot } from "./cache";
 import { authMiddleware } from "./middleware";
 
 export const updateAlias = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string() }).merge(aliasUpdateSchema))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = createDb(env.DB);
     const existing = await db.select().from(appAliases).where(eq(appAliases.id, data.id)).get();
     if (!existing) throw new Error("Not found");
@@ -47,6 +48,13 @@ export const updateAlias = createServerFn({ method: "POST" })
 
     await db.update(appAliases).set(updates).where(eq(appAliases.id, data.id));
     await invalidateInventoryMatchSnapshot(env);
+    await captureAdminEvent(context.user, "alias_updated", {
+      target_type: "alias",
+      target_id: data.id,
+      app_id: existing.appId,
+      alias_type: existing.aliasType,
+      status: data.isActive === false ? "inactive" : "updated",
+    });
 
     return { status: "updated" };
   });
@@ -77,6 +85,13 @@ export const deleteAlias = createServerFn({ method: "POST" })
       createdAt: now,
     });
     await invalidateInventoryMatchSnapshot(env);
+    await captureAdminEvent(context.user, "alias_deleted", {
+      target_type: "alias",
+      target_id: data.id,
+      app_id: existing.appId,
+      alias_type: existing.aliasType,
+      status: "deleted",
+    });
 
     return { status: "deleted" };
   });

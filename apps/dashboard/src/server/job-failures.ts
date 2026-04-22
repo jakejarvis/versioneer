@@ -8,6 +8,7 @@ import { markJobFailureRetrying } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
 import { jobFailures } from "@versioneer/db";
 
+import { captureAdminEvent } from "./analytics";
 import { loadEntityRefsByIds } from "./entity-summaries";
 import {
   scheduleRecomputeLatest,
@@ -213,6 +214,14 @@ export const retryJobFailure = createServerFn({ method: "POST" })
     if (!failure) throw new Error("Not found");
 
     const status = await retryFailure(db, failure, context.user.email);
+    await captureAdminEvent(context.user, "job_failure_retry_triggered", {
+      target_type: "job_failure",
+      target_id: id,
+      job_type: failure.jobType,
+      related_id: failure.relatedId,
+      status: status ?? failure.status,
+      count: status ? 1 : 0,
+    });
     return { status: status ?? failure.status, count: status ? 1 : 0 };
   });
 
@@ -249,6 +258,14 @@ export const retryAllJobFailures = createServerFn({ method: "POST" })
         failed++;
       }
     }
+
+    await captureAdminEvent(context.user, "job_failure_retry_all_triggered", {
+      target_type: "job_failure",
+      job_type: jobType ?? "all",
+      status: failed > 0 ? "partial" : "retrying",
+      count: retried,
+      failed_count: failed,
+    });
 
     return {
       status: failed > 0 ? "partial" : "retrying",
