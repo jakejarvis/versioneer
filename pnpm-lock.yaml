@@ -7,7 +7,7 @@ settings:
 catalogs:
   default:
     '@cloudflare/vitest-pool-workers':
-      specifier: ^0.14.8
+      specifier: ^0.14.9
       version: 0.14.9
     drizzle-orm:
       specifier: ^0.45.2

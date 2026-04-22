@@ -7,7 +7,7 @@ allowBuilds:
   sharp: true
   workerd: true
 catalog:
-  "@cloudflare/vitest-pool-workers": ^0.14.8
+  "@cloudflare/vitest-pool-workers": ^0.14.9
   "@vitest/runner": npm:@voidzero-dev/vite-plus-test@latest
   "@vitest/snapshot": npm:@voidzero-dev/vite-plus-test@latest
   drizzle-orm: ^0.45.2
