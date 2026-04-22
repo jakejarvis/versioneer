@@ -79,6 +79,7 @@ describe("public contract schemas", () => {
           latestVersion: "127.0",
           latestVersionRaw: "127.0",
           latestReleaseId: "rel_firefox",
+          targetArchitecture: "arm64",
           releasedAt: "2026-03-20T12:00:00Z",
           staleSince: null,
           iconUrl: "https://assets.example.com/firefox.png",

@@ -21,6 +21,7 @@ describe("appDecisionSchema install payload", () => {
       latestVersion: "2.0.0",
       latestVersionRaw: "2.0.0",
       latestReleaseId: "rel_123",
+      targetArchitecture: "arm64",
       releasedAt: "2026-03-26T12:00:00Z",
       staleSince: null,
       iconUrl: null,
@@ -56,6 +57,7 @@ describe("appDecisionSchema install payload", () => {
       appId: "app_123",
       releaseId: "rel_123",
       artifactId: "art_123",
+      targetArchitecture: "arm64",
       installStrategy: "zip_replace",
       executionRoute: "local_replace",
       previousVersion: "1.0.0",
@@ -82,6 +84,7 @@ describe("appDecisionSchema install payload", () => {
     });
 
     expect(status.verification?.signatureVerified).toBe(true);
+    expect(status.targetArchitecture).toBe("arm64");
     expect(status.executionRoute).toBe("local_replace");
   });
 });

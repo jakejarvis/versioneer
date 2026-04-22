@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 import {
+  artifactArchitectureSchema,
+  targetArchitectureSchema,
+  type TargetArchitecture,
+} from "@versioneer/schemas/architecture";
+import {
   executionRouteSchema as installExecutionRouteSchema,
   type ExecutionRoute as InstallExecutionRoute,
   installExecutionStatusSchema,
@@ -33,7 +38,7 @@ export const installTrustSchema = z.object({
 export const appArtifactSchema = z.object({
   id: z.string().nullable(),
   downloadUrl: z.string().nullable(),
-  architecture: z.string().nullable(),
+  architecture: artifactArchitectureSchema.nullable(),
   minOsVersion: z.string().nullable(),
   artifactType: z.string().nullable(),
   sizeBytes: z.number().nullable(),
@@ -68,6 +73,7 @@ const installExecutionBaseSchema = z.object({
   appId: z.string().min(1),
   releaseId: z.string().min(1),
   artifactId: z.string().min(1).nullable().optional(),
+  targetArchitecture: targetArchitectureSchema.nullable().optional(),
   installStrategy: installStrategySchema,
   executionRoute: installExecutionRouteSchema.optional(),
   channel: z.string().max(100).nullable().optional(),
@@ -101,6 +107,7 @@ export type InstallTrustReason = z.infer<typeof installTrustReasonSchema>;
 export type InstallTrust = z.infer<typeof installTrustSchema>;
 export type AppArtifact = z.infer<typeof appArtifactSchema>;
 export type InstallExecutionClient = z.infer<typeof installExecutionClientSchema>;
+export type { TargetArchitecture };
 export type InstallVerificationSummary = z.infer<typeof installVerificationSummarySchema>;
 export type InstallPrepareRequest = z.infer<typeof installPrepareRequestSchema>;
 export type InstallPrepareResponse = z.infer<typeof installPrepareResponseSchema>;

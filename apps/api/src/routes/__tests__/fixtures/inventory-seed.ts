@@ -17,6 +17,7 @@ import {
  * - App B (Sketch): public, bundle_id alias, mac_app_store source, release 100.0, arm64-only zip artifact (minOS 14.0)
  * - App C (Draft App): draft status, bundle_id alias — matched but not public
  * - App D (No Source App): public, bundle_id alias — no approved authority source, no latest release
+ * - App E (Split App): public, bundle_id alias, separate arm64 and x86_64 latest rows
  */
 export async function seedInventoryCatalog(db: Database) {
   // --- App A: Firefox (fully tracked, sparkle) ---
@@ -62,6 +63,19 @@ export async function seedInventoryCatalog(db: Database) {
     appId: appA.id,
     releaseId: releaseA.id,
     authoritySourceId: sourceA.id,
+    artifactId: artifactA.id,
+    targetArchitecture: "arm64",
+    versionNormalized: releaseA.versionNormalized,
+    versionRaw: releaseA.versionRaw,
+    releasedAt: releaseA.releasedAt!,
+    installStrategy: "dmg_copy_replace",
+  });
+  await seedLatestRelease(db, {
+    appId: appA.id,
+    releaseId: releaseA.id,
+    authoritySourceId: sourceA.id,
+    artifactId: artifactA.id,
+    targetArchitecture: "x86_64",
     versionNormalized: releaseA.versionNormalized,
     versionRaw: releaseA.versionRaw,
     releasedAt: releaseA.releasedAt!,
@@ -106,6 +120,8 @@ export async function seedInventoryCatalog(db: Database) {
     appId: appB.id,
     releaseId: releaseB.id,
     authoritySourceId: sourceB.id,
+    artifactId: artifactB.id,
+    targetArchitecture: "arm64",
     versionNormalized: releaseB.versionNormalized,
     versionRaw: releaseB.versionRaw,
     releasedAt: releaseB.releasedAt!,
@@ -128,5 +144,94 @@ export async function seedInventoryCatalog(db: Database) {
     normalizedValue: "com.example.nosource",
   });
 
-  return { appA, appB, appC, appD, releaseA, releaseB, artifactA, artifactB, sourceA, sourceB };
+  // --- App E: Split App (newer arm64 release, older x86_64 release) ---
+  const appE = await seedApp(db, {
+    canonicalName: "Split App",
+    vendorName: "Split Vendor",
+    status: "public",
+  });
+  await seedAlias(db, appE.id, {
+    aliasType: "bundle_id",
+    value: "com.example.split",
+    normalizedValue: "com.example.split",
+  });
+  const sourceE = await seedSource(db, appE.id, {
+    sourceType: "github_releases",
+    parserKey: "github_releases",
+    reviewStatus: "approved",
+    role: "authority",
+    status: "active",
+    lastSuccessAt: new Date().toISOString(),
+  });
+  const releaseEArm = await seedRelease(db, appE.id, {
+    versionRaw: "3.0.0",
+    versionNormalized: normalizeVersion("3.0.0"),
+    channel: "stable",
+    status: "active",
+    publishedBySourceId: sourceE.id,
+    releasedAt: "2026-03-10T00:00:00Z",
+  });
+  const artifactEArm = await seedArtifact(db, releaseEArm.id, {
+    artifactType: "dmg",
+    url: "https://example.com/split-3.0.0-arm64.dmg",
+    sha256: "armhash",
+    architecture: "arm64",
+    isPrimary: true,
+  });
+  const releaseEX86 = await seedRelease(db, appE.id, {
+    versionRaw: "2.5.0",
+    versionNormalized: normalizeVersion("2.5.0"),
+    channel: "stable",
+    status: "active",
+    publishedBySourceId: sourceE.id,
+    releasedAt: "2026-02-10T00:00:00Z",
+  });
+  const artifactEX86 = await seedArtifact(db, releaseEX86.id, {
+    artifactType: "dmg",
+    url: "https://example.com/split-2.5.0-x86_64.dmg",
+    sha256: "x86hash",
+    architecture: "x86_64",
+    isPrimary: true,
+  });
+  await seedLatestRelease(db, {
+    appId: appE.id,
+    releaseId: releaseEArm.id,
+    authoritySourceId: sourceE.id,
+    artifactId: artifactEArm.id,
+    targetArchitecture: "arm64",
+    versionNormalized: releaseEArm.versionNormalized,
+    versionRaw: releaseEArm.versionRaw,
+    releasedAt: releaseEArm.releasedAt!,
+    installStrategy: "dmg_copy_replace",
+  });
+  await seedLatestRelease(db, {
+    appId: appE.id,
+    releaseId: releaseEX86.id,
+    authoritySourceId: sourceE.id,
+    artifactId: artifactEX86.id,
+    targetArchitecture: "x86_64",
+    versionNormalized: releaseEX86.versionNormalized,
+    versionRaw: releaseEX86.versionRaw,
+    releasedAt: releaseEX86.releasedAt!,
+    installStrategy: "dmg_copy_replace",
+  });
+
+  return {
+    appA,
+    appB,
+    appC,
+    appD,
+    appE,
+    releaseA,
+    releaseB,
+    releaseEArm,
+    releaseEX86,
+    artifactA,
+    artifactB,
+    artifactEArm,
+    artifactEX86,
+    sourceA,
+    sourceB,
+    sourceE,
+  };
 }

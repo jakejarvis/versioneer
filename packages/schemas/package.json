@@ -4,6 +4,7 @@
   "private": true,
   "exports": {
     "./catalog": "./src/catalog.ts",
+    "./architecture": "./src/architecture.ts",
     "./sources": "./src/sources.ts",
     "./releases": "./src/releases.ts",
     "./discovery": "./src/discovery.ts",

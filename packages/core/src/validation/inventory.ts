@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { targetArchitectureSchema } from "@versioneer/schemas/architecture";
+
 import { channelSchema } from "./common";
 import { appArtifactSchema, installStrategySchema, installTrustSchema } from "./install";
 
@@ -66,7 +68,7 @@ export const appDecisionSchema = z.object({
   matchedAppId: z.string().nullable(),
   matchedAppName: z.string().nullable(),
   matchConfidence: z.number().nullable(),
-  decision: z.enum(["up_to_date", "update_available", "ambiguous", "local_only"]),
+  decision: z.enum(["up_to_date", "update_available", "ambiguous", "local_only", "incompatible"]),
   trackingState: z.enum(["public", "local_only"]),
   localReasonCode: z
     .enum([
@@ -75,11 +77,13 @@ export const appDecisionSchema = z.object({
       "matched_draft",
       "ambiguous_match",
       "not_found",
+      "no_compatible_release",
     ])
     .nullable(),
   latestVersion: z.string().nullable(),
   latestVersionRaw: z.string().nullable(),
   latestReleaseId: z.string().nullable(),
+  targetArchitecture: targetArchitectureSchema.nullable(),
   channel: z.string().nullable().optional(),
   availableChannels: z.array(z.string()).optional(),
   homebrewCaskToken: z.string().nullable().optional(),

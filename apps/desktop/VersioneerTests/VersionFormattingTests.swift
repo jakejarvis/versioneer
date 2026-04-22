@@ -11,6 +11,7 @@ struct VersionFormattingTests {
     #expect(VersionFormatting.statusLabel(for: .updateAvailable) == "Update Available")
     #expect(VersionFormatting.statusLabel(for: .ambiguous) == "Ambiguous")
     #expect(VersionFormatting.statusLabel(for: .localOnly) == "Local Only")
+    #expect(VersionFormatting.statusLabel(for: .incompatible) == "Not Compatible")
   }
 
   @Test func displayVersionShowsDash() {

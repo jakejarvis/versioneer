@@ -123,6 +123,7 @@ describe("inventoryCheckResponseSchema", () => {
           latestVersion: "1.0.0",
           latestVersionRaw: "1.0.0",
           latestReleaseId: "rel_123",
+          targetArchitecture: "arm64",
           releasedAt: "2026-01-01T00:00:00Z",
           staleSince: null,
           iconUrl: null,

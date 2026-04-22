@@ -330,6 +330,20 @@ export interface ReleaseListItem extends Release {
   app: AppSummary | null;
   isLatestForChannel: boolean;
   isPinnedLatest: boolean;
+  latestTargetArchitectures: string[];
+  pinnedTargetArchitectures: string[];
+}
+
+export interface ReleaseLatestTarget {
+  id: string;
+  targetArchitecture: string;
+  channel: string;
+  artifactId: string | null;
+  installStrategy: string | null;
+  pinnedReleaseId: string | null;
+  pinnedAt: string | null;
+  pinnedBy: string | null;
+  trustWarnings: string[];
 }
 
 export interface ReleaseDetail extends Release {
@@ -338,6 +352,7 @@ export interface ReleaseDetail extends Release {
   isPinnedLatest: boolean;
   latestInstallStrategy: string | null;
   latestArtifactId: string | null;
+  latestTargets: ReleaseLatestTarget[];
   trustWarnings: string[];
 }
 
@@ -376,6 +391,7 @@ export interface AppLatestRelease {
   id: string;
   appId: string;
   channel: string;
+  targetArchitecture: string;
   releaseId: string;
   artifactId: string | null;
   versionNormalized: string;

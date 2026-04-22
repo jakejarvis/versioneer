@@ -114,6 +114,55 @@ describe("jsonParser", () => {
     expect(result.releases[0]!.downloadUrl).toBe("https://example.com/dl/app.pkg");
   });
 
+  it("extracts architecture metadata from artifact arrays", () => {
+    const body = JSON.stringify({
+      version: "5.0.0",
+      files: [
+        {
+          url: "/downloads/app-5.0.0-arm64.dmg",
+          arch: "apple-silicon",
+          sha256: "armhash",
+          size: 1000,
+          min_os: "13.0",
+        },
+        {
+          url: "/downloads/app-5.0.0-x64.dmg",
+          arch: "amd64",
+          sha256: "x86hash",
+          size: 1100,
+          min_os: "12.0",
+        },
+      ],
+    });
+    const result = jsonParser.parse(body, {
+      versionPath: "$.version",
+      artifactsPath: "$.files[*]",
+      artifactUrlPath: "$.url",
+      architecturePath: "$.arch",
+      sha256Path: "$.sha256",
+      sizeBytesPath: "$.size",
+      minOsVersionPath: "$.min_os",
+      sourceBaseUrl: "https://example.com",
+    });
+
+    expect(result.releases[0]!.artifacts).toEqual([
+      expect.objectContaining({
+        url: "https://example.com/downloads/app-5.0.0-arm64.dmg",
+        architecture: "arm64",
+        sha256: "armhash",
+        sizeBytes: 1000,
+        minOsVersion: "13.0",
+      }),
+      expect.objectContaining({
+        url: "https://example.com/downloads/app-5.0.0-x64.dmg",
+        architecture: "x86_64",
+        sha256: "x86hash",
+        sizeBytes: 1100,
+        minOsVersion: "12.0",
+      }),
+    ]);
+  });
+
   it("stores config paths in metadata", () => {
     const result = jsonParser.parse(SIMPLE_JSON, {
       versionPath: "$.version",

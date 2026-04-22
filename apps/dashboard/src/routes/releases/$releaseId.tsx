@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, ExternalLink, Inbox, Pencil, Save, X } from "lucide-react";
+import { ArrowLeft, ExternalLink, Inbox, Pencil, Plus, Save, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -32,6 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   usePinRelease,
+  useCreateReleaseArtifact,
   useRelease,
   useReleaseArtifacts,
   useReleaseObservations,
@@ -48,6 +49,8 @@ export const Route = createFileRoute("/releases/$releaseId")({
   component: ReleaseDetailPage,
 });
 
+const TARGET_ARCHITECTURES = ["arm64", "x86_64"] as const;
+
 function ReleaseDetailPage() {
   const { releaseId } = Route.useParams();
   const { data: release, isLoading } = useRelease(releaseId);
@@ -57,6 +60,15 @@ function ReleaseDetailPage() {
     useReleaseObservations(releaseId);
   const pinRelease = usePinRelease();
   const unpinRelease = useUnpinRelease();
+  const createArtifact = useCreateReleaseArtifact(releaseId);
+  const [artifactDraft, setArtifactDraft] = useState({
+    artifactType: "dmg",
+    architecture: "universal",
+    url: "",
+    sha256: "",
+    sizeBytes: "",
+    minOsVersion: "",
+  });
 
   const artifactColumns = useMemo<ColumnDef<Artifact>[]>(
     () => [
@@ -261,33 +273,36 @@ function ReleaseDetailPage() {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {release.isPinnedLatest ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                unpinRelease.mutate(release.id, {
-                  onSuccess: () => toast.success("Release unpinned"),
-                  onError: (error) => toast.error(error.message),
-                })
-              }
-            >
-              Unpin
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                pinRelease.mutate(release.id, {
-                  onSuccess: () => toast.success("Release pinned"),
-                  onError: (error) => toast.error(error.message),
-                })
-              }
-            >
-              Pin
-            </Button>
-          )}
+          {TARGET_ARCHITECTURES.map((targetArchitecture) => {
+            const targetRow = release.latestTargets.find(
+              (target) => target.targetArchitecture === targetArchitecture,
+            );
+            const isPinned = targetRow?.pinnedReleaseId === release.id;
+            return (
+              <Button
+                key={targetArchitecture}
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const mutation = isPinned ? unpinRelease : pinRelease;
+                  mutation.mutate(
+                    { releaseId: release.id, targetArchitecture },
+                    {
+                      onSuccess: () =>
+                        toast.success(
+                          isPinned
+                            ? `${targetArchitecture} unpinned`
+                            : `${targetArchitecture} pinned`,
+                        ),
+                      onError: (error) => toast.error(error.message),
+                    },
+                  );
+                }}
+              >
+                {isPinned ? `Unpin ${targetArchitecture}` : `Pin ${targetArchitecture}`}
+              </Button>
+            );
+          })}
           <Select
             value={release.status}
             onValueChange={(value) =>
@@ -349,17 +364,28 @@ function ReleaseDetailPage() {
 
       <div className="mt-6 rounded-lg border p-4">
         <h3 className="text-lg font-medium">Install Trust</h3>
-        {release.isLatestForChannel ? (
-          <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-            <div className="flex flex-wrap items-center gap-2">
-              <InstallStrategyBadge
-                strategy={release.latestInstallStrategy}
-                reasons={release.trustWarnings}
-              />
-              <InstallTrustBadges reasons={release.trustWarnings} />
-              {release.latestArtifactId ? <IdDisplay id={release.latestArtifactId} /> : null}
-            </div>
-            <InstallTrustReasonList reasons={release.trustWarnings} />
+        {release.latestTargets.length > 0 ? (
+          <div className="mt-3 flex flex-col gap-3">
+            {release.latestTargets.map((target) => (
+              <div
+                key={target.id}
+                className="grid gap-3 rounded-md border bg-muted/20 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+                    {target.targetArchitecture}
+                  </span>
+                  <InstallStrategyBadge
+                    strategy={target.installStrategy}
+                    reasons={target.trustWarnings}
+                  />
+                  {target.pinnedReleaseId ? <StatusBadge status="pinned" /> : null}
+                  <InstallTrustBadges reasons={target.trustWarnings} />
+                  {target.artifactId ? <IdDisplay id={target.artifactId} /> : null}
+                </div>
+                <InstallTrustReasonList reasons={target.trustWarnings} />
+              </div>
+            ))}
           </div>
         ) : (
           <p className="mt-2 text-sm text-muted-foreground">
@@ -379,6 +405,115 @@ function ReleaseDetailPage() {
             Verification state, trust metadata, and artifact shortcuts.
           </p>
         </div>
+        <form
+          className="mb-3 grid gap-2 rounded-lg border bg-muted/20 p-3 lg:grid-cols-[minmax(9rem,0.7fr)_minmax(8rem,0.6fr)_minmax(0,2fr)_minmax(8rem,0.6fr)_minmax(8rem,0.6fr)_minmax(8rem,0.6fr)_auto]"
+          onSubmit={(event) => {
+            event.preventDefault();
+            createArtifact.mutate(
+              {
+                artifactType: artifactDraft.artifactType as
+                  | "zip"
+                  | "dmg"
+                  | "pkg"
+                  | "appcast_enclosure"
+                  | "mac_app_store"
+                  | "other",
+                architecture: artifactDraft.architecture as
+                  | "arm64"
+                  | "x86_64"
+                  | "universal"
+                  | "unknown",
+                url: artifactDraft.url,
+                sha256: artifactDraft.sha256 || null,
+                sizeBytes: artifactDraft.sizeBytes ? Number(artifactDraft.sizeBytes) : null,
+                minOsVersion: artifactDraft.minOsVersion || null,
+              },
+              {
+                onSuccess: () => {
+                  toast.success("Artifact added");
+                  setArtifactDraft({
+                    artifactType: "dmg",
+                    architecture: "universal",
+                    url: "",
+                    sha256: "",
+                    sizeBytes: "",
+                    minOsVersion: "",
+                  });
+                },
+                onError: (error) => toast.error(error.message),
+              },
+            );
+          }}
+        >
+          <Select
+            value={artifactDraft.artifactType}
+            onValueChange={(value) =>
+              setArtifactDraft((draft) => ({ ...draft, artifactType: value }))
+            }
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="dmg">DMG</SelectItem>
+              <SelectItem value="zip">ZIP</SelectItem>
+              <SelectItem value="pkg">PKG</SelectItem>
+              <SelectItem value="appcast_enclosure">Appcast</SelectItem>
+              <SelectItem value="mac_app_store">Mac App Store</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={artifactDraft.architecture}
+            onValueChange={(value) =>
+              setArtifactDraft((draft) => ({ ...draft, architecture: value }))
+            }
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="universal">Universal</SelectItem>
+              <SelectItem value="arm64">arm64</SelectItem>
+              <SelectItem value="x86_64">x86_64</SelectItem>
+              <SelectItem value="unknown">Unknown</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            value={artifactDraft.url}
+            onChange={(event) =>
+              setArtifactDraft((draft) => ({ ...draft, url: event.target.value }))
+            }
+            placeholder="Artifact URL"
+            required
+          />
+          <Input
+            value={artifactDraft.sha256}
+            onChange={(event) =>
+              setArtifactDraft((draft) => ({ ...draft, sha256: event.target.value }))
+            }
+            placeholder="SHA-256"
+          />
+          <Input
+            value={artifactDraft.sizeBytes}
+            onChange={(event) =>
+              setArtifactDraft((draft) => ({ ...draft, sizeBytes: event.target.value }))
+            }
+            inputMode="numeric"
+            placeholder="Size bytes"
+          />
+          <Input
+            value={artifactDraft.minOsVersion}
+            onChange={(event) =>
+              setArtifactDraft((draft) => ({ ...draft, minOsVersion: event.target.value }))
+            }
+            placeholder="Min macOS"
+          />
+          <Button type="submit" disabled={createArtifact.isPending}>
+            <Plus data-icon="inline-start" />
+            Add
+          </Button>
+        </form>
         <DataTable
           columns={artifactColumns}
           data={artifactsData?.items ?? []}

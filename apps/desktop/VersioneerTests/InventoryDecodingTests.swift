@@ -86,12 +86,13 @@ struct InventoryDecodingTests {
 
   @Test func decodesAllDecisionTypes() throws {
     let decisions = [
-      "up_to_date", "update_available", "ambiguous", "local_only",
+      "up_to_date", "update_available", "ambiguous", "local_only", "incompatible",
     ]
 
     for decisionStr in decisions {
       let trackingState =
         decisionStr == "up_to_date" || decisionStr == "update_available"
+          || decisionStr == "incompatible"
         ? "public" : "local_only"
       let localReasonCode: String? =
         switch decisionStr {
@@ -99,6 +100,8 @@ struct InventoryDecodingTests {
           "ambiguous_match"
         case "local_only":
           "not_found"
+        case "incompatible":
+          "no_compatible_release"
         default:
           nil
         }

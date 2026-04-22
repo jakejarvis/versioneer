@@ -147,6 +147,7 @@ export async function seedLatestRelease(
     .values({
       id: generateId(idPrefixes.appLatestRelease),
       channel: "stable",
+      targetArchitecture: "arm64",
       updatedAt: now(),
       ...overrides,
     })

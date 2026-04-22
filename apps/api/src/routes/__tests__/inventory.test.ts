@@ -22,6 +22,7 @@ type InventoryResponse = {
     matchConfidence: number | null;
     latestVersion: string | null;
     latestReleaseId: string | null;
+    targetArchitecture: string | null;
     homebrewCaskToken?: string | null;
     artifact: { id: string; downloadUrl: string; architecture: string | null } | null;
     installStrategy: string | null;
@@ -198,6 +199,7 @@ describe("POST /v1/inventory/check", () => {
     expect(result.trackingState).toBe("public");
     expect(result.matchedAppId).toBe(catalog.appA.id);
     expect(result.latestVersion).toBe("130.0");
+    expect(result.targetArchitecture).toBe("arm64");
     expect(result.artifact).not.toBeNull();
     expect(result.installStrategy).toBeNull();
     expect(result.installTrust.status).toBe("none");
@@ -312,29 +314,53 @@ describe("POST /v1/inventory/check", () => {
     expect(result.localReasonCode).toBe("no_approved_source");
   });
 
-  it("handles incompatible architecture by falling back", async () => {
+  it("returns incompatible when no target-architecture latest row exists", async () => {
     const res = await postInventory({
       client: { osVersion: "15.0", systemArchitecture: "x86_64" },
       apps: [{ appName: "Sketch", bundleId: "com.bohemiancoding.sketch3", version: "99.0" }],
     });
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
-    // arm64-only artifact is incompatible with x86_64, no older compatible releases exist
-    // so the handler falls through to no_approved_source
-    expect(result.decision).toBe("local_only");
-    expect(result.localReasonCode).toBe("no_approved_source");
+    expect(result.decision).toBe("incompatible");
+    expect(result.trackingState).toBe("public");
+    expect(result.localReasonCode).toBe("no_compatible_release");
+    expect(result.targetArchitecture).toBe("x86_64");
   });
 
-  it("handles incompatible OS version by falling back", async () => {
+  it("returns incompatible when the latest artifact requires a newer OS", async () => {
     const res = await postInventory({
       client: { osVersion: "13.0", systemArchitecture: "arm64" },
       apps: [{ appName: "Sketch", bundleId: "com.bohemiancoding.sketch3", version: "99.0" }],
     });
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
-    // minOsVersion 14.0 is incompatible with client OS 13.0, no older compatible releases
-    expect(result.decision).toBe("local_only");
-    expect(result.localReasonCode).toBe("no_approved_source");
+    expect(result.decision).toBe("incompatible");
+    expect(result.localReasonCode).toBe("no_compatible_release");
+  });
+
+  it("returns different latest compatible releases for split arm64 and x86 clients", async () => {
+    const [armRes, x86Res] = await Promise.all([
+      postInventory({
+        client: { osVersion: "15.0", systemArchitecture: "arm64" },
+        apps: [{ appName: "Split App", bundleId: "com.example.split", version: "2.0.0" }],
+      }),
+      postInventory({
+        client: { osVersion: "15.0", systemArchitecture: "x86_64" },
+        apps: [{ appName: "Split App", bundleId: "com.example.split", version: "2.0.0" }],
+      }),
+    ]);
+    const armBody = await readInventoryResponse(armRes);
+    const x86Body = await readInventoryResponse(x86Res);
+
+    expect(armBody.results[0]!.latestVersion).toBe("3.0.0");
+    expect(armBody.results[0]!.latestReleaseId).toBe(catalog.releaseEArm.id);
+    expect(armBody.results[0]!.targetArchitecture).toBe("arm64");
+    expect(armBody.results[0]!.artifact?.architecture).toBe("arm64");
+
+    expect(x86Body.results[0]!.latestVersion).toBe("2.5.0");
+    expect(x86Body.results[0]!.latestReleaseId).toBe(catalog.releaseEX86.id);
+    expect(x86Body.results[0]!.targetArchitecture).toBe("x86_64");
+    expect(x86Body.results[0]!.artifact?.architecture).toBe("x86_64");
   });
 
   it("reports skipped apps for invalid entries", async () => {

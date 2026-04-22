@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 import { createDb } from "@versioneer/db";
 import {
@@ -10,6 +10,11 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
+import {
+  rankArtifactForTarget,
+  targetArchitectureValues,
+  type TargetArchitecture,
+} from "@versioneer/schemas/architecture";
 import type { InstallStrategy } from "@versioneer/schemas/releases";
 
 import { setCachedLatest, recentReleasesKey } from "../cache";
@@ -30,6 +35,49 @@ function inferInstallStrategy(
   if (artifactType === "zip") return "zip_replace";
   if (artifactType === "pkg") return "pkg_install";
   return "manual_only";
+}
+
+type ReleaseRow = typeof releases.$inferSelect;
+type ArtifactRow = typeof artifacts.$inferSelect;
+
+function sortReleasesDescending(a: ReleaseRow, b: ReleaseRow): number {
+  if (b.versionNormalized > a.versionNormalized) return 1;
+  if (b.versionNormalized < a.versionNormalized) return -1;
+  if ((b.releasedAt ?? "") > (a.releasedAt ?? "")) return 1;
+  if ((b.releasedAt ?? "") < (a.releasedAt ?? "")) return -1;
+  if (b.createdAt > a.createdAt) return 1;
+  if (b.createdAt < a.createdAt) return -1;
+  return 0;
+}
+
+function selectBestArtifactForTarget(
+  releaseArtifacts: ArtifactRow[],
+  targetArchitecture: TargetArchitecture,
+): ArtifactRow | null {
+  let best: { artifact: ArtifactRow; rank: number } | null = null;
+  for (const artifact of releaseArtifacts) {
+    const rank = rankArtifactForTarget(artifact.architecture, targetArchitecture);
+    if (rank < 0) continue;
+    if (!best || rank > best.rank) {
+      best = { artifact, rank };
+      continue;
+    }
+    if (rank === best.rank && artifact.createdAt > best.artifact.createdAt) {
+      best = { artifact, rank };
+    }
+  }
+  return best?.artifact ?? null;
+}
+
+function candidateForTarget(
+  release: ReleaseRow,
+  artifactsByRelease: ReadonlyMap<string, ArtifactRow[]>,
+  targetArchitecture: TargetArchitecture,
+): { release: ReleaseRow; artifact: ArtifactRow | null } | null {
+  const releaseArtifacts = artifactsByRelease.get(release.id) ?? [];
+  if (releaseArtifacts.length === 0) return { release, artifact: null };
+  const artifact = selectBestArtifactForTarget(releaseArtifacts, targetArchitecture);
+  return artifact ? { release, artifact } : null;
 }
 
 export async function handleRecomputeLatest(
@@ -92,108 +140,119 @@ export async function handleRecomputeLatest(
       )
       .all();
 
-    if (candidateReleases.length === 0) {
-      // Remove existing latest if no candidates
-      const existing = await db
+    const candidateIds = new Set(candidateReleases.map((release) => release.id));
+    const releaseArtifacts =
+      candidateReleases.length > 0
+        ? await db
+            .select()
+            .from(artifacts)
+            .where(
+              inArray(
+                artifacts.releaseId,
+                candidateReleases.map((release) => release.id),
+              ),
+            )
+            .all()
+        : [];
+    const artifactsByRelease = new Map<string, ArtifactRow[]>();
+    for (const artifact of releaseArtifacts) {
+      const rows = artifactsByRelease.get(artifact.releaseId) ?? [];
+      rows.push(artifact);
+      artifactsByRelease.set(artifact.releaseId, rows);
+    }
+    candidateReleases.sort(sortReleasesDescending);
+
+    for (const targetArchitecture of targetArchitectureValues) {
+      const existingLatest = await db
         .select()
         .from(appLatestReleases)
-        .where(and(eq(appLatestReleases.appId, job.appId), eq(appLatestReleases.channel, channel)))
+        .where(
+          and(
+            eq(appLatestReleases.appId, job.appId),
+            eq(appLatestReleases.channel, channel),
+            eq(appLatestReleases.targetArchitecture, targetArchitecture),
+          ),
+        )
         .get();
 
-      if (existing) {
-        await db.delete(appLatestReleases).where(eq(appLatestReleases.id, existing.id));
+      let winning = null as { release: ReleaseRow; artifact: ArtifactRow | null } | null;
+      if (existingLatest?.pinnedReleaseId) {
+        const pinnedRelease = candidateReleases.find(
+          (r) => r.id === existingLatest.pinnedReleaseId,
+        );
+        if (pinnedRelease) {
+          winning = candidateForTarget(pinnedRelease, artifactsByRelease, targetArchitecture);
+        }
+        if (!winning) {
+          await db
+            .update(appLatestReleases)
+            .set({ pinnedReleaseId: null, updatedAt: now })
+            .where(eq(appLatestReleases.id, existingLatest.id));
+        }
       }
-      continue;
-    }
 
-    // Check for pinned release
-    const existingLatest = await db
-      .select()
-      .from(appLatestReleases)
-      .where(and(eq(appLatestReleases.appId, job.appId), eq(appLatestReleases.channel, channel)))
-      .get();
+      if (!winning) {
+        for (const candidateRelease of candidateReleases) {
+          winning = candidateForTarget(candidateRelease, artifactsByRelease, targetArchitecture);
+          if (winning) break;
+        }
+      }
 
-    let winningRelease;
+      if (!winning || !candidateIds.has(winning.release.id)) {
+        if (existingLatest) {
+          await db.delete(appLatestReleases).where(eq(appLatestReleases.id, existingLatest.id));
+        }
+        continue;
+      }
 
-    if (existingLatest?.pinnedReleaseId) {
-      winningRelease = candidateReleases.find((r) => r.id === existingLatest.pinnedReleaseId);
-      // Clear stale pin if the pinned release is no longer an active candidate
-      if (!winningRelease) {
+      const installStrategy = inferInstallStrategy(
+        authoritySource?.sourceType ?? null,
+        winning.artifact?.artifactType ?? null,
+      );
+
+      if (existingLatest) {
         await db
           .update(appLatestReleases)
-          .set({ pinnedReleaseId: null, updatedAt: now })
+          .set({
+            releaseId: winning.release.id,
+            artifactId: winning.artifact?.id ?? null,
+            authoritySourceId: authoritySource?.id ?? null,
+            versionNormalized: winning.release.versionNormalized,
+            versionRaw: winning.release.versionRaw,
+            releasedAt: winning.release.releasedAt,
+            installStrategy,
+            updatedAt: now,
+          })
           .where(eq(appLatestReleases.id, existingLatest.id));
-      }
-    }
-
-    if (!winningRelease) {
-      // Sort by normalized version descending, pick highest
-      // Compare normalized strings directly — they are zero-padded for
-      // lexicographic ordering.  Do NOT re-parse via compareVersionStrings()
-      // as that would mangle the internal format (e.g. "-0.001.…" suffixes).
-      candidateReleases.sort((a, b) => {
-        if (b.versionNormalized > a.versionNormalized) return 1;
-        if (b.versionNormalized < a.versionNormalized) return -1;
-        return 0;
-      });
-      winningRelease = candidateReleases[0]!;
-    }
-
-    // Find primary artifact
-    const primaryArtifact = await db
-      .select()
-      .from(artifacts)
-      .where(and(eq(artifacts.releaseId, winningRelease.id), eq(artifacts.isPrimary, true)))
-      .get();
-
-    // Infer install strategy
-    const installStrategy = inferInstallStrategy(
-      authoritySource?.sourceType ?? null,
-      primaryArtifact?.artifactType ?? null,
-    );
-
-    // Upsert app_latest_releases
-    if (existingLatest) {
-      await db
-        .update(appLatestReleases)
-        .set({
-          releaseId: winningRelease.id,
-          artifactId: primaryArtifact?.id ?? null,
+      } else {
+        await db.insert(appLatestReleases).values({
+          id: generateId(idPrefixes.appLatestRelease),
+          appId: job.appId,
+          channel,
+          targetArchitecture,
+          releaseId: winning.release.id,
           authoritySourceId: authoritySource?.id ?? null,
-          versionNormalized: winningRelease.versionNormalized,
-          versionRaw: winningRelease.versionRaw,
-          releasedAt: winningRelease.releasedAt,
+          artifactId: winning.artifact?.id ?? null,
+          versionNormalized: winning.release.versionNormalized,
+          versionRaw: winning.release.versionRaw,
+          releasedAt: winning.release.releasedAt,
           installStrategy,
           updatedAt: now,
-        })
-        .where(eq(appLatestReleases.id, existingLatest.id));
-    } else {
-      await db.insert(appLatestReleases).values({
-        id: generateId(idPrefixes.appLatestRelease),
+        });
+      }
+
+      const cacheKV: CacheKV = env.CACHE_KV;
+      await setCachedLatest(cacheKV, {
         appId: job.appId,
+        releaseId: winning.release.id,
+        versionNormalized: winning.release.versionNormalized,
+        versionRaw: winning.release.versionRaw,
         channel,
-        releaseId: winningRelease.id,
-        authoritySourceId: authoritySource?.id ?? null,
-        artifactId: primaryArtifact?.id ?? null,
-        versionNormalized: winningRelease.versionNormalized,
-        versionRaw: winningRelease.versionRaw,
-        releasedAt: winningRelease.releasedAt,
-        installStrategy,
+        targetArchitecture,
+        releasedAt: winning.release.releasedAt,
         updatedAt: now,
       });
     }
-
-    // Update KV cache
-    const cacheKV: CacheKV = env.CACHE_KV;
-    await setCachedLatest(cacheKV, {
-      appId: job.appId,
-      releaseId: winningRelease.id,
-      versionNormalized: winningRelease.versionNormalized,
-      versionRaw: winningRelease.versionRaw,
-      channel,
-      releasedAt: winningRelease.releasedAt,
-      updatedAt: now,
-    });
   }
 
   // Bust the recent-releases cache so the marketing page updates promptly

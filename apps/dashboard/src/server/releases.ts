@@ -18,6 +18,11 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
+import {
+  artifactArchitectureSchema,
+  targetArchitectureSchema,
+} from "@versioneer/schemas/architecture";
+import { artifactTypeSchema } from "@versioneer/schemas/releases";
 
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { scheduleRecomputeLatest } from "./followup-jobs";
@@ -97,17 +102,29 @@ export const listReleases = createServerFn({ method: "GET" })
             )
             .all()
         : [];
-    const latestReleaseIds = new Set(latestRows.map((row) => row.releaseId));
-    const pinnedReleaseIds = new Set(
-      latestRows.filter((row) => row.pinnedReleaseId).map((row) => row.pinnedReleaseId as string),
-    );
+    const latestTargetsByRelease = new Map<string, string[]>();
+    const pinnedTargetsByRelease = new Map<string, string[]>();
+    for (const row of latestRows) {
+      latestTargetsByRelease.set(row.releaseId, [
+        ...(latestTargetsByRelease.get(row.releaseId) ?? []),
+        row.targetArchitecture,
+      ]);
+      if (row.pinnedReleaseId) {
+        pinnedTargetsByRelease.set(row.pinnedReleaseId, [
+          ...(pinnedTargetsByRelease.get(row.pinnedReleaseId) ?? []),
+          row.targetArchitecture,
+        ]);
+      }
+    }
 
     return {
       items: items.map((item) =>
         Object.assign({}, item, {
           app: appMap.get(item.appId) ? toAppSummary(appMap.get(item.appId)!) : null,
-          isLatestForChannel: latestReleaseIds.has(item.id),
-          isPinnedLatest: pinnedReleaseIds.has(item.id),
+          isLatestForChannel: latestTargetsByRelease.has(item.id),
+          isPinnedLatest: pinnedTargetsByRelease.has(item.id),
+          latestTargetArchitectures: latestTargetsByRelease.get(item.id) ?? [],
+          pinnedTargetArchitectures: pinnedTargetsByRelease.get(item.id) ?? [],
         }),
       ),
       total: countResult?.count ?? 0,
@@ -125,19 +142,24 @@ export const getRelease = createServerFn({ method: "GET" })
     const release = await db.select().from(releases).where(eq(releases.id, id)).get();
     if (!release) throw new Error("Not found");
     const appMap = await loadAppsByIds(db, [release.appId]);
-    const latestRow = await db
+    const latestRows = await db
       .select()
       .from(appLatestReleases)
       .where(eq(appLatestReleases.releaseId, release.id))
-      .get();
-    const isPinnedLatest = latestRow?.pinnedReleaseId === release.id;
-    const latestArtifact = latestRow?.artifactId
-      ? await db
-          .select({ sha256: artifacts.sha256 })
-          .from(artifacts)
-          .where(eq(artifacts.id, latestRow.artifactId))
-          .get()
-      : undefined;
+      .all();
+    const isPinnedLatest = latestRows.some((row) => row.pinnedReleaseId === release.id);
+    const latestArtifactIds = latestRows
+      .map((row) => row.artifactId)
+      .filter((artifactId): artifactId is string => Boolean(artifactId));
+    const latestArtifactRows =
+      latestArtifactIds.length > 0
+        ? await db
+            .select({ id: artifacts.id, sha256: artifacts.sha256 })
+            .from(artifacts)
+            .where(inArray(artifacts.id, latestArtifactIds))
+            .all()
+        : [];
+    const artifactById = new Map(latestArtifactRows.map((artifact) => [artifact.id, artifact]));
     const trustRows = await db
       .select({ assertionType: trustAssertions.assertionType })
       .from(trustAssertions)
@@ -149,21 +171,36 @@ export const getRelease = createServerFn({ method: "GET" })
       .where(and(eq(appAliases.appId, release.appId), eq(appAliases.isActive, true)))
       .all();
 
+    const latestTargets = latestRows.map((row) => {
+      const trustWarnings = latestReleaseTrustWarnings({
+        installStrategy: row.installStrategy,
+        artifact: row.artifactId ? artifactById.get(row.artifactId) : undefined,
+        trustTypes: new Set(trustRows.map((trustRow) => trustRow.assertionType)),
+        aliasTypes: new Set(aliasRows.map((aliasRow) => aliasRow.aliasType)),
+      });
+
+      return {
+        id: row.id,
+        targetArchitecture: row.targetArchitecture,
+        channel: row.channel,
+        artifactId: row.artifactId,
+        installStrategy: row.installStrategy,
+        pinnedReleaseId: row.pinnedReleaseId,
+        pinnedAt: row.pinnedAt,
+        pinnedBy: row.pinnedBy,
+        trustWarnings,
+      };
+    });
+
     return {
       ...release,
       app: appMap.get(release.appId) ? toAppSummary(appMap.get(release.appId)!) : null,
-      isLatestForChannel: Boolean(latestRow),
+      isLatestForChannel: latestRows.length > 0,
       isPinnedLatest,
-      latestInstallStrategy: latestRow?.installStrategy ?? null,
-      latestArtifactId: latestRow?.artifactId ?? null,
-      trustWarnings: latestRow
-        ? latestReleaseTrustWarnings({
-            installStrategy: latestRow.installStrategy,
-            artifact: latestArtifact,
-            trustTypes: new Set(trustRows.map((row) => row.assertionType)),
-            aliasTypes: new Set(aliasRows.map((row) => row.aliasType)),
-          })
-        : [],
+      latestInstallStrategy: latestRows[0]?.installStrategy ?? null,
+      latestArtifactId: latestRows[0]?.artifactId ?? null,
+      latestTargets,
+      trustWarnings: latestTargets.flatMap((target) => target.trustWarnings),
     };
   });
 
@@ -274,11 +311,66 @@ export const getReleaseArtifacts = createServerFn({ method: "GET" })
     return { items };
   });
 
+export const createReleaseArtifact = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(
+    z.object({
+      releaseId: z.string().min(1),
+      artifactType: artifactTypeSchema,
+      url: z.string().url(),
+      architecture: artifactArchitectureSchema,
+      sha256: z.string().max(256).nullable().optional(),
+      sizeBytes: z.number().int().positive().nullable().optional(),
+      minOsVersion: z.string().max(50).nullable().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const db = createDb(env.DB);
+    const release = await db.select().from(releases).where(eq(releases.id, data.releaseId)).get();
+    if (!release) throw new Error("Not found");
+
+    const now = new Date().toISOString();
+    const artifactId = generateId(idPrefixes.artifact);
+    await db.batch([
+      db.insert(artifacts).values({
+        id: artifactId,
+        releaseId: release.id,
+        artifactType: data.artifactType,
+        url: data.url,
+        urlHash: null,
+        sha256: data.sha256?.trim() || null,
+        sizeBytes: data.sizeBytes ?? null,
+        architecture: data.architecture,
+        minOsVersion: data.minOsVersion?.trim() || null,
+        isPrimary: false,
+        createdAt: now,
+      }),
+      db.insert(auditLog).values({
+        id: generateId(idPrefixes.auditLog),
+        eventType: "release_artifact_created",
+        actorType: "admin",
+        actorId: context.user.email,
+        targetType: "artifact",
+        targetId: artifactId,
+        payloadJson: JSON.stringify({
+          releaseId: release.id,
+          artifactType: data.artifactType,
+          architecture: data.architecture,
+          url: data.url,
+        }),
+        createdAt: now,
+      }),
+    ]);
+
+    await scheduleRecomputeLatest({ db, appId: release.appId, channel: release.channel });
+    return { id: artifactId, status: "created" };
+  });
+
 // POST /releases/:id/pin - pin release as latest
 export const pinRelease = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .inputValidator(z.object({ id: z.string().min(1) }))
-  .handler(async ({ data: { id }, context }) => {
+  .inputValidator(z.object({ id: z.string().min(1), targetArchitecture: targetArchitectureSchema }))
+  .handler(async ({ data: { id, targetArchitecture }, context }) => {
     const db = createDb(env.DB);
     const release = await db.select().from(releases).where(eq(releases.id, id)).get();
     if (!release) throw new Error("Not found");
@@ -298,6 +390,7 @@ export const pinRelease = createServerFn({ method: "POST" })
         and(
           eq(appLatestReleases.appId, release.appId),
           eq(appLatestReleases.channel, release.channel),
+          eq(appLatestReleases.targetArchitecture, targetArchitecture),
         ),
       );
 
@@ -309,8 +402,8 @@ export const pinRelease = createServerFn({ method: "POST" })
 // POST /releases/:id/unpin - remove pin
 export const unpinRelease = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .inputValidator(z.object({ id: z.string().min(1) }))
-  .handler(async ({ data: { id } }) => {
+  .inputValidator(z.object({ id: z.string().min(1), targetArchitecture: targetArchitectureSchema }))
+  .handler(async ({ data: { id, targetArchitecture } }) => {
     const db = createDb(env.DB);
     const release = await db.select().from(releases).where(eq(releases.id, id)).get();
     if (!release) throw new Error("Not found");
@@ -327,6 +420,7 @@ export const unpinRelease = createServerFn({ method: "POST" })
         and(
           eq(appLatestReleases.appId, release.appId),
           eq(appLatestReleases.channel, release.channel),
+          eq(appLatestReleases.targetArchitecture, targetArchitecture),
         ),
       );
 

@@ -43,6 +43,13 @@
       "when": 1776870412105,
       "tag": "0005_wandering_nocturne",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1776877481234,
+      "tag": "0006_whole_hobgoblin",
+      "breakpoints": true
     }
   ]
 }

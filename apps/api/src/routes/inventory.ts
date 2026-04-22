@@ -32,6 +32,13 @@ import {
   suggestionEvidence,
   trustAssertions,
 } from "@versioneer/db";
+import {
+  artifactSupportsTarget,
+  normalizeArtifactArchitecture,
+  normalizeTargetArchitecture,
+  rankArtifactForTarget,
+  type TargetArchitecture,
+} from "@versioneer/schemas/architecture";
 import type { AliasType } from "@versioneer/schemas/catalog";
 import type { InstallStrategy } from "@versioneer/schemas/releases";
 import type { SourceType, SourceRole } from "@versioneer/schemas/sources";
@@ -46,7 +53,7 @@ import {
   MAX_INVENTORY_GZIP_EXPANSION_RATIO,
   MAX_INVENTORY_JSON_BYTES,
 } from "../lib/constants";
-import { isArchCompatible, isOsVersionCompatible, computeStaleSince } from "./helpers";
+import { isOsVersionCompatible, computeStaleSince } from "./helpers";
 
 function computeLookupKey(appName: string, bundleId?: string | null): string {
   if (bundleId) return `bid:${bundleId.toLowerCase()}`;
@@ -79,6 +86,30 @@ type DiscoveryCandidate = {
 type PersistedDiscovery = {
   id: string;
   iconR2Key: string | null;
+};
+
+type LatestReleaseRow = typeof appLatestReleases.$inferSelect;
+type ArtifactRow = typeof artifacts.$inferSelect;
+type LatestByAppChannel = Map<string, Map<string, Map<TargetArchitecture, LatestReleaseRow>>>;
+type InventoryAppInfo = {
+  canonicalName: string;
+  iconR2Key: string | null;
+  status: "draft" | "public" | "merged" | "deprecated" | "unlisted";
+};
+type InventoryMatchPlan = {
+  installedApp: InstalledApp;
+  matchResult: ReturnType<typeof matchApp>;
+  appInfo: InventoryAppInfo | undefined;
+  isPublic: boolean;
+  requestedChannel: string | null;
+};
+
+type CompatibleReleaseCandidate = {
+  releaseId: string;
+  versionNormalized: string;
+  versionRaw: string;
+  releasedAt: string | null;
+  artifact: AppDecision["artifact"];
 };
 
 function deriveInstallTrust(params: {
@@ -281,6 +312,308 @@ async function selectDiscoveredAppsByLookupKeys(
   }
 
   return rows;
+}
+
+async function selectArtifactsByIds(
+  db: ReturnType<typeof createDb>,
+  artifactIds: string[],
+): Promise<ArtifactRow[]> {
+  const rows: ArtifactRow[] = [];
+  for (let i = 0; i < artifactIds.length; i += D1_PARAM_LIMIT) {
+    const chunk = artifactIds.slice(i, i + D1_PARAM_LIMIT);
+    if (chunk.length === 0) continue;
+
+    rows.push(...(await db.select().from(artifacts).where(inArray(artifacts.id, chunk)).all()));
+  }
+  return rows;
+}
+
+function uniqueStrings(values: Iterable<string | null | undefined>): string[] {
+  return [...new Set([...values].filter((value): value is string => Boolean(value)))];
+}
+
+function chunkStrings(values: string[], chunkSize: number): string[][] {
+  const chunks: string[][] = [];
+  for (let i = 0; i < values.length; i += chunkSize) {
+    chunks.push(values.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+async function selectLatestRowsForInventory(
+  db: ReturnType<typeof createDb>,
+  appIds: string[],
+  channels: string[],
+): Promise<LatestReleaseRow[]> {
+  if (appIds.length === 0 || channels.length === 0) return [];
+
+  const rows: LatestReleaseRow[] = [];
+  const channelChunks = chunkStrings(channels, Math.max(1, Math.floor(D1_PARAM_LIMIT / 2)));
+  for (const channelChunk of channelChunks) {
+    const appChunkSize = Math.max(1, D1_PARAM_LIMIT - channelChunk.length);
+    for (const appChunk of chunkStrings(appIds, appChunkSize)) {
+      rows.push(
+        ...(await db
+          .select()
+          .from(appLatestReleases)
+          .where(
+            and(
+              inArray(appLatestReleases.appId, appChunk),
+              inArray(appLatestReleases.channel, channelChunk),
+            ),
+          )
+          .all()),
+      );
+    }
+  }
+
+  return rows;
+}
+
+async function selectAvailableChannelsByApp(
+  db: ReturnType<typeof createDb>,
+  appIds: string[],
+): Promise<Map<string, string[]>> {
+  const channelsByApp = new Map<string, Set<string>>();
+  if (appIds.length === 0) return new Map();
+
+  for (const appChunk of chunkStrings(appIds, Math.max(1, D1_PARAM_LIMIT))) {
+    const rows = await db
+      .selectDistinct({
+        appId: appLatestReleases.appId,
+        channel: appLatestReleases.channel,
+      })
+      .from(appLatestReleases)
+      .where(inArray(appLatestReleases.appId, appChunk))
+      .all();
+
+    for (const row of rows) {
+      const channels = channelsByApp.get(row.appId) ?? new Set<string>();
+      channels.add(row.channel);
+      channelsByApp.set(row.appId, channels);
+    }
+  }
+
+  return new Map(
+    [...channelsByApp].map(([appId, channels]) => [
+      appId,
+      [...channels].sort((a, b) => {
+        if (a === "stable") return -1;
+        if (b === "stable") return 1;
+        return a.localeCompare(b);
+      }),
+    ]),
+  );
+}
+
+async function selectLatestSourceSuccessByApp(
+  db: ReturnType<typeof createDb>,
+  appIds: string[],
+): Promise<Map<string, string | null>> {
+  const latestSourceSuccessByApp = new Map<string, string | null>();
+  if (appIds.length === 0) return latestSourceSuccessByApp;
+
+  for (const appChunk of chunkStrings(appIds, Math.max(1, D1_PARAM_LIMIT - 8))) {
+    const rows = await db
+      .select({ appId: sources.appId, lastSuccessAt: sources.lastSuccessAt })
+      .from(sources)
+      .where(
+        and(
+          inArray(sources.appId, appChunk),
+          eq(sources.status, "active"),
+          eq(sources.reviewStatus, "approved"),
+          eq(sources.role, "authority"),
+        ),
+      )
+      .all();
+
+    for (const row of rows) {
+      const existing = latestSourceSuccessByApp.get(row.appId);
+      if (!existing || (row.lastSuccessAt && row.lastSuccessAt > existing)) {
+        latestSourceSuccessByApp.set(row.appId, row.lastSuccessAt);
+      }
+    }
+  }
+
+  return latestSourceSuccessByApp;
+}
+
+function buildLatestIndex(latestReleases: LatestReleaseRow[]): LatestByAppChannel {
+  const latestByAppChannel: LatestByAppChannel = new Map();
+  for (const latest of latestReleases) {
+    let channelMap = latestByAppChannel.get(latest.appId);
+    if (!channelMap) {
+      channelMap = new Map();
+      latestByAppChannel.set(latest.appId, channelMap);
+    }
+
+    let targetMap = channelMap.get(latest.channel);
+    if (!targetMap) {
+      targetMap = new Map();
+      channelMap.set(latest.channel, targetMap);
+    }
+    targetMap.set(latest.targetArchitecture, latest);
+  }
+  return latestByAppChannel;
+}
+
+function latestRowsForRequestedChannel(
+  latestByAppChannel: LatestByAppChannel,
+  appId: string,
+  requestedChannel: string,
+): { channel: string; rows: Map<TargetArchitecture, LatestReleaseRow> } | null {
+  const channelMap = latestByAppChannel.get(appId);
+  if (!channelMap) return null;
+  const requestedRows = channelMap.get(requestedChannel);
+  if (requestedRows) return { channel: requestedChannel, rows: requestedRows };
+  const stableRows = channelMap.get("stable");
+  return stableRows ? { channel: "stable", rows: stableRows } : null;
+}
+
+function artifactForDecision(artifact: ArtifactRow | null | undefined): AppDecision["artifact"] {
+  if (!artifact) return null;
+  return {
+    id: artifact.id,
+    downloadUrl: artifact.url,
+    architecture: artifact.architecture,
+    minOsVersion: artifact.minOsVersion,
+    artifactType: artifact.artifactType,
+    sizeBytes: artifact.sizeBytes,
+    sha256: artifact.sha256,
+  };
+}
+
+function artifactRankForUnknownClient(architecture: string | null | undefined): number {
+  const normalized = normalizeArtifactArchitecture(architecture);
+  if (normalized === "universal") return 200;
+  if (normalized === "unknown") return 100;
+  return -1;
+}
+
+function latestRowIsUsableForClient(params: {
+  latest: LatestReleaseRow;
+  artifactById: ReadonlyMap<string, ArtifactRow>;
+  targetArchitecture: TargetArchitecture | null;
+  clientOs: string | undefined;
+}): boolean {
+  if (!params.latest.artifactId) return true;
+  const artifact = params.artifactById.get(params.latest.artifactId);
+  if (!artifact) return false;
+  if (!isOsVersionCompatible(params.clientOs, artifact.minOsVersion)) return false;
+  if (params.targetArchitecture) {
+    return artifactSupportsTarget(artifact.architecture, params.targetArchitecture);
+  }
+  return artifactRankForUnknownClient(artifact.architecture) >= 0;
+}
+
+function selectUnknownArchitectureLatest(
+  rows: ReadonlyMap<TargetArchitecture, LatestReleaseRow>,
+  artifactById: ReadonlyMap<string, ArtifactRow>,
+  clientOs: string | undefined,
+): LatestReleaseRow | null {
+  let best: { latest: LatestReleaseRow; rank: number } | null = null;
+  for (const latest of rows.values()) {
+    if (!latestRowIsUsableForClient({ latest, artifactById, targetArchitecture: null, clientOs })) {
+      continue;
+    }
+    const artifact = latest.artifactId ? artifactById.get(latest.artifactId) : null;
+    const rank = artifact ? artifactRankForUnknownClient(artifact.architecture) : 50;
+    if (
+      !best ||
+      latest.versionNormalized > best.latest.versionNormalized ||
+      (latest.versionNormalized === best.latest.versionNormalized && rank > best.rank)
+    ) {
+      best = { latest, rank };
+    }
+  }
+  return best?.latest ?? null;
+}
+
+async function findCompatibleReleaseCandidate(params: {
+  db: ReturnType<typeof createDb>;
+  appId: string;
+  channel: string;
+  targetArchitecture: TargetArchitecture | null;
+  clientOs: string | undefined;
+}): Promise<CompatibleReleaseCandidate | null> {
+  const rows = await params.db
+    .select({
+      releaseId: releases.id,
+      versionNormalized: releases.versionNormalized,
+      versionRaw: releases.versionRaw,
+      releasedAt: releases.releasedAt,
+      artifactId: artifacts.id,
+      artifactUrl: artifacts.url,
+      artifactArch: artifacts.architecture,
+      artifactMinOs: artifacts.minOsVersion,
+      artifactType: artifacts.artifactType,
+      artifactSize: artifacts.sizeBytes,
+      artifactSha256: artifacts.sha256,
+      artifactCreatedAt: artifacts.createdAt,
+    })
+    .from(releases)
+    .innerJoin(artifacts, eq(artifacts.releaseId, releases.id))
+    .where(
+      and(
+        eq(releases.appId, params.appId),
+        eq(releases.status, "active"),
+        eq(releases.channel, params.channel),
+      ),
+    )
+    .orderBy(desc(releases.versionNormalized), desc(releases.createdAt))
+    .limit(250)
+    .all();
+
+  let currentReleaseId: string | null = null;
+  let bestForRelease: {
+    row: (typeof rows)[number];
+    rank: number;
+  } | null = null;
+
+  const flush = (): CompatibleReleaseCandidate | null => {
+    if (!bestForRelease) return null;
+    const row = bestForRelease.row;
+    return {
+      releaseId: row.releaseId,
+      versionNormalized: row.versionNormalized,
+      versionRaw: row.versionRaw,
+      releasedAt: row.releasedAt,
+      artifact: {
+        id: row.artifactId,
+        downloadUrl: row.artifactUrl,
+        architecture: row.artifactArch,
+        minOsVersion: row.artifactMinOs,
+        artifactType: row.artifactType,
+        sizeBytes: row.artifactSize,
+        sha256: row.artifactSha256,
+      },
+    };
+  };
+
+  for (const row of rows) {
+    if (currentReleaseId && row.releaseId !== currentReleaseId) {
+      const candidate = flush();
+      if (candidate) return candidate;
+      bestForRelease = null;
+    }
+    currentReleaseId = row.releaseId;
+
+    if (!isOsVersionCompatible(params.clientOs, row.artifactMinOs)) continue;
+    const rank = params.targetArchitecture
+      ? rankArtifactForTarget(row.artifactArch, params.targetArchitecture)
+      : artifactRankForUnknownClient(row.artifactArch);
+    if (rank < 0) continue;
+
+    if (
+      !bestForRelease ||
+      rank > bestForRelease.rank ||
+      (rank === bestForRelease.rank && row.artifactCreatedAt > bestForRelease.row.artifactCreatedAt)
+    ) {
+      bestForRelease = { row, rank };
+    }
+  }
+
+  return flush();
 }
 
 function parseSampleVersions(value: string | null): string[] {
@@ -879,14 +1212,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       .all();
 
     // Load app details
-    const appMap = new Map<
-      string,
-      {
-        canonicalName: string;
-        iconR2Key: string | null;
-        status: "draft" | "public" | "merged" | "deprecated" | "unlisted";
-      }
-    >();
+    const appMap = new Map<string, InventoryAppInfo>();
     const allApps = await db
       .select({
         id: apps.id,
@@ -941,48 +1267,13 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       sparkleTrustAssertions.map((assertion) => assertion.appId),
     );
 
-    // Load all latest releases, indexed by appId → channel → release
-    const latestReleases = await db.select().from(appLatestReleases).limit(10_000).all();
-    const latestByAppChannel = new Map<string, Map<string, (typeof latestReleases)[number]>>();
-    for (const lr of latestReleases) {
-      let channelMap = latestByAppChannel.get(lr.appId);
-      if (!channelMap) {
-        channelMap = new Map();
-        latestByAppChannel.set(lr.appId, channelMap);
-      }
-      channelMap.set(lr.channel, lr);
-    }
-
     // Extract channel preferences from client request
     const channelPrefs = request.client.channelPreferences;
     const defaultChannel = channelPrefs?.defaultChannel ?? "stable";
     const perAppChannels = channelPrefs?.perApp ?? {};
+    const clientTargetArchitecture = normalizeTargetArchitecture(request.client.systemArchitecture);
 
-    // Load source lastSuccessAt for staleness computation
-    const allSources = await db
-      .select({ appId: sources.appId, lastSuccessAt: sources.lastSuccessAt })
-      .from(sources)
-      .where(
-        and(
-          eq(sources.status, "active"),
-          eq(sources.reviewStatus, "approved"),
-          eq(sources.role, "authority"),
-        ),
-      )
-      .limit(10_000)
-      .all();
-    const latestSourceSuccessByApp = new Map<string, string | null>();
-    for (const s of allSources) {
-      const existing = latestSourceSuccessByApp.get(s.appId);
-      if (!existing || (s.lastSuccessAt && (!existing || s.lastSuccessAt > existing))) {
-        latestSourceSuccessByApp.set(s.appId, s.lastSuccessAt);
-      }
-    }
-
-    // Process each app
-    const results: AppDecision[] = [];
-
-    for (const installedApp of request.apps) {
+    const matchPlans: InventoryMatchPlan[] = request.apps.map((installedApp) => {
       const matchResult = matchApp(
         {
           appName: installedApp.appName,
@@ -998,7 +1289,60 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         aliasRecords,
         sparkleTrustAssertions,
       );
+      const appInfo = matchResult.appId ? appMap.get(matchResult.appId) : undefined;
+      const isPublic = appInfo?.status === "public";
+      return {
+        installedApp,
+        matchResult,
+        appInfo,
+        isPublic,
+        requestedChannel: matchResult.appId
+          ? (perAppChannels[matchResult.appId] ?? defaultChannel)
+          : null,
+      };
+    });
 
+    const publicMatchedAppIds = uniqueStrings(
+      matchPlans.map((plan) =>
+        plan.matchResult.matched &&
+        !plan.matchResult.ambiguous &&
+        plan.matchResult.appId &&
+        plan.isPublic
+          ? plan.matchResult.appId
+          : null,
+      ),
+    );
+    const requestedChannels = uniqueStrings([
+      "stable",
+      ...matchPlans.map((plan) =>
+        plan.matchResult.matched &&
+        !plan.matchResult.ambiguous &&
+        plan.matchResult.appId &&
+        plan.isPublic
+          ? plan.requestedChannel
+          : null,
+      ),
+    ]);
+
+    const latestReleases = await selectLatestRowsForInventory(
+      db,
+      publicMatchedAppIds,
+      requestedChannels,
+    );
+    const latestByAppChannel = buildLatestIndex(latestReleases);
+    const availableChannelsByApp = await selectAvailableChannelsByApp(db, publicMatchedAppIds);
+    const latestArtifactIds = uniqueStrings(latestReleases.map((latest) => latest.artifactId));
+    const latestArtifactRows = await selectArtifactsByIds(db, latestArtifactIds);
+    const latestArtifactById = new Map(
+      latestArtifactRows.map((artifact) => [artifact.id, artifact]),
+    );
+
+    const latestSourceSuccessByApp = await selectLatestSourceSuccessByApp(db, publicMatchedAppIds);
+
+    // Process each app
+    const results: AppDecision[] = [];
+
+    for (const { installedApp, matchResult, appInfo, isPublic, requestedChannel } of matchPlans) {
       let decision: AppDecision["decision"] = "local_only";
       let trackingState: AppDecision["trackingState"] = "local_only";
       let localReasonCode: AppDecision["localReasonCode"] = "not_found";
@@ -1012,117 +1356,68 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       let resolvedChannel: string | null = null;
       let staleSince: string | null = null;
 
-      const appInfo = matchResult.appId ? appMap.get(matchResult.appId) : undefined;
-      const isPublic = appInfo?.status === "public";
-
-      if (matchResult.matched && matchResult.appId) {
+      if (matchResult.matched && matchResult.appId && !matchResult.ambiguous) {
         if (!isPublic) {
           localReasonCode = appInfo?.status === "draft" ? "matched_draft" : "no_approved_source";
         } else {
-          const requestedChannel = perAppChannels[matchResult.appId] ?? defaultChannel;
-          const channelMap = latestByAppChannel.get(matchResult.appId);
-          const latest = channelMap
-            ? (channelMap.get(requestedChannel) ?? channelMap.get("stable"))
-            : undefined;
-          if (latest) {
+          const selectedChannel = latestRowsForRequestedChannel(
+            latestByAppChannel,
+            matchResult.appId,
+            requestedChannel ?? defaultChannel,
+          );
+          if (selectedChannel) {
             trackingState = "public";
             localReasonCode = null;
-            // Compute staleness
+
             const lastSuccess = latestSourceSuccessByApp.get(matchResult.appId) ?? null;
             staleSince = computeStaleSince(lastSuccess);
-
-            // Find a compatible artifact for this client's arch + OS
-            const releaseArtifacts = await db
-              .select()
-              .from(artifacts)
-              .where(eq(artifacts.releaseId, latest.releaseId))
-              .all();
-
-            const clientArch = request.client.systemArchitecture;
             const clientOs = request.client.osVersion;
+            const latest = clientTargetArchitecture
+              ? selectedChannel.rows.get(clientTargetArchitecture)
+              : selectUnknownArchitectureLatest(selectedChannel.rows, latestArtifactById, clientOs);
 
-            const compatibleArtifact = releaseArtifacts.find(
-              (a) =>
-                isArchCompatible(a.architecture, clientArch) &&
-                isOsVersionCompatible(clientOs, a.minOsVersion),
-            );
-
-            if (compatibleArtifact || releaseArtifacts.length === 0) {
-              latestVersion = displayVersion(latest.versionRaw);
-              latestVersionRaw = latest.versionRaw;
-              latestVersionNormalized = latest.versionNormalized;
-              releasedAt = latest.releasedAt;
-              latestReleaseId = latest.releaseId;
+            let compatibleCandidate: CompatibleReleaseCandidate | null = null;
+            if (
+              latest &&
+              latestRowIsUsableForClient({
+                latest,
+                artifactById: latestArtifactById,
+                targetArchitecture: clientTargetArchitecture,
+                clientOs,
+              })
+            ) {
+              const latestArtifact = latest.artifactId
+                ? latestArtifactById.get(latest.artifactId)
+                : null;
+              compatibleCandidate = {
+                releaseId: latest.releaseId,
+                versionNormalized: latest.versionNormalized,
+                versionRaw: latest.versionRaw,
+                releasedAt: latest.releasedAt,
+                artifact: artifactForDecision(latestArtifact),
+              };
               resolvedInstallStrategy = latest.installStrategy;
               resolvedChannel = latest.channel;
-
-              if (compatibleArtifact) {
-                matchedArtifact = {
-                  id: compatibleArtifact.id,
-                  downloadUrl: compatibleArtifact.url,
-                  architecture: compatibleArtifact.architecture,
-                  minOsVersion: compatibleArtifact.minOsVersion,
-                  artifactType: compatibleArtifact.artifactType,
-                  sizeBytes: compatibleArtifact.sizeBytes,
-                  sha256: compatibleArtifact.sha256,
-                };
-              }
-            } else {
-              // Latest release has no compatible artifact — walk back through older releases
-              const olderCompatible = await db
-                .select({
-                  releaseId: releases.id,
-                  versionNormalized: releases.versionNormalized,
-                  versionRaw: releases.versionRaw,
-                  releasedAt: releases.releasedAt,
-                  artifactId: artifacts.id,
-                  artifactUrl: artifacts.url,
-                  artifactArch: artifacts.architecture,
-                  artifactMinOs: artifacts.minOsVersion,
-                  artifactType: artifacts.artifactType,
-                  artifactSize: artifacts.sizeBytes,
-                  artifactSha256: artifacts.sha256,
-                })
-                .from(releases)
-                .innerJoin(artifacts, eq(artifacts.releaseId, releases.id))
-                .where(
-                  and(
-                    eq(releases.appId, matchResult.appId),
-                    eq(releases.status, "active"),
-                    eq(releases.channel, latest.channel),
-                  ),
-                )
-                .orderBy(desc(releases.versionNormalized))
-                .limit(100)
-                .all();
-
-              const found = olderCompatible.find(
-                (r) =>
-                  isArchCompatible(r.artifactArch, clientArch) &&
-                  isOsVersionCompatible(clientOs, r.artifactMinOs),
-              );
-
-              if (found) {
-                latestVersion = displayVersion(found.versionRaw);
-                latestVersionRaw = found.versionRaw;
-                latestVersionNormalized = found.versionNormalized;
-                releasedAt = found.releasedAt;
-                latestReleaseId = found.releaseId;
-                resolvedInstallStrategy = latest.installStrategy;
-                resolvedChannel = latest.channel;
-                matchedArtifact = {
-                  id: found.artifactId,
-                  downloadUrl: found.artifactUrl,
-                  architecture: found.artifactArch,
-                  minOsVersion: found.artifactMinOs,
-                  artifactType: found.artifactType,
-                  sizeBytes: found.artifactSize,
-                  sha256: found.artifactSha256,
-                };
-              }
+            } else if (latest) {
+              compatibleCandidate = await findCompatibleReleaseCandidate({
+                db,
+                appId: matchResult.appId,
+                channel: selectedChannel.channel,
+                targetArchitecture: clientTargetArchitecture,
+                clientOs,
+              });
+              resolvedInstallStrategy = latest.installStrategy;
+              resolvedChannel = selectedChannel.channel;
             }
 
-            if (latestVersion) {
+            if (compatibleCandidate) {
+              latestVersion = displayVersion(compatibleCandidate.versionRaw);
+              latestVersionRaw = compatibleCandidate.versionRaw;
+              latestVersionNormalized = compatibleCandidate.versionNormalized;
+              releasedAt = compatibleCandidate.releasedAt;
+              latestReleaseId = compatibleCandidate.releaseId;
+              matchedArtifact = compatibleCandidate.artifact;
+
               if (installedApp.version) {
                 // Compare normalized strings directly — they are zero-padded
                 // for lexicographic ordering.  Re-parsing via compareVersionStrings()
@@ -1137,9 +1432,9 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 decision = "ambiguous";
               }
             } else {
-              decision = "local_only";
-              trackingState = "local_only";
-              localReasonCode = "no_approved_source";
+              decision = "incompatible";
+              localReasonCode = "no_compatible_release";
+              resolvedChannel = selectedChannel.channel;
             }
           } else {
             trackingState = "local_only";
@@ -1185,9 +1480,10 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         latestVersionRaw,
         homebrewCaskToken,
         latestReleaseId,
+        targetArchitecture: clientTargetArchitecture,
         channel: resolvedChannel,
         availableChannels: matchResult.appId
-          ? [...(latestByAppChannel.get(matchResult.appId)?.keys() ?? [])]
+          ? (availableChannelsByApp.get(matchResult.appId) ?? [])
           : undefined,
         releasedAt,
         staleSince,

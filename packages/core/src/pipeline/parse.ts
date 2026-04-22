@@ -12,6 +12,7 @@ import {
   generateId,
   idPrefixes,
 } from "@versioneer/db";
+import { normalizeArtifactArchitecture } from "@versioneer/schemas/architecture";
 
 import { inferReleasedAt, toISODate } from "../dates";
 import { createLogger } from "../logger";
@@ -297,10 +298,23 @@ export async function handleSourceParse(
         .from(artifacts)
         .where(eq(artifacts.releaseId, releaseId))
         .all();
-      const existingUrls = new Set(existingArtifacts.map((a) => a.url));
+      const existingByUrl = new Map(existingArtifacts.map((a) => [a.url, a] as const));
 
       for (const parsedArtifact of parsedRelease.artifacts) {
-        if (existingUrls.has(parsedArtifact.url)) continue;
+        const architecture = normalizeArtifactArchitecture(parsedArtifact.architecture);
+        const existingArtifact = existingByUrl.get(parsedArtifact.url);
+        if (existingArtifact) {
+          await db
+            .update(artifacts)
+            .set({
+              sha256: parsedArtifact.sha256 ?? undefined,
+              sizeBytes: parsedArtifact.sizeBytes ?? undefined,
+              architecture,
+              minOsVersion: parsedArtifact.minOsVersion ?? undefined,
+            })
+            .where(eq(artifacts.id, existingArtifact.id));
+          continue;
+        }
         const hostname = artifactHostname(parsedArtifact.url);
         if (hostname) {
           if (knownArtifactHosts.size > 0 && !knownArtifactHosts.has(hostname)) {
@@ -336,7 +350,7 @@ export async function handleSourceParse(
           url: parsedArtifact.url,
           sha256: parsedArtifact.sha256 ?? null,
           sizeBytes: parsedArtifact.sizeBytes ?? null,
-          architecture: parsedArtifact.architecture ?? null,
+          architecture,
           minOsVersion: parsedArtifact.minOsVersion ?? null,
           isPrimary: false,
           createdAt: now,

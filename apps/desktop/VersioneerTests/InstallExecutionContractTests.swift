@@ -28,6 +28,7 @@ struct InstallExecutionContractTests {
       appId: "app_firefox",
       releaseId: "rel_firefox",
       artifactId: "art_firefox",
+      targetArchitecture: "arm64",
       installStrategy: "zip_replace",
       executionRoute: "local_replace",
       channel: "stable",
@@ -60,6 +61,7 @@ struct InstallExecutionContractTests {
     #expect(json["status"] as? String == "succeeded")
     #expect(json["executionRoute"] as? String == "local_replace")
     #expect(json["installStrategy"] as? String == "zip_replace")
+    #expect(json["targetArchitecture"] as? String == "arm64")
     #expect(json["previousVersion"] as? String == "126.0")
     #expect((json["verification"] as? [String: Any])?["signatureVerified"] as? Bool == true)
   }

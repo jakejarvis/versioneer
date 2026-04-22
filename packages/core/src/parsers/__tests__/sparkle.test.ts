@@ -50,6 +50,35 @@ describe("sparkleParser", () => {
     expect(artifact.signature).toBe("abc123");
   });
 
+  it("preserves split architecture enclosures", () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <sparkle:shortVersionString>4.0.0</sparkle:shortVersionString>
+      <sparkle:version>400</sparkle:version>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://example.com/MyApp-4.0.0-arm64.dmg" length="15000000" type="application/octet-stream" sparkle:architecture="arm64" sparkle:edSignature="arm-sig"/>
+      <enclosure url="https://example.com/MyApp-4.0.0-x86_64.dmg" length="16000000" type="application/octet-stream" sparkle:architecture="x86_64" sparkle:edSignature="x86-sig"/>
+      <enclosure url="https://example.com/MyApp-3.9.0-to-4.0.0.delta" length="5000000" type="application/octet-stream" sparkle:deltaFrom="390"/>
+    </item>
+  </channel>
+</rss>`;
+
+    const result = sparkleParser.parse(xml);
+    expect(result.releases).toHaveLength(1);
+    expect(result.releases[0]!.artifacts).toHaveLength(2);
+    expect(
+      result.releases[0]!.artifacts.map((artifact) => artifact.architecture).sort((a, b) =>
+        String(a).localeCompare(String(b)),
+      ),
+    ).toEqual(["arm64", "x86_64"]);
+    expect(result.releases[0]!.artifacts.map((artifact) => artifact.minOsVersion)).toEqual([
+      "13.0",
+      "13.0",
+    ]);
+  });
+
   it("extracts pubDate", () => {
     const result = sparkleParser.parse(SAMPLE_APPCAST);
     expect(result.releases[0]!.publishedAt).toBe("Mon, 15 Jan 2024 12:00:00 +0000");

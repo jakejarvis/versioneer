@@ -1,12 +1,11 @@
 import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Plus } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useMemo, useState } from "react";
 import { z } from "zod";
 
 import { CreateReleaseDialog } from "@/components/shared/create-release-dialog";
-import { DataTable, type BulkAction } from "@/components/shared/data-table";
+import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { AppEntityLink, ReleaseEntityLink } from "@/components/shared/entity-link";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -20,7 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useReleases } from "@/hooks/use-releases";
-import { usePinRelease, useUnpinRelease } from "@/hooks/use-releases";
 import {
   applyPaginationToSearch,
   applySortingToSearch,
@@ -60,8 +58,6 @@ function ReleasesPage() {
   const searchState = Route.useSearch();
   const pagination = paginationFromSearch(searchState);
   const sorting = sortingFromSearch(searchState);
-  const pinRelease = usePinRelease();
-  const unpinRelease = useUnpinRelease();
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useReleases({
@@ -72,17 +68,6 @@ function ReleasesPage() {
     sortBy: searchState.sortBy,
     sortDir: searchState.sortDir,
   });
-
-  const togglePin = useCallback(
-    (row: ReleaseListItem) => {
-      const mutation = row.isPinnedLatest ? unpinRelease : pinRelease;
-      mutation.mutate(row.id, {
-        onSuccess: () => toast.success(row.isPinnedLatest ? "Release unpinned" : "Release pinned"),
-        onError: (err) => toast.error(err.message),
-      });
-    },
-    [pinRelease, unpinRelease],
-  );
 
   const columns = useMemo<ColumnDef<ReleaseListItem>[]>(
     () => [
@@ -114,10 +99,14 @@ function ReleasesPage() {
             />
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {row.original.isLatestForChannel ? (
-                <span className="rounded bg-muted px-2 py-0.5">Latest</span>
+                <span className="rounded bg-muted px-2 py-0.5">
+                  Latest {row.original.latestTargetArchitectures.join(", ")}
+                </span>
               ) : null}
               {row.original.isPinnedLatest ? (
-                <span className="rounded bg-muted px-2 py-0.5">Pinned</span>
+                <span className="rounded bg-muted px-2 py-0.5">
+                  Pinned {row.original.pinnedTargetArchitectures.join(", ")}
+                </span>
               ) : null}
               {row.original.isPrerelease ? (
                 <span className="rounded bg-muted px-2 py-0.5">Prerelease</span>
@@ -162,38 +151,12 @@ function ReleasesPage() {
                 Open
               </Link>
             </Button>
-            <Button variant="outline" size="sm" onClick={() => togglePin(row.original)}>
-              {row.original.isPinnedLatest ? "Unpin" : "Pin"}
-            </Button>
           </div>
         ),
       },
     ],
-    [togglePin],
+    [],
   );
-
-  const bulkActions: BulkAction<ReleaseListItem>[] = [
-    {
-      label: "Pin Selected",
-      disabled: pinRelease.isPending,
-      onClick: async (rows) => {
-        for (const row of rows) {
-          pinRelease.mutate(row.id, { onError: (err) => toast.error(err.message) });
-        }
-        toast.success(`Pinned ${rows.length} release${rows.length === 1 ? "" : "s"}`);
-      },
-    },
-    {
-      label: "Unpin Selected",
-      disabled: unpinRelease.isPending,
-      onClick: async (rows) => {
-        for (const row of rows) {
-          unpinRelease.mutate(row.id, { onError: (err) => toast.error(err.message) });
-        }
-        toast.success(`Unpinned ${rows.length} release${rows.length === 1 ? "" : "s"}`);
-      },
-    },
-  ];
 
   const pageCount = data ? Math.max(1, Math.ceil(data.total / pagination.pageSize)) : 0;
 
@@ -222,8 +185,6 @@ function ReleasesPage() {
           }
           manualSorting
           enableColumnVisibility
-          enableRowSelection
-          bulkActions={bulkActions}
           toolbar={
             <>
               <Select

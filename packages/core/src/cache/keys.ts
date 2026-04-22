@@ -1,5 +1,9 @@
-export function latestReleaseKey(appId: string, channel: string): string {
-  return `latest:app:${appId}:${channel}`;
+export function latestReleaseKey(
+  appId: string,
+  channel: string,
+  targetArchitecture: string,
+): string {
+  return `latest:app:${appId}:${channel}:${targetArchitecture}`;
 }
 
 export function bundleLookupKey(bundleId: string): string {

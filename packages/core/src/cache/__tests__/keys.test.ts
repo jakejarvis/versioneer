@@ -8,12 +8,12 @@ import {
 } from "../keys";
 
 describe("latestReleaseKey", () => {
-  it("formats key with appId and channel", () => {
-    expect(latestReleaseKey("app_123", "stable")).toBe("latest:app:app_123:stable");
+  it("formats key with appId, channel, and target architecture", () => {
+    expect(latestReleaseKey("app_123", "stable", "arm64")).toBe("latest:app:app_123:stable:arm64");
   });
 
   it("works with beta channel", () => {
-    expect(latestReleaseKey("app_456", "beta")).toBe("latest:app:app_456:beta");
+    expect(latestReleaseKey("app_456", "beta", "x86_64")).toBe("latest:app:app_456:beta:x86_64");
   });
 });
 

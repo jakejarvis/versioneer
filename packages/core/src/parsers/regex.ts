@@ -1,6 +1,6 @@
 import { inferChannel, isPreRelease } from "../versioning";
 import type { ParsedArtifact, ParserOutput, SourceParser } from "./types";
-import { inferArtifactType, resolveUrl } from "./utils";
+import { inferArchitectureFromText, inferArtifactType, resolveUrl } from "./utils";
 
 export const regexParser: SourceParser = {
   key: "regex",
@@ -66,6 +66,7 @@ export const regexParser: SourceParser = {
           artifacts.push({
             url: downloadUrl,
             type: inferArtifactType(downloadUrl),
+            architecture: inferArchitectureFromText(downloadUrl),
           });
         }
       }

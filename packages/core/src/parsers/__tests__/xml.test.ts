@@ -111,6 +111,48 @@ describe("xmlParser", () => {
     expect(result.releases[0]!.downloadUrl).toBe("https://example.com/files/app.pkg");
   });
 
+  it("extracts architecture metadata from artifact nodes", () => {
+    const xml = `<?xml version="1.0"?>
+<release>
+  <version>5.0.0</version>
+  <artifacts>
+    <artifact arch="apple-silicon" sha256="armhash" size="1000" min_os="13.0">
+      <url>/downloads/app-5.0.0-arm64.dmg</url>
+    </artifact>
+    <artifact arch="amd64" sha256="x86hash" size="1100" min_os="12.0">
+      <url>/downloads/app-5.0.0-x64.dmg</url>
+    </artifact>
+  </artifacts>
+</release>`;
+    const result = xmlParser.parse(xml, {
+      versionXPath: "//version/text()",
+      artifactsXPath: "//artifact",
+      artifactUrlXPath: "./url/text()",
+      architectureXPath: "./@arch",
+      sha256XPath: "./@sha256",
+      sizeBytesXPath: "./@size",
+      minOsVersionXPath: "./@min_os",
+      sourceBaseUrl: "https://example.com",
+    });
+
+    expect(result.releases[0]!.artifacts).toEqual([
+      expect.objectContaining({
+        url: "https://example.com/downloads/app-5.0.0-arm64.dmg",
+        architecture: "arm64",
+        sha256: "armhash",
+        sizeBytes: 1000,
+        minOsVersion: "13.0",
+      }),
+      expect.objectContaining({
+        url: "https://example.com/downloads/app-5.0.0-x64.dmg",
+        architecture: "x86_64",
+        sha256: "x86hash",
+        sizeBytes: 1100,
+        minOsVersion: "12.0",
+      }),
+    ]);
+  });
+
   it("stores config in metadata", () => {
     const result = xmlParser.parse(SIMPLE_XML, {
       versionXPath: "//version/text()",

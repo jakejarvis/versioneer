@@ -4,7 +4,12 @@ import { describe, expect, it } from "vite-plus/test";
 import { getDb, seedApp, seedArtifact, seedRelease, seedSource } from "../../__tests__/seed";
 import app from "../../index";
 
-const prepareBody = (appId: string, releaseId: string, artifactId?: string) => ({
+const prepareBody = (
+  appId: string,
+  releaseId: string,
+  artifactId?: string,
+  overrides: Record<string, unknown> = {},
+) => ({
   client: {
     platform: "macos",
     appVersion: "1.0.0",
@@ -19,6 +24,7 @@ const prepareBody = (appId: string, releaseId: string, artifactId?: string) => (
   previousVersion: "0.9.0",
   bundleId: "com.example.test",
   teamId: "TEAM123456",
+  ...overrides,
 });
 
 describe("POST /v1/install/prepare", () => {
@@ -54,6 +60,36 @@ describe("POST /v1/install/prepare", () => {
       env,
     );
     expect(res.status).toBe(404);
+  });
+
+  it("rejects artifacts incompatible with the target architecture", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db);
+    const source = await seedSource(db, testApp.id);
+    const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
+    const artifact = await seedArtifact(db, release.id, { architecture: "arm64" });
+
+    const res = await app.request(
+      "/v1/install/prepare",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          prepareBody(testApp.id, release.id, artifact.id, {
+            client: {
+              platform: "macos",
+              appVersion: "1.0.0",
+              osVersion: "15.4",
+              systemArchitecture: "x86_64",
+            },
+            targetArchitecture: "x86_64",
+          }),
+        ),
+      },
+      env,
+    );
+
+    expect(res.status).toBe(409);
   });
 });
 

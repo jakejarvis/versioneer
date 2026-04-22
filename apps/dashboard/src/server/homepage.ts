@@ -189,10 +189,20 @@ export const getHomepage = createServerFn({ method: "GET" })
             )
             .all()
         : [];
-    const latestReleaseIds = new Set(latestRows.map((row) => row.releaseId));
-    const pinnedReleaseIds = new Set(
-      latestRows.filter((row) => row.pinnedReleaseId).map((row) => row.pinnedReleaseId as string),
-    );
+    const latestTargetsByRelease = new Map<string, string[]>();
+    const pinnedTargetsByRelease = new Map<string, string[]>();
+    for (const row of latestRows) {
+      latestTargetsByRelease.set(row.releaseId, [
+        ...(latestTargetsByRelease.get(row.releaseId) ?? []),
+        row.targetArchitecture,
+      ]);
+      if (row.pinnedReleaseId) {
+        pinnedTargetsByRelease.set(row.pinnedReleaseId, [
+          ...(pinnedTargetsByRelease.get(row.pinnedReleaseId) ?? []),
+          row.targetArchitecture,
+        ]);
+      }
+    }
 
     const pendingSuggestions = suggestionRows.map((item) => {
       const source = item.sourceId ? (suggestionSourceMap.get(item.sourceId) ?? null) : null;
@@ -275,8 +285,10 @@ export const getHomepage = createServerFn({ method: "GET" })
     const recentReleases: ReleaseListItem[] = recentReleaseRows.map((item) =>
       Object.assign({}, item, {
         app: releaseAppMap.get(item.appId) ? toAppSummary(releaseAppMap.get(item.appId)!) : null,
-        isLatestForChannel: latestReleaseIds.has(item.id),
-        isPinnedLatest: pinnedReleaseIds.has(item.id),
+        isLatestForChannel: latestTargetsByRelease.has(item.id),
+        isPinnedLatest: pinnedTargetsByRelease.has(item.id),
+        latestTargetArchitectures: latestTargetsByRelease.get(item.id) ?? [],
+        pinnedTargetArchitectures: pinnedTargetsByRelease.get(item.id) ?? [],
       }),
     );
 

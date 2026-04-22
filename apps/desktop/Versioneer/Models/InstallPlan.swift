@@ -4,7 +4,7 @@ import Foundation
 /// Replaces the old server-issued InstallPrepareResponse.
 nonisolated struct InstallPlan: Sendable, Equatable {
   nonisolated enum Origin: Sendable, Equatable {
-    case catalog(appId: String, releaseId: String, channel: String?)
+    case catalog(appId: String, releaseId: String, channel: String?, targetArchitecture: String?)
     case local
   }
 
@@ -31,29 +31,40 @@ nonisolated struct InstallPlan: Sendable, Equatable {
     appId: String,
     releaseId: String,
     channel: String? = nil,
+    targetArchitecture: String? = nil,
     artifact: AppDecision.Artifact? = nil
   ) {
     self.init(
       localId: localId,
       strategy: strategy,
-      origin: .catalog(appId: appId, releaseId: releaseId, channel: channel),
+      origin: .catalog(
+        appId: appId,
+        releaseId: releaseId,
+        channel: channel,
+        targetArchitecture: targetArchitecture
+      ),
       artifact: artifact
     )
   }
 
   var appId: String? {
-    guard case .catalog(let appId, _, _) = origin else { return nil }
+    guard case .catalog(let appId, _, _, _) = origin else { return nil }
     return appId
   }
 
   var releaseId: String? {
-    guard case .catalog(_, let releaseId, _) = origin else { return nil }
+    guard case .catalog(_, let releaseId, _, _) = origin else { return nil }
     return releaseId
   }
 
   var channel: String? {
-    guard case .catalog(_, _, let channel) = origin else { return nil }
+    guard case .catalog(_, _, let channel, _) = origin else { return nil }
     return channel
+  }
+
+  var targetArchitecture: String? {
+    guard case .catalog(_, _, _, let targetArchitecture) = origin else { return nil }
+    return targetArchitecture
   }
 
   var isCatalogBacked: Bool {
@@ -73,7 +84,12 @@ nonisolated struct InstallPlan: Sendable, Equatable {
     {
       self.init(
         strategy: strategy,
-        origin: .catalog(appId: appId, releaseId: releaseId, channel: result.channel),
+        origin: .catalog(
+          appId: appId,
+          releaseId: releaseId,
+          channel: result.channel,
+          targetArchitecture: result.targetArchitecture
+        ),
         artifact: result.artifact
       )
       return

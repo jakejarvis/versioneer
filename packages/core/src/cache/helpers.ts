@@ -12,6 +12,7 @@ export interface CachedLatestRelease {
   versionNormalized: string;
   versionRaw: string;
   channel: string;
+  targetArchitecture: string;
   releasedAt: string | null;
   updatedAt: string;
 }
@@ -22,8 +23,9 @@ export async function getCachedLatest(
   kv: CacheKV,
   appId: string,
   channel: string = "stable",
+  targetArchitecture: string = "arm64",
 ): Promise<CachedLatestRelease | null> {
-  const raw = await kv.get(latestReleaseKey(appId, channel));
+  const raw = await kv.get(latestReleaseKey(appId, channel, targetArchitecture));
   if (!raw) return null;
   try {
     return JSON.parse(raw) as CachedLatestRelease;
@@ -37,9 +39,13 @@ export async function setCachedLatest(
   data: CachedLatestRelease,
   ttl: number = DEFAULT_TTL,
 ): Promise<void> {
-  await kv.put(latestReleaseKey(data.appId, data.channel), JSON.stringify(data), {
-    expirationTtl: ttl,
-  });
+  await kv.put(
+    latestReleaseKey(data.appId, data.channel, data.targetArchitecture),
+    JSON.stringify(data),
+    {
+      expirationTtl: ttl,
+    },
+  );
 }
 
 export interface CachedRecentRelease {

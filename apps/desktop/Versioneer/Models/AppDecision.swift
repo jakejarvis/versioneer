@@ -14,6 +14,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
   let latestVersion: String?
   let latestVersionRaw: String?
   let latestReleaseId: String?
+  let targetArchitecture: String?
   let channel: String?
   let availableChannels: [String]?
   let homebrewCaskToken: String?
@@ -47,6 +48,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     latestVersion: String?,
     latestVersionRaw: String?,
     latestReleaseId: String?,
+    targetArchitecture: String? = nil,
     channel: String?,
     availableChannels: [String]?,
     homebrewCaskToken: String?,
@@ -70,6 +72,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     self.latestVersion = latestVersion
     self.latestVersionRaw = latestVersionRaw
     self.latestReleaseId = latestReleaseId
+    self.targetArchitecture = targetArchitecture
     self.channel = channel
     self.availableChannels = availableChannels
     self.homebrewCaskToken = homebrewCaskToken
@@ -85,8 +88,9 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
   private enum CodingKeys: String, CodingKey {
     case appName, bundleId, installedVersion, matchedAppId, matchedAppName,
       matchConfidence, decision, trackingState, localReasonCode, latestVersion, latestVersionRaw,
-      latestReleaseId, channel, availableChannels, homebrewCaskToken, releasedAt, staleSince,
-      iconUrl,
+      latestReleaseId, targetArchitecture, channel, availableChannels, homebrewCaskToken,
+      releasedAt,
+      staleSince, iconUrl,
       artifact, installStrategy, installTrust
   }
 
@@ -104,6 +108,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     latestVersion = try container.decodeIfPresent(String.self, forKey: .latestVersion)
     latestVersionRaw = try container.decodeIfPresent(String.self, forKey: .latestVersionRaw)
     latestReleaseId = try container.decodeIfPresent(String.self, forKey: .latestReleaseId)
+    targetArchitecture = try container.decodeIfPresent(String.self, forKey: .targetArchitecture)
     channel = try container.decodeIfPresent(String.self, forKey: .channel)
     availableChannels = try container.decodeIfPresent([String].self, forKey: .availableChannels)
     homebrewCaskToken = try container.decodeIfPresent(String.self, forKey: .homebrewCaskToken)
@@ -123,6 +128,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     case updateAvailable = "update_available"
     case ambiguous
     case localOnly = "local_only"
+    case incompatible
   }
 
   enum TrackingState: String, Codable, Sendable, CaseIterable {
@@ -136,6 +142,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     case matchedDraft = "matched_draft"
     case ambiguousMatch = "ambiguous_match"
     case notFound = "not_found"
+    case noCompatibleRelease = "no_compatible_release"
   }
 
   struct Artifact: Codable, Hashable, Sendable {
@@ -201,6 +208,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       "Needs Review"
     case .upToDate, .localOnly:
       "Local Only"
+    case .incompatible:
+      "Not Compatible"
     }
   }
 
@@ -216,6 +225,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       "Versioneer found multiple possible catalog matches and needs a reviewer to resolve them."
     case .notFound:
       "Versioneer is using local metadata because this app is not in the public catalog yet."
+    case .noCompatibleRelease:
+      "Versioneer found this app, but no compatible release is available for this Mac."
     case nil:
       "Versioneer is using local metadata because this app is not backed by a public catalog entry."
     }
@@ -260,6 +271,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       latestVersion: latestVersion,
       latestVersionRaw: latestVersionRaw,
       latestReleaseId: latestReleaseId,
+      targetArchitecture: targetArchitecture,
       channel: channel,
       availableChannels: availableChannels,
       homebrewCaskToken: homebrewCaskToken,
@@ -288,6 +300,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       latestVersion: latestVersion,
       latestVersionRaw: latestVersionRaw,
       latestReleaseId: latestReleaseId,
+      targetArchitecture: targetArchitecture,
       channel: channel,
       availableChannels: availableChannels,
       homebrewCaskToken: homebrewCaskToken,

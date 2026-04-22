@@ -1,5 +1,6 @@
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
+import { targetArchitectureValues } from "@versioneer/schemas/architecture";
 import {
   cronJobTypeValues,
   cronRunStatusValues,
@@ -86,6 +87,7 @@ export const installExecutions = sqliteTable(
     clientAppVersion: text("client_app_version"),
     clientOsVersion: text("client_os_version"),
     clientSystemArchitecture: text("client_system_architecture"),
+    targetArchitecture: text("target_architecture", { enum: targetArchitectureValues }),
     channel: text("channel"),
     installStrategy: text("install_strategy", { enum: installStrategyValues }).notNull(),
     executionRoute: text("execution_route", { enum: executionRouteValues }),

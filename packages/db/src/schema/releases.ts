@@ -1,6 +1,10 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import {
+  artifactArchitectureValues,
+  targetArchitectureValues,
+} from "@versioneer/schemas/architecture";
+import {
   artifactTypeValues,
   installStrategyValues,
   releaseStatusValues,
@@ -34,6 +38,12 @@ export const releases = sqliteTable(
   (table) => [
     index("idx_releases_app_id").on(table.appId),
     index("idx_releases_app_channel").on(table.appId, table.channel),
+    index("idx_releases_app_channel_status_version").on(
+      table.appId,
+      table.channel,
+      table.status,
+      table.versionNormalized,
+    ),
     index("idx_releases_version").on(table.appId, table.versionNormalized),
     index("idx_releases_status").on(table.status),
   ],
@@ -80,7 +90,9 @@ export const artifacts = sqliteTable(
     urlHash: text("url_hash"),
     sha256: text("sha256"),
     sizeBytes: integer("size_bytes"),
-    architecture: text("architecture"),
+    architecture: text("architecture", { enum: artifactArchitectureValues })
+      .notNull()
+      .default("unknown"),
     minOsVersion: text("min_os_version"),
     isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at").notNull(),
@@ -96,6 +108,7 @@ export const appLatestReleases = sqliteTable(
       .notNull()
       .references(() => apps.id),
     channel: text("channel").notNull().default("stable"),
+    targetArchitecture: text("target_architecture", { enum: targetArchitectureValues }).notNull(),
     releaseId: text("release_id")
       .notNull()
       .references(() => releases.id),
@@ -110,5 +123,13 @@ export const appLatestReleases = sqliteTable(
     pinnedBy: text("pinned_by"),
     updatedAt: text("updated_at").notNull(),
   },
-  (table) => [uniqueIndex("idx_latest_app_channel").on(table.appId, table.channel)],
+  (table) => [
+    uniqueIndex("idx_latest_app_channel_arch").on(
+      table.appId,
+      table.channel,
+      table.targetArchitecture,
+    ),
+    index("idx_latest_release_id").on(table.releaseId),
+    index("idx_latest_channel_released").on(table.channel, table.releasedAt),
+  ],
 );

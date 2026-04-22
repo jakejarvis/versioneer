@@ -22,6 +22,7 @@ struct APIContractAlignmentTests {
             "latestVersion": "127.0",
             "latestVersionRaw": "127.0",
             "latestReleaseId": "rel_firefox",
+            "targetArchitecture": "arm64",
             "releasedAt": "2026-03-20T12:00:00Z",
             "iconUrl": "https://assets.example.com/firefox.png",
             "artifact": {
@@ -48,6 +49,7 @@ struct APIContractAlignmentTests {
     let result = try #require(response.results.first)
 
     #expect(result.latestReleaseId == "rel_firefox")
+    #expect(result.targetArchitecture == "arm64")
     #expect(result.iconUrl == "https://assets.example.com/firefox.png")
     #expect(result.installStrategy == .zipReplace)
     #expect(result.installTrust.status == .oneClick)

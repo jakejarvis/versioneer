@@ -1,5 +1,6 @@
 import { inferChannel, isPreRelease } from "../versioning";
 import type { SourceParser, ParserOutput, ParsedRelease, ParsedArtifact } from "./types";
+import { inferArchitectureFromText } from "./utils";
 
 /**
  * Minimal XML-like parser for Sparkle appcast feeds.
@@ -43,10 +44,6 @@ export const sparkleParser: SourceParser = {
 };
 
 function parseSparkleItem(xml: string): ParsedRelease | null {
-  // Skip delta updates — partial patches targeting a specific prior version,
-  // not standalone releases.
-  if (extractAttr(xml, "enclosure", "sparkle:deltaFrom")) return null;
-
   const version =
     extractTag(xml, "sparkle:shortVersionString") ??
     extractTag(xml, "sparkle:version") ??
@@ -65,38 +62,9 @@ function parseSparkleItem(xml: string): ParsedRelease | null {
   // Explicit Sparkle channel tag (e.g. "beta") overrides version-string inference
   const sparkleChannel = extractTag(xml, "sparkle:channel");
 
-  // Extract enclosure info
-  const enclosureMatch = xml.match(/<enclosure\s([^>]*?)\/?\s*>/i);
-  const artifacts: ParsedArtifact[] = [];
-
-  if (enclosureMatch) {
-    const encAttrs = enclosureMatch[1]!;
-    const url = extractAttrValue(encAttrs, "url");
-    if (url) {
-      const artifact: ParsedArtifact = {
-        url,
-        type: inferArtifactType(url),
-      };
-
-      const length = extractAttrValue(encAttrs, "length");
-      if (length) {
-        const sizeBytes = parseInt(length, 10);
-        if (!isNaN(sizeBytes) && sizeBytes > 0) artifact.sizeBytes = sizeBytes;
-      }
-
-      const signature =
-        extractAttrValue(encAttrs, "sparkle:edSignature") ??
-        extractAttrValue(encAttrs, "sparkle:dsaSignature");
-      if (signature) artifact.signature = signature;
-
-      const osVersion =
-        extractAttrValue(encAttrs, "sparkle:minimumSystemVersion") ??
-        extractTag(xml, "sparkle:minimumSystemVersion");
-      if (osVersion) artifact.minOsVersion = osVersion;
-
-      artifacts.push(artifact);
-    }
-  }
+  const itemMinOsVersion = extractTag(xml, "sparkle:minimumSystemVersion");
+  const artifacts = extractEnclosureArtifacts(xml, itemMinOsVersion);
+  if (hasEnclosures(xml) && artifacts.length === 0) return null;
 
   const downloadUrl = artifacts[0]?.url;
 
@@ -112,6 +80,10 @@ function parseSparkleItem(xml: string): ParsedRelease | null {
     downloadUrl: downloadUrl ?? undefined,
     artifacts,
   };
+}
+
+function hasEnclosures(xml: string): boolean {
+  return /<enclosure\s/i.test(xml);
 }
 
 function extractTag(xml: string, tag: string): string | null {
@@ -131,6 +103,46 @@ function extractAttr(xml: string, tag: string, attr: string): string | null {
   const tagMatch = xml.match(new RegExp(`<${tag}\\s([^>]*?)\\/?\\s*>`, "i"));
   if (!tagMatch) return null;
   return extractAttrValue(tagMatch[1]!, attr);
+}
+
+function extractEnclosureArtifacts(xml: string, itemMinOsVersion: string | null): ParsedArtifact[] {
+  const artifacts: ParsedArtifact[] = [];
+  const enclosureRegex = /<enclosure\s([^>]*?)\/?\s*>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = enclosureRegex.exec(xml)) !== null) {
+    const attrs = match[1]!;
+    if (extractAttrValue(attrs, "sparkle:deltaFrom")) continue;
+
+    const url = extractAttrValue(attrs, "url");
+    if (!url) continue;
+
+    const artifact: ParsedArtifact = {
+      url,
+      type: inferArtifactType(url),
+      architecture:
+        inferArchitectureFromText(extractAttrValue(attrs, "sparkle:architecture")) ??
+        inferArchitectureFromText(url),
+    };
+
+    const length = extractAttrValue(attrs, "length");
+    if (length) {
+      const sizeBytes = parseInt(length, 10);
+      if (!Number.isNaN(sizeBytes) && sizeBytes > 0) artifact.sizeBytes = sizeBytes;
+    }
+
+    const signature =
+      extractAttrValue(attrs, "sparkle:edSignature") ??
+      extractAttrValue(attrs, "sparkle:dsaSignature");
+    if (signature) artifact.signature = signature;
+
+    const osVersion = extractAttrValue(attrs, "sparkle:minimumSystemVersion") ?? itemMinOsVersion;
+    if (osVersion) artifact.minOsVersion = osVersion;
+
+    artifacts.push(artifact);
+  }
+
+  return artifacts;
 }
 
 function extractAttrValue(attrs: string, name: string): string | null {

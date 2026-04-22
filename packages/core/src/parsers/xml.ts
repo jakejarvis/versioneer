@@ -3,11 +3,20 @@ import xpath from "xpath";
 
 import { inferChannel, isPreRelease } from "../versioning";
 import type { ParsedArtifact, ParsedRelease, ParserOutput, SourceParser } from "./types";
-import { inferArtifactType, resolveUrl } from "./utils";
+import { inferArchitectureFromText, inferArtifactType, resolveUrl } from "./utils";
 
 // xmldom's Document is structurally compatible with the global DOM Document
 // that xpath expects, but TS sees them as distinct nominal types.
 const noop = () => {};
+
+interface ArtifactExtractionConfig {
+  artifactsXPath: string;
+  artifactUrlXPath: string;
+  architectureXPath: string;
+  sha256XPath: string;
+  sizeBytesXPath: string;
+  minOsVersionXPath: string;
+}
 
 export const xmlParser: SourceParser = {
   key: "xml",
@@ -20,6 +29,16 @@ export const xmlParser: SourceParser = {
     const versionXPath = typeof config?.versionXPath === "string" ? config.versionXPath : "";
     const downloadXPath = typeof config?.downloadXPath === "string" ? config.downloadXPath : "";
     const sourceBaseUrl = typeof config?.sourceBaseUrl === "string" ? config.sourceBaseUrl : "";
+    const artifactConfig: ArtifactExtractionConfig = {
+      artifactsXPath: typeof config?.artifactsXPath === "string" ? config.artifactsXPath : "",
+      artifactUrlXPath: typeof config?.artifactUrlXPath === "string" ? config.artifactUrlXPath : "",
+      architectureXPath:
+        typeof config?.architectureXPath === "string" ? config.architectureXPath : "",
+      sha256XPath: typeof config?.sha256XPath === "string" ? config.sha256XPath : "",
+      sizeBytesXPath: typeof config?.sizeBytesXPath === "string" ? config.sizeBytesXPath : "",
+      minOsVersionXPath:
+        typeof config?.minOsVersionXPath === "string" ? config.minOsVersionXPath : "",
+    };
 
     if (!versionXPath) {
       errors.push("Missing required config: versionXPath");
@@ -38,10 +57,17 @@ export const xmlParser: SourceParser = {
     }
 
     if (releasesXPath) {
-      return parseMultiRelease(doc, releasesXPath, versionXPath, downloadXPath, sourceBaseUrl);
+      return parseMultiRelease(
+        doc,
+        releasesXPath,
+        versionXPath,
+        downloadXPath,
+        artifactConfig,
+        sourceBaseUrl,
+      );
     }
 
-    return parseSingleRelease(doc, versionXPath, downloadXPath, sourceBaseUrl);
+    return parseSingleRelease(doc, versionXPath, downloadXPath, artifactConfig, sourceBaseUrl);
   },
 };
 
@@ -49,6 +75,7 @@ function parseSingleRelease(
   doc: Node,
   versionXPath: string,
   downloadXPath: string,
+  artifactConfig: ArtifactExtractionConfig,
   sourceBaseUrl: string,
 ): ParserOutput {
   const errors: string[] = [];
@@ -72,28 +99,10 @@ function parseSingleRelease(
     return { releases: [], confidence: 0, parserVersion: xmlParser.version, errors };
   }
 
-  let downloadUrl: string | undefined;
-  const artifacts: ParsedArtifact[] = [];
-  if (downloadXPath) {
-    try {
-      const result = xpath.select1(downloadXPath, doc);
-      const text = nodeText(result);
-      if (text !== null) {
-        const rawUrl = text.trim();
-        if (rawUrl) {
-          downloadUrl = resolveUrl(rawUrl, sourceBaseUrl);
-          artifacts.push({
-            url: downloadUrl,
-            type: inferArtifactType(downloadUrl),
-          });
-        }
-      }
-    } catch (e) {
-      errors.push(
-        `Invalid downloadXPath expression: ${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
-  }
+  const extracted = extractArtifacts(doc, downloadXPath, artifactConfig, sourceBaseUrl);
+  errors.push(...extracted.errors);
+  const artifacts = extracted.artifacts;
+  const downloadUrl = artifacts[0]?.url;
 
   return {
     releases: [
@@ -120,6 +129,7 @@ function parseMultiRelease(
   releasesXPath: string,
   versionXPath: string,
   downloadXPath: string,
+  artifactConfig: ArtifactExtractionConfig,
   sourceBaseUrl: string,
 ): ParserOutput {
   const errors: string[] = [];
@@ -169,29 +179,17 @@ function parseMultiRelease(
       continue;
     }
 
-    let downloadUrl: string | undefined;
-    const artifacts: ParsedArtifact[] = [];
-    if (downloadXPath) {
-      try {
-        const result = xpath.select1(downloadXPath, node);
-        const text = nodeText(result);
-        if (text !== null) {
-          const rawUrl = text.trim();
-          if (rawUrl) {
-            downloadUrl = resolveUrl(rawUrl, sourceBaseUrl);
-            artifacts.push({
-              url: downloadUrl,
-              type: inferArtifactType(downloadUrl),
-            });
-            hasArtifacts = true;
-          }
-        }
-      } catch (e) {
-        errors.push(
-          `downloadXPath failed on element [${i}]: ${e instanceof Error ? e.message : String(e)}`,
-        );
-      }
-    }
+    const extracted = extractArtifacts(
+      node,
+      downloadXPath,
+      artifactConfig,
+      sourceBaseUrl,
+      `element [${i}]`,
+    );
+    errors.push(...extracted.errors);
+    const artifacts = extracted.artifacts;
+    const downloadUrl = artifacts[0]?.url;
+    if (artifacts.length > 0) hasArtifacts = true;
 
     releases.push({
       versionRaw,
@@ -213,6 +211,79 @@ function parseMultiRelease(
     parserVersion: xmlParser.version,
     errors,
   };
+}
+
+function firstText(path: string, node: Node): string | undefined {
+  if (!path) return undefined;
+  const value = nodeText(xpath.select1(path, node))?.trim();
+  return value || undefined;
+}
+
+function firstNumber(path: string, node: Node): number | undefined {
+  const value = firstText(path, node);
+  if (!value) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function makeArtifact(
+  node: Node,
+  urlXPath: string,
+  config: ArtifactExtractionConfig,
+  sourceBaseUrl: string,
+): ParsedArtifact | undefined {
+  const rawUrl = firstText(urlXPath, node);
+  if (!rawUrl) return undefined;
+  const url = resolveUrl(rawUrl, sourceBaseUrl);
+  return {
+    url,
+    type: inferArtifactType(url),
+    architecture: inferArchitectureFromText(firstText(config.architectureXPath, node) ?? rawUrl),
+    sha256: firstText(config.sha256XPath, node),
+    sizeBytes: firstNumber(config.sizeBytesXPath, node),
+    minOsVersion: firstText(config.minOsVersionXPath, node),
+  };
+}
+
+function extractArtifacts(
+  node: Node,
+  downloadXPath: string,
+  config: ArtifactExtractionConfig,
+  sourceBaseUrl: string,
+  context = "XML",
+): { artifacts: ParsedArtifact[]; errors: string[] } {
+  const artifacts: ParsedArtifact[] = [];
+  const errors: string[] = [];
+  try {
+    if (config.artifactsXPath) {
+      const nodes = xpath.select(config.artifactsXPath, node);
+      if (Array.isArray(nodes)) {
+        const artifactUrlXPath = config.artifactUrlXPath || "./@url";
+        for (const selected of nodes) {
+          if (
+            typeof selected === "string" ||
+            typeof selected === "number" ||
+            typeof selected === "boolean"
+          ) {
+            continue;
+          }
+          const artifact = makeArtifact(selected as Node, artifactUrlXPath, config, sourceBaseUrl);
+          if (artifact) artifacts.push(artifact);
+        }
+      }
+      return { artifacts, errors };
+    }
+
+    if (downloadXPath) {
+      const artifact = makeArtifact(node, downloadXPath, config, sourceBaseUrl);
+      if (artifact) artifacts.push(artifact);
+    }
+  } catch (e) {
+    errors.push(
+      `${context} artifact extraction failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+  return { artifacts, errors };
 }
 
 /** Extract text content from an xpath result (element, attribute, or text node). */

@@ -1,4 +1,4 @@
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { Hono } from "hono";
 
 import {
@@ -6,7 +6,6 @@ import {
   setCachedRecentReleases,
   type CachedRecentRelease,
 } from "@versioneer/core/cache";
-import { compareDatesDesc } from "@versioneer/core/dates";
 import { displayVersion } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
 import { apps, appLatestReleases } from "@versioneer/db";
@@ -42,11 +41,16 @@ export const recentReleasesRoutes = new Hono<{ Bindings: Env }>()
           isNotNull(appLatestReleases.releasedAt),
         ),
       )
+      .orderBy(desc(appLatestReleases.releasedAt))
+      .limit(64)
       .all();
 
-    rows.sort((a, b) => compareDatesDesc(a.releasedAt, b.releasedAt));
+    const rowsByApp = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) {
+      if (!rowsByApp.has(row.appId)) rowsByApp.set(row.appId, row);
+    }
 
-    const items: CachedRecentRelease[] = rows.slice(0, 8).map((row) => ({
+    const items: CachedRecentRelease[] = [...rowsByApp.values()].slice(0, 8).map((row) => ({
       appId: row.appId,
       appName: row.appName,
       appSlug: row.appSlug,

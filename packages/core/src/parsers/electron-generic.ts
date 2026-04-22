@@ -1,6 +1,6 @@
 import { inferChannel, isPreRelease } from "../versioning";
 import type { ParsedArtifact, ParsedRelease, ParserOutput, SourceParser } from "./types";
-import { inferArtifactType } from "./utils";
+import { inferArchitectureFromText, inferArtifactType } from "./utils";
 
 export const electronGenericParser: SourceParser = {
   key: "electron_generic",
@@ -18,24 +18,29 @@ export const electronGenericParser: SourceParser = {
         return { releases, confidence: 0, parserVersion: this.version, errors };
       }
 
+      const fileArtifacts = extractFileArtifacts(body, config?.sourceBaseUrl);
       const artifactPath = yaml.path ?? yaml.url ?? extractFirstFileUrl(body);
-      const artifact: ParsedArtifact[] = artifactPath
-        ? [
-            {
-              url: resolveArtifactUrl(config?.sourceBaseUrl, artifactPath),
-              type: inferArtifactType(artifactPath),
-              signature: yaml.sha512,
-              sizeBytes: yaml.filesize ? parsePositiveInt(yaml.filesize) : undefined,
-            },
-          ]
-        : [];
+      const artifacts: ParsedArtifact[] =
+        fileArtifacts.length > 0
+          ? fileArtifacts
+          : artifactPath
+            ? [
+                {
+                  url: resolveArtifactUrl(config?.sourceBaseUrl, artifactPath),
+                  type: inferArtifactType(artifactPath),
+                  architecture: inferArchitectureFromText(artifactPath),
+                  signature: yaml.sha512,
+                  sizeBytes: yaml.filesize ? parsePositiveInt(yaml.filesize) : undefined,
+                },
+              ]
+            : [];
 
       const release: ParsedRelease = {
         versionRaw,
         channel: inferChannel(versionRaw),
         isPrerelease: isPreRelease(versionRaw),
         publishedAt: yaml.releaseDate,
-        artifacts: artifact,
+        artifacts,
         metadata: {
           rawFeedType: "electron_generic",
           releaseName: yaml.releaseName,
@@ -82,6 +87,51 @@ function parseSimpleYaml(body: string): Record<string, string> {
 function extractFirstFileUrl(body: string): string | undefined {
   const match = body.match(/^\s*-\s*url:\s*["']?([^"'\n]+)["']?\s*$/m);
   return match?.[1]?.trim();
+}
+
+function extractFileArtifacts(body: string, sourceBaseUrl: unknown): ParsedArtifact[] {
+  const filesBlock = extractFilesBlock(body);
+  if (!filesBlock) return [];
+
+  const artifacts: ParsedArtifact[] = [];
+  const blocks = filesBlock
+    .split(/\n(?=\s*-\s+url:\s*)/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  for (const block of blocks) {
+    const url = block.match(/^-\s+url:\s*["']?([^"'\n]+)["']?/m)?.[1]?.trim();
+    if (!url) continue;
+    const sha512 = block.match(/^\s*sha512:\s*["']?([^"'\n]+)["']?/m)?.[1]?.trim();
+    const size = block.match(/^\s*size:\s*["']?([^"'\n]+)["']?/m)?.[1]?.trim();
+    artifacts.push({
+      url: resolveArtifactUrl(sourceBaseUrl, url),
+      type: inferArtifactType(url),
+      architecture: inferArchitectureFromText(url),
+      signature: sha512,
+      sizeBytes: size ? parsePositiveInt(size) : undefined,
+    });
+  }
+
+  return artifacts;
+}
+
+function extractFilesBlock(body: string): string | undefined {
+  const lines = body.split(/\r?\n/);
+  const block: string[] = [];
+  let inFiles = false;
+
+  for (const line of lines) {
+    if (!inFiles) {
+      if (/^\s*files:\s*$/.test(line)) inFiles = true;
+      continue;
+    }
+
+    if (/^\S/.test(line) && line.includes(":")) break;
+    block.push(line);
+  }
+
+  return block.length > 0 ? block.join("\n") : undefined;
 }
 
 function resolveArtifactUrl(sourceBaseUrl: unknown, artifactPath: string): string {

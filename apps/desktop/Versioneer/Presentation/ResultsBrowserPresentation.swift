@@ -116,6 +116,8 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
           return ("Needs Review", .attention, "scope")
         case .upToDate, .localOnly:
           return ("Local Only", .neutral, "desktopcomputer")
+        case .incompatible:
+          return ("Not Compatible", .neutral, "desktopcomputer.trianglebadge.exclamationmark")
         }
       }
       switch result.decision {
@@ -127,6 +129,8 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
         return ("Needs Review", .attention, "scope")
       case .localOnly:
         return ("Local Only", .neutral, "desktopcomputer")
+      case .incompatible:
+        return ("Not Compatible", .neutral, "desktopcomputer.trianglebadge.exclamationmark")
       }
     }
   }
@@ -152,6 +156,8 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
         return 6
       case .localOnly:
         return 7
+      case .incompatible:
+        return 8
       }
     }
   }

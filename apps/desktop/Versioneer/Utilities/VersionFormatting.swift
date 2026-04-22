@@ -9,6 +9,7 @@ nonisolated enum VersionFormatting {
     case .updateAvailable: "Update Available"
     case .ambiguous: "Ambiguous"
     case .localOnly: "Local Only"
+    case .incompatible: "Not Compatible"
     }
   }
 

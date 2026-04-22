@@ -78,6 +78,7 @@ struct DetailSummaryPanel: View {
     case .upToDate: return "Up to Date"
     case .ambiguous: return "Needs Review"
     case .localOnly: return "Local Only"
+    case .incompatible: return "Not Compatible"
     }
   }
 
@@ -90,6 +91,7 @@ struct DetailSummaryPanel: View {
     case .upToDate: return .green
     case .ambiguous: return .orange
     case .localOnly: return .secondary
+    case .incompatible: return .secondary
     }
   }
 
@@ -102,6 +104,7 @@ struct DetailSummaryPanel: View {
     case .upToDate: return "checkmark.circle.fill"
     case .ambiguous: return "scope"
     case .localOnly: return "desktopcomputer"
+    case .incompatible: return "desktopcomputer.trianglebadge.exclamationmark"
     }
   }
 

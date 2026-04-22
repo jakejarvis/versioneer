@@ -21,6 +21,11 @@ import {
   suggestionEvidence,
   trustAssertions,
 } from "@versioneer/db";
+import {
+  artifactSupportsTarget,
+  normalizeTargetArchitecture,
+  type TargetArchitecture,
+} from "@versioneer/schemas/architecture";
 
 function validationErrorResponse(result: { error: { issues: unknown[] } }) {
   return Response.json({ error: "Invalid request", details: result.error.issues }, { status: 400 });
@@ -32,6 +37,10 @@ async function validateInstallTarget(
     appId: string;
     releaseId: string;
     artifactId?: string | null;
+    targetArchitecture?: TargetArchitecture | null;
+    client: {
+      systemArchitecture?: string | null;
+    };
   },
 ) {
   const app = await db
@@ -62,9 +71,12 @@ async function validateInstallTarget(
     throw new HTTPException(404, { message: "Release not found" });
   }
 
+  const targetArchitecture =
+    params.targetArchitecture ?? normalizeTargetArchitecture(params.client.systemArchitecture);
   let artifact: {
     id: string;
     releaseId: string;
+    architecture: string | null;
   } | null = null;
   if (params.artifactId) {
     artifact =
@@ -72,6 +84,7 @@ async function validateInstallTarget(
         .select({
           id: artifacts.id,
           releaseId: artifacts.releaseId,
+          architecture: artifacts.architecture,
         })
         .from(artifacts)
         .where(eq(artifacts.id, params.artifactId))
@@ -79,9 +92,15 @@ async function validateInstallTarget(
     if (!artifact || artifact.releaseId !== params.releaseId) {
       throw new HTTPException(404, { message: "Artifact not found" });
     }
+
+    if (targetArchitecture && !artifactSupportsTarget(artifact.architecture, targetArchitecture)) {
+      throw new HTTPException(409, {
+        message: "Artifact is not compatible with target architecture",
+      });
+    }
   }
 
-  return { app, release, artifact };
+  return { app, release, artifact, targetArchitecture };
 }
 
 async function upsertSuggestion(params: {
@@ -264,6 +283,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         clientAppVersion: data.client.appVersion ?? null,
         clientOsVersion: data.client.osVersion ?? null,
         clientSystemArchitecture: data.client.systemArchitecture ?? null,
+        targetArchitecture: target.targetArchitecture ?? null,
         channel: data.channel ?? null,
         installStrategy: data.installStrategy,
         executionRoute: data.executionRoute ?? null,
@@ -291,6 +311,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
           appId: data.appId,
           releaseId: data.releaseId,
           artifactId: data.artifactId ?? null,
+          targetArchitecture: target.targetArchitecture ?? null,
           installStrategy: data.installStrategy,
           executionRoute: data.executionRoute ?? null,
         }),
@@ -336,6 +357,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
             clientAppVersion: data.client.appVersion ?? null,
             clientOsVersion: data.client.osVersion ?? null,
             clientSystemArchitecture: data.client.systemArchitecture ?? null,
+            targetArchitecture: target.targetArchitecture ?? existing.targetArchitecture,
             channel: data.channel ?? existing.channel,
             installStrategy: data.installStrategy,
             executionRoute:
@@ -361,6 +383,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
           clientAppVersion: data.client.appVersion ?? null,
           clientOsVersion: data.client.osVersion ?? null,
           clientSystemArchitecture: data.client.systemArchitecture ?? null,
+          targetArchitecture: target.targetArchitecture ?? null,
           channel: data.channel ?? null,
           installStrategy: data.installStrategy,
           executionRoute: data.executionRoute ?? data.verification?.executionRoute ?? null,
@@ -389,6 +412,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         status: data.status,
         errorMessage: data.errorMessage ?? null,
         installStrategy: data.installStrategy,
+        targetArchitecture: target.targetArchitecture ?? null,
         executionRoute: data.executionRoute ?? data.verification?.executionRoute ?? null,
         previousVersion: data.previousVersion ?? null,
         installedVersion: data.installedVersion ?? null,

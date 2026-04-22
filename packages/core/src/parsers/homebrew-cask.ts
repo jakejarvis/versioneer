@@ -1,5 +1,6 @@
 import { inferChannel, isPreRelease } from "../versioning";
 import type { ParsedArtifact, ParsedRelease, ParserOutput, SourceParser } from "./types";
+import { inferArchitectureFromText } from "./utils";
 
 interface CaskJson {
   token: string;
@@ -53,11 +54,11 @@ export const homebrewCaskParser: SourceParser = {
       // Primary artifact
       if (cask.url) {
         const sha256 = cask.sha256 !== "no_check" ? cask.sha256 : undefined;
-        artifacts.push({
+        mergeArtifact(artifacts, {
           url: cask.url,
           type: inferArtifactTypeFromUrl(cask.url, cask.container),
           sha256,
-          architecture: inferArchitectureFromUrl(cask.url),
+          architecture: inferArchitectureFromText(cask.url),
           minOsVersion: extractMinOsVersion(cask.depends_on),
         });
       }
@@ -68,12 +69,9 @@ export const homebrewCaskParser: SourceParser = {
           if (!variation.url) continue;
           const archLabel = archFromVariationKey(arch);
           if (!archLabel) continue;
-          // Skip if it's the same URL as the primary
-          if (variation.url === cask.url) continue;
-
           const sha256 =
             variation.sha256 && variation.sha256 !== "no_check" ? variation.sha256 : undefined;
-          artifacts.push({
+          mergeArtifact(artifacts, {
             url: variation.url,
             type: inferArtifactTypeFromUrl(variation.url, cask.container),
             sha256,
@@ -125,21 +123,31 @@ function inferArtifactTypeFromUrl(url: string, container?: string | null): Parse
   return "other";
 }
 
-function inferArchitectureFromUrl(url: string): string | undefined {
-  const lower = url.toLowerCase();
-  if (lower.includes("arm64") || lower.includes("aarch64") || lower.includes("apple-silicon"))
-    return "arm64";
-  if (lower.includes("x86_64") || lower.includes("amd64") || lower.includes("intel"))
-    return "x86_64";
-  if (lower.includes("universal")) return "universal";
-  return undefined;
+function mergeArtifact(artifacts: ParsedArtifact[], artifact: ParsedArtifact) {
+  const existing = artifacts.find((candidate) => candidate.url === artifact.url);
+  if (!existing) {
+    artifacts.push(artifact);
+    return;
+  }
+
+  if (!existing.sha256 && artifact.sha256) existing.sha256 = artifact.sha256;
+  if (!existing.sizeBytes && artifact.sizeBytes) existing.sizeBytes = artifact.sizeBytes;
+  if (!existing.minOsVersion && artifact.minOsVersion)
+    existing.minOsVersion = artifact.minOsVersion;
+
+  if (!existing.architecture) {
+    existing.architecture = artifact.architecture;
+  } else if (
+    artifact.architecture &&
+    existing.architecture !== artifact.architecture &&
+    existing.architecture !== "universal"
+  ) {
+    existing.architecture = "universal";
+  }
 }
 
-function archFromVariationKey(key: string): string | undefined {
-  const lower = key.toLowerCase();
-  if (lower.includes("arm64") || lower.includes("silicon")) return "arm64";
-  if (lower.includes("intel") || lower.includes("x86_64")) return "x86_64";
-  return undefined;
+function archFromVariationKey(key: string): ParsedArtifact["architecture"] {
+  return inferArchitectureFromText(key);
 }
 
 function extractMinOsVersion(dependsOn?: CaskJson["depends_on"]): string | undefined {

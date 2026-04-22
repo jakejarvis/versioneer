@@ -351,6 +351,9 @@ function ReleaseReadinessSection({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge status={release.channel} />
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+                      {release.targetArchitecture}
+                    </span>
                     <span className="font-mono text-sm font-medium">{release.versionRaw}</span>
                     <IdDisplay id={release.releaseId} />
                   </div>

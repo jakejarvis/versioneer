@@ -19,6 +19,7 @@ nonisolated struct InstallPrepareRequest: Codable, Sendable {
   let appId: String
   let releaseId: String
   let artifactId: String?
+  let targetArchitecture: String?
   let installStrategy: String
   let executionRoute: String?
   let channel: String?
@@ -37,6 +38,7 @@ nonisolated struct InstallExecutionStatusRequest: Codable, Sendable {
   let appId: String
   let releaseId: String
   let artifactId: String?
+  let targetArchitecture: String?
   let installStrategy: String
   let executionRoute: String?
   let channel: String?

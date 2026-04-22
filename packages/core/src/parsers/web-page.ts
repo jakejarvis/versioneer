@@ -2,7 +2,7 @@ import * as cheerio from "cheerio";
 
 import { inferChannel, isPreRelease } from "../versioning";
 import type { ParsedArtifact, ParsedRelease, ParserOutput, SourceParser } from "./types";
-import { inferArtifactType, resolveUrl } from "./utils";
+import { inferArchitectureFromText, inferArtifactType, resolveUrl } from "./utils";
 
 export const webPageParser: SourceParser = {
   key: "web_page",
@@ -61,6 +61,7 @@ export const webPageParser: SourceParser = {
           artifacts.push({
             url,
             type: inferArtifactType(url),
+            architecture: inferArchitectureFromText(url),
           });
         });
       }

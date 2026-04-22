@@ -22,11 +22,12 @@ describe("cached latest release", () => {
       versionNormalized: "0000001.0000000.0000000",
       versionRaw: "1.0.0",
       channel: "stable",
+      targetArchitecture: "arm64",
       releasedAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
     };
     await setCachedLatest(kv, data);
-    const result = await getCachedLatest(kv, "app_123", "stable");
+    const result = await getCachedLatest(kv, "app_123", "stable", "arm64");
     expect(result).toEqual(data);
   });
 
@@ -38,8 +39,8 @@ describe("cached latest release", () => {
 
   it("returns null for corrupted JSON", async () => {
     const kv = createMockKV();
-    kv.store.set("latest:app:app_123:stable", "not-json");
-    const result = await getCachedLatest(kv, "app_123", "stable");
+    kv.store.set("latest:app:app_123:stable:arm64", "not-json");
+    const result = await getCachedLatest(kv, "app_123", "stable", "arm64");
     expect(result).toBeNull();
   });
 
@@ -51,6 +52,7 @@ describe("cached latest release", () => {
       versionNormalized: "0000001.0000000.0000000",
       versionRaw: "1.0.0",
       channel: "stable",
+      targetArchitecture: "arm64",
       releasedAt: null,
       updatedAt: "2026-01-01T00:00:00Z",
     };

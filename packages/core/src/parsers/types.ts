@@ -1,3 +1,4 @@
+import type { ArtifactArchitecture } from "@versioneer/schemas/architecture";
 import type { ArtifactType } from "@versioneer/schemas/releases";
 
 export interface ParsedRelease {
@@ -19,7 +20,7 @@ export interface ParsedArtifact {
   type: ArtifactType;
   sha256?: string;
   sizeBytes?: number;
-  architecture?: string;
+  architecture?: ArtifactArchitecture;
   minOsVersion?: string;
   signature?: string;
 }

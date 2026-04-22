@@ -1,3 +1,5 @@
+import { architectureFromText } from "@versioneer/schemas/architecture";
+
 import type { ParsedArtifact } from "./types";
 
 export function resolveUrl(href: string, baseUrl: string): string {
@@ -16,4 +18,11 @@ export function inferArtifactType(url: string): ParsedArtifact["type"] {
   if (lower.endsWith(".zip")) return "zip";
   if (lower.endsWith(".pkg")) return "pkg";
   return "other";
+}
+
+export function inferArchitectureFromText(
+  value: string | null | undefined,
+): ParsedArtifact["architecture"] {
+  const architecture = architectureFromText(value);
+  return architecture === "unknown" ? undefined : architecture;
 }

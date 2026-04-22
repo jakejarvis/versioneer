@@ -38,4 +38,40 @@ describe("electronGenericParser", () => {
     expect(result.confidence).toBe(0);
     expect(result.errors[0]).toContain("Missing version");
   });
+
+  it("preserves split files from latest-mac.yml feeds", () => {
+    const result = electronGenericParser.parse(
+      `
+version: 3.1.0
+files:
+  - url: Example-3.1.0-arm64.dmg
+    sha512: arm512
+    size: 1000
+  - url: Example-3.1.0-x64.dmg
+    sha512: x64512
+    size: 1100
+path: Example-3.1.0-arm64.dmg
+sha512: fallback
+releaseDate: 2026-03-28T12:00:00.000Z
+`,
+      { sourceBaseUrl: "https://downloads.example.com/app/" },
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.releases[0]!.artifacts).toHaveLength(2);
+    expect(result.releases[0]!.artifacts).toEqual([
+      expect.objectContaining({
+        url: "https://downloads.example.com/app/Example-3.1.0-arm64.dmg",
+        architecture: "arm64",
+        signature: "arm512",
+        sizeBytes: 1000,
+      }),
+      expect.objectContaining({
+        url: "https://downloads.example.com/app/Example-3.1.0-x64.dmg",
+        architecture: "x86_64",
+        signature: "x64512",
+        sizeBytes: 1100,
+      }),
+    ]);
+  });
 });

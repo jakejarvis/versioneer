@@ -2,7 +2,16 @@ import { JSONPath } from "jsonpath-plus";
 
 import { inferChannel, isPreRelease } from "../versioning";
 import type { ParsedArtifact, ParsedRelease, ParserOutput, SourceParser } from "./types";
-import { inferArtifactType, resolveUrl } from "./utils";
+import { inferArchitectureFromText, inferArtifactType, resolveUrl } from "./utils";
+
+interface ArtifactExtractionConfig {
+  artifactsPath: string;
+  artifactUrlPath: string;
+  architecturePath: string;
+  sha256Path: string;
+  sizeBytesPath: string;
+  minOsVersionPath: string;
+}
 
 function queryJsonPath(path: string, json: object): unknown[] {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-return
@@ -20,6 +29,14 @@ export const jsonParser: SourceParser = {
     const versionPath = typeof config?.versionPath === "string" ? config.versionPath : "";
     const downloadPath = typeof config?.downloadPath === "string" ? config.downloadPath : "";
     const sourceBaseUrl = typeof config?.sourceBaseUrl === "string" ? config.sourceBaseUrl : "";
+    const artifactConfig: ArtifactExtractionConfig = {
+      artifactsPath: typeof config?.artifactsPath === "string" ? config.artifactsPath : "",
+      artifactUrlPath: typeof config?.artifactUrlPath === "string" ? config.artifactUrlPath : "",
+      architecturePath: typeof config?.architecturePath === "string" ? config.architecturePath : "",
+      sha256Path: typeof config?.sha256Path === "string" ? config.sha256Path : "",
+      sizeBytesPath: typeof config?.sizeBytesPath === "string" ? config.sizeBytesPath : "",
+      minOsVersionPath: typeof config?.minOsVersionPath === "string" ? config.minOsVersionPath : "",
+    };
 
     if (!versionPath) {
       errors.push("Missing required config: versionPath");
@@ -35,10 +52,17 @@ export const jsonParser: SourceParser = {
     }
 
     if (releasesPath) {
-      return parseMultiRelease(data, releasesPath, versionPath, downloadPath, sourceBaseUrl);
+      return parseMultiRelease(
+        data,
+        releasesPath,
+        versionPath,
+        downloadPath,
+        artifactConfig,
+        sourceBaseUrl,
+      );
     }
 
-    return parseSingleRelease(data, versionPath, downloadPath, sourceBaseUrl);
+    return parseSingleRelease(data, versionPath, downloadPath, artifactConfig, sourceBaseUrl);
   },
 };
 
@@ -46,6 +70,7 @@ function parseSingleRelease(
   data: object,
   versionPath: string,
   downloadPath: string,
+  artifactConfig: ArtifactExtractionConfig,
   sourceBaseUrl: string,
 ): ParserOutput {
   const errors: string[] = [];
@@ -71,28 +96,14 @@ function parseSingleRelease(
     return { releases: [], confidence: 0, parserVersion: jsonParser.version, errors };
   }
 
-  let downloadUrl: string | undefined;
-  const artifacts: ParsedArtifact[] = [];
-  if (downloadPath) {
-    try {
-      const results = queryJsonPath(downloadPath, data);
-      const first = results[0];
-      if (first !== undefined && first !== null) {
-        const rawUrl = String(first).trim();
-        if (rawUrl) {
-          downloadUrl = resolveUrl(rawUrl, sourceBaseUrl);
-          artifacts.push({
-            url: downloadUrl,
-            type: inferArtifactType(downloadUrl),
-          });
-        }
-      }
-    } catch (e) {
-      errors.push(
-        `Invalid downloadPath JSONPath expression: ${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
-  }
+  const { artifacts, errors: artifactErrors } = extractArtifacts(
+    data,
+    downloadPath,
+    artifactConfig,
+    sourceBaseUrl,
+  );
+  errors.push(...artifactErrors);
+  const downloadUrl = artifacts[0]?.url;
 
   return {
     releases: [
@@ -119,6 +130,7 @@ function parseMultiRelease(
   releasesPath: string,
   versionPath: string,
   downloadPath: string,
+  artifactConfig: ArtifactExtractionConfig,
   sourceBaseUrl: string,
 ): ParserOutput {
   const errors: string[] = [];
@@ -169,29 +181,17 @@ function parseMultiRelease(
       continue;
     }
 
-    let downloadUrl: string | undefined;
-    const artifacts: ParsedArtifact[] = [];
-    if (downloadPath) {
-      try {
-        const results = queryJsonPath(downloadPath, element);
-        const first = results[0];
-        if (first !== undefined && first !== null) {
-          const rawUrl = String(first).trim();
-          if (rawUrl) {
-            downloadUrl = resolveUrl(rawUrl, sourceBaseUrl);
-            artifacts.push({
-              url: downloadUrl,
-              type: inferArtifactType(downloadUrl),
-            });
-            hasArtifacts = true;
-          }
-        }
-      } catch (e) {
-        errors.push(
-          `downloadPath failed on element [${i}]: ${e instanceof Error ? e.message : String(e)}`,
-        );
-      }
-    }
+    const extracted = extractArtifacts(
+      element,
+      downloadPath,
+      artifactConfig,
+      sourceBaseUrl,
+      `element [${i}]`,
+    );
+    errors.push(...extracted.errors);
+    const artifacts = extracted.artifacts;
+    const downloadUrl = artifacts[0]?.url;
+    if (artifacts.length > 0) hasArtifacts = true;
 
     releases.push({
       versionRaw,
@@ -213,4 +213,73 @@ function parseMultiRelease(
     parserVersion: jsonParser.version,
     errors,
   };
+}
+
+function firstString(path: string, data: object): string | undefined {
+  if (!path) return undefined;
+  const first = queryJsonPath(path, data)[0];
+  if (first === undefined || first === null) return undefined;
+  const value = String(first).trim();
+  return value || undefined;
+}
+
+function firstNumber(path: string, data: object): number | undefined {
+  const value = firstString(path, data);
+  if (!value) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function makeArtifact(
+  data: object,
+  urlPath: string,
+  config: ArtifactExtractionConfig,
+  sourceBaseUrl: string,
+): ParsedArtifact | undefined {
+  const rawUrl = firstString(urlPath, data);
+  if (!rawUrl) return undefined;
+  const url = resolveUrl(rawUrl, sourceBaseUrl);
+  return {
+    url,
+    type: inferArtifactType(url),
+    architecture: inferArchitectureFromText(firstString(config.architecturePath, data) ?? rawUrl),
+    sha256: firstString(config.sha256Path, data),
+    sizeBytes: firstNumber(config.sizeBytesPath, data),
+    minOsVersion: firstString(config.minOsVersionPath, data),
+  };
+}
+
+function extractArtifacts(
+  data: object,
+  downloadPath: string,
+  config: ArtifactExtractionConfig,
+  sourceBaseUrl: string,
+  context = "JSON",
+): { artifacts: ParsedArtifact[]; errors: string[] } {
+  const errors: string[] = [];
+  const artifacts: ParsedArtifact[] = [];
+
+  try {
+    if (config.artifactsPath) {
+      const elements = queryJsonPath(config.artifactsPath, data);
+      const artifactUrlPath = config.artifactUrlPath || "$.url";
+      for (const element of elements) {
+        if (typeof element !== "object" || element === null) continue;
+        const artifact = makeArtifact(element, artifactUrlPath, config, sourceBaseUrl);
+        if (artifact) artifacts.push(artifact);
+      }
+      return { artifacts, errors };
+    }
+
+    if (downloadPath) {
+      const artifact = makeArtifact(data, downloadPath, config, sourceBaseUrl);
+      if (artifact) artifacts.push(artifact);
+    }
+  } catch (e) {
+    errors.push(
+      `${context} artifact extraction failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  return { artifacts, errors };
 }

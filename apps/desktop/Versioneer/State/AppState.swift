@@ -795,6 +795,7 @@ final class AppState {
         latestVersion: localInfo.latestVersion ?? decision.latestVersion,
         latestVersionRaw: localInfo.latestVersion ?? decision.latestVersionRaw,
         latestReleaseId: decision.latestReleaseId,
+        targetArchitecture: decision.targetArchitecture,
         channel: decision.channel,
         availableChannels: decision.availableChannels,
         homebrewCaskToken: matchingApp.homebrewCaskToken ?? decision.homebrewCaskToken,

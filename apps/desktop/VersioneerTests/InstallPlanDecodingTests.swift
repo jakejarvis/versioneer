@@ -19,6 +19,7 @@ struct InstallPlanTests {
         "latestVersion": "127.0",
         "latestVersionRaw": "127.0",
         "latestReleaseId": "rel_456",
+        "targetArchitecture": "arm64",
         "releasedAt": "2026-03-20T12:00:00Z",
         "iconUrl": null,
         "artifact": {
@@ -46,6 +47,7 @@ struct InstallPlanTests {
     #expect(plan.isCatalogBacked)
     #expect(plan.appId == "app_firefox")
     #expect(plan.releaseId == "rel_456")
+    #expect(plan.targetArchitecture == "arm64")
     #expect(plan.artifact?.id == "art_789")
     #expect(plan.artifact?.sha256 == "abc123")
     #expect(!plan.localId.isEmpty)
