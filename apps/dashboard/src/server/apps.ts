@@ -60,6 +60,7 @@ function appReleaseOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
 
 // GET /apps - list with pagination, status/search filters
 export const listApps = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(
     z.object({
       limit: z.number().int().min(1).max(100).default(50),
@@ -123,6 +124,7 @@ export const listApps = createServerFn({ method: "GET" })
 
 // GET /apps/:id - detail with latestReleases, sourceCount
 export const getApp = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data: { id } }) => {
     const db = createDb(env.DB);
@@ -223,6 +225,7 @@ export const updateApp = createServerFn({ method: "POST" })
 
 // GET /apps/:id/aliases
 export const getAppAliases = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ appId: z.string().min(1) }))
   .handler(async ({ data: { appId } }) => {
     const db = createDb(env.DB);
@@ -288,6 +291,7 @@ export const createAlias = createServerFn({ method: "POST" })
 
 // GET /apps/:id/sources
 export const getAppSources = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ appId: z.string().min(1) }))
   .handler(async ({ data: { appId } }) => {
     const db = createDb(env.DB);
@@ -302,6 +306,7 @@ export const getAppSources = createServerFn({ method: "GET" })
 
 // GET /apps/:id/releases - paginated with filters
 export const getAppReleases = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(
     z.object({
       appId: z.string().min(1),
@@ -338,6 +343,7 @@ export const getAppReleases = createServerFn({ method: "GET" })
 
 // GET /apps/:id/latest
 export const getAppLatest = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ appId: z.string().min(1) }))
   .handler(async ({ data: { appId } }) => {
     const db = createDb(env.DB);

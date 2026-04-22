@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 
+import { telemetryRateLimit } from "@/middleware/rate-limit";
 import { matchApp, normalizeAliasValue } from "@versioneer/core/identity";
 import type { AliasRecord, TrustAssertionRecord } from "@versioneer/core/identity";
 import { normalizeBaseUrl, resolveSourceUrl } from "@versioneer/core/sources";
@@ -39,6 +40,7 @@ import {
 import {
   D1_PARAM_LIMIT,
   MAX_INVENTORY_GZIP_BYTES,
+  MAX_INVENTORY_GZIP_EXPANSION_RATIO,
   MAX_INVENTORY_JSON_BYTES,
 } from "../lib/constants";
 import { isArchCompatible, isOsVersionCompatible, computeStaleSince } from "./helpers";
@@ -161,6 +163,10 @@ async function readInventoryJson(request: Request): Promise<unknown> {
     .stream()
     .pipeThrough(new DecompressionStream("gzip"));
   const decoded = await readStreamBytesLimited(decompressedStream, MAX_INVENTORY_JSON_BYTES);
+  const expansionRatio = decoded.byteLength / Math.max(compressed.byteLength, 1);
+  if (expansionRatio > MAX_INVENTORY_GZIP_EXPANSION_RATIO) {
+    throw new HTTPException(413, { message: "Compressed inventory body expands too much" });
+  }
   return JSON.parse(decoder.decode(decoded)) as unknown;
 }
 
@@ -780,7 +786,7 @@ const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next) => {
 export const inventoryRoutes = new Hono<InventoryEnv>()
   // POST /v1/inventory/check
   // TODO: Pre-compute inventory snapshot in KV, rebuilt on catalog changes, to avoid full-table loads
-  .post("/inventory/check", gzipJsonMiddleware, async (c) => {
+  .post("/inventory/check", telemetryRateLimit, gzipJsonMiddleware, async (c) => {
     const request = c.get("inventoryRequest");
     const db = createDb(c.env.DB);
     const now = new Date().toISOString();

@@ -43,6 +43,7 @@ function releaseOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
 
 // GET /releases - list with pagination and filters
 export const listReleases = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(
     z.object({
       limit: z.number().int().min(1).max(100).default(50),
@@ -114,6 +115,7 @@ export const listReleases = createServerFn({ method: "GET" })
 
 // GET /releases/:id - detail
 export const getRelease = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data: { id } }) => {
     const db = createDb(env.DB);
@@ -229,6 +231,7 @@ export const updateRelease = createServerFn({ method: "POST" })
 
 // GET /releases/:id/artifacts
 export const getReleaseArtifacts = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ releaseId: z.string().min(1) }))
   .handler(async ({ data: { releaseId } }) => {
     const db = createDb(env.DB);
@@ -299,6 +302,7 @@ export const unpinRelease = createServerFn({ method: "POST" })
 
 // GET /releases/:id/observations
 export const getReleaseObservations = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ releaseId: z.string().min(1) }))
   .handler(async ({ data: { releaseId } }) => {
     const db = createDb(env.DB);

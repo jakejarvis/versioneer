@@ -118,6 +118,7 @@ async function prepareAuthorityHandoffInsert(params: {
 
 // GET /sources - list with pagination and filters
 export const listSources = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(
     z.object({
       limit: z.number().int().min(1).max(100).default(50),
@@ -183,6 +184,7 @@ export const listSources = createServerFn({ method: "GET" })
 
 // GET /sources/:id - detail
 export const getSource = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data: { id } }) => {
     const db = createDb(env.DB);
@@ -527,6 +529,7 @@ export const triggerFetch = createServerFn({ method: "POST" })
 
 // GET /sources/:id/fetches - paginated fetch history
 export const getSourceFetches = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(
     z.object({
       sourceId: z.string().min(1),
@@ -557,6 +560,7 @@ export const getSourceFetches = createServerFn({ method: "GET" })
 
 // GET /source-fetches/:id - single fetch detail
 export const getSourceFetch = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data: { id } }) => {
     const db = createDb(env.DB);
@@ -639,6 +643,7 @@ export const reorderSources = createServerFn({ method: "POST" })
 
 // GET /source-fetches/:id/parser-runs
 export const getParserRuns = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ fetchId: z.string().min(1) }))
   .handler(async ({ data: { fetchId } }) => {
     const db = createDb(env.DB);

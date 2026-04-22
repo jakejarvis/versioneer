@@ -145,6 +145,7 @@ final class InstallCoordinator {
       guard let installPlan = InstallPlan(result: result, installedApp: installedApp) else {
         throw InstallError.unsupportedStrategy
       }
+      try validateCatalogInstallTrust(plan: installPlan, installedApp: installedApp)
       plan = installPlan
 
       executionRouteUsed =
@@ -835,6 +836,31 @@ final class InstallCoordinator {
     return summary
   }
 
+  private func validateCatalogInstallTrust(
+    plan: InstallPlan,
+    installedApp: InstalledApp
+  ) throws {
+    guard plan.isCatalogBacked else { return }
+
+    switch plan.strategy {
+    case .zipReplace, .dmgCopyReplace, .pkgInstall:
+      guard installedApp.bundleId?.isEmpty == false else {
+        throw InstallError.missingInstallTrustMaterial(
+          "Catalog-backed installs require the installed app's bundle identifier before Versioneer can replace it.")
+      }
+      guard installedApp.teamId?.isEmpty == false else {
+        throw InstallError.missingInstallTrustMaterial(
+          "Catalog-backed installs require the installed app's Developer Team ID before Versioneer can replace it.")
+      }
+      guard plan.artifact?.sha256?.isEmpty == false else {
+        throw InstallError.missingInstallTrustMaterial(
+          "Catalog-backed installs require a SHA-256 checksum before Versioneer can replace or install with elevated privileges.")
+      }
+    case .sparkle, .macAppStore, .manualOnly:
+      return
+    }
+  }
+
   private func verifyPackage(
     packageURL: URL,
     expectedHash: String?,
@@ -1060,7 +1086,10 @@ final class InstallCoordinator {
   private func makeStagingDirectory(executionId: String) throws -> URL {
     let root = PrivilegedInstallPaths.stagingRoot(
       in: FileManager.default.homeDirectoryForCurrentUser)
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let ownerOnlyAttributes: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
+    try FileManager.default.createDirectory(
+      at: root, withIntermediateDirectories: true, attributes: ownerOnlyAttributes)
+    try FileManager.default.setAttributes(ownerOnlyAttributes, ofItemAtPath: root.path)
     let executionDirectory = PrivilegedInstallPaths.stagingDirectory(
       executionId: executionId,
       in: FileManager.default.homeDirectoryForCurrentUser
@@ -1069,7 +1098,8 @@ final class InstallCoordinator {
       try FileManager.default.removeItem(at: executionDirectory)
     }
     try FileManager.default.createDirectory(
-      at: executionDirectory, withIntermediateDirectories: true)
+      at: executionDirectory, withIntermediateDirectories: true, attributes: ownerOnlyAttributes)
+    try FileManager.default.setAttributes(ownerOnlyAttributes, ofItemAtPath: executionDirectory.path)
     return executionDirectory
   }
 
@@ -1294,6 +1324,7 @@ enum InstallError: LocalizedError {
   case installerPayloadInvalid(String)
   case verificationFailed(String)
   case unsupportedStrategy
+  case missingInstallTrustMaterial(String)
   case cancelled
   case privilegedHelperApprovalRequired
   case privilegedHelperRegistrationFailed(String)
@@ -1314,6 +1345,8 @@ enum InstallError: LocalizedError {
       message
     case .unsupportedStrategy:
       "This install strategy is not supported by the current desktop app build."
+    case .missingInstallTrustMaterial(let message):
+      message
     case .cancelled:
       "The install was cancelled."
     case .privilegedHelperApprovalRequired:

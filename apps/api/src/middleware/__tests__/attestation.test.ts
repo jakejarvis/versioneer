@@ -93,6 +93,24 @@ describe("requireAttestation middleware", () => {
     expect(res.status).toBe(401);
   });
 
+  it("returns 401 for expired JWT", async () => {
+    const token = await sign(
+      { sub: "device_123", exp: Math.floor(TEST_NOW.getTime() / 1000) - 60 },
+      TEST_SECRET,
+    );
+    const res = await protectedRequest(
+      { Authorization: `Bearer ${token}` },
+      {
+        ENVIRONMENT: "production" as Env["ENVIRONMENT"],
+        REQUIRE_ATTESTATION: "true" as string,
+        JWT_SECRET: TEST_SECRET,
+      },
+    );
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("expired");
+  });
+
   it("passes through with a valid JWT", async () => {
     const token = await sign(
       { sub: "device_123", exp: Math.floor(TEST_NOW.getTime() / 1000) + 3600 },

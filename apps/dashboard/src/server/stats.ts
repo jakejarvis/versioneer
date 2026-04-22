@@ -13,56 +13,60 @@ import {
   catalogSuggestions,
 } from "@versioneer/db";
 
-export const getStats = createServerFn({ method: "GET" }).handler(async () => {
-  const db = createDb(env.DB);
+import { authMiddleware } from "./middleware";
 
-  const [appCount] = await db.select({ count: sql<number>`count(*)` }).from(apps);
-  const [activeSourceCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(sources)
-    .where(sql`${sources.status} = 'active'`);
-  const [errorSourceCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(sources)
-    .where(sql`${sources.status} = 'error'`);
-  const [openFailureCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(jobFailures)
-    .where(sql`${jobFailures.status} = 'open'`);
-  const [recentReleaseCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(releases)
-    .where(sql`${releases.createdAt} > datetime('now', '-7 days')`);
+export const getStats = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async () => {
+    const db = createDb(env.DB);
 
-  const [publicCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(apps)
-    .where(sql`${apps.status} = 'public'`);
+    const [appCount] = await db.select({ count: sql<number>`count(*)` }).from(apps);
+    const [activeSourceCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(sources)
+      .where(sql`${sources.status} = 'active'`);
+    const [errorSourceCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(sources)
+      .where(sql`${sources.status} = 'error'`);
+    const [openFailureCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(jobFailures)
+      .where(sql`${jobFailures.status} = 'open'`);
+    const [recentReleaseCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(releases)
+      .where(sql`${releases.createdAt} > datetime('now', '-7 days')`);
 
-  const [pendingFeedbackCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(clientFeedback)
-    .where(sql`${clientFeedback.status} = 'new'`);
+    const [publicCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(apps)
+      .where(sql`${apps.status} = 'public'`);
 
-  const [pendingDiscoveredCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(discoveredApps)
-    .where(sql`${discoveredApps.status} = 'pending'`);
+    const [pendingFeedbackCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(clientFeedback)
+      .where(sql`${clientFeedback.status} = 'new'`);
 
-  const [pendingSuggestionCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(catalogSuggestions)
-    .where(sql`${catalogSuggestions.status} = 'pending'`);
+    const [pendingDiscoveredCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(discoveredApps)
+      .where(sql`${discoveredApps.status} = 'pending'`);
 
-  return {
-    totalApps: appCount?.count ?? 0,
-    activeSources: activeSourceCount?.count ?? 0,
-    errorSources: errorSourceCount?.count ?? 0,
-    openFailures: openFailureCount?.count ?? 0,
-    recentReleases: recentReleaseCount?.count ?? 0,
-    publicApps: publicCount?.count ?? 0,
-    pendingFeedback: pendingFeedbackCount?.count ?? 0,
-    pendingDiscoveredApps: pendingDiscoveredCount?.count ?? 0,
-    pendingCatalogSuggestions: pendingSuggestionCount?.count ?? 0,
-  };
-});
+    const [pendingSuggestionCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(catalogSuggestions)
+      .where(sql`${catalogSuggestions.status} = 'pending'`);
+
+    return {
+      totalApps: appCount?.count ?? 0,
+      activeSources: activeSourceCount?.count ?? 0,
+      errorSources: errorSourceCount?.count ?? 0,
+      openFailures: openFailureCount?.count ?? 0,
+      recentReleases: recentReleaseCount?.count ?? 0,
+      publicApps: publicCount?.count ?? 0,
+      pendingFeedback: pendingFeedbackCount?.count ?? 0,
+      pendingDiscoveredApps: pendingDiscoveredCount?.count ?? 0,
+      pendingCatalogSuggestions: pendingSuggestionCount?.count ?? 0,
+    };
+  });

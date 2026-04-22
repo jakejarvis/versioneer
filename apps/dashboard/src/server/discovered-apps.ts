@@ -31,6 +31,7 @@ function discoveredAppOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
 }
 
 export const listDiscoveredApps = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(
     z.object({
       limit: z.number().int().min(1).max(100).default(50),
@@ -110,6 +111,7 @@ export const dismissDiscoveredApp = createServerFn({ method: "POST" })
 
 // GET single discovered app by ID (with all enrichment data)
 export const getDiscoveredApp = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data: { id } }) => {
     const db = createDb(env.DB);

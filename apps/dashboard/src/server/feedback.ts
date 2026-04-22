@@ -27,6 +27,7 @@ function feedbackOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
 }
 
 export const listFeedback = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(
     z.object({
       limit: z.number().optional(),
@@ -91,6 +92,7 @@ export const listFeedback = createServerFn({ method: "GET" })
   });
 
 export const getFeedbackDetail = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string() }))
   .handler(async ({ data }) => {
     const db = createDb(env.DB);
@@ -133,20 +135,22 @@ export const updateFeedback = createServerFn({ method: "POST" })
     return { status: "updated" };
   });
 
-export const getFeedbackStats = createServerFn({ method: "GET" }).handler(async () => {
-  const db = createDb(env.DB);
+export const getFeedbackStats = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async () => {
+    const db = createDb(env.DB);
 
-  const [newCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(clientFeedback)
-    .where(eq(clientFeedback.status, "new"));
-  const [triagedCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(clientFeedback)
-    .where(eq(clientFeedback.status, "triaged"));
+    const [newCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(clientFeedback)
+      .where(eq(clientFeedback.status, "new"));
+    const [triagedCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(clientFeedback)
+      .where(eq(clientFeedback.status, "triaged"));
 
-  return {
-    new: newCount?.count ?? 0,
-    triaged: triagedCount?.count ?? 0,
-  };
-});
+    return {
+      new: newCount?.count ?? 0,
+      triaged: triagedCount?.count ?? 0,
+    };
+  });

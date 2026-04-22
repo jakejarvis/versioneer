@@ -85,6 +85,7 @@ async function retryFailure(
 
 // GET /job-failures - list with pagination, default status="open"
 export const listJobFailures = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(
     z.object({
       limit: z.number().int().min(1).max(100).default(50),
@@ -128,6 +129,7 @@ export const listJobFailures = createServerFn({ method: "GET" })
 
 // GET /job-failures/:id - detail
 export const getJobFailure = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data: { id } }) => {
     const db = createDb(env.DB);

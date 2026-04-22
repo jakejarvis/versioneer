@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 
@@ -251,6 +252,39 @@ struct PrivilegedOperationValidationTests {
       Issue.record("Unexpected error: \(error.localizedDescription)")
     }
   }
+
+  @Test func rejectsGroupWritableStagingWhenOwnerOnlyModeIsRequired() throws {
+    let sandbox = try TestSandbox(requireOwnerOnlyStaging: true)
+    let context = try sandbox.makePackageContext(executionId: "exec_open_staging")
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o755], ofItemAtPath: context.stagingDirectory.path)
+
+    let manifest = PreparedPrivilegedOperation(
+      executionId: "exec_open_staging",
+      operationType: .installPackage,
+      sourceRelativePath: "payload/payload.pkg",
+      destinationPath: "/",
+      backupRelativePath: nil,
+      installTarget: "/",
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
+    )
+    try sandbox.writeManifest(manifest, to: context.stagingDirectory)
+
+    do {
+      _ = try sandbox.validator.validate(request: context.request)
+      Issue.record("Expected owner-only staging permission failure")
+    } catch let error as PrivilegedOperationValidationError {
+      guard case .stagingDirectoryPermissionsInvalid = error else {
+        Issue.record("Unexpected validation error: \(error.localizedDescription)")
+        return
+      }
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
+    }
+  }
+
   @Test func masUpgradeManifestPassesValidation() throws {
     let sandbox = try TestSandbox()
     let stagingDirectory = sandbox.allowedStagingRoot.appendingPathComponent(
@@ -289,12 +323,16 @@ private struct TestSandbox {
   let allowedStagingRoot: URL
   let validator: PrivilegedOperationValidator
 
-  init() throws {
+  init(requireOwnerOnlyStaging: Bool = false) throws {
     root = FileManager.default.temporaryDirectory
       .resolvingSymlinksInPath()
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     allowedStagingRoot = PrivilegedInstallPaths.stagingRoot(in: root)
-    validator = PrivilegedOperationValidator(allowedStagingRoot: allowedStagingRoot)
+    validator = PrivilegedOperationValidator(
+      allowedStagingRoot: allowedStagingRoot,
+      allowedOwnerUserIdentifier: getuid(),
+      requireOwnerOnlyStaging: requireOwnerOnlyStaging
+    )
     try createDirectory(at: root)
   }
 

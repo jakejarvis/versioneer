@@ -36,18 +36,28 @@ async function fetchWithCandidates(
     throw new Error("No fetch URLs for source");
   }
 
-  const headers = {
-    ...descriptor.fetchHeaders({ githubToken: env.GITHUB_TOKEN }),
-    ...conditionalHeaders,
-  };
-
   let lastResponse: Response | undefined;
   for (const candidate of candidates) {
+    const headers = {
+      ...descriptor.fetchHeaders({
+        githubToken: isGitHubApiUrl(candidate) ? env.GITHUB_TOKEN : undefined,
+      }),
+      ...conditionalHeaders,
+    };
     lastResponse = await fetch(candidate, { headers });
     if (lastResponse.ok || lastResponse.status === 304) return lastResponse;
   }
 
   return lastResponse!;
+}
+
+function isGitHubApiUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === "https:" && url.hostname.toLowerCase() === "api.github.com";
+  } catch {
+    return false;
+  }
 }
 
 export async function handleSourceFetch(

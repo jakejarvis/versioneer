@@ -2,3 +2,4 @@ export const D1_PARAM_LIMIT = 100;
 
 export const MAX_INVENTORY_JSON_BYTES = 25 * 1024 * 1024;
 export const MAX_INVENTORY_GZIP_BYTES = 8 * 1024 * 1024;
+export const MAX_INVENTORY_GZIP_EXPANSION_RATIO = 100;

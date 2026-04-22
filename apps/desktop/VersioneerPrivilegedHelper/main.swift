@@ -12,7 +12,9 @@ private final class PrivilegedHelperListenerDelegate: NSObject, NSXPCListenerDel
     newConnection.exportedInterface = NSXPCInterface(with: PrivilegedInstallerXPCProtocol.self)
     newConnection.exportedObject = PrivilegedHelperService(
       validator: PrivilegedOperationValidator(
-        allowedStagingRoot: PrivilegedInstallPaths.stagingRoot(in: homeDirectory)
+        allowedStagingRoot: PrivilegedInstallPaths.stagingRoot(in: homeDirectory),
+        allowedOwnerUserIdentifier: newConnection.effectiveUserIdentifier,
+        requireOwnerOnlyStaging: true
       )
     )
     newConnection.resume()

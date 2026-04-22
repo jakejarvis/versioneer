@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 nonisolated struct ValidatedPrivilegedOperation: Sendable {
@@ -20,6 +21,7 @@ nonisolated enum PrivilegedOperationValidationError: LocalizedError {
   case backupPathInvalid(String)
   case symlinkRejected(String)
   case unsupportedInstallTarget(String)
+  case stagingDirectoryPermissionsInvalid(String)
 
   var errorDescription: String? {
     switch self {
@@ -40,13 +42,27 @@ nonisolated enum PrivilegedOperationValidationError: LocalizedError {
       message
     case .unsupportedInstallTarget(let target):
       "Privileged package installs must target /. Received \(target)."
+    case .stagingDirectoryPermissionsInvalid(let message):
+      message
     }
   }
 }
 
 nonisolated struct PrivilegedOperationValidator {
   let allowedStagingRoot: URL
+  let allowedOwnerUserIdentifier: uid_t?
+  let requireOwnerOnlyStaging: Bool
   private let executionIdRegex = try! NSRegularExpression(pattern: #"^[A-Za-z0-9._-]+$"#)
+
+  init(
+    allowedStagingRoot: URL,
+    allowedOwnerUserIdentifier: uid_t? = nil,
+    requireOwnerOnlyStaging: Bool = false
+  ) {
+    self.allowedStagingRoot = allowedStagingRoot
+    self.allowedOwnerUserIdentifier = allowedOwnerUserIdentifier
+    self.requireOwnerOnlyStaging = requireOwnerOnlyStaging
+  }
 
   func validate(request: PrivilegedOperationRequest) throws -> ValidatedPrivilegedOperation {
     guard
@@ -78,6 +94,8 @@ nonisolated struct PrivilegedOperationValidator {
     else {
       throw PrivilegedOperationValidationError.stagingPathNotAllowed
     }
+
+    try validateStagingDirectorySecurity(stagingDirectory)
 
     let manifestURL = PreparedPrivilegedOperation.manifestURL(in: stagingDirectory)
     let manifestData: Data
@@ -243,6 +261,30 @@ nonisolated struct PrivilegedOperationValidator {
       throw validationError
     } catch {
       throw error
+    }
+  }
+
+  private func validateStagingDirectorySecurity(_ stagingDirectory: URL) throws {
+    guard requireOwnerOnlyStaging else { return }
+
+    let attributes = try FileManager.default.attributesOfItem(atPath: stagingDirectory.path)
+    if let allowedOwnerUserIdentifier,
+      let owner = attributes[.ownerAccountID] as? NSNumber,
+      owner.uint32Value != allowedOwnerUserIdentifier
+    {
+      throw PrivilegedOperationValidationError.stagingDirectoryPermissionsInvalid(
+        "Privileged install staging must be owned by the requesting user.")
+    }
+
+    guard let permissions = attributes[.posixPermissions] as? NSNumber else {
+      throw PrivilegedOperationValidationError.stagingDirectoryPermissionsInvalid(
+        "Privileged install staging permissions could not be verified.")
+    }
+
+    let mode = permissions.uint16Value & 0o777
+    guard mode & 0o077 == 0 else {
+      throw PrivilegedOperationValidationError.stagingDirectoryPermissionsInvalid(
+        "Privileged install staging must not be readable or writable by group or other users.")
     }
   }
 

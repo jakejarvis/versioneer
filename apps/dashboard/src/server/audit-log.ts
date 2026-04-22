@@ -7,6 +7,7 @@ import { createDb } from "@versioneer/db";
 import { auditLog } from "@versioneer/db";
 
 import { resolveTargetRefs } from "./entity-summaries";
+import { authMiddleware } from "./middleware";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
 
@@ -27,6 +28,7 @@ function auditLogOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
 }
 
 export const listAuditLog = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(
     z.object({
       limit: z.number().optional(),

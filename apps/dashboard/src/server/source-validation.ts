@@ -19,6 +19,14 @@ import { getDescriptor } from "@versioneer/core/sources";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { sourceTypeSchema } from "@versioneer/schemas/sources";
 
+import { authMiddleware } from "./middleware";
+import {
+  assertValidSourceFetchUrl,
+  isGitHubApiUrl,
+  resolvePublicDnsAddresses,
+  SourceUrlPolicyError,
+} from "./source-url-policy";
+
 const MAX_VALIDATION_BODY_BYTES = 2 * 1024 * 1024;
 
 const validatableParsers: Partial<Record<SourceType, SourceParser>> = {
@@ -34,6 +42,7 @@ const validatableParsers: Partial<Record<SourceType, SourceParser>> = {
 };
 
 export const validateSource = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .inputValidator(
     z.object({
       url: z.string().url(),
@@ -58,13 +67,17 @@ export const validateSource = createServerFn({ method: "POST" })
 
     const descriptor = getDescriptor(sourceType);
     const fetchUrls = descriptor.buildFetchUrls(url);
-    const headers = descriptor.fetchHeaders({ githubToken: env.GITHUB_TOKEN });
+    const token = fetchUrls.every(isGitHubApiUrl) ? env.GITHUB_TOKEN : undefined;
+    const headers = descriptor.fetchHeaders({ githubToken: token });
 
     let response: Response | undefined;
     let fetchedUrl: string | undefined;
     try {
       for (const candidate of fetchUrls) {
         fetchedUrl = candidate;
+        await assertValidSourceFetchUrl(candidate, {
+          resolveAddresses: resolvePublicDnsAddresses,
+        });
         const res = await fetch(candidate, {
           signal: AbortSignal.timeout(10_000),
           headers,
@@ -79,9 +92,11 @@ export const validateSource = createServerFn({ method: "POST" })
       const isTimeout = error instanceof DOMException && error.name === "TimeoutError";
       const detail = isTimeout
         ? "Request timed out after 10 s"
-        : error instanceof Error
+        : error instanceof SourceUrlPolicyError
           ? error.message
-          : "Network error";
+          : error instanceof Error
+            ? error.message
+            : "Network error";
       return {
         status: "error" as const,
         releaseCount: 0,

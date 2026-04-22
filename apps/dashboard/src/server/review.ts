@@ -668,6 +668,7 @@ async function applySuggestionApproval(params: {
 }
 
 export const listCatalogSuggestions = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(listSuggestionsSchema)
   .handler(async ({ data }) => {
     const db = createDb(env.DB);
@@ -738,6 +739,7 @@ export const listCatalogSuggestions = createServerFn({ method: "GET" })
   });
 
 export const getCatalogSuggestion = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data: { id } }) => {
     const db = createDb(env.DB);

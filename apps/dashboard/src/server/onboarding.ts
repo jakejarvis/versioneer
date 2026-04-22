@@ -33,6 +33,7 @@ import { buildSourceDerivedAliasInserts } from "./source-derived-aliases";
 // ──────────────────────────────────────────────────────────
 
 export const checkSlugAvailable = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ slug: z.string().min(1) }))
   .handler(async ({ data: { slug } }) => {
     const db = createDb(env.DB);
@@ -278,6 +279,7 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
 // ──────────────────────────────────────────────────────────
 
 export const lookupCaskToken = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(z.object({ bundleId: z.string().min(1) }))
   .handler(async ({ data: { bundleId } }) => {
     const token = await lookupCaskTokenByBundleId(env.CONFIG_KV, bundleId);

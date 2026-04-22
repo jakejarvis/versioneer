@@ -33,6 +33,21 @@ async function issueToken(
   return { token, deviceId, expiresAt: new Date(exp * 1000).toISOString() };
 }
 
+export async function markAssertionCounterUsed(
+  db: ReturnType<typeof createDb>,
+  deviceId: string,
+  newCounter: number,
+  now: string,
+): Promise<boolean> {
+  const updated = await db
+    .update(deviceAttestations)
+    .set({ counter: newCounter, lastUsedAt: now })
+    .where(and(eq(deviceAttestations.id, deviceId), lt(deviceAttestations.counter, newCounter)))
+    .returning({ id: deviceAttestations.id });
+
+  return updated.length > 0;
+}
+
 export const attestRoutes = new Hono<{ Bindings: Env }>()
   // POST /v1/attest/challenge — generate a one-time challenge
   .post("/attest/challenge", async (c) => {
@@ -122,18 +137,7 @@ export const attestRoutes = new Hono<{ Bindings: Env }>()
 
     // Conditional counter update prevents replay: only succeeds if counter < newCounter
     const now = new Date().toISOString();
-    const updated = await db
-      .update(deviceAttestations)
-      .set({ counter: result.newCounter, lastUsedAt: now })
-      .where(
-        and(
-          eq(deviceAttestations.id, device.id),
-          lt(deviceAttestations.counter, result.newCounter),
-        ),
-      )
-      .returning({ id: deviceAttestations.id });
-
-    if (updated.length === 0) {
+    if (!(await markAssertionCounterUsed(db, device.id, result.newCounter, now))) {
       throw new HTTPException(409, { message: "Assertion replay detected" });
     }
 

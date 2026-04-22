@@ -29,6 +29,7 @@ function cronJobRunOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
 }
 
 export const listCronJobRuns = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
   .inputValidator(
     z.object({
       limit: z.number().int().min(1).max(100).default(50),
