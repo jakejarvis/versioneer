@@ -28,6 +28,19 @@ describe("assertValidSourceFetchUrl", () => {
     ).resolves.toMatchObject({ hostname: "example.com" });
   });
 
+  it("allows four-label public hostnames", async () => {
+    const resolveAddresses = vi.fn<(hostname: string) => Promise<string[]>>(async () => [
+      "104.21.87.201",
+    ]);
+
+    await expect(
+      assertValidSourceFetchUrl("https://release.files.ghostty.org/appcast.xml", {
+        resolveAddresses,
+      }),
+    ).resolves.toMatchObject({ hostname: "release.files.ghostty.org" });
+    expect(resolveAddresses).toHaveBeenCalledWith("release.files.ghostty.org");
+  });
+
   it("rejects invalid and non-https URLs", async () => {
     await expectPolicyReason("not a url", "invalid_url");
     await expectPolicyReason("http://example.com/feed.xml", "non_https");

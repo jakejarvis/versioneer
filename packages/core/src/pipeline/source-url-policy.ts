@@ -56,7 +56,7 @@ export async function assertValidSourceFetchUrl(
   }
 
   const hostname = normalizeHostname(url.hostname);
-  if (isBlockedHostname(hostname) || isBlockedAddress(hostname)) {
+  if (isBlockedHostname(hostname) || (isAddressLiteral(hostname) && isBlockedAddress(hostname))) {
     throw new SourceUrlPolicyError(
       "blocked_hostname",
       "Source fetch URL resolves to a blocked host",
@@ -166,9 +166,15 @@ function isBlockedAddress(address: string): boolean {
   return isBlockedIpv4(address) || isBlockedIpv6(address);
 }
 
+function isAddressLiteral(hostname: string): boolean {
+  return hostname.includes(":") || /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
+}
+
 function isBlockedIpv4(address: string): boolean {
   const parts = address.split(".");
   if (parts.length !== 4) return false;
+  if (parts.some((part) => !/^\d+$/.test(part))) return false;
+
   const octets = parts.map((part) => Number(part));
   if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) return true;
 
