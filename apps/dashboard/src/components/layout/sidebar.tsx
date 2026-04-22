@@ -93,7 +93,7 @@ export function AppSidebar() {
               className="hover:text-destructive-foreground"
               onClick={async () => {
                 await authClient.signOut();
-                navigate({ to: "/login" });
+                await navigate({ to: "/login" });
               }}
             >
               <LogOut />

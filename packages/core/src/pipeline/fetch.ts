@@ -2,7 +2,6 @@ import { desc, eq } from "drizzle-orm";
 
 import { createDb } from "@versioneer/db";
 import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/db";
-import type { SourceType } from "@versioneer/schemas/sources";
 
 import { createLogger } from "../logger";
 import { getDescriptor } from "../sources/registry";
@@ -70,7 +69,7 @@ export async function handleSourceFetch(
     return { sourceFetchId: null, shouldParse: false, appId: source.appId };
   }
 
-  const descriptor = getDescriptor(source.sourceType as SourceType);
+  const descriptor = getDescriptor(source.sourceType);
 
   if (!source.baseUrl && !descriptor.skipsFetch) {
     throw new Error(`Source ${job.sourceId} has no base URL`);

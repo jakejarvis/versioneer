@@ -216,11 +216,7 @@ function SourceDetailPage() {
         </div>
       ) : null}
 
-      <SourceEditForm
-        sourceId={sourceId}
-        sourceType={source.sourceType as SourceType}
-        source={source}
-      />
+      <SourceEditForm sourceId={sourceId} sourceType={source.sourceType} source={source} />
 
       <ConfirmDialog
         open={disableConfirmOpen}

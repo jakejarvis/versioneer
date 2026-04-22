@@ -12,7 +12,7 @@ export function normalizeReleaseNotes(body: string, format: "html" | "markdown")
   let html: string;
 
   if (format === "markdown") {
-    html = marked.parse(body, { async: false }) as string;
+    html = marked.parse(body, { async: false });
   } else {
     html = body;
   }

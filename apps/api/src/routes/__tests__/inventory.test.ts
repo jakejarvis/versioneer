@@ -1,7 +1,7 @@
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { eq, inArray } from "drizzle-orm";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { discoveredApps } from "@versioneer/db";
 
@@ -58,6 +58,10 @@ async function postInventory(
   return postInventoryRequest({ body: JSON.stringify(body) }, extraEnv);
 }
 
+async function readInventoryResponse(res: Response): Promise<InventoryResponse> {
+  return (await res.json()) as InventoryResponse;
+}
+
 async function gzipText(text: string): Promise<ArrayBuffer> {
   return new Response(
     new Blob([text]).stream().pipeThrough(new CompressionStream("gzip")),
@@ -101,7 +105,7 @@ describe("POST /v1/inventory/check", () => {
   it("returns empty results for empty apps array", async () => {
     const res = await postInventory({ client: {}, apps: [] });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     expect(body.results).toEqual([]);
     expect(body.processedAt).toBeDefined();
   });
@@ -117,7 +121,7 @@ describe("POST /v1/inventory/check", () => {
     });
 
     expect(res.status).toBe(200);
-    const responseBody = (await res.json()) as InventoryResponse;
+    const responseBody = await readInventoryResponse(res);
     expect(responseBody.results[0]!.decision).toBe("up_to_date");
   });
 
@@ -182,7 +186,7 @@ describe("POST /v1/inventory/check", () => {
       apps: [{ appName: "Firefox", bundleId: "org.mozilla.firefox", version: "130.0" }],
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     expect(body.results).toHaveLength(1);
     const result = body.results[0]!;
     expect(result.decision).toBe("up_to_date");
@@ -200,7 +204,7 @@ describe("POST /v1/inventory/check", () => {
       client: { osVersion: "15.0", systemArchitecture: "arm64" },
       apps: [{ appName: "Firefox", bundleId: "org.mozilla.firefox", version: "120.0" }],
     });
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("update_available");
     expect(result.latestVersion).toBe("130.0");
@@ -211,7 +215,7 @@ describe("POST /v1/inventory/check", () => {
       client: {},
       apps: [{ appName: "Firefox", bundleId: "org.mozilla.firefox" }],
     });
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("ambiguous");
   });
@@ -221,7 +225,7 @@ describe("POST /v1/inventory/check", () => {
       client: {},
       apps: [{ appName: "Unknown App", bundleId: "com.unknown.app" }],
     });
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("local_only");
     expect(result.trackingState).toBe("local_only");
@@ -234,7 +238,7 @@ describe("POST /v1/inventory/check", () => {
       client: {},
       apps: [{ appName: "Draft App", bundleId: "com.example.draft", version: "1.0" }],
     });
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("local_only");
     expect(result.localReasonCode).toBe("matched_draft");
@@ -245,7 +249,7 @@ describe("POST /v1/inventory/check", () => {
       client: {},
       apps: [{ appName: "No Source App", bundleId: "com.example.nosource", version: "1.0" }],
     });
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("local_only");
     expect(result.localReasonCode).toBe("no_approved_source");
@@ -256,7 +260,7 @@ describe("POST /v1/inventory/check", () => {
       client: { osVersion: "15.0", systemArchitecture: "x86_64" },
       apps: [{ appName: "Sketch", bundleId: "com.bohemiancoding.sketch3", version: "99.0" }],
     });
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     // arm64-only artifact is incompatible with x86_64, no older compatible releases exist
     // so the handler falls through to no_approved_source
@@ -269,7 +273,7 @@ describe("POST /v1/inventory/check", () => {
       client: { osVersion: "13.0", systemArchitecture: "arm64" },
       apps: [{ appName: "Sketch", bundleId: "com.bohemiancoding.sketch3", version: "99.0" }],
     });
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     // minOsVersion 14.0 is incompatible with client OS 13.0, no older compatible releases
     expect(result.decision).toBe("local_only");
@@ -284,7 +288,7 @@ describe("POST /v1/inventory/check", () => {
         { appName: 123 }, // invalid: appName must be string
       ],
     });
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     expect(body.results).toHaveLength(1);
     expect(body.skipped).toHaveLength(1);
     expect(body.skipped![0]!.index).toBe(1);
@@ -322,7 +326,7 @@ describe("POST /v1/inventory/check", () => {
     const res = await postInventory({ client: {}, apps: submittedApps });
     expect(res.status).toBe(200);
 
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     expect(body.results).toHaveLength(submittedApps.length);
     expect(body.skipped ?? []).toHaveLength(0);
 
@@ -345,7 +349,7 @@ describe("POST /v1/inventory/check", () => {
     expect(responses.map((res) => res.status)).toEqual([200, 200]);
 
     for (const res of responses) {
-      const body = (await res.json()) as InventoryResponse;
+      const body = await readInventoryResponse(res);
       expect(body.results).toHaveLength(submittedApps.length);
       expect(body.skipped ?? []).toHaveLength(0);
     }
@@ -365,7 +369,7 @@ describe("POST /v1/inventory/check", () => {
         { appName: "Unknown", bundleId: "com.totally.unknown" },
       ],
     });
-    const body = (await res.json()) as InventoryResponse;
+    const body = await readInventoryResponse(res);
     expect(body.results).toHaveLength(2);
     expect(body.results[0]!.decision).toBe("up_to_date");
     expect(body.results[1]!.decision).toBe("local_only");

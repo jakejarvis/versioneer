@@ -1,6 +1,6 @@
 import { env, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { SourceFetchJob } from "@versioneer/core/pipeline";
 import { createDb, generateId, idPrefixes, sourceFetches, sources } from "@versioneer/db";

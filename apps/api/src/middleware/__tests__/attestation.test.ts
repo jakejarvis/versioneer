@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { sign } from "hono/jwt";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import app from "../../index";
 

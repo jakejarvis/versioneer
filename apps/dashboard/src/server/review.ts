@@ -19,7 +19,6 @@ import {
   suggestionEvidence,
   trustAssertions,
 } from "@versioneer/db";
-import type { SourceType } from "@versioneer/schemas/sources";
 import {
   defaultParserKeyForSourceType,
   defaultRoleForSourceType,
@@ -287,7 +286,7 @@ async function approveNewSourceSuggestion(params: {
   }
 
   if (payload.baseUrl) {
-    const derived = getDescriptor(payload.sourceType as SourceType).derivedAlias(payload.baseUrl);
+    const derived = getDescriptor(payload.sourceType).derivedAlias(payload.baseUrl);
     if (derived) {
       await assertNoConflictingExactAlias(db, {
         aliasType: derived.aliasType,

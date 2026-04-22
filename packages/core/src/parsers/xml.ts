@@ -132,7 +132,7 @@ function parseMultiRelease(
       errors.push(`releasesXPath "${releasesXPath}" did not return a node set`);
       return { releases: [], confidence: 0, parserVersion: xmlParser.version, errors };
     }
-    nodes = result as Node[];
+    nodes = result;
   } catch (e) {
     errors.push(`Invalid releasesXPath expression: ${e instanceof Error ? e.message : String(e)}`);
     return { releases: [], confidence: 0, parserVersion: xmlParser.version, errors };

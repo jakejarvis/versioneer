@@ -36,17 +36,13 @@ jobs:
       SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
       SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          cache: true
+          run-install: true
 
       - name: Ensure GitHub release exists
         run: |
@@ -235,7 +231,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
-          WRANGLER="pnpm --filter @versioneer/web exec wrangler"
+          WRANGLER="vp pm --filter @versioneer/web exec wrangler"
 
           $WRANGLER r2 object put "$DOWNLOADS_BUCKET/downloads/${ARCHIVE_STEM}.zip" \
             --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.zip" \

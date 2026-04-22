@@ -8,9 +8,26 @@ allowBuilds:
   workerd: true
 catalog:
   "@cloudflare/vitest-pool-workers": ^0.14.8
-  "@vitest/coverage-v8": ^4.1.5
+  "@vitest/runner": npm:@voidzero-dev/vite-plus-test@latest
+  "@vitest/snapshot": npm:@voidzero-dev/vite-plus-test@latest
   drizzle-orm: ^0.45.2
   typescript: ^6.0.3
-  vitest: ^4.1.5
   wrangler: ^4.84.1
   zod: ^4.3.6
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite-plus: latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+overrides:
+  "@vitest/runner": "catalog:"
+  "@vitest/snapshot": "catalog:"
+  vite: "catalog:"
+  vitest: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - "@vitest/runner"
+    - "@vitest/snapshot"
+    - vite
+    - vitest
+  allowedVersions:
+    vite: "*"
+    vitest: "*"

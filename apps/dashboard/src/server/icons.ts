@@ -46,7 +46,7 @@ export const uploadAppIcon = createServerFn({ method: "POST" })
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    const body = bytes.buffer as ArrayBuffer;
+    const body = bytes.buffer;
 
     if (body.byteLength > MAX_SIZE_BYTES) {
       throw new Error(`File too large: ${body.byteLength} bytes (max ${MAX_SIZE_BYTES})`);

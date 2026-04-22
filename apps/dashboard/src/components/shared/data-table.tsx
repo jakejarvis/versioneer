@@ -70,7 +70,7 @@ interface LegacyPaginationProps {
 }
 
 interface DataTableProps<T> {
-  columns: Array<ColumnDef<T, unknown> | Column<T>>;
+  columns: Array<ColumnDef<T> | Column<T>>;
   data: T[];
   getRowId?: (row: T, index: number) => string;
   rowKey?: (row: T, index: number) => string;
@@ -331,7 +331,7 @@ export function DataTable<T>({
                     key={column.id}
                     className="capitalize"
                     checked={column.getIsVisible()}
-                    onCheckedChange={(value) => column.toggleVisibility(Boolean(value))}
+                    onCheckedChange={(value) => column.toggleVisibility(value)}
                   >
                     {typeof column.columnDef.meta === "object" &&
                     column.columnDef.meta &&

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { githubReleasesDescriptor, toGitHubRepoUrl } from "../github-releases";
 
@@ -53,21 +53,21 @@ describe("githubReleasesDescriptor", () => {
 
   describe("fetchHeaders", () => {
     it("includes Authorization header when token is provided", () => {
-      const headers = githubReleasesDescriptor.fetchHeaders!({
+      const headers = githubReleasesDescriptor.fetchHeaders({
         githubToken: "ghp_test123",
       });
       expect(headers["Authorization"]).toBe("token ghp_test123");
     });
 
     it("omits Authorization header when no token", () => {
-      const headers = githubReleasesDescriptor.fetchHeaders!({});
+      const headers = githubReleasesDescriptor.fetchHeaders({});
       expect(headers["Authorization"]).toBeUndefined();
     });
   });
 
   describe("derivedAlias", () => {
     it("returns github_repo alias pointing to HTML URL", () => {
-      const alias = githubReleasesDescriptor.derivedAlias!(
+      const alias = githubReleasesDescriptor.derivedAlias(
         "https://api.github.com/repos/owner/repo/releases",
       );
       expect(alias).toEqual({
