@@ -47,6 +47,22 @@ struct RootView: View {
     .task(id: appState.visibleUpdateCount) {
       updateDockBadge(with: appState.visibleUpdateCount)
     }
+    .alert(
+      appState.pendingInstallConfirmationTitle(),
+      isPresented: Binding(
+        get: { appState.pendingInstallConfirmation != .none },
+        set: { if !$0 { appState.cancelPendingInstallRequest() } }
+      )
+    ) {
+      Button("Continue") {
+        appState.confirmPendingInstallRequest()
+      }
+      Button("Cancel", role: .cancel) {
+        appState.cancelPendingInstallRequest()
+      }
+    } message: {
+      Text(appState.pendingInstallConfirmationMessage())
+    }
     .onDisappear {
       searchDebounceTask?.cancel()
     }

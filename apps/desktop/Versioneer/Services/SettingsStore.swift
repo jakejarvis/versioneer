@@ -11,6 +11,12 @@ final class SettingsStore {
     static let baseURL = "versioneer_base_url"
     static let scanOnLaunch = "versioneer_scan_on_launch"
     static let ignoredAppRules = "versioneer_ignored_app_rules"
+    static let confirmInstallAll = "versioneer_confirm_install_all"
+    static let confirmPrivilegedInstall = "versioneer_confirm_privileged_install"
+    static let directoryWatcherEnabled = "versioneer_directory_watcher_enabled"
+    static let analyticsEnabled = "versioneer_analytics_enabled"
+    static let crashlyticsEnabled = "versioneer_crashlytics_enabled"
+    static let resultsSortMode = "versioneer_results_sort_mode"
     static let defaultChannel = "versioneer_default_channel"
     static let perAppChannels = "versioneer_per_app_channels"
     static let extraScanRoots = "versioneer_extra_scan_roots"
@@ -45,6 +51,76 @@ final class SettingsStore {
     }
     set {
       defaults.set(newValue, forKey: Keys.scanOnLaunch)
+    }
+  }
+
+  var confirmInstallAll: Bool {
+    get {
+      if let value = defaults.object(forKey: Keys.confirmInstallAll) as? NSNumber {
+        return value.boolValue
+      }
+      return true
+    }
+    set {
+      defaults.set(newValue, forKey: Keys.confirmInstallAll)
+    }
+  }
+
+  var confirmPrivilegedInstall: Bool {
+    get {
+      if let value = defaults.object(forKey: Keys.confirmPrivilegedInstall) as? NSNumber {
+        return value.boolValue
+      }
+      return true
+    }
+    set {
+      defaults.set(newValue, forKey: Keys.confirmPrivilegedInstall)
+    }
+  }
+
+  var directoryWatcherEnabled: Bool {
+    get {
+      if let value = defaults.object(forKey: Keys.directoryWatcherEnabled) as? NSNumber {
+        return value.boolValue
+      }
+      return true
+    }
+    set {
+      defaults.set(newValue, forKey: Keys.directoryWatcherEnabled)
+    }
+  }
+
+  var analyticsEnabled: Bool {
+    get {
+      if let value = defaults.object(forKey: Keys.analyticsEnabled) as? NSNumber {
+        return value.boolValue
+      }
+      return true
+    }
+    set {
+      defaults.set(newValue, forKey: Keys.analyticsEnabled)
+    }
+  }
+
+  var crashlyticsEnabled: Bool {
+    get {
+      if let value = defaults.object(forKey: Keys.crashlyticsEnabled) as? NSNumber {
+        return value.boolValue
+      }
+      return true
+    }
+    set {
+      defaults.set(newValue, forKey: Keys.crashlyticsEnabled)
+    }
+  }
+
+  var resultsSortMode: ResultsBrowserSort {
+    get {
+      let rawValue = defaults.string(forKey: Keys.resultsSortMode)
+      return ResultsBrowserSort(rawValue: rawValue ?? "") ?? .updatesFirst
+    }
+    set {
+      defaults.set(newValue.rawValue, forKey: Keys.resultsSortMode)
     }
   }
 

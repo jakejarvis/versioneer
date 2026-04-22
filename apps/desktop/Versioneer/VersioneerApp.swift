@@ -5,10 +5,6 @@ struct VersioneerApp: App {
   @State private var appState = AppState()
   @State private var selfUpdateService = SelfUpdateService()
 
-  init() {
-    FirebaseBootstrapper.configureIfNeeded()
-  }
-
   private var selectedMenuResult: AppDecision? {
     guard let id = appState.selectedAppID else { return nil }
     return appState.inventoryResultsByID[id]
@@ -97,7 +93,7 @@ struct VersioneerApp: App {
       .keyboardShortcut("r", modifiers: .command)
 
       Button("Update All") {
-        Task { await appState.installAll() }
+        appState.requestInstallAll()
       }
       .keyboardShortcut("u", modifiers: [.command, .shift])
       .disabled(appState.updatableResults.isEmpty)

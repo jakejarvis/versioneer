@@ -66,6 +66,14 @@ final class DirectoryWatcher {
     Logger.appScanner.info("Watching \(sources.count) directories for changes")
   }
 
+  /// Stops monitoring and releases any file descriptors.
+  func stop() {
+    scheduler.cancel()
+    for source in sources {
+      source.cancel()
+    }
+  }
+
   deinit {
     scheduler.cancel()
     for source in sources {

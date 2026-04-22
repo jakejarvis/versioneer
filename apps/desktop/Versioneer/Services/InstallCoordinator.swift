@@ -846,15 +846,18 @@ final class InstallCoordinator {
     case .zipReplace, .dmgCopyReplace, .pkgInstall:
       guard installedApp.bundleId?.isEmpty == false else {
         throw InstallError.missingInstallTrustMaterial(
-          "Catalog-backed installs require the installed app's bundle identifier before Versioneer can replace it.")
+          "Catalog-backed installs require the installed app's bundle identifier before Versioneer can replace it."
+        )
       }
       guard installedApp.teamId?.isEmpty == false else {
         throw InstallError.missingInstallTrustMaterial(
-          "Catalog-backed installs require the installed app's Developer Team ID before Versioneer can replace it.")
+          "Catalog-backed installs require the installed app's Developer Team ID before Versioneer can replace it."
+        )
       }
       guard plan.artifact?.sha256?.isEmpty == false else {
         throw InstallError.missingInstallTrustMaterial(
-          "Catalog-backed installs require a SHA-256 checksum before Versioneer can replace or install with elevated privileges.")
+          "Catalog-backed installs require a SHA-256 checksum before Versioneer can replace or install with elevated privileges."
+        )
       }
     case .sparkle, .macAppStore, .manualOnly:
       return
@@ -1099,7 +1102,8 @@ final class InstallCoordinator {
     }
     try FileManager.default.createDirectory(
       at: executionDirectory, withIntermediateDirectories: true, attributes: ownerOnlyAttributes)
-    try FileManager.default.setAttributes(ownerOnlyAttributes, ofItemAtPath: executionDirectory.path)
+    try FileManager.default.setAttributes(
+      ownerOnlyAttributes, ofItemAtPath: executionDirectory.path)
     return executionDirectory
   }
 

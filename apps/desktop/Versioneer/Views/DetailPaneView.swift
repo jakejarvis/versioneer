@@ -32,7 +32,7 @@ struct DetailPaneView: View {
     }
     .alert("Install unverified update?", isPresented: $showInstallWarning) {
       Button("Install Update", role: .destructive) {
-        Task { await appState.install(result) }
+        appState.requestPrimaryUpdate(for: result)
       }
       Button("Cancel", role: .cancel) {}
     } message: {
@@ -42,7 +42,7 @@ struct DetailPaneView: View {
     }
     .alert("Install directly?", isPresented: $showBrewBypassWarning) {
       Button("Install Directly", role: .destructive) {
-        Task { await appState.install(result) }
+        appState.requestPrimaryUpdate(for: result)
       }
       Button("Cancel", role: .cancel) {}
     } message: {

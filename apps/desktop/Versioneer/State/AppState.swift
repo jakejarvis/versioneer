@@ -25,6 +25,12 @@ final class AppState {
   private var _attestClient: AppAttestClient?
   private var _attestClientBaseURL: URL?
 
+  enum InstallConfirmationRequest: Equatable {
+    case none
+    case installAll
+    case installResult(String)
+  }
+
   var attestClient: AppAttestClient {
     let url = settings.baseURL
     if let existing = _attestClient, _attestClientBaseURL == url {
@@ -95,6 +101,7 @@ final class AppState {
   var selectedSection: FilterSection = .all
   var selectedAppID: String?
   var resultsSort: ResultsBrowserSort = .updatesFirst
+  private(set) var pendingInstallConfirmation: InstallConfirmationRequest = .none
   @ObservationIgnored weak var windowUndoManager: UndoManager?
 
   // MARK: - Data
@@ -140,6 +147,7 @@ final class AppState {
   ) {
     self.settings = settings
     self.cacheStore = cacheStore
+    resultsSort = settings.resultsSortMode
 
     installCoordinator.onStateChange = { [weak self] in
       self?.rebuildResultsBrowserRows()
@@ -153,12 +161,22 @@ final class AppState {
       refreshDisplayedResults()
     }
 
-    startDirectoryWatching()
+    configureDirectoryWatcher()
+    FirebaseBootstrapper.configureIfNeeded(
+      analyticsEnabled: settings.analyticsEnabled,
+      crashlyticsEnabled: settings.crashlyticsEnabled
+    )
   }
 
   /// Watches app directories for changes and triggers a rescan when apps are
   /// installed, updated, or removed outside of Versioneer.
-  private func startDirectoryWatching() {
+  private func configureDirectoryWatcher() {
+    stopDirectoryWatching()
+
+    guard settings.directoryWatcherEnabled else {
+      return
+    }
+
     let watcher = DirectoryWatcher(urls: settings.allScanRootURLs) { [weak self] in
       guard let self else { return }
       // Only auto-rescan if we're idle (not mid-scan or mid-install)
@@ -167,6 +185,11 @@ final class AppState {
     }
     watcher.start()
     self.directoryWatcher = watcher
+  }
+
+  private func stopDirectoryWatching() {
+    directoryWatcher?.stop()
+    directoryWatcher = nil
   }
 
   /// Whether we have cached inventory results to display while rescanning.
@@ -316,8 +339,107 @@ final class AppState {
 
   func setResultsSort(_ sort: ResultsBrowserSort) {
     resultsSort = sort
+    settings.resultsSortMode = sort
     rebuildResultsBrowserRows()
     syncSelectedAppIDToVisibleRows()
+  }
+
+  func requestInstallAll() {
+    guard !updatableResults.isEmpty else { return }
+
+    if settings.confirmInstallAll {
+      pendingInstallConfirmation = .installAll
+    } else {
+      Task { await installAll() }
+    }
+  }
+
+  func requestPrimaryUpdate(for result: AppDecision) {
+    guard canPerformPrimaryUpdate(for: result) else { return }
+
+    if settings.confirmPrivilegedInstall, result.installStrategy?.requiresAdmin ?? false {
+      pendingInstallConfirmation = .installResult(result.id)
+    } else {
+      Task { await performPrimaryUpdate(for: result) }
+    }
+  }
+
+  func confirmPendingInstallRequest() {
+    let request = pendingInstallConfirmation
+    pendingInstallConfirmation = .none
+
+    switch request {
+    case .none:
+      return
+    case .installAll:
+      Task { await installAll() }
+    case .installResult(let resultID):
+      guard let result = inventoryResultsByID[resultID] else { return }
+      Task { await performPrimaryUpdate(for: result) }
+    }
+  }
+
+  func cancelPendingInstallRequest() {
+    pendingInstallConfirmation = .none
+  }
+
+  func pendingInstallConfirmationTitle() -> String {
+    switch pendingInstallConfirmation {
+    case .none:
+      return ""
+    case .installAll:
+      return "Install all updates"
+    case .installResult(let resultID):
+      guard let result = inventoryResultsByID[resultID] else {
+        return "Install update"
+      }
+      return "Install \(result.appName)"
+    }
+  }
+
+  func pendingInstallConfirmationMessage() -> String {
+    switch pendingInstallConfirmation {
+    case .none:
+      return ""
+    case .installAll:
+      return "Versioneer found \(updatableResults.count) updates. Continue with a bulk install?"
+    case .installResult(let resultID):
+      guard let result = inventoryResultsByID[resultID] else {
+        return "Versioneer needs to continue with an admin-required install."
+      }
+      return "\(result.appName) requires administrator privileges. Continue with this install?"
+    }
+  }
+
+  func setDirectoryWatcherEnabled(_ enabled: Bool) {
+    settings.directoryWatcherEnabled = enabled
+    configureDirectoryWatcher()
+  }
+
+  func addExtraScanRoot(_ path: String) {
+    settings.addExtraScanRoot(path)
+    configureDirectoryWatcher()
+  }
+
+  func removeExtraScanRoot(_ path: String) {
+    settings.removeExtraScanRoot(path)
+    configureDirectoryWatcher()
+  }
+
+  func setAnalyticsEnabled(_ enabled: Bool) {
+    settings.analyticsEnabled = enabled
+    FirebaseBootstrapper.configureIfNeeded(
+      analyticsEnabled: settings.analyticsEnabled,
+      crashlyticsEnabled: settings.crashlyticsEnabled
+    )
+  }
+
+  func setCrashlyticsEnabled(_ enabled: Bool) {
+    settings.crashlyticsEnabled = enabled
+    FirebaseBootstrapper.configureIfNeeded(
+      analyticsEnabled: settings.analyticsEnabled,
+      crashlyticsEnabled: settings.crashlyticsEnabled
+    )
   }
 
   func setSearchText(_ text: String) {

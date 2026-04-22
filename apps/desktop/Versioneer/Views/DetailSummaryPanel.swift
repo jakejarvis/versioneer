@@ -456,7 +456,7 @@ struct DetailSummaryPanel: View {
       if actionPresentation.requiresInstallWarning {
         showInstallWarning = true
       } else {
-        Task { await appState.install(result) }
+        appState.requestPrimaryUpdate(for: result)
       }
     case .manualUpdate:
       appState.openManualUpdate(result)

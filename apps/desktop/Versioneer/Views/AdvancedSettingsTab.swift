@@ -98,6 +98,13 @@ private struct ScanDirectoriesSection: View {
 
   @State private var newScanRoot = ""
 
+  private var directoryWatcherBinding: Binding<Bool> {
+    Binding(
+      get: { appState.settings.directoryWatcherEnabled },
+      set: { appState.setDirectoryWatcherEnabled($0) }
+    )
+  }
+
   private var canAddRoot: Bool {
     !newScanRoot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       && newScanRoot.hasPrefix("/")
@@ -105,6 +112,8 @@ private struct ScanDirectoriesSection: View {
 
   var body: some View {
     Section {
+      Toggle("Watch directories for changes", isOn: directoryWatcherBinding)
+
       if appState.settings.extraScanRoots.isEmpty {
         Text("No extra directories configured.")
           .foregroundStyle(.secondary)
@@ -117,7 +126,7 @@ private struct ScanDirectoriesSection: View {
               .truncationMode(.middle)
             Spacer()
             Button("Remove", role: .destructive) {
-              appState.settings.removeExtraScanRoot(root)
+              appState.removeExtraScanRoot(root)
             }
             .buttonStyle(.bordered)
             .tint(.red)
@@ -142,7 +151,7 @@ private struct ScanDirectoriesSection: View {
   }
 
   private func addScanRoot() {
-    appState.settings.addExtraScanRoot(newScanRoot)
+    appState.addExtraScanRoot(newScanRoot)
     newScanRoot = ""
   }
 }

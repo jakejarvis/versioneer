@@ -52,6 +52,20 @@ struct GeneralSettingsTab: View {
     return "xmark.octagon.fill"
   }
 
+  private var analyticsEnabledBinding: Binding<Bool> {
+    Binding(
+      get: { appState.settings.analyticsEnabled },
+      set: { appState.setAnalyticsEnabled($0) }
+    )
+  }
+
+  private var crashlyticsEnabledBinding: Binding<Bool> {
+    Binding(
+      get: { appState.settings.crashlyticsEnabled },
+      set: { appState.setCrashlyticsEnabled($0) }
+    )
+  }
+
   var body: some View {
     @Bindable var settings = appState.settings
 
@@ -126,6 +140,26 @@ struct GeneralSettingsTab: View {
       } footer: {
         Text(
           "When enabled, Versioneer performs a local scan and update check as soon as the main window opens."
+        )
+      }
+
+      Section {
+        Toggle("Confirm bulk update installs", isOn: $settings.confirmInstallAll)
+        Toggle("Confirm admin-required installs", isOn: $settings.confirmPrivilegedInstall)
+      } header: {
+        Text("Confirmations")
+      } footer: {
+        Text("Show confirmation prompts before running update actions in these cases.")
+      }
+
+      Section {
+        Toggle("Analytics collection", isOn: analyticsEnabledBinding)
+        Toggle("Crash report collection", isOn: crashlyticsEnabledBinding)
+      } header: {
+        Text("Privacy")
+      } footer: {
+        Text(
+          "Control whether Versioneer reports anonymized analytics and crash reports via Firebase."
         )
       }
     }

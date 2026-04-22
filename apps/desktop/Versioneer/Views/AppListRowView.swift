@@ -143,7 +143,7 @@ struct AppListRowView: View {
       for: result, installState: installState)
 
     Button(appState.primaryActionTitle(for: result)) {
-      Task { await appState.performPrimaryUpdate(for: result) }
+      appState.requestPrimaryUpdate(for: result)
     }
     .disabled(actionPresentation.isDisabled)
   }
@@ -239,7 +239,7 @@ private struct AppListRowTrailingContent: View {
     } else if row.hasUpdateAction && row.isUpdateAvailable, let result {
       if showsInlineAction {
         Button {
-          Task { await appState.performPrimaryUpdate(for: result) }
+          appState.requestPrimaryUpdate(for: result)
         } label: {
           Text(appState.primaryActionCompactTitle(for: result))
             .font(.caption.weight(.semibold))
