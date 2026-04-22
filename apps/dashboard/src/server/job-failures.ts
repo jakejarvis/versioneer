@@ -13,7 +13,7 @@ import {
   scheduleSourceFetch,
   scheduleSourceReparse,
 } from "./followup-jobs";
-import { runCaskIndexSyncJob, runPollSourcesJob, startEnrichmentDrainJob } from "./jobs";
+import { runCaskIndexSyncJob, runPollSourcesJob, startEnrichmentDrainJob } from "./job-runners";
 import { authMiddleware } from "./middleware";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
