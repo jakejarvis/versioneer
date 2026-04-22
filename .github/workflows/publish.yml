@@ -231,7 +231,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
-          WRANGLER="vp exec --filter @versioneer/web wrangler"
+          WRANGLER="vp pm --filter @versioneer/web exec wrangler"
 
           $WRANGLER r2 object put "$DOWNLOADS_BUCKET/downloads/${ARCHIVE_STEM}.zip" \
             --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.zip" \
