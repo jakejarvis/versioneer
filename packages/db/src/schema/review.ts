@@ -39,6 +39,13 @@ export const catalogSuggestions = sqliteTable(
     index("idx_catalog_suggestions_created_at").on(table.createdAt),
     index("idx_catalog_suggestions_bundle_key").on(table.bundleKey),
     index("idx_catalog_suggestions_app_id").on(table.appId),
+    index("idx_catalog_suggestions_queue").on(
+      table.status,
+      table.queueType,
+      table.firstSeenAt,
+      table.createdAt,
+    ),
+    index("idx_catalog_suggestions_last_seen").on(table.status, table.lastSeenAt),
   ],
 );
 
@@ -80,5 +87,11 @@ export const trustAssertions = sqliteTable(
     index("idx_trust_assertions_app_id").on(table.appId),
     index("idx_trust_assertions_source_id").on(table.sourceId),
     index("idx_trust_assertions_type").on(table.assertionType),
+    index("idx_trust_assertions_lookup").on(
+      table.assertionType,
+      table.appId,
+      table.sourceId,
+      table.value,
+    ),
   ],
 );

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 
 import { createDb } from "@versioneer/db";
 import { generateId, idPrefixes, jobFailures } from "@versioneer/db";
@@ -18,6 +18,14 @@ export type TrackedJobResult = {
   errorMessage?: string;
 };
 
+function jobFailureDedupeKey(params: {
+  jobType: string;
+  relatedId: string | null;
+  jobKey: string | null;
+}) {
+  return JSON.stringify([params.jobType, params.relatedId, params.jobKey]);
+}
+
 function nullableStringClause(
   column: typeof jobFailures.jobKey | typeof jobFailures.relatedId,
   value: string | null,
@@ -31,14 +39,21 @@ export async function findOutstandingJobFailure(params: {
   relatedId: string | null;
   jobKey: string | null;
 }) {
+  const dedupeKey = jobFailureDedupeKey(params);
   return params.db
     .select({ id: jobFailures.id })
     .from(jobFailures)
     .where(
       and(
-        eq(jobFailures.jobType, params.jobType),
-        nullableStringClause(jobFailures.relatedId, params.relatedId),
-        nullableStringClause(jobFailures.jobKey, params.jobKey),
+        or(
+          eq(jobFailures.dedupeKey, dedupeKey),
+          and(
+            sql`${jobFailures.dedupeKey} is null`,
+            eq(jobFailures.jobType, params.jobType),
+            nullableStringClause(jobFailures.relatedId, params.relatedId),
+            nullableStringClause(jobFailures.jobKey, params.jobKey),
+          ),
+        ),
         sql`${jobFailures.status} in ('open', 'retrying')`,
       ),
     )
@@ -52,11 +67,15 @@ export async function recordJobFailure(params: {
   jobKey: string | null;
   errorMessage: string;
 }) {
+  const now = new Date().toISOString();
+  const id = generateId(idPrefixes.jobFailure);
+  const dedupeKey = jobFailureDedupeKey(params);
   const existing = await findOutstandingJobFailure(params);
   if (existing) {
     await params.db
       .update(jobFailures)
       .set({
+        dedupeKey,
         status: "open",
         errorMessage: params.errorMessage,
         retryCount: sql`${jobFailures.retryCount} + 1`,
@@ -66,20 +85,32 @@ export async function recordJobFailure(params: {
     return existing.id;
   }
 
-  const now = new Date().toISOString();
-  const id = generateId(idPrefixes.jobFailure);
-  await params.db.insert(jobFailures).values({
-    id,
-    jobType: params.jobType,
-    jobKey: params.jobKey,
-    relatedId: params.relatedId,
-    errorMessage: params.errorMessage,
-    retryCount: 0,
-    status: "open",
-    createdAt: now,
-    resolvedAt: null,
-  });
-  return id;
+  await params.db
+    .insert(jobFailures)
+    .values({
+      id,
+      jobType: params.jobType,
+      jobKey: params.jobKey,
+      relatedId: params.relatedId,
+      dedupeKey,
+      errorMessage: params.errorMessage,
+      retryCount: 0,
+      status: "open",
+      createdAt: now,
+      resolvedAt: null,
+    })
+    .onConflictDoUpdate({
+      target: jobFailures.dedupeKey,
+      targetWhere: sql`${jobFailures.dedupeKey} is not null and ${jobFailures.status} in ('open', 'retrying')`,
+      set: {
+        status: "open",
+        errorMessage: params.errorMessage,
+        retryCount: sql`${jobFailures.retryCount} + 1`,
+        resolvedAt: null,
+      },
+    });
+
+  return (await findOutstandingJobFailure(params))?.id ?? id;
 }
 
 export async function resolveJobFailure(params: {
@@ -88,6 +119,7 @@ export async function resolveJobFailure(params: {
   relatedId: string | null;
   jobKey: string | null;
 }) {
+  const dedupeKey = jobFailureDedupeKey(params);
   await params.db
     .update(jobFailures)
     .set({
@@ -96,9 +128,15 @@ export async function resolveJobFailure(params: {
     })
     .where(
       and(
-        eq(jobFailures.jobType, params.jobType),
-        nullableStringClause(jobFailures.relatedId, params.relatedId),
-        nullableStringClause(jobFailures.jobKey, params.jobKey),
+        or(
+          eq(jobFailures.dedupeKey, dedupeKey),
+          and(
+            sql`${jobFailures.dedupeKey} is null`,
+            eq(jobFailures.jobType, params.jobType),
+            nullableStringClause(jobFailures.relatedId, params.relatedId),
+            nullableStringClause(jobFailures.jobKey, params.jobKey),
+          ),
+        ),
         sql`${jobFailures.status} in ('open', 'retrying')`,
       ),
     );

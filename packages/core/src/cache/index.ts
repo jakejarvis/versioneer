@@ -3,6 +3,7 @@ export {
   latestReleaseKey,
   bundleLookupKey,
   recentReleasesKey,
+  inventoryMatchSnapshotKey,
   dismissedBundleIdsKey,
 } from "./keys";
 export type { CachedLatestRelease, CachedRecentRelease } from "./helpers";
@@ -17,4 +18,11 @@ export {
   getCachedDismissedBundleIds,
   setCachedDismissedBundleIds,
 } from "./helpers";
+export type { InventoryMatchSnapshot, InventorySnapshotApp } from "./inventory-snapshot";
+export {
+  INVENTORY_MATCH_SNAPSHOT_TTL_SECONDS,
+  buildInventoryMatchSnapshot,
+  deleteInventoryMatchSnapshot,
+  getInventoryMatchSnapshot,
+} from "./inventory-snapshot";
 export { refreshDismissedBundleIdsCache } from "./dismissed";

@@ -21,6 +21,7 @@ import {
 } from "@versioneer/db";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import { invalidateInventoryMatchSnapshot } from "./cache";
 import { buildAppSourceHealth } from "./homepage-helpers";
 import { latestReleaseTrustWarnings } from "./install-trust";
 import { buildAppSortDescriptors } from "./list-helpers";
@@ -225,6 +226,7 @@ export const createApp = createServerFn({ method: "POST" })
       payloadJson: JSON.stringify(data),
       createdAt: now,
     });
+    await invalidateInventoryMatchSnapshot(env);
 
     return { id, status: "created" };
   });
@@ -264,6 +266,7 @@ export const updateApp = createServerFn({ method: "POST" })
       payloadJson: JSON.stringify(fields),
       createdAt: now,
     });
+    await invalidateInventoryMatchSnapshot(env);
 
     return { status: "updated" };
   });
@@ -330,6 +333,7 @@ export const createAlias = createServerFn({ method: "POST" })
       payloadJson: JSON.stringify({ appId, ...aliasData }),
       createdAt: now,
     });
+    await invalidateInventoryMatchSnapshot(env);
 
     return { id, status: "created" };
   });

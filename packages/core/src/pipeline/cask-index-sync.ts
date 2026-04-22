@@ -3,14 +3,17 @@ import { eq, and, isNotNull, or } from "drizzle-orm";
 import { createDb } from "@versioneer/db";
 import { appAliases, discoveredApps, generateId, idPrefixes } from "@versioneer/db";
 
+import { deleteInventoryMatchSnapshot } from "../cache";
 import { msElapsedSince } from "../dates";
 import { createLogger } from "../logger";
+import { readResponseTextLimited } from "./response-body";
 import { VERSIONEER_USER_AGENT, type CaskIndexSyncEnv, type CaskSyncDueEnv } from "./types";
 
 const CASK_INDEX_URL = "https://formulae.brew.sh/api/cask.json";
 const ETAG_KV_KEY = "cask-index-etag";
 const LAST_SYNC_KV_KEY = "cask-index-last-sync";
 const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const MAX_CASK_INDEX_BYTES = 20 * 1024 * 1024;
 
 interface CaskIndexEntry {
   token: string;
@@ -182,7 +185,8 @@ export async function handleCaskIndexSync(
     await env.CONFIG_KV.put(ETAG_KV_KEY, etag);
   }
 
-  const casks = (await response.json()) as CaskIndexEntry[];
+  const { text } = await readResponseTextLimited(response, MAX_CASK_INDEX_BYTES);
+  const casks = JSON.parse(text) as CaskIndexEntry[];
   log.info("cask index fetched", { caskCount: casks.length });
 
   // Build a map of cask bundle IDs -> cask entries
@@ -243,6 +247,7 @@ export async function handleCaskIndexSync(
     .all();
 
   let bundleIdMatches = 0;
+  let catalogAliasMatches = 0;
   let errors = 0;
   const matchedCaskTokens = new Set<string>();
 
@@ -268,6 +273,7 @@ export async function handleCaskIndexSync(
           createdAt: now,
         });
         bundleIdMatches++;
+        catalogAliasMatches++;
       } catch (e) {
         log.error("cask alias creation failed", { caskToken: cask.token, error: e });
         errors++;
@@ -314,8 +320,11 @@ export async function handleCaskIndexSync(
       errors,
     }),
   );
+  if (catalogAliasMatches > 0) {
+    await deleteInventoryMatchSnapshot(env.CACHE_KV);
+  }
 
-  log.info("cask sync completed", { bundleIdMatches, errors });
+  log.info("cask sync completed", { bundleIdMatches, catalogAliasMatches, errors });
 }
 
 /**

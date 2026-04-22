@@ -12,6 +12,7 @@ import {
   jobFailures,
 } from "@versioneer/db";
 
+import { listEnrichmentCandidates } from "../enrichment";
 import { EnrichmentDrainWorkflow } from "../workflows/enrichment-drain";
 
 const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
@@ -78,11 +79,29 @@ beforeEach(async () => {
 });
 
 describe("EnrichmentDrainWorkflow", () => {
+  it("uses the mocked Worker clock for failed enrichment retry backoff", async () => {
+    const db = createDb(env.DB);
+    const id = await insertDiscoveredApp(db, 1);
+    await db
+      .update(discoveredApps)
+      .set({
+        enrichmentStatus: "failed",
+        enrichmentError: "try again later",
+        updatedAt: TEST_NOW_ISO,
+      })
+      .where(eq(discoveredApps.id, id));
+
+    expect(await listEnrichmentCandidates(db)).toEqual([]);
+
+    vi.setSystemTime(new Date(TEST_NOW.getTime() + 16 * 60 * 1000));
+    expect(await listEnrichmentCandidates(db)).toEqual([{ id }]);
+  });
+
   it("drains multiple eligible batches and resolves the mirrored failure", async () => {
     const db = createDb(env.DB);
     const runId = generateId(idPrefixes.cronJobRun);
     await insertRun(db, runId);
-    for (let index = 0; index < 27; index++) {
+    for (let index = 0; index < 125; index++) {
       await insertDiscoveredApp(db, index);
     }
     await db.insert(jobFailures).values({
@@ -103,8 +122,8 @@ describe("EnrichmentDrainWorkflow", () => {
 
     const run = await db.select().from(cronJobRuns).where(eq(cronJobRuns.id, runId)).get();
     expect(run?.status).toBe("completed");
-    expect(run?.itemsTotal).toBe(27);
-    expect(run?.itemsQueued).toBe(27);
+    expect(run?.itemsTotal).toBe(125);
+    expect(run?.itemsQueued).toBe(125);
 
     const openFailure = await db
       .select()

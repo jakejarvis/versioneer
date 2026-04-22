@@ -36,6 +36,7 @@ export const sources = sqliteTable(
     lastSuccessAt: text("last_success_at"),
     lastFailureAt: text("last_failure_at"),
     lastFetchedAt: text("last_fetched_at"),
+    nextPollAt: text("next_poll_at"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -45,6 +46,7 @@ export const sources = sqliteTable(
     index("idx_sources_type").on(table.sourceType),
     index("idx_sources_review_status").on(table.reviewStatus),
     index("idx_sources_role").on(table.role),
+    index("idx_sources_due_poll").on(table.status, table.nextPollAt),
   ],
 );
 
@@ -72,6 +74,7 @@ export const sourceFetches = sqliteTable(
   },
   (table) => [
     index("idx_fetches_source_id").on(table.sourceId),
+    index("idx_fetches_source_fetched").on(table.sourceId, table.fetchedAt),
     index("idx_fetches_status").on(table.fetchStatus),
   ],
 );
@@ -92,5 +95,8 @@ export const parserRuns = sqliteTable(
     startedAt: text("started_at").notNull(),
     finishedAt: text("finished_at"),
   },
-  (table) => [index("idx_parser_runs_fetch_id").on(table.sourceFetchId)],
+  (table) => [
+    index("idx_parser_runs_fetch_id").on(table.sourceFetchId),
+    index("idx_parser_runs_fetch_started").on(table.sourceFetchId, table.startedAt),
+  ],
 );

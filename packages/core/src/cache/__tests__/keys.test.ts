@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   bundleLookupKey,
   dismissedBundleIdsKey,
+  inventoryMatchSnapshotKey,
   latestReleaseKey,
   recentReleasesKey,
 } from "../keys";
@@ -34,6 +35,12 @@ describe("bundleLookupKey", () => {
 describe("recentReleasesKey", () => {
   it("returns static key", () => {
     expect(recentReleasesKey()).toBe("recent-releases");
+  });
+});
+
+describe("inventoryMatchSnapshotKey", () => {
+  it("returns versioned static key", () => {
+    expect(inventoryMatchSnapshotKey()).toBe("inventory-match-snapshot:v1");
   });
 });
 

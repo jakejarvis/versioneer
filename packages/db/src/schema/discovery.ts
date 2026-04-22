@@ -50,6 +50,7 @@ export const discoveredApps = sqliteTable(
       .notNull()
       .default("pending"),
     enrichedAt: text("enriched_at"),
+    enrichmentStartedAt: text("enrichment_started_at"),
     enrichmentError: text("enrichment_error"),
     enrichedVendorName: text("enriched_vendor_name"),
     enrichedHomepageUrl: text("enriched_homepage_url"),
@@ -75,5 +76,19 @@ export const discoveredApps = sqliteTable(
     index("idx_discovered_apps_sighting_count").on(table.sightingCount),
     index("idx_discovered_apps_enrichment_status").on(table.enrichmentStatus),
     index("idx_discovered_apps_confidence_score").on(table.confidenceScore),
+    index("idx_discovered_apps_review_enrichment").on(
+      table.status,
+      table.enrichmentStatus,
+      table.enrichmentStartedAt,
+      table.enrichedAt,
+      table.lastSeenAt,
+    ),
+    index("idx_discovered_apps_queue").on(
+      table.status,
+      table.enrichmentStatus,
+      table.confidenceScore,
+      table.sightingCount,
+      table.lastSeenAt,
+    ),
   ],
 );

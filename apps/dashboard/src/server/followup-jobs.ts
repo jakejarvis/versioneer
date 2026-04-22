@@ -1,7 +1,9 @@
+import { eq } from "drizzle-orm";
+
 import { pipelineWorker, sourcePipeline } from "@/lib/pipeline";
 import { createLogger } from "@versioneer/core/logger";
-import { runTrackedJob, type TrackedJobResult } from "@versioneer/core/pipeline";
-import { createDb } from "@versioneer/db";
+import { computeNextPollAt, runTrackedJob, type TrackedJobResult } from "@versioneer/core/pipeline";
+import { createDb, sources } from "@versioneer/db";
 
 type Db = ReturnType<typeof createDb>;
 
@@ -30,9 +32,27 @@ export async function scheduleSourceFetch(params: {
         error,
       }),
     run: async () => {
+      const source = await params.db
+        .select({ pollIntervalMinutes: sources.pollIntervalMinutes })
+        .from(sources)
+        .where(eq(sources.id, params.sourceId))
+        .get();
       await sourcePipeline.create({
         params: { sourceId: params.sourceId, reason: params.reason, force: params.force },
       });
+      if (source) {
+        const now = new Date().toISOString();
+        await params.db
+          .update(sources)
+          .set({
+            nextPollAt: computeNextPollAt({
+              baseTime: now,
+              pollIntervalMinutes: source.pollIntervalMinutes,
+              now,
+            }),
+          })
+          .where(eq(sources.id, params.sourceId));
+      }
     },
   });
 }

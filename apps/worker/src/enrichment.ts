@@ -1,4 +1,4 @@
-import { and, desc, notInArray, sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 
 import { enrichDiscoveredApp } from "@versioneer/core/pipeline";
 import { createDb, discoveredApps } from "@versioneer/db";
@@ -19,26 +19,23 @@ export interface EnrichmentBatchResult {
 export async function listEnrichmentCandidates(
   db: Db,
   limit = ENRICHMENT_BATCH_SIZE,
-  excludeIds: string[] = [],
+  now = new Date().toISOString(),
 ) {
-  const conditions = [
-    sql`(${discoveredApps.status} = 'pending' OR ${discoveredApps.status} = 'linked')
-      AND (
-        ${discoveredApps.enrichmentStatus} IN ('pending', 'failed')
-        OR (${discoveredApps.enrichmentStatus} = 'in_progress'
-            AND datetime(${discoveredApps.updatedAt}, '+15 minutes') <= datetime('now'))
-        OR (${discoveredApps.enrichmentStatus} = 'success'
-            AND datetime(${discoveredApps.enrichedAt}, '+24 hours') <= datetime('now'))
-      )`,
-  ];
-  if (excludeIds.length > 0) {
-    conditions.push(notInArray(discoveredApps.id, excludeIds));
-  }
-
   return db
     .select({ id: discoveredApps.id })
     .from(discoveredApps)
-    .where(and(...conditions))
+    .where(
+      sql`(${discoveredApps.status} = 'pending' OR ${discoveredApps.status} = 'linked')
+      AND (
+        ${discoveredApps.enrichmentStatus} = 'pending'
+        OR (${discoveredApps.enrichmentStatus} = 'failed'
+            AND datetime(${discoveredApps.updatedAt}, '+15 minutes') <= datetime(${now}))
+        OR (${discoveredApps.enrichmentStatus} = 'in_progress'
+            AND datetime(coalesce(${discoveredApps.enrichmentStartedAt}, ${discoveredApps.updatedAt}), '+15 minutes') <= datetime(${now}))
+        OR (${discoveredApps.enrichmentStatus} = 'success'
+            AND datetime(${discoveredApps.enrichedAt}, '+24 hours') <= datetime(${now}))
+      )`,
+    )
     .orderBy(
       sql`CASE ${discoveredApps.enrichmentStatus}
         WHEN 'pending' THEN 0
@@ -57,9 +54,8 @@ export async function runEnrichmentBatch(params: {
   db: Db;
   env: Pick<Env, "GITHUB_TOKEN" | "RAW_BUCKET" | "CONFIG_KV">;
   limit?: number;
-  excludeIds?: string[];
 }): Promise<EnrichmentBatchResult> {
-  const candidates = await listEnrichmentCandidates(params.db, params.limit, params.excludeIds);
+  const candidates = await listEnrichmentCandidates(params.db, params.limit);
   const result: EnrichmentBatchResult = {
     candidateCount: candidates.length,
     attemptedIds: [],

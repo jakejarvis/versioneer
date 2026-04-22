@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, lte, or } from "drizzle-orm";
 
 import { enrichmentDrain } from "@/lib/pipeline";
 import {
@@ -73,15 +73,19 @@ export async function runPollSourcesJob(params: {
   });
 
   try {
-    const activeSources = await db.select().from(sources).where(eq(sources.status, "active")).all();
-
+    const nowIso = now.toISOString();
     const dueSources = force
-      ? activeSources
-      : activeSources.filter((source) => {
-          const lastFetched = source.lastFetchedAt ? new Date(source.lastFetchedAt) : null;
-          const intervalMs = source.pollIntervalMinutes * 60 * 1000;
-          return !lastFetched || now.getTime() - lastFetched.getTime() >= intervalMs;
-        });
+      ? await db.select().from(sources).where(eq(sources.status, "active")).all()
+      : await db
+          .select()
+          .from(sources)
+          .where(
+            and(
+              eq(sources.status, "active"),
+              or(isNull(sources.nextPollAt), lte(sources.nextPollAt, nowIso)),
+            ),
+          )
+          .all();
 
     const queuedSourceIds: string[] = [];
     const failedSources: Array<{ sourceId: string; errorMessage: string | null }> = [];
@@ -114,7 +118,7 @@ export async function runPollSourcesJob(params: {
       .set({
         status,
         itemsQueued: queuedSourceIds.length,
-        itemsTotal: activeSources.length,
+        itemsTotal: dueSources.length,
         resultJson,
         errorMessage,
         completedAt: new Date().toISOString(),
@@ -142,7 +146,7 @@ export async function runPollSourcesJob(params: {
       id: runId,
       status,
       itemsQueued: queuedSourceIds.length,
-      itemsTotal: activeSources.length,
+      itemsTotal: dueSources.length,
       failedCount: failedSources.length,
     };
   } catch (error) {

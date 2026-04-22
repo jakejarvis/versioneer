@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import { targetArchitectureValues } from "@versioneer/schemas/architecture";
 import {
@@ -21,6 +22,7 @@ export const jobFailures = sqliteTable(
     jobType: text("job_type").notNull(),
     jobKey: text("job_key"),
     relatedId: text("related_id"),
+    dedupeKey: text("dedupe_key"),
     errorMessage: text("error_message"),
     retryCount: integer("retry_count").notNull().default(0),
     status: text("status", { enum: jobFailureStatusValues }).notNull().default("open"),
@@ -30,6 +32,11 @@ export const jobFailures = sqliteTable(
   (table) => [
     index("idx_job_failures_status").on(table.status),
     index("idx_job_failures_type").on(table.jobType),
+    index("idx_job_failures_status_created").on(table.status, table.createdAt),
+    index("idx_job_failures_status_type_created").on(table.status, table.jobType, table.createdAt),
+    uniqueIndex("idx_job_failures_active_dedupe")
+      .on(table.dedupeKey)
+      .where(sql`${table.dedupeKey} is not null and ${table.status} in ('open', 'retrying')`),
   ],
 );
 
@@ -48,6 +55,9 @@ export const auditLog = sqliteTable(
   (table) => [
     index("idx_audit_event_type").on(table.eventType),
     index("idx_audit_target").on(table.targetType, table.targetId),
+    index("idx_audit_created").on(table.createdAt),
+    index("idx_audit_event_created").on(table.eventType, table.createdAt),
+    index("idx_audit_target_created").on(table.targetType, table.targetId, table.createdAt),
   ],
 );
 
@@ -69,6 +79,13 @@ export const cronJobRuns = sqliteTable(
   (table) => [
     index("idx_cron_job_runs_type").on(table.jobType),
     index("idx_cron_job_runs_started").on(table.startedAt),
+    index("idx_cron_job_runs_status_started").on(table.status, table.startedAt),
+    index("idx_cron_job_runs_type_status_trigger_started").on(
+      table.jobType,
+      table.status,
+      table.trigger,
+      table.startedAt,
+    ),
   ],
 );
 

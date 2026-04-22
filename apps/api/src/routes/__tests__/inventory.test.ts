@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { eq, inArray } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { inventoryMatchSnapshotKey } from "@versioneer/core/cache";
 import { normalizeVersion } from "@versioneer/core/versioning";
 import { discoveredApps } from "@versioneer/db";
 
@@ -119,6 +120,7 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(TEST_NOW);
+  return env.CACHE_KV.delete(inventoryMatchSnapshotKey());
 });
 
 describe("POST /v1/inventory/check", () => {
@@ -219,6 +221,7 @@ describe("POST /v1/inventory/check", () => {
     expect(result.installTrust.status).toBe("none");
     expect(result.homebrewCaskToken).toBe("firefox");
     expect(result.localReasonCode).toBeNull();
+    expect(await env.CACHE_KV.get(inventoryMatchSnapshotKey())).not.toBeNull();
   });
 
   it("matches an app by bundle_id — update available", async () => {

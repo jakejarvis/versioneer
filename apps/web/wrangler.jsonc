@@ -2,5 +2,5 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "versioneer-landing",
   "pages_build_output_dir": "dist",
-  "compatibility_date": "2026-02-24"
+  "compatibility_date": "2026-04-22"
 }

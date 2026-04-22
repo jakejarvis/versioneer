@@ -7,6 +7,7 @@ export interface SourceFetchEnv {
 
 export interface SourceParseEnv {
   DB: D1Database;
+  CACHE_KV: KVNamespace;
   RAW_BUCKET: R2Bucket;
 }
 
@@ -17,6 +18,7 @@ export interface RecomputeLatestEnv {
 
 export interface CaskIndexSyncEnv {
   DB: D1Database;
+  CACHE_KV: KVNamespace;
   CONFIG_KV: KVNamespace;
 }
 

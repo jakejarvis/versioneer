@@ -1,7 +1,6 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, lte, or } from "drizzle-orm";
 
-import { msElapsedSince } from "@versioneer/core/dates";
 import { createLogger } from "@versioneer/core/logger";
 import {
   handleSourceParse,
@@ -10,6 +9,7 @@ import {
   isCaskSyncDue,
   recordJobFailure,
   resolveJobFailure,
+  computeNextPollAt,
 } from "@versioneer/core/pipeline";
 import type { SourceParseJob, RecomputeLatestJob } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
@@ -109,39 +109,54 @@ export default class PipelineWorker extends WorkerEntrypoint {
       const runId = generateId(idPrefixes.cronJobRun);
       const startedAt = new Date().toISOString();
       try {
-        const activeSources = await db
-          .select()
+        const nowIso = now.toISOString();
+        const dueSources = await db
+          .select({ id: sources.id, pollIntervalMinutes: sources.pollIntervalMinutes })
           .from(sources)
-          .where(eq(sources.status, "active"))
+          .where(
+            and(
+              eq(sources.status, "active"),
+              or(isNull(sources.nextPollAt), lte(sources.nextPollAt, nowIso)),
+            ),
+          )
           .all();
-        const jobs: SourcePipelineCreateOptions[] = [];
-        for (const source of activeSources) {
-          const elapsed = msElapsedSince(source.lastFetchedAt, now.getTime());
-          const intervalMs = source.pollIntervalMinutes * 60 * 1000;
-          if (elapsed === null || elapsed >= intervalMs) {
-            jobs.push({
-              params: {
-                sourceId: source.id,
-                reason: "scheduled",
-                force: false,
-              },
-            });
-          }
-        }
+        const jobs: SourcePipelineCreateOptions[] = dueSources.map((source) => ({
+          params: {
+            sourceId: source.id,
+            reason: "scheduled",
+            force: false,
+          },
+        }));
         const queued = await createSourcePipelineBatch(this.env.SOURCE_PIPELINE, jobs, log);
+        if (queued === jobs.length && dueSources.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const writes: any[] = dueSources.map((source) =>
+            db
+              .update(sources)
+              .set({
+                nextPollAt: computeNextPollAt({
+                  baseTime: nowIso,
+                  pollIntervalMinutes: source.pollIntervalMinutes,
+                  now: nowIso,
+                }),
+              })
+              .where(eq(sources.id, source.id)),
+          );
+          await db.batch(writes as [(typeof writes)[0], ...typeof writes]);
+        }
         const status = queued === jobs.length ? "completed" : "failed";
         const errorMessage =
           status === "failed"
             ? `${jobs.length - queued} source workflow${jobs.length - queued === 1 ? "" : "s"} failed to queue`
             : null;
-        log.info("poll sources completed", { queued, total: activeSources.length, status });
+        log.info("poll sources completed", { queued, total: dueSources.length, status });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "poll_sources",
           trigger: "scheduled",
           status,
           itemsQueued: queued,
-          itemsTotal: activeSources.length,
+          itemsTotal: dueSources.length,
           errorMessage,
           startedAt,
           completedAt: new Date().toISOString(),

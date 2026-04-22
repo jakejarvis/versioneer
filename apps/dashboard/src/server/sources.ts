@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { computeNextPollAt, initialNextPollAt } from "@versioneer/core/pipeline";
 import { getDescriptor, normalizeBaseUrl } from "@versioneer/core/sources";
 import { sourceCreateSchema, sourceUpdateSchema } from "@versioneer/core/validation";
 import { createDb } from "@versioneer/db";
@@ -23,6 +24,7 @@ import {
 } from "@versioneer/schemas/sources";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import { invalidateInventoryMatchSnapshot } from "./cache";
 import type { Db } from "./db-types";
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { scheduleSourceFetch, scheduleSourceReparse } from "./followup-jobs";
@@ -309,6 +311,11 @@ export const createSource = createServerFn({ method: "POST" })
         role: persistedRole,
         ordinal: nextOrdinal,
         status: runtimeStatus,
+        nextPollAt: initialNextPollAt({
+          status: runtimeStatus,
+          pollIntervalMinutes: data.pollIntervalMinutes,
+          now,
+        }),
         approvedAt: data.reviewStatus === "approved" ? now : null,
         reviewedAt: data.reviewStatus === "approved" ? now : null,
         reviewedBy: data.reviewStatus === "approved" ? context.user.email : null,
@@ -329,6 +336,7 @@ export const createSource = createServerFn({ method: "POST" })
       }),
     ];
     await db.batch(writes as [(typeof writes)[0], ...typeof writes]);
+    await invalidateInventoryMatchSnapshot(env);
 
     if (shouldQueueFetch) {
       await scheduleSourceFetch({ db, sourceId: id, reason: "source-create", force: true });
@@ -430,14 +438,6 @@ export const updateSource = createServerFn({ method: "POST" })
     if (fields.status !== undefined || fields.reviewStatus !== undefined) {
       updates.status = nextStatus;
     }
-    if (fields.reviewStatus !== undefined) {
-      updates.reviewedAt = now;
-      updates.reviewedBy = context.user.email;
-      if (nextReviewStatus === "approved" && !existing.approvedAt) {
-        updates.approvedAt = now;
-      }
-    }
-
     const shouldQueueFetch =
       nextReviewStatus === "approved" &&
       nextStatus === "active" &&
@@ -446,6 +446,35 @@ export const updateSource = createServerFn({ method: "POST" })
         fields.configJson !== undefined ||
         fields.parserKey !== undefined ||
         (fields.status === "active" && existing.status !== "active"));
+    if (
+      shouldQueueFetch ||
+      fields.pollIntervalMinutes !== undefined ||
+      fields.status !== undefined ||
+      fields.reviewStatus !== undefined
+    ) {
+      updates.nextPollAt =
+        nextStatus === "active"
+          ? shouldQueueFetch
+            ? initialNextPollAt({
+                status: nextStatus,
+                pollIntervalMinutes: fields.pollIntervalMinutes ?? existing.pollIntervalMinutes,
+                now,
+              })
+            : computeNextPollAt({
+                baseTime: existing.lastFetchedAt ?? now,
+                pollIntervalMinutes: fields.pollIntervalMinutes ?? existing.pollIntervalMinutes,
+                now,
+              })
+          : null;
+    }
+    if (fields.reviewStatus !== undefined) {
+      updates.reviewedAt = now;
+      updates.reviewedBy = context.user.email;
+      if (nextReviewStatus === "approved" && !existing.approvedAt) {
+        updates.approvedAt = now;
+      }
+    }
+
     // Pre-batch reads
     const derivedAliasWrites = await prepareSyncSourceDerivedAliasWrites(db, {
       appId: existing.appId,
@@ -491,6 +520,7 @@ export const updateSource = createServerFn({ method: "POST" })
       }),
     ];
     await db.batch(writes as [(typeof writes)[0], ...typeof writes]);
+    await invalidateInventoryMatchSnapshot(env);
 
     if (shouldQueueFetch) {
       await scheduleSourceFetch({

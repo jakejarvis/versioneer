@@ -19,5 +19,7 @@ export const clientFeedback = sqliteTable(
     index("idx_feedback_status").on(table.status),
     index("idx_feedback_type").on(table.feedbackType),
     index("idx_feedback_target_app").on(table.targetAppId),
+    index("idx_feedback_status_created").on(table.status, table.createdAt),
+    index("idx_feedback_type_created").on(table.feedbackType, table.createdAt),
   ],
 );

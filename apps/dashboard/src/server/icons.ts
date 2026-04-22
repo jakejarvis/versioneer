@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createDb } from "@versioneer/db";
 import { apps, auditLog, generateId, idPrefixes } from "@versioneer/db";
 
+import { invalidateInventoryMatchSnapshot } from "./cache";
 import { authMiddleware } from "./middleware";
 
 const ALLOWED_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
@@ -82,6 +83,7 @@ export const uploadAppIcon = createServerFn({ method: "POST" })
       payloadJson: JSON.stringify({ r2Key, previousKey }),
       createdAt: now,
     });
+    await invalidateInventoryMatchSnapshot(env);
 
     return { iconR2Key: r2Key };
   });
@@ -111,6 +113,7 @@ export const deleteAppIcon = createServerFn({ method: "POST" })
       payloadJson: JSON.stringify({ deletedKey: app.iconR2Key }),
       createdAt: now,
     });
+    await invalidateInventoryMatchSnapshot(env);
 
     return { status: "deleted" };
   });

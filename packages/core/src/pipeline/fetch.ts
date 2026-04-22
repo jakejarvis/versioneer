@@ -8,6 +8,7 @@ import { getDescriptor } from "../sources/registry";
 import type { SourceTypeDescriptor } from "../sources/types";
 import { recordSourceAnomaly } from "./anomalies";
 import { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
+import { computeNextPollAt } from "./source-polling";
 import {
   assertValidSourceFetchUrl,
   getSourceFetchUrlMetadata,
@@ -174,6 +175,11 @@ export async function handleSourceFetch(
   }
 
   const descriptor = getDescriptor(source.sourceType);
+  const nextPollAt = computeNextPollAt({
+    baseTime: now,
+    pollIntervalMinutes: source.pollIntervalMinutes,
+    now,
+  });
 
   if (!source.baseUrl && !descriptor.skipsFetch) {
     throw new Error(`Source ${job.sourceId} has no base URL`);
@@ -211,6 +217,15 @@ export async function handleSourceFetch(
       fetchStatus: "success",
       fetchedAt: now,
     });
+    await db
+      .update(sources)
+      .set({
+        lastFetchedAt: now,
+        lastSuccessAt: now,
+        nextPollAt,
+        updatedAt: now,
+      })
+      .where(eq(sources.id, source.id));
     return { sourceFetchId: fetchId, shouldParse: false, appId: source.appId };
   }
 
@@ -264,7 +279,7 @@ export async function handleSourceFetch(
 
       await db
         .update(sources)
-        .set({ lastFetchedAt: now, lastSuccessAt: now, updatedAt: now })
+        .set({ lastFetchedAt: now, lastSuccessAt: now, nextPollAt, updatedAt: now })
         .where(eq(sources.id, source.id));
 
       return { sourceFetchId: fetchId, shouldParse: false, appId: source.appId };
@@ -293,7 +308,7 @@ export async function handleSourceFetch(
 
       await db
         .update(sources)
-        .set({ lastFetchedAt: now, lastFailureAt: now, updatedAt: now })
+        .set({ lastFetchedAt: now, lastFailureAt: now, nextPollAt, updatedAt: now })
         .where(eq(sources.id, source.id));
 
       return { sourceFetchId: fetchId, shouldParse: false, appId: source.appId };
@@ -355,6 +370,7 @@ export async function handleSourceFetch(
       .set({
         lastFetchedAt: now,
         lastSuccessAt: now,
+        nextPollAt,
         status: "active",
         updatedAt: now,
       })
@@ -405,7 +421,7 @@ export async function handleSourceFetch(
 
     await db
       .update(sources)
-      .set({ lastFetchedAt: now, lastFailureAt: now, updatedAt: now })
+      .set({ lastFetchedAt: now, lastFailureAt: now, nextPollAt, updatedAt: now })
       .where(eq(sources.id, source.id));
 
     throw error;

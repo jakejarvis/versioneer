@@ -50,6 +50,13 @@
       "when": 1776877481234,
       "tag": "0006_whole_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1776879708856,
+      "tag": "0007_wide_pepper_potts",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@ import PipelineWorker from "../index";
 // (which run in separate miniflare isolates and produce uncaught exceptions).
 const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
 const TEST_NOW_ISO = TEST_NOW.toISOString();
+const TEST_FUTURE_ISO = new Date(TEST_NOW.getTime() + 60 * 60 * 1000).toISOString();
 
 type MockWorkflowCreateOptions = {
   params?: { sourceId: string; reason: string; force: boolean };
@@ -129,6 +130,7 @@ describe("scheduled handler", () => {
       appId,
       pollIntervalMinutes: 60,
       lastFetchedAt: TEST_NOW_ISO,
+      nextPollAt: TEST_FUTURE_ISO,
     });
 
     const worker = createWorkerInstance();
@@ -138,10 +140,36 @@ describe("scheduled handler", () => {
     const pollRun = await latestPollRun(db);
     expect(pollRun).toBeDefined();
     expect(pollRun!.status).toBe("completed");
-    expect(pollRun!.itemsTotal).toBe(1);
+    expect(pollRun!.itemsTotal).toBe(0);
     expect(pollRun!.itemsQueued).toBe(0);
     expect(mockWorkflowBinding.createBatch).not.toHaveBeenCalled();
     expect(mockWorkflowBinding.create).not.toHaveBeenCalled();
+  });
+
+  it("queues a source once mocked time reaches nextPollAt", async () => {
+    const db = createDb(env.DB);
+    await disableExistingSources(db);
+    const appId = await insertTestApp(db, "Future Due App");
+    await insertActiveSource(db, appId, {
+      appId,
+      pollIntervalMinutes: 60,
+      lastFetchedAt: TEST_NOW_ISO,
+      nextPollAt: TEST_FUTURE_ISO,
+    });
+
+    vi.setSystemTime(new Date(TEST_NOW.getTime() + 61 * 60 * 1000));
+
+    const worker = createWorkerInstance();
+    const event = { scheduledTime: Date.now(), cron: "*/15 * * * *" } as ScheduledEvent;
+    await worker.scheduled(event);
+
+    const pollRun = await latestPollRun(db);
+    expect(pollRun).toBeDefined();
+    expect(pollRun!.status).toBe("completed");
+    expect(pollRun!.itemsTotal).toBe(1);
+    expect(pollRun!.itemsQueued).toBe(1);
+    expect(mockWorkflowBinding.createBatch).toHaveBeenCalledTimes(1);
+    expect(mockWorkflowBinding.createBatch.mock.calls[0]![0]).toHaveLength(1);
   });
 
   it("queues due source workflows with createBatch chunks of 100", async () => {

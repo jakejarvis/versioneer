@@ -14,6 +14,10 @@ export function recentReleasesKey(): string {
   return "recent-releases";
 }
 
+export function inventoryMatchSnapshotKey(): string {
+  return "inventory-match-snapshot:v1";
+}
+
 export function dismissedBundleIdsKey(): string {
   return "dismissed-bundle-ids";
 }

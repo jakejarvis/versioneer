@@ -8,7 +8,11 @@ import { sparkleParser, githubReleasesParser } from "../parsers";
 import { toGitHubRepoUrl } from "../sources/github-releases";
 import { resolveSourceUrl } from "../sources/registry";
 import { toGitHubApiReleasesUrl } from "../validation/github-url";
-import { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
+import {
+  readResponseArrayBufferLimited,
+  readResponseTextLimited,
+  ResponseBodyTooLargeError,
+} from "./response-body";
 import { fetchAndParse, extractIconUrl } from "./scrape-html";
 import { githubApiHeaders } from "./types";
 
@@ -28,6 +32,7 @@ export interface EnrichmentResult {
 /** Maximum age in ms before enrichment is considered stale and re-runs. */
 export const ENRICHMENT_STALE_MS = 24 * 60 * 60 * 1000;
 const MAX_ENRICHMENT_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_ICON_BYTES = 512 * 1024;
 
 /**
  * Returns true if the discovered app should be (re-)enriched.
@@ -94,7 +99,11 @@ export async function enrichDiscoveredApp(params: {
     // Mark in-progress inside try so a crash always hits the catch handler
     await db
       .update(discoveredApps)
-      .set({ enrichmentStatus: "in_progress", updatedAt: new Date().toISOString() })
+      .set({
+        enrichmentStatus: "in_progress",
+        enrichmentStartedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
       .where(eq(discoveredApps.id, discoveredAppId));
     // Try Sparkle feed first
     if (row.sparkleFeedUrl) {
@@ -176,6 +185,7 @@ export async function enrichDiscoveredApp(params: {
         enrichmentStatus: result.enrichmentStatus,
         enrichmentError: null,
         enrichedAt: now,
+        enrichmentStartedAt: null,
         enrichedVendorName: result.enrichedVendorName ?? null,
         enrichedHomepageUrl: result.enrichedHomepageUrl ?? null,
         enrichedLatestVersion: result.enrichedLatestVersion ?? null,
@@ -198,6 +208,7 @@ export async function enrichDiscoveredApp(params: {
         enrichmentStatus: "failed",
         enrichmentError: errorMsg,
         enrichedAt: new Date().toISOString(),
+        enrichmentStartedAt: null,
         confidenceScore: result.confidenceScore,
         updatedAt: new Date().toISOString(),
       })
@@ -343,7 +354,18 @@ async function enrichFromMasLookup(bundleId: string, result: EnrichmentResult): 
     return;
   }
 
-  const data = (await response.json()) as {
+  let body: string;
+  try {
+    ({ text: body } = await readResponseTextLimited(response, MAX_ENRICHMENT_BODY_BYTES));
+  } catch (error) {
+    if (error instanceof ResponseBodyTooLargeError) {
+      result.sourceValidationStatus = "invalid";
+      return;
+    }
+    throw error;
+  }
+
+  const data = JSON.parse(body) as {
     resultCount: number;
     results: Array<{
       version?: string;
@@ -476,8 +498,7 @@ async function scrapeHomepageIcon(homepageUrl: string, bucket: R2Bucket): Promis
     const contentType = iconResponse.headers.get("content-type") ?? "";
     if (!contentType.startsWith("image/")) return null;
 
-    const body = await iconResponse.arrayBuffer();
-    if (body.byteLength > 512 * 1024) return null;
+    const { buffer: body } = await readResponseArrayBufferLimited(iconResponse, MAX_ICON_BYTES);
 
     const ext = contentType.includes("png")
       ? "png"

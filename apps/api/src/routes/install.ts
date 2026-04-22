@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 
-import { telemetryRateLimit } from "@/middleware/rate-limit";
+import { clientRateLimit } from "@/middleware/rate-limit";
 import {
   installExecutionStatusRequestSchema,
   installPrepareRequestSchema,
@@ -278,7 +278,7 @@ async function createReleaseDiscrepancySuggestion(params: {
 export const installRoutes = new Hono<{ Bindings: Env }>()
   .post(
     "/install/prepare",
-    telemetryRateLimit,
+    clientRateLimit,
     zValidator("json", installPrepareRequestSchema, (result) => {
       if (!result.success) {
         throw new HTTPException(400, { res: validationErrorResponse(result) });
@@ -340,7 +340,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
   )
   .post(
     "/install/executions/:executionId/status",
-    telemetryRateLimit,
+    clientRateLimit,
     zValidator("json", installExecutionStatusRequestSchema, (result) => {
       if (!result.success) {
         throw new HTTPException(400, { res: validationErrorResponse(result) });

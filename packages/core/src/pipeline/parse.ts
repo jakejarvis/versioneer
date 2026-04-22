@@ -17,6 +17,7 @@ import {
   normalizeArtifactArchitecture,
 } from "@versioneer/schemas/architecture";
 
+import { deleteInventoryMatchSnapshot } from "../cache";
 import { inferReleasedAt, toISODate } from "../dates";
 import { createLogger } from "../logger";
 import { getParser } from "../parsers";
@@ -28,6 +29,11 @@ import { getSourceFetchUrlMetadata } from "./source-url-policy";
 import type { ParseStepResult, SourceParseEnv, SourceParseJob } from "./types";
 
 const INSTALLABLE_ARTIFACT_TYPES = new Set(["zip", "dmg", "pkg"]);
+
+async function artifactUrlHash(url: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(url));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
 
 function artifactHostname(rawUrl: string): string | null {
   return getSourceFetchUrlMetadata(rawUrl).hostname;
@@ -255,24 +261,51 @@ export async function handleSourceParse(
               parsedRelease.releaseNotesFormat ?? "html",
             )
           : null;
-        await db.insert(releases).values({
-          id: releaseId,
-          appId: source.appId,
-          versionRaw: parsedRelease.versionRaw,
-          versionNormalized,
-          buildNumber: parsedRelease.buildNumber ?? null,
-          channel,
-          releasedAt: inferReleasedAt(parsedRelease.publishedAt, isInitialFetch, now),
-          isPrerelease: parsedRelease.isPrerelease,
-          sourceConfidence: output.confidence,
-          publishedBySourceId: source.id,
-          releaseNotesMarkdown,
-          releaseNotesHtml: null,
-          releaseNotesUrl: parsedRelease.releaseNotesUrl ?? null,
-          status: "active",
-          createdAt: now,
-          updatedAt: now,
-        });
+        await db
+          .insert(releases)
+          .values({
+            id: releaseId,
+            appId: source.appId,
+            versionRaw: parsedRelease.versionRaw,
+            versionNormalized,
+            buildNumber: parsedRelease.buildNumber ?? null,
+            channel,
+            releasedAt: inferReleasedAt(parsedRelease.publishedAt, isInitialFetch, now),
+            isPrerelease: parsedRelease.isPrerelease,
+            sourceConfidence: output.confidence,
+            publishedBySourceId: source.id,
+            releaseNotesMarkdown,
+            releaseNotesHtml: null,
+            releaseNotesUrl: parsedRelease.releaseNotesUrl ?? null,
+            status: "active",
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [releases.appId, releases.channel, releases.versionNormalized],
+            set: {
+              status: "active",
+              releasedAt: toISODate(parsedRelease.publishedAt) ?? undefined,
+              sourceConfidence: output.confidence,
+              publishedBySourceId: source.id,
+              releaseNotesMarkdown: releaseNotesMarkdown ?? undefined,
+              releaseNotesHtml: releaseNotesMarkdown ? null : undefined,
+              releaseNotesUrl: parsedRelease.releaseNotesUrl ?? undefined,
+              updatedAt: now,
+            },
+          });
+        const persistedRelease = await db
+          .select({ id: releases.id })
+          .from(releases)
+          .where(
+            and(
+              eq(releases.appId, source.appId),
+              eq(releases.versionNormalized, versionNormalized),
+              eq(releases.channel, channel),
+            ),
+          )
+          .get();
+        if (persistedRelease) releaseId = persistedRelease.id;
       }
 
       observedReleaseIds.add(releaseId);
@@ -300,20 +333,27 @@ export async function handleSourceParse(
         .select({
           id: artifacts.id,
           url: artifacts.url,
+          urlHash: artifacts.urlHash,
           architecture: artifacts.architecture,
         })
         .from(artifacts)
         .where(eq(artifacts.releaseId, releaseId))
         .all();
       const existingByUrl = new Map(existingArtifacts.map((a) => [a.url, a] as const));
+      const existingByUrlHash = new Map(
+        existingArtifacts.filter((a) => a.urlHash).map((a) => [a.urlHash!, a] as const),
+      );
 
       for (const parsedArtifact of parsedRelease.artifacts) {
         const architecture = normalizeArtifactArchitecture(parsedArtifact.architecture);
-        const existingArtifact = existingByUrl.get(parsedArtifact.url);
+        const urlHash = await artifactUrlHash(parsedArtifact.url);
+        const existingArtifact =
+          existingByUrlHash.get(urlHash) ?? existingByUrl.get(parsedArtifact.url);
         if (existingArtifact) {
           await db
             .update(artifacts)
             .set({
+              urlHash,
               sha256: parsedArtifact.sha256 ?? undefined,
               sizeBytes: parsedArtifact.sizeBytes ?? undefined,
               architecture: mergeArtifactArchitectures(existingArtifact.architecture, architecture),
@@ -350,18 +390,32 @@ export async function handleSourceParse(
             now,
           });
         }
-        await db.insert(artifacts).values({
-          id: generateId(idPrefixes.artifact),
-          releaseId,
-          artifactType: parsedArtifact.type,
-          url: parsedArtifact.url,
-          sha256: parsedArtifact.sha256 ?? null,
-          sizeBytes: parsedArtifact.sizeBytes ?? null,
-          architecture,
-          minOsVersion: parsedArtifact.minOsVersion ?? null,
-          isPrimary: false,
-          createdAt: now,
-        });
+        await db
+          .insert(artifacts)
+          .values({
+            id: generateId(idPrefixes.artifact),
+            releaseId,
+            artifactType: parsedArtifact.type,
+            url: parsedArtifact.url,
+            urlHash,
+            sha256: parsedArtifact.sha256 ?? null,
+            sizeBytes: parsedArtifact.sizeBytes ?? null,
+            architecture,
+            minOsVersion: parsedArtifact.minOsVersion ?? null,
+            isPrimary: false,
+            createdAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [artifacts.releaseId, artifacts.urlHash],
+            set: {
+              artifactType: parsedArtifact.type,
+              url: parsedArtifact.url,
+              sha256: parsedArtifact.sha256 ?? null,
+              sizeBytes: parsedArtifact.sizeBytes ?? null,
+              architecture,
+              minOsVersion: parsedArtifact.minOsVersion ?? null,
+            },
+          });
       }
 
       // Ensure exactly one primary artifact per release (prefer newest)
@@ -431,6 +485,7 @@ export async function handleSourceParse(
             updatedAt: new Date().toISOString(),
           })
           .where(eq(apps.id, source.appId));
+        await deleteInventoryMatchSnapshot(env.CACHE_KV);
         log.info("app promoted to public", { appId: source.appId });
       }
     }

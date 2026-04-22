@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { defaultLabelForSourceType } from "@/lib/source-types";
 import { normalizeAliasValue } from "@versioneer/core/identity";
+import { initialNextPollAt } from "@versioneer/core/pipeline";
 import { getDescriptor, normalizeBaseUrl } from "@versioneer/core/sources";
 import { createDb } from "@versioneer/db";
 import {
@@ -26,6 +27,7 @@ import {
 } from "@versioneer/schemas/sources";
 
 import { assertNoConflictingExactAlias } from "./alias-conflicts";
+import { invalidateInventoryMatchSnapshot } from "./cache";
 import { loadAppsByIds, loadSourcesByIds, toAppSummary, toSourceSummary } from "./entity-summaries";
 import { scheduleRecomputeLatest, scheduleSourceFetch } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
@@ -354,6 +356,11 @@ async function approveNewSourceSuggestion(params: {
       reviewStatus: "approved",
       role: persistedRole,
       status: runtimeStatus,
+      nextPollAt: initialNextPollAt({
+        status: runtimeStatus,
+        pollIntervalMinutes: 60,
+        now,
+      }),
       discoveredVia: "catalog_suggestion",
       approvedAt: now,
       reviewedAt: now,
@@ -532,6 +539,11 @@ async function approveAuthorityHandoffSuggestion(params: {
       role: "authority",
       reviewStatus: "approved",
       status: "active",
+      nextPollAt: initialNextPollAt({
+        status: "active",
+        pollIntervalMinutes: 60,
+        now,
+      }),
       approvedAt: now,
       reviewedAt: now,
       reviewedBy: reviewer,
@@ -826,6 +838,7 @@ export const approveCatalogSuggestion = createServerFn({ method: "POST" })
       }),
       createdAt: now,
     });
+    await invalidateInventoryMatchSnapshot(env);
 
     return { status: "approved" };
   });

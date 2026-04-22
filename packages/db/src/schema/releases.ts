@@ -36,6 +36,11 @@ export const releases = sqliteTable(
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
+    uniqueIndex("idx_releases_app_channel_version").on(
+      table.appId,
+      table.channel,
+      table.versionNormalized,
+    ),
     index("idx_releases_app_id").on(table.appId),
     index("idx_releases_app_channel").on(table.appId, table.channel),
     index("idx_releases_app_channel_status_version").on(
@@ -46,6 +51,7 @@ export const releases = sqliteTable(
     ),
     index("idx_releases_version").on(table.appId, table.versionNormalized),
     index("idx_releases_status").on(table.status),
+    index("idx_releases_status_created").on(table.status, table.createdAt),
   ],
 );
 
@@ -97,7 +103,10 @@ export const artifacts = sqliteTable(
     isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at").notNull(),
   },
-  (table) => [index("idx_artifacts_release_id").on(table.releaseId)],
+  (table) => [
+    index("idx_artifacts_release_id").on(table.releaseId),
+    uniqueIndex("idx_artifacts_release_url_hash").on(table.releaseId, table.urlHash),
+  ],
 );
 
 export const appLatestReleases = sqliteTable(

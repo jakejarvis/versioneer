@@ -24,43 +24,40 @@ export async function recordSourceAnomaly(params: {
 }) {
   const now = params.now ?? new Date().toISOString();
   const jobKey = `${params.kind}:${params.fingerprint}`;
-  const existing = await params.db
-    .select({ id: jobFailures.id })
-    .from(jobFailures)
-    .where(
-      and(
-        eq(jobFailures.jobType, "source-anomaly"),
-        eq(jobFailures.relatedId, params.sourceId),
-        eq(jobFailures.jobKey, jobKey),
-        sql`${jobFailures.status} in ('open', 'retrying')`,
-      ),
-    )
-    .get();
+  const id = generateId(idPrefixes.jobFailure);
+  const dedupeKey = JSON.stringify(["source-anomaly", params.sourceId, jobKey]);
 
-  if (existing) {
-    await params.db
-      .update(jobFailures)
-      .set({
+  await params.db
+    .insert(jobFailures)
+    .values({
+      id,
+      jobType: "source-anomaly",
+      jobKey,
+      relatedId: params.sourceId,
+      dedupeKey,
+      errorMessage: params.message,
+      retryCount: 0,
+      status: "open",
+      createdAt: now,
+      resolvedAt: null,
+    })
+    .onConflictDoUpdate({
+      target: jobFailures.dedupeKey,
+      targetWhere: sql`${jobFailures.dedupeKey} is not null and ${jobFailures.status} in ('open', 'retrying')`,
+      set: {
         status: "open",
         errorMessage: params.message,
         retryCount: sql`${jobFailures.retryCount} + 1`,
         resolvedAt: null,
-      })
-      .where(eq(jobFailures.id, existing.id));
-    return existing.id;
-  }
+      },
+    });
 
-  const id = generateId(idPrefixes.jobFailure);
-  await params.db.insert(jobFailures).values({
-    id,
-    jobType: "source-anomaly",
-    jobKey,
-    relatedId: params.sourceId,
-    errorMessage: params.message,
-    retryCount: 0,
-    status: "open",
-    createdAt: now,
-    resolvedAt: null,
-  });
-  return id;
+  const existing = await params.db
+    .select({ id: jobFailures.id })
+    .from(jobFailures)
+    .where(
+      and(eq(jobFailures.dedupeKey, dedupeKey), sql`${jobFailures.status} in ('open', 'retrying')`),
+    )
+    .get();
+  return existing?.id ?? id;
 }

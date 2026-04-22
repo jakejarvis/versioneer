@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { normalizeAliasValue } from "@versioneer/core/identity";
-import { lookupCaskTokenByBundleId } from "@versioneer/core/pipeline";
+import { initialNextPollAt, lookupCaskTokenByBundleId } from "@versioneer/core/pipeline";
 import { getDescriptor, normalizeBaseUrl } from "@versioneer/core/sources";
 import { createDb } from "@versioneer/db";
 import {
@@ -24,6 +24,7 @@ import {
 } from "@versioneer/schemas/sources";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import { invalidateInventoryMatchSnapshot } from "./cache";
 import { scheduleSourceFetch } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
 import { buildSourceDerivedAliasInserts } from "./source-derived-aliases";
@@ -213,6 +214,11 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
           role,
           ordinal: i,
           status: runtimeStatus,
+          nextPollAt: initialNextPollAt({
+            status: runtimeStatus,
+            pollIntervalMinutes: src.pollIntervalMinutes,
+            now,
+          }),
           approvedAt: now,
           reviewedAt: now,
           reviewedBy: context.user.email,
@@ -266,6 +272,7 @@ export const onboardDiscoveredApp = createServerFn({ method: "POST" })
     );
 
     await db.batch(writes as [(typeof writes)[0], ...typeof writes]);
+    await invalidateInventoryMatchSnapshot(env);
 
     for (const sourceId of sourceIds) {
       await scheduleSourceFetch({ db, sourceId, reason: "onboarding", force: true });

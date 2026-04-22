@@ -68,7 +68,7 @@ export class EnrichmentDrainWorkflow extends WorkflowEntrypoint<Env, EnrichmentD
         const batch = await step.do<EnrichmentBatchResult>(
           `enrich-discoveries-${batchIndex + 1}`,
           { retries: { limit: 2, delay: "10 seconds", backoff: "exponential" } },
-          async () => runEnrichmentBatch({ db, env: this.env, excludeIds: totals.attemptedIds }),
+          async () => runEnrichmentBatch({ db, env: this.env }),
         );
 
         if (batch.candidateCount === 0) break;
@@ -76,7 +76,7 @@ export class EnrichmentDrainWorkflow extends WorkflowEntrypoint<Env, EnrichmentD
       }
 
       const remaining = await step.do("check-remaining-discoveries", async () =>
-        listEnrichmentCandidates(db, 1, totals.attemptedIds),
+        listEnrichmentCandidates(db, 1),
       );
       totals.hasMore = remaining.length > 0;
       if (totals.hasMore) {

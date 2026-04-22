@@ -20,7 +20,11 @@ export { normalizeReleaseNotes } from "./release-notes";
 export type { ReleaseNotesFormat } from "./release-notes";
 export { renderReleaseNotesHtml, renderReleaseNotesMarkdownHtml } from "./release-notes-render";
 export { sanitizeHtml } from "./sanitize-html";
-export { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
+export {
+  readResponseArrayBufferLimited,
+  readResponseTextLimited,
+  ResponseBodyTooLargeError,
+} from "./response-body";
 export {
   assertValidSourceFetchUrl,
   getSourceFetchUrlMetadata,
@@ -35,6 +39,7 @@ export type {
 } from "./source-url-policy";
 export { recordSourceAnomaly } from "./anomalies";
 export type { SourceAnomalyKind } from "./anomalies";
+export { computeNextPollAt, initialNextPollAt } from "./source-polling";
 export { enrichDiscoveredApp, lookupCaskTokenByBundleId } from "./enrich-discovered-app";
 export {
   findOutstandingJobFailure,

@@ -3,9 +3,9 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 
-import { telemetryRateLimit } from "@/middleware/rate-limit";
+import { clientRateLimit } from "@/middleware/rate-limit";
+import { deleteInventoryMatchSnapshot, getInventoryMatchSnapshot } from "@versioneer/core/cache";
 import { matchApp, normalizeAliasValue } from "@versioneer/core/identity";
-import type { AliasRecord, TrustAssertionRecord } from "@versioneer/core/identity";
 import { normalizeBaseUrl, resolveSourceUrl } from "@versioneer/core/sources";
 import { installedAppSchema, inventoryRequestEnvelopeSchema } from "@versioneer/core/validation";
 import type {
@@ -91,12 +91,14 @@ type PersistedDiscovery = {
 
 type LatestReleaseRow = typeof appLatestReleases.$inferSelect;
 type ArtifactRow = typeof artifacts.$inferSelect;
+type InventoryFollowupAppRow = Pick<
+  typeof apps.$inferSelect,
+  "id" | "slug" | "canonicalName" | "vendorName" | "homepageUrl" | "status" | "iconR2Key"
+>;
 type LatestByAppChannel = Map<string, Map<string, Map<TargetArchitecture, LatestReleaseRow>>>;
-type InventoryAppInfo = {
-  canonicalName: string;
-  iconR2Key: string | null;
-  status: "draft" | "public" | "merged" | "deprecated" | "unlisted";
-};
+type InventoryAppInfo = NonNullable<
+  Awaited<ReturnType<typeof getInventoryMatchSnapshot>>["appsById"][string]
+>;
 type InventoryMatchPlan = {
   installedApp: InstalledApp;
   matchResult: ReturnType<typeof matchApp>;
@@ -354,6 +356,31 @@ async function selectArtifactsByIds(
     if (chunk.length === 0) continue;
 
     rows.push(...(await db.select().from(artifacts).where(inArray(artifacts.id, chunk)).all()));
+  }
+  return rows;
+}
+
+async function selectInventoryFollowupAppsByIds(
+  db: ReturnType<typeof createDb>,
+  appIds: string[],
+): Promise<InventoryFollowupAppRow[]> {
+  const rows: InventoryFollowupAppRow[] = [];
+  for (const appChunk of chunkStrings(appIds, Math.max(1, D1_PARAM_LIMIT))) {
+    rows.push(
+      ...(await db
+        .select({
+          id: apps.id,
+          slug: apps.slug,
+          canonicalName: apps.canonicalName,
+          vendorName: apps.vendorName,
+          homepageUrl: apps.homepageUrl,
+          status: apps.status,
+          iconR2Key: apps.iconR2Key,
+        })
+        .from(apps)
+        .where(inArray(apps.id, appChunk))
+        .all()),
+    );
   }
   return rows;
 }
@@ -1124,29 +1151,6 @@ async function storeIcon(bucket: R2Bucket, iconBase64: string): Promise<string |
   }
 }
 
-function pickPreferredAliasMap(
-  aliases: Array<{
-    appId: string;
-    aliasType: string;
-    value: string;
-    isExact: boolean;
-    confidenceWeight: number;
-  }>,
-  aliasType: string,
-): Map<string, string> {
-  const map = new Map<string, { value: string; confidenceWeight: number }>();
-
-  for (const alias of aliases) {
-    if (alias.aliasType !== aliasType || !alias.isExact) continue;
-    const existing = map.get(alias.appId);
-    if (!existing || alias.confidenceWeight > existing.confidenceWeight) {
-      map.set(alias.appId, { value: alias.value, confidenceWeight: alias.confidenceWeight });
-    }
-  }
-
-  return new Map(Array.from(map.entries(), ([appId, entry]) => [appId, entry.value]));
-}
-
 type InventoryEnv = {
   Bindings: Env;
   Variables: {
@@ -1223,79 +1227,19 @@ const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next) => {
 
 export const inventoryRoutes = new Hono<InventoryEnv>()
   // POST /v1/inventory/check
-  // TODO: Pre-compute inventory snapshot in KV, rebuilt on catalog changes, to avoid full-table loads
-  .post("/inventory/check", telemetryRateLimit, gzipJsonMiddleware, async (c) => {
+  .post("/inventory/check", clientRateLimit, gzipJsonMiddleware, async (c) => {
     const request = c.get("inventoryRequest");
     const db = createDb(c.env.DB);
     const now = new Date().toISOString();
 
-    // Load all active aliases for matching
-    const allAliases = await db
-      .select({
-        appId: appAliases.appId,
-        aliasType: appAliases.aliasType,
-        value: appAliases.value,
-        normalizedValue: appAliases.normalizedValue,
-        isExact: appAliases.isExact,
-        confidenceWeight: appAliases.confidenceWeight,
-      })
-      .from(appAliases)
-      .where(eq(appAliases.isActive, true))
-      .limit(10_000)
-      .all();
-
-    // Load app details
-    const appMap = new Map<string, InventoryAppInfo>();
-    const allApps = await db
-      .select({
-        id: apps.id,
-        canonicalName: apps.canonicalName,
-        iconR2Key: apps.iconR2Key,
-        status: apps.status,
-      })
-      .from(apps)
-      .limit(10_000)
-      .all();
-    for (const a of allApps) {
-      appMap.set(a.id, {
-        canonicalName: a.canonicalName,
-        iconR2Key: a.iconR2Key,
-        status: a.status,
-      });
-    }
-
-    const aliasRecords: AliasRecord[] = allAliases.map((a) => ({
-      appId: a.appId,
-      appName: appMap.get(a.appId)?.canonicalName ?? "Unknown",
-      aliasType: a.aliasType,
-      value: a.value,
-      normalizedValue: a.normalizedValue,
-      isExact: a.isExact,
-      confidenceWeight: a.confidenceWeight,
-    }));
-    const caskTokenByApp = pickPreferredAliasMap(allAliases, "homebrew_cask");
-    const sparkleTrustAssertions: TrustAssertionRecord[] = (
-      await db
-        .select({
-          appId: trustAssertions.appId,
-          assertionType: trustAssertions.assertionType,
-          value: trustAssertions.value,
-        })
-        .from(trustAssertions)
-        .where(eq(trustAssertions.assertionType, "sparkle_public_key"))
-        .limit(10_000)
-        .all()
-    ).flatMap((assertion) =>
-      assertion.appId
-        ? [
-            {
-              appId: assertion.appId,
-              assertionType: assertion.assertionType,
-              value: assertion.value,
-            },
-          ]
-        : [],
-    );
+    const inventorySnapshot = await getInventoryMatchSnapshot({
+      db,
+      kv: c.env.CACHE_KV,
+    });
+    const appMap = new Map<string, InventoryAppInfo>(Object.entries(inventorySnapshot.appsById));
+    const aliasRecords = inventorySnapshot.aliases;
+    const caskTokenByApp = new Map(Object.entries(inventorySnapshot.caskTokenByAppId));
+    const sparkleTrustAssertions = inventorySnapshot.sparkleTrustAssertions;
     const approvedSparkleTrustByApp = new Set(
       sparkleTrustAssertions.map((assertion) => assertion.appId),
     );
@@ -1544,6 +1488,12 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
     // themselves are already persisted above so the dashboard cannot show a partial batch.
     c.executionCtx.waitUntil(
       (async () => {
+        const matchedFollowupAppIds = uniqueStrings(results.map((result) => result.matchedAppId));
+        const followupAppRows = await selectInventoryFollowupAppsByIds(db, matchedFollowupAppIds);
+        const followupAppById = new Map(
+          followupAppRows.map((appRow) => [appRow.id, appRow] as const),
+        );
+
         for (const [key, app] of unmatchedByKey) {
           if (!app.iconBase64) continue;
           const persisted = persistedDiscoveries.get(key);
@@ -1565,12 +1515,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           const result = resultByLookupKey.get(key);
           if (!result?.matchedAppId) continue;
 
-          // Re-check from DB to avoid races with concurrent requests
-          const appRow = await db
-            .select({ id: apps.id, slug: apps.slug, iconR2Key: apps.iconR2Key })
-            .from(apps)
-            .where(eq(apps.id, result.matchedAppId))
-            .get();
+          const appRow = followupAppById.get(result.matchedAppId);
           if (!appRow || appRow.iconR2Key) continue;
 
           try {
@@ -1580,6 +1525,8 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 .update(apps)
                 .set({ iconR2Key: iconKey, updatedAt: now })
                 .where(eq(apps.id, appRow.id));
+              followupAppById.set(appRow.id, { ...appRow, iconR2Key: iconKey });
+              await deleteInventoryMatchSnapshot(c.env.CACHE_KV);
             }
           } catch {
             // Non-critical — continue
@@ -1592,17 +1539,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           const result = resultByLookupKey.get(lookupKey);
           if (!result?.matchedAppId || result.trackingState !== "public") continue;
 
-          const appRow = await db
-            .select({
-              id: apps.id,
-              canonicalName: apps.canonicalName,
-              vendorName: apps.vendorName,
-              homepageUrl: apps.homepageUrl,
-              status: apps.status,
-            })
-            .from(apps)
-            .where(eq(apps.id, result.matchedAppId))
-            .get();
+          const appRow = followupAppById.get(result.matchedAppId);
           if (!appRow) continue;
 
           const canonicalSnapshotJson = JSON.stringify({

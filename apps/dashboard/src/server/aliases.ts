@@ -8,6 +8,7 @@ import { createDb } from "@versioneer/db";
 import { appAliases, auditLog, generateId, idPrefixes } from "@versioneer/db";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import { invalidateInventoryMatchSnapshot } from "./cache";
 import { authMiddleware } from "./middleware";
 
 export const updateAlias = createServerFn({ method: "POST" })
@@ -45,6 +46,7 @@ export const updateAlias = createServerFn({ method: "POST" })
     if (data.confidenceWeight !== undefined) updates.confidenceWeight = data.confidenceWeight;
 
     await db.update(appAliases).set(updates).where(eq(appAliases.id, data.id));
+    await invalidateInventoryMatchSnapshot(env);
 
     return { status: "updated" };
   });
@@ -74,6 +76,7 @@ export const deleteAlias = createServerFn({ method: "POST" })
       }),
       createdAt: now,
     });
+    await invalidateInventoryMatchSnapshot(env);
 
     return { status: "deleted" };
   });
