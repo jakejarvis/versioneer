@@ -34,21 +34,34 @@ nonisolated enum VersionFormatting {
   }
 
   /// Attempts to parse a date string in ISO-8601 or RFC 2822 format.
-  private static func parseDate(_ string: String) -> Date? {
+  static func parseDate(_ string: String) -> Date? {
+    let value = string.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty else { return nil }
+
     let iso8601Fractional = ISO8601DateFormatter()
     iso8601Fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let date = iso8601Fractional.date(from: string) { return date }
+    if let date = iso8601Fractional.date(from: value) { return date }
 
     let iso8601 = ISO8601DateFormatter()
-    if let date = iso8601.date(from: string) { return date }
+    if let date = iso8601.date(from: value) { return date }
 
     let rfc2822 = DateFormatter()
     rfc2822.locale = Locale(identifier: "en_US_POSIX")
-    rfc2822.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
-    if let date = rfc2822.date(from: string) { return date }
+    rfc2822.isLenient = false
+    for format in [
+      "EEE, dd MMM yyyy HH:mm:ss Z",
+      "EEE, d MMM yyyy HH:mm:ss Z",
+      "dd MMM yyyy HH:mm:ss Z",
+      "d MMM yyyy HH:mm:ss Z",
+      "EEE, dd MMM yyyy HH:mm:ss zzz",
+      "EEE, d MMM yyyy HH:mm:ss zzz",
+      "dd MMM yyyy HH:mm:ss zzz",
+      "d MMM yyyy HH:mm:ss zzz",
+    ] {
+      rfc2822.dateFormat = format
+      if let date = rfc2822.date(from: value) { return date }
+    }
 
-    // Fallback with flexible parsing
-    rfc2822.dateFormat = "EEE, d MMM yyyy HH:mm:ss Z"
-    return rfc2822.date(from: string)
+    return nil
   }
 }

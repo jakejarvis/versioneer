@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { sql } from "drizzle-orm";
+import { gt, sql } from "drizzle-orm";
 
 import { createDb } from "@versioneer/db";
 import {
@@ -19,6 +19,7 @@ export const getStats = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async () => {
     const db = createDb(env.DB);
+    const recentReleaseThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const [appCount] = await db.select({ count: sql<number>`count(*)` }).from(apps);
     const [activeSourceCount] = await db
@@ -36,7 +37,7 @@ export const getStats = createServerFn({ method: "GET" })
     const [recentReleaseCount] = await db
       .select({ count: sql<number>`count(*)` })
       .from(releases)
-      .where(sql`${releases.createdAt} > datetime('now', '-7 days')`);
+      .where(gt(releases.createdAt, recentReleaseThreshold));
 
     const [publicCount] = await db
       .select({ count: sql<number>`count(*)` })

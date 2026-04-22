@@ -166,13 +166,6 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
 nonisolated enum ResultsBrowserDateParser {
   static func date(from string: String?) -> Date? {
     guard let string else { return nil }
-    let iso8601WithFractions = ISO8601DateFormatter()
-    iso8601WithFractions.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let date = iso8601WithFractions.date(from: string) {
-      return date
-    }
-    let iso8601 = ISO8601DateFormatter()
-    iso8601.formatOptions = [.withInternetDateTime]
-    return iso8601.date(from: string)
+    return VersionFormatting.parseDate(string)
   }
 }

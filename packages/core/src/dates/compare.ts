@@ -1,7 +1,10 @@
+import { toISODate } from "./parse";
+
 /** Parse an ISO date string to epoch milliseconds. Returns null if unparseable. */
 export function toEpochMs(dateStr: string | null | undefined): number | null {
-  if (!dateStr) return null;
-  const ms = new Date(dateStr).getTime();
+  const iso = toISODate(dateStr);
+  if (!iso) return null;
+  const ms = new Date(iso).getTime();
   return Number.isNaN(ms) ? null : ms;
 }
 

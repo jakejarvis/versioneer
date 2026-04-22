@@ -14,11 +14,13 @@ struct ReleaseNotesMarkdownView: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .environment(\.openURL, OpenURLAction { url in
-      guard Self.isSafeExternalURL(url) else { return .discarded }
-      NSWorkspace.shared.open(url)
-      return .handled
-    })
+    .environment(
+      \.openURL,
+      OpenURLAction { url in
+        guard Self.isSafeExternalURL(url) else { return .discarded }
+        NSWorkspace.shared.open(url)
+        return .handled
+      })
   }
 
   private static func isSafeExternalURL(_ url: URL) -> Bool {

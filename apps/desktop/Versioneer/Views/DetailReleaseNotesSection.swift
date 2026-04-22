@@ -64,8 +64,8 @@ struct DetailReleaseNotesSection: View {
   }
 }
 
-private extension View {
-  func releaseNotesSurface() -> some View {
+extension View {
+  fileprivate func releaseNotesSurface() -> some View {
     frame(minHeight: 100, maxHeight: 300)
       .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
       .overlay {

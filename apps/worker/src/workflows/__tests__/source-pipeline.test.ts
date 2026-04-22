@@ -426,4 +426,47 @@ describe("SourcePipelineWorkflow", () => {
     ).toBe(true);
     expect(await getCachedLatest(env.CACHE_KV, appId, "beta", "arm64")).toBeNull();
   });
+
+  it("normalizes latest release timestamps during recompute", async () => {
+    const db = createDb(env.DB);
+
+    const appId = generateId(idPrefixes.app);
+    await db.insert(apps).values({
+      id: appId,
+      slug: `wf-latest-date-${appId.slice(-8)}`,
+      canonicalName: "Latest Date App",
+      status: "public",
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
+    });
+
+    const releaseId = generateId(idPrefixes.release);
+    await db.insert(releases).values({
+      id: releaseId,
+      appId,
+      versionRaw: "2.0.0",
+      versionNormalized: normalizeVersion("2.0.0"),
+      channel: "stable",
+      releasedAt: "Wed, 11 Feb 2026 06:36:00 +0000",
+      status: "active",
+      isPrerelease: false,
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
+    });
+
+    await handleRecomputeLatest({ appId, channel: "stable" }, env);
+
+    const latest = await db
+      .select()
+      .from(appLatestReleases)
+      .where(eq(appLatestReleases.appId, appId))
+      .get();
+    expect(latest?.releasedAt).toBe("2026-02-11T06:36:00.000Z");
+
+    const release = await db.select().from(releases).where(eq(releases.id, releaseId)).get();
+    expect(release?.releasedAt).toBe("2026-02-11T06:36:00.000Z");
+
+    const cached = await getCachedLatest(env.CACHE_KV, appId, "stable", "arm64");
+    expect(cached?.releasedAt).toBe("2026-02-11T06:36:00.000Z");
+  });
 });

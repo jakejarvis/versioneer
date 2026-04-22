@@ -176,6 +176,26 @@ describe("releaseCreateSchema", () => {
   it("rejects empty versionRaw", () => {
     expect(releaseCreateSchema.safeParse({ appId: "app_123", versionRaw: "" }).success).toBe(false);
   });
+
+  it("accepts parseable releasedAt values", () => {
+    expect(
+      releaseCreateSchema.safeParse({
+        appId: "app_123",
+        versionRaw: "2.0.0",
+        releasedAt: "Wed, 11 Feb 2026 06:36:00 +0000",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects unparseable releasedAt values", () => {
+    expect(
+      releaseCreateSchema.safeParse({
+        appId: "app_123",
+        versionRaw: "2.0.0",
+        releasedAt: "not-a-date",
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("releaseUpdateSchema", () => {

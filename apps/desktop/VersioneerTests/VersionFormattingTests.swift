@@ -40,4 +40,23 @@ struct VersionFormattingTests {
     #expect(result != "2020-01-01T00:00:00Z")
     #expect(!result.isEmpty)
   }
+
+  @Test func parseDateRejectsVersionLikeStrings() {
+    #expect(VersionFormatting.parseDate("12.7.4") == nil)
+    #expect(VersionFormatting.parseDate("6.6.0") == nil)
+  }
+
+  @Test func parseDateRejectsImpossibleRFC2822CalendarDates() {
+    #expect(VersionFormatting.parseDate("Wed, 31 Feb 2026 06:36:00 +0000") == nil)
+  }
+
+  @Test func resultsBrowserDateParserHandlesRFC2822() {
+    let date = ResultsBrowserDateParser.date(from: "Wed, 11 Feb 2026 06:36:00 +0000")
+    #expect(date?.timeIntervalSince1970 == 1_770_791_760)
+  }
+
+  @Test func resultsBrowserDateParserHandlesRFC2822GMT() {
+    let date = ResultsBrowserDateParser.date(from: "11 Feb 2026 06:36:00 GMT")
+    #expect(date?.timeIntervalSince1970 == 1_770_791_760)
+  }
 }

@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 
 import type {
   DashboardHomepageData,
@@ -40,6 +40,7 @@ export const getHomepage = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async () => {
     const db = createDb(env.DB);
+    const recentReleaseThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const [
       [appCount],
@@ -69,7 +70,7 @@ export const getHomepage = createServerFn({ method: "GET" })
       db
         .select({ count: sql<number>`count(*)` })
         .from(releases)
-        .where(sql`${releases.createdAt} > datetime('now', '-7 days')`),
+        .where(gt(releases.createdAt, recentReleaseThreshold)),
       db
         .select({ count: sql<number>`count(*)` })
         .from(sources)

@@ -19,6 +19,7 @@ import type { InstallStrategy } from "@versioneer/schemas/releases";
 
 import { deleteCachedLatest, setCachedLatest, recentReleasesKey } from "../cache";
 import type { CacheKV } from "../cache";
+import { toEpochMs, toISODate } from "../dates";
 import type { RecomputeLatestEnv, RecomputeLatestJob } from "./types";
 
 /**
@@ -43,8 +44,8 @@ type ArtifactRow = typeof artifacts.$inferSelect;
 function sortReleasesDescending(a: ReleaseRow, b: ReleaseRow): number {
   if (b.versionNormalized > a.versionNormalized) return 1;
   if (b.versionNormalized < a.versionNormalized) return -1;
-  if ((b.releasedAt ?? "") > (a.releasedAt ?? "")) return 1;
-  if ((b.releasedAt ?? "") < (a.releasedAt ?? "")) return -1;
+  const releasedAtDelta = (toEpochMs(b.releasedAt) ?? 0) - (toEpochMs(a.releasedAt) ?? 0);
+  if (releasedAtDelta !== 0) return releasedAtDelta;
   if (b.createdAt > a.createdAt) return 1;
   if (b.createdAt < a.createdAt) return -1;
   return 0;
@@ -151,6 +152,13 @@ export async function handleRecomputeLatest(
       .all();
 
     const candidateIds = new Set(candidateReleases.map((release) => release.id));
+    for (const release of candidateReleases) {
+      const releasedAt = toISODate(release.releasedAt);
+      if (releasedAt && releasedAt !== release.releasedAt) {
+        release.releasedAt = releasedAt;
+        await db.update(releases).set({ releasedAt }).where(eq(releases.id, release.id));
+      }
+    }
     const releaseArtifacts =
       candidateReleases.length > 0
         ? await db
@@ -220,6 +228,7 @@ export async function handleRecomputeLatest(
         authoritySource?.sourceType ?? null,
         winning.artifact?.artifactType ?? null,
       );
+      const releasedAt = toISODate(winning.release.releasedAt);
 
       if (existingLatest) {
         await db
@@ -230,7 +239,7 @@ export async function handleRecomputeLatest(
             authoritySourceId: authoritySource?.id ?? null,
             versionNormalized: winning.release.versionNormalized,
             versionRaw: winning.release.versionRaw,
-            releasedAt: winning.release.releasedAt,
+            releasedAt,
             installStrategy,
             updatedAt: now,
           })
@@ -246,7 +255,7 @@ export async function handleRecomputeLatest(
           artifactId: winning.artifact?.id ?? null,
           versionNormalized: winning.release.versionNormalized,
           versionRaw: winning.release.versionRaw,
-          releasedAt: winning.release.releasedAt,
+          releasedAt,
           installStrategy,
           updatedAt: now,
         });
@@ -260,7 +269,7 @@ export async function handleRecomputeLatest(
         versionRaw: winning.release.versionRaw,
         channel,
         targetArchitecture,
-        releasedAt: winning.release.releasedAt,
+        releasedAt,
         updatedAt: now,
       });
     }

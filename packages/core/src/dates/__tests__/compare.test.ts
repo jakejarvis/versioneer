@@ -7,6 +7,10 @@ describe("toEpochMs", () => {
     expect(toEpochMs("2024-01-15T12:00:00.000Z")).toBe(1705320000000);
   });
 
+  it("returns epoch ms for supported RFC 2822 strings", () => {
+    expect(toEpochMs("Mon, 15 Jan 2024 12:00:00 +0000")).toBe(1705320000000);
+  });
+
   it("returns null for null", () => {
     expect(toEpochMs(null)).toBeNull();
   });
@@ -21,6 +25,15 @@ describe("toEpochMs", () => {
 
   it("returns null for garbage", () => {
     expect(toEpochMs("not-a-date")).toBeNull();
+  });
+
+  it("returns null for version-like strings that Date.parse accepts", () => {
+    expect(toEpochMs("12.7.4")).toBeNull();
+    expect(toEpochMs("6.6.0")).toBeNull();
+  });
+
+  it("returns null for impossible RFC 2822 calendar dates", () => {
+    expect(toEpochMs("Wed, 31 Feb 2026 06:36:00 +0000")).toBeNull();
   });
 });
 

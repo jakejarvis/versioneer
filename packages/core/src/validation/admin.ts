@@ -9,6 +9,7 @@ import {
   sourceTypeSchema,
 } from "@versioneer/schemas/sources";
 
+import { toISODate } from "../dates";
 import { channelSchema } from "./common";
 
 export const appCreateSchema = z.object({
@@ -80,7 +81,11 @@ export const releaseCreateSchema = z.object({
   versionRaw: z.string().min(1).max(200),
   buildNumber: z.string().max(200).optional(),
   channel: channelSchema.default("stable"),
-  releasedAt: z.string().max(50).optional(),
+  releasedAt: z
+    .string()
+    .max(50)
+    .refine((value) => toISODate(value) !== null, "releasedAt must be a parseable date")
+    .optional(),
   releaseNotesMarkdown: z.string().max(500000).optional(),
   releaseNotesUrl: z.string().url().max(2000).optional(),
 });

@@ -6,6 +6,7 @@ import { HTTPException } from "hono/http-exception";
 import { captureApiEvent } from "@/lib/observability";
 import { clientRateLimit } from "@/middleware/rate-limit";
 import { getInventoryMatchSnapshot } from "@versioneer/core/cache";
+import { toEpochMs } from "@versioneer/core/dates";
 import { matchApp } from "@versioneer/core/identity";
 import {
   inventoryFollowupPayloadR2Key,
@@ -461,7 +462,10 @@ async function selectLatestSourceSuccessByApp(
 
     for (const row of rows) {
       const existing = latestSourceSuccessByApp.get(row.appId);
-      if (!existing || (row.lastSuccessAt && row.lastSuccessAt > existing)) {
+      const rowTime = toEpochMs(row.lastSuccessAt);
+      if (row.lastSuccessAt && rowTime === null) continue;
+      const existingTime = toEpochMs(existing) ?? 0;
+      if (!existing || (rowTime ?? 0) > existingTime) {
         latestSourceSuccessByApp.set(row.appId, row.lastSuccessAt);
       }
     }

@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { toISODate } from "@versioneer/core/dates";
 import { normalizeReleaseNotes } from "@versioneer/core/pipeline";
 import { releaseCreateSchema, releaseUpdateSchema } from "@versioneer/core/validation";
 import { normalizeVersion, isPreRelease, inferChannel } from "@versioneer/core/versioning";
@@ -221,6 +222,7 @@ export const createRelease = createServerFn({ method: "POST" })
 
     const versionNormalized = normalizeVersion(data.versionRaw);
     const channel = data.channel || inferChannel(data.versionRaw);
+    const releasedAt = data.releasedAt ? toISODate(data.releasedAt)! : now;
 
     await db.batch([
       db.insert(releases).values({
@@ -230,7 +232,7 @@ export const createRelease = createServerFn({ method: "POST" })
         versionNormalized,
         buildNumber: data.buildNumber ?? null,
         channel,
-        releasedAt: data.releasedAt ?? now,
+        releasedAt,
         isPrerelease: isPreRelease(data.versionRaw),
         status: "active",
         releaseNotesMarkdown: data.releaseNotesMarkdown
