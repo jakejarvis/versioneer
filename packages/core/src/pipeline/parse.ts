@@ -18,8 +18,43 @@ import { createLogger } from "../logger";
 import { getParser } from "../parsers";
 import { getDescriptor } from "../sources/registry";
 import { normalizeVersion, inferChannel } from "../versioning";
+import { recordSourceAnomaly } from "./anomalies";
 import { normalizeReleaseNotes } from "./release-notes";
+import { getSourceFetchUrlMetadata } from "./source-url-policy";
 import type { ParseStepResult, SourceParseEnv, SourceParseJob } from "./types";
+
+const INSTALLABLE_ARTIFACT_TYPES = new Set(["zip", "dmg", "pkg"]);
+
+function artifactHostname(rawUrl: string): string | null {
+  return getSourceFetchUrlMetadata(rawUrl).hostname;
+}
+
+async function recordParserErrorSpike(params: {
+  db: ReturnType<typeof createDb>;
+  sourceId: string;
+  parserKey: string;
+  now: string;
+}) {
+  const recentRuns = await params.db
+    .select({ runStatus: parserRuns.runStatus })
+    .from(parserRuns)
+    .innerJoin(sourceFetches, eq(parserRuns.sourceFetchId, sourceFetches.id))
+    .where(eq(sourceFetches.sourceId, params.sourceId))
+    .orderBy(desc(parserRuns.startedAt))
+    .limit(3)
+    .all();
+
+  if (recentRuns.length === 3 && recentRuns.every((run) => run.runStatus === "error")) {
+    await recordSourceAnomaly({
+      db: params.db,
+      sourceId: params.sourceId,
+      kind: "parser_error_spike",
+      fingerprint: params.parserKey,
+      message: `Parser ${params.parserKey} failed 3 consecutive times`,
+      now: params.now,
+    });
+  }
+}
 
 export async function handleSourceParse(
   job: SourceParseJob,
@@ -98,6 +133,7 @@ export async function handleSourceParse(
         startedAt: now,
         finishedAt: new Date().toISOString(),
       });
+      await recordParserErrorSpike({ db, sourceId: source.id, parserKey: source.parserKey, now });
       return { appId: source.appId, releaseCount: 0 };
     }
   }
@@ -111,24 +147,29 @@ export async function handleSourceParse(
       sourceBaseUrl: artifactBase,
     });
 
+    const runStatus =
+      output.errors.length > 0 && output.releases.length > 0
+        ? "partial"
+        : output.releases.length > 0
+          ? "success"
+          : "error";
+
     // Insert parser run
     await db.insert(parserRuns).values({
       id: parserRunId,
       sourceFetchId: fetchRecord.id,
       parserKey: source.parserKey,
       parserVersion: output.parserVersion,
-      runStatus:
-        output.errors.length > 0 && output.releases.length > 0
-          ? "partial"
-          : output.releases.length > 0
-            ? "success"
-            : "error",
+      runStatus,
       observationCount: output.releases.length,
       confidence: output.confidence,
       errorMessage: output.errors.length > 0 ? output.errors.join("; ") : null,
       startedAt: now,
       finishedAt: new Date().toISOString(),
     });
+    if (runStatus === "error") {
+      await recordParserErrorSpike({ db, sourceId: source.id, parserKey: source.parserKey, now });
+    }
 
     if (output.errors.length > 0) {
       log.warn("parse had errors", {
@@ -140,6 +181,17 @@ export async function handleSourceParse(
 
     // Track which releases are observed in this parse for retraction detection
     const observedReleaseIds = new Set<string>();
+    const priorArtifactRows = await db
+      .select({ url: artifacts.url })
+      .from(artifacts)
+      .innerJoin(releases, eq(artifacts.releaseId, releases.id))
+      .where(and(eq(releases.appId, source.appId), eq(releases.publishedBySourceId, source.id)))
+      .all();
+    const knownArtifactHosts = new Set(
+      priorArtifactRows
+        .map((row) => artifactHostname(row.url))
+        .filter((hostname): hostname is string => Boolean(hostname)),
+    );
 
     // Process each parsed release
     for (const parsedRelease of output.releases) {
@@ -238,6 +290,34 @@ export async function handleSourceParse(
 
       for (const parsedArtifact of parsedRelease.artifacts) {
         if (existingUrls.has(parsedArtifact.url)) continue;
+        const hostname = artifactHostname(parsedArtifact.url);
+        if (hostname) {
+          if (knownArtifactHosts.size > 0 && !knownArtifactHosts.has(hostname)) {
+            await recordSourceAnomaly({
+              db,
+              sourceId: source.id,
+              kind: "new_artifact_hostname",
+              fingerprint: hostname,
+              message: `Source produced artifact from new hostname: ${hostname}`,
+              now,
+            });
+          }
+          knownArtifactHosts.add(hostname);
+        }
+        if (
+          INSTALLABLE_ARTIFACT_TYPES.has(parsedArtifact.type) &&
+          !parsedArtifact.sha256 &&
+          !parsedArtifact.signature
+        ) {
+          await recordSourceAnomaly({
+            db,
+            sourceId: source.id,
+            kind: "missing_install_hash",
+            fingerprint: parsedArtifact.url,
+            message: `Installable ${parsedArtifact.type} artifact is missing SHA-256: ${parsedArtifact.url}`,
+            now,
+          });
+        }
         await db.insert(artifacts).values({
           id: generateId(idPrefixes.artifact),
           releaseId,
@@ -343,6 +423,7 @@ export async function handleSourceParse(
       startedAt: now,
       finishedAt: new Date().toISOString(),
     });
+    await recordParserErrorSpike({ db, sourceId: source.id, parserKey: source.parserKey, now });
 
     throw error;
   }

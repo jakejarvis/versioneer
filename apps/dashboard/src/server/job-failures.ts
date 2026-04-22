@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { createDb } from "@versioneer/db";
@@ -91,22 +91,28 @@ export const listJobFailures = createServerFn({ method: "GET" })
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
       status: z.enum(["open", "retrying", "resolved", "abandoned"]).default("open"),
+      jobType: z.string().optional(),
+      relatedId: z.string().optional(),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,
     }),
   )
   .handler(async ({ data }) => {
-    const { limit, offset, status, sortBy, sortDir } = data;
+    const { limit, offset, status, jobType, relatedId, sortBy, sortDir } = data;
     const db = createDb(env.DB);
+    const filters = [eq(jobFailures.status, status)];
+    if (jobType) filters.push(eq(jobFailures.jobType, jobType));
+    if (relatedId) filters.push(eq(jobFailures.relatedId, relatedId));
+    const where = and(...filters);
 
     const [countResult] = await db
       .select({ count: sql<number>`count(*)` })
       .from(jobFailures)
-      .where(eq(jobFailures.status, status));
+      .where(where);
     const items = await db
       .select()
       .from(jobFailures)
-      .where(eq(jobFailures.status, status))
+      .where(where)
       .orderBy(...jobFailureOrderBy(sortBy, sortDir))
       .limit(limit)
       .offset(offset);

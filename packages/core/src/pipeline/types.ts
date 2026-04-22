@@ -2,6 +2,7 @@ export interface SourceFetchEnv {
   DB: D1Database;
   RAW_BUCKET: R2Bucket;
   GITHUB_TOKEN?: string;
+  resolveSourceHostAddresses?: (hostname: string) => Promise<string[]>;
 }
 
 export interface SourceParseEnv {

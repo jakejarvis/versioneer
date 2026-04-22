@@ -28,6 +28,11 @@ import { EditAppDialog } from "@/components/shared/edit-app-dialog";
 import { SourceEntityLink } from "@/components/shared/entity-link";
 import { FormField } from "@/components/shared/form-field";
 import { IdDisplay } from "@/components/shared/id-display";
+import {
+  InstallStrategyBadge,
+  InstallTrustBadges,
+  InstallTrustReasonList,
+} from "@/components/shared/security-signals";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
@@ -319,10 +324,12 @@ function OverviewTab({
                     <IdDisplay id={latestRelease.releaseId} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    {latestRelease.installStrategy ? (
-                      <span>Strategy: {latestRelease.installStrategy}</span>
-                    ) : null}
+                    <InstallStrategyBadge
+                      strategy={latestRelease.installStrategy}
+                      reasons={latestRelease.trustWarnings}
+                    />
                     {latestRelease.pinnedReleaseId ? <span>Pinned</span> : null}
+                    <InstallTrustBadges reasons={latestRelease.trustWarnings} />
                   </div>
                 </div>
                 <TimeAgo
@@ -334,6 +341,8 @@ function OverviewTab({
           </div>
         )}
       </div>
+
+      <InstallTrustReadinessCard releases={app.latestReleases} />
 
       <div className="rounded-lg border p-4">
         <h3 className="font-medium">Info</h3>
@@ -349,6 +358,39 @@ function OverviewTab({
             </div>
           ) : null}
         </dl>
+      </div>
+    </div>
+  );
+}
+
+function InstallTrustReadinessCard({ releases }: { releases: AppLatestRelease[] }) {
+  if (releases.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border p-4">
+      <h3 className="font-medium">Install Trust Readiness</h3>
+      <div className="mt-3 grid gap-3">
+        {releases.map((release) => (
+          <div
+            key={release.id}
+            className="grid gap-3 rounded-md border bg-muted/20 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
+          >
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge status={release.channel} />
+                <span className="font-mono text-sm font-medium">{release.versionRaw}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <InstallStrategyBadge
+                  strategy={release.installStrategy}
+                  reasons={release.trustWarnings}
+                />
+                {release.pinnedReleaseId ? <StatusBadge status="pinned" /> : null}
+              </div>
+            </div>
+            <InstallTrustReasonList reasons={release.trustWarnings} />
+          </div>
+        ))}
       </div>
     </div>
   );

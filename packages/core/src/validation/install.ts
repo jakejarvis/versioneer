@@ -8,6 +8,28 @@ import {
 } from "@versioneer/schemas/ops";
 import { installStrategySchema, type InstallStrategy } from "@versioneer/schemas/releases";
 
+export const installTrustStatusValues = ["one_click", "manual_only", "external", "none"] as const;
+export const installTrustStatusSchema = z.enum(installTrustStatusValues);
+
+export const installTrustReasonValues = [
+  "missing_artifact",
+  "missing_sha256",
+  "missing_bundle_id",
+  "missing_team_id",
+  "missing_sparkle_public_key",
+  "mac_app_store_external",
+  "homebrew_external",
+  "manual_only",
+  "unsupported_strategy",
+] as const;
+export const installTrustReasonSchema = z.enum(installTrustReasonValues);
+
+export const installTrustSchema = z.object({
+  status: installTrustStatusSchema,
+  resolvedStrategy: installStrategySchema.nullable(),
+  reasons: z.array(installTrustReasonSchema),
+});
+
 export const appArtifactSchema = z.object({
   id: z.string().nullable(),
   downloadUrl: z.string().nullable(),
@@ -74,6 +96,9 @@ export const installExecutionStatusResponseSchema = z.object({
 });
 
 export type { InstallStrategy, InstallExecutionRoute, InstallExecutionStatus };
+export type InstallTrustStatus = z.infer<typeof installTrustStatusSchema>;
+export type InstallTrustReason = z.infer<typeof installTrustReasonSchema>;
+export type InstallTrust = z.infer<typeof installTrustSchema>;
 export type AppArtifact = z.infer<typeof appArtifactSchema>;
 export type InstallExecutionClient = z.infer<typeof installExecutionClientSchema>;
 export type InstallVerificationSummary = z.infer<typeof installVerificationSummarySchema>;

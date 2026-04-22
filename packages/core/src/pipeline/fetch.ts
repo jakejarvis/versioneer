@@ -6,10 +6,20 @@ import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/db";
 import { createLogger } from "../logger";
 import { getDescriptor } from "../sources/registry";
 import type { SourceTypeDescriptor } from "../sources/types";
-import { readResponseTextLimited } from "./response-body";
+import { recordSourceAnomaly } from "./anomalies";
+import { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
+import {
+  assertValidSourceFetchUrl,
+  getSourceFetchUrlMetadata,
+  isGitHubApiUrl,
+  resolvePublicDnsAddresses,
+  SourceUrlPolicyError,
+} from "./source-url-policy";
+import type { SourceFetchFailureReason, SourceFetchUrlMetadata } from "./source-url-policy";
 import type { FetchStepResult, SourceFetchEnv, SourceFetchJob } from "./types";
 
 const MAX_SOURCE_FETCH_BODY_BYTES = 5 * 1024 * 1024;
+const SOURCE_FETCH_TIMEOUT_MS = 30_000;
 
 async function deterministicSourceFetchId(sourceId: string, idempotencyKey?: string) {
   if (!idempotencyKey) return generateId(idPrefixes.sourceFetch);
@@ -25,39 +35,123 @@ async function deterministicSourceFetchId(sourceId: string, idempotencyKey?: str
   return `${idPrefixes.sourceFetch}_${digest.slice(0, 20)}`;
 }
 
+interface SourceFetchResponse {
+  response: Response;
+  metadata: SourceFetchUrlMetadata;
+}
+
+class SourceFetchAttemptError extends Error {
+  constructor(
+    readonly metadata: SourceFetchUrlMetadata,
+    readonly reason: SourceFetchFailureReason,
+    message: string,
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = "SourceFetchAttemptError";
+  }
+}
+
 async function fetchWithCandidates(
   descriptor: SourceTypeDescriptor,
   baseUrl: string,
   conditionalHeaders: Record<string, string>,
   env: SourceFetchEnv,
-): Promise<Response> {
+): Promise<SourceFetchResponse> {
   const candidates = descriptor.buildFetchUrls(baseUrl);
   if (candidates.length === 0) {
     throw new Error("No fetch URLs for source");
   }
 
-  let lastResponse: Response | undefined;
+  let lastResult: SourceFetchResponse | undefined;
   for (const candidate of candidates) {
+    const metadata = getSourceFetchUrlMetadata(candidate);
+    let url: URL;
+    try {
+      url = await assertValidSourceFetchUrl(candidate, {
+        resolveAddresses: env.resolveSourceHostAddresses ?? resolvePublicDnsAddresses,
+      });
+    } catch (error) {
+      if (error instanceof SourceUrlPolicyError) {
+        throw new SourceFetchAttemptError(metadata, error.reason, error.message, {
+          cause: error,
+        });
+      }
+      throw error;
+    }
+
     const headers = {
       ...descriptor.fetchHeaders({
         githubToken: isGitHubApiUrl(candidate) ? env.GITHUB_TOKEN : undefined,
       }),
       ...conditionalHeaders,
     };
-    lastResponse = await fetch(candidate, { headers });
-    if (lastResponse.ok || lastResponse.status === 304) return lastResponse;
+
+    let response: Response;
+    try {
+      response = await fetch(candidate, {
+        headers,
+        signal: AbortSignal.timeout(SOURCE_FETCH_TIMEOUT_MS),
+      });
+    } catch (error) {
+      const isTimeout = error instanceof DOMException && error.name === "TimeoutError";
+      throw new SourceFetchAttemptError(
+        { ...metadata, url },
+        isTimeout ? "timeout" : "network_error",
+        isTimeout
+          ? `Source fetch timed out after ${SOURCE_FETCH_TIMEOUT_MS / 1000} s`
+          : error instanceof Error
+            ? error.message
+            : "Source fetch network error",
+        { cause: error },
+      );
+    }
+
+    lastResult = { response, metadata: { ...metadata, url } };
+    if (response.ok || response.status === 304) return lastResult;
   }
 
-  return lastResponse!;
+  return lastResult!;
 }
 
-function isGitHubApiUrl(rawUrl: string): boolean {
-  try {
-    const url = new URL(rawUrl);
-    return url.protocol === "https:" && url.hostname.toLowerCase() === "api.github.com";
-  } catch {
-    return false;
-  }
+function sourceFetchMetadataValues(metadata?: SourceFetchUrlMetadata | null) {
+  return {
+    fetchUrl: metadata?.rawUrl ?? null,
+    fetchHostname: metadata?.hostname ?? null,
+    fetchScheme: metadata?.scheme ?? null,
+  };
+}
+
+async function recordNewFetchHostnameAnomaly(params: {
+  db: ReturnType<typeof createDb>;
+  sourceId: string;
+  hostname: string | null;
+  fetchId: string;
+  now: string;
+}) {
+  if (!params.hostname) return;
+
+  const priorRows = await params.db
+    .select({ id: sourceFetches.id, fetchHostname: sourceFetches.fetchHostname })
+    .from(sourceFetches)
+    .where(eq(sourceFetches.sourceId, params.sourceId))
+    .all();
+  const priorHosts = new Set(
+    priorRows
+      .filter((row) => row.id !== params.fetchId)
+      .map((row) => row.fetchHostname)
+      .filter((hostname): hostname is string => Boolean(hostname)),
+  );
+  if (priorHosts.size === 0 || priorHosts.has(params.hostname)) return;
+
+  await recordSourceAnomaly({
+    db: params.db,
+    sourceId: params.sourceId,
+    kind: "new_fetch_hostname",
+    fingerprint: params.hostname,
+    message: `Source fetched from new hostname: ${params.hostname}`,
+    now: params.now,
+  });
 }
 
 export async function handleSourceFetch(
@@ -121,6 +215,7 @@ export async function handleSourceFetch(
   }
 
   // Perform HTTP fetch
+  let lastFetchMetadata: SourceFetchUrlMetadata | null = null;
   try {
     // Use etag/last-modified for conditional requests
     const conditionalHeaders: Record<string, string> = {};
@@ -137,12 +232,15 @@ export async function handleSourceFetch(
       if (lastFetch.lastModified) conditionalHeaders["If-Modified-Since"] = lastFetch.lastModified;
     }
 
-    const response = await fetchWithCandidates(
+    const fetchResult = await fetchWithCandidates(
       descriptor,
       source.baseUrl!,
       conditionalHeaders,
       env,
     );
+    const { response, metadata } = fetchResult;
+    lastFetchMetadata = metadata;
+    const metadataValues = sourceFetchMetadataValues(metadata);
 
     if (response.status === 304) {
       log.info("not modified", { fetchId });
@@ -153,7 +251,15 @@ export async function handleSourceFetch(
         httpStatus: 304,
         etag: response.headers.get("etag"),
         lastModified: response.headers.get("last-modified"),
+        ...metadataValues,
         fetchedAt: now,
+      });
+      await recordNewFetchHostnameAnomaly({
+        db,
+        sourceId: source.id,
+        hostname: metadata.hostname,
+        fetchId,
+        now,
       });
 
       await db
@@ -173,7 +279,16 @@ export async function handleSourceFetch(
         fetchStatus: "error",
         httpStatus: response.status,
         errorMessage: errorMsg,
+        failureReason: "http_error",
+        ...metadataValues,
         fetchedAt: now,
+      });
+      await recordNewFetchHostnameAnomaly({
+        db,
+        sourceId: source.id,
+        hostname: metadata.hostname,
+        fetchId,
+        now,
       });
 
       await db
@@ -223,7 +338,16 @@ export async function handleSourceFetch(
       contentLength: bytesRead,
       contentHash,
       r2Key,
+      ...metadataValues,
       fetchedAt: now,
+    });
+
+    await recordNewFetchHostnameAnomaly({
+      db,
+      sourceId: source.id,
+      hostname: metadata.hostname,
+      fetchId,
+      now,
     });
 
     await db
@@ -241,6 +365,11 @@ export async function handleSourceFetch(
   } catch (error) {
     log.error("fetch failed", { fetchId, error });
     const errorMsg = error instanceof Error ? error.message : String(error);
+    const attemptError = error instanceof SourceFetchAttemptError ? error : null;
+    const failureReason: SourceFetchFailureReason =
+      attemptError?.reason ??
+      (error instanceof ResponseBodyTooLargeError ? "body_limit" : "network_error");
+    const metadataValues = sourceFetchMetadataValues(attemptError?.metadata ?? lastFetchMetadata);
 
     const existingFetch = await db
       .select({ id: sourceFetches.id })
@@ -252,9 +381,25 @@ export async function handleSourceFetch(
       await db.insert(sourceFetches).values({
         id: fetchId,
         sourceId: source.id,
-        fetchStatus: "error",
+        fetchStatus: failureReason === "timeout" ? "timeout" : "error",
         errorMessage: errorMsg,
+        failureReason,
+        ...metadataValues,
         fetchedAt: now,
+      });
+    }
+
+    if (
+      attemptError &&
+      !["timeout", "network_error", "body_limit", "http_error"].includes(attemptError.reason)
+    ) {
+      await recordSourceAnomaly({
+        db,
+        sourceId: source.id,
+        kind: "blocked_fetch_url",
+        fingerprint: `${attemptError.reason}:${attemptError.metadata.rawUrl}`,
+        message: `Blocked source fetch URL (${attemptError.reason}): ${attemptError.metadata.rawUrl}`,
+        now,
       });
     }
 

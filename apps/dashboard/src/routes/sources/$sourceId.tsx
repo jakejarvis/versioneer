@@ -1,7 +1,7 @@
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
-import { ArrowLeft, Ban, Inbox, RefreshCw, RotateCcw, Save, Zap } from "lucide-react";
+import { ArrowLeft, Ban, CheckCircle, Inbox, RefreshCw, RotateCcw, Save, Zap } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -11,6 +11,7 @@ import { DataTableColumnHeader } from "@/components/shared/data-table-column-hea
 import { AppEntityLink } from "@/components/shared/entity-link";
 import { FormField } from "@/components/shared/form-field";
 import { IdDisplay } from "@/components/shared/id-display";
+import { FetchFailureReasonBadge, SourceAnomalyBadge } from "@/components/shared/security-signals";
 import {
   parseConfigJson,
   serializeConfig,
@@ -29,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useJobFailures, useUpdateJobFailure } from "@/hooks/use-job-failures";
 import {
   useParserRuns,
   useReparse,
@@ -39,7 +41,7 @@ import {
 } from "@/hooks/use-sources";
 import { formatDuration } from "@/lib/format-duration";
 import { SOURCE_TYPES } from "@/lib/source-types";
-import type { ParserRun, SourceFetch } from "@/lib/types";
+import type { JobFailureListItem, ParserRun, SourceFetch } from "@/lib/types";
 import { extractSourceIdentifier, resolveSourceUrl } from "@versioneer/core/sources";
 import type { SourceType } from "@versioneer/schemas/sources";
 
@@ -64,6 +66,15 @@ function SourceDetailPage() {
     offset: fetchPagination.pageIndex * fetchPagination.pageSize,
     sortBy: fetchSorting[0]?.id,
     sortDir: fetchSorting[0] ? (fetchSorting[0].desc ? "desc" : "asc") : undefined,
+  });
+  const { data: anomalies, isLoading: anomaliesLoading } = useJobFailures({
+    status: "open",
+    jobType: "source-anomaly",
+    relatedId: sourceId,
+    limit: 10,
+    offset: 0,
+    sortBy: "createdAt",
+    sortDir: "desc",
   });
   const toggleFetch = useCallback((id: string) => {
     setExpandedFetch((current) => (current === id ? null : id));
@@ -216,6 +227,10 @@ function SourceDetailPage() {
         </div>
       ) : null}
 
+      {anomaliesLoading || (anomalies?.items.length ?? 0) > 0 ? (
+        <SourceAnomaliesPanel items={anomalies?.items ?? []} isLoading={anomaliesLoading} />
+      ) : null}
+
       <SourceEditForm sourceId={sourceId} sourceType={source.sourceType} source={source} />
 
       <ConfirmDialog
@@ -267,6 +282,109 @@ function SourceDetailPage() {
               : undefined
           }
         />
+      </div>
+    </div>
+  );
+}
+
+function SourceAnomaliesPanel({
+  items,
+  isLoading,
+}: {
+  items: JobFailureListItem[];
+  isLoading: boolean;
+}) {
+  const updateFailure = useUpdateJobFailure();
+
+  const updateStatus = (id: string, status: "resolved" | "abandoned") => {
+    updateFailure.mutate(
+      { id, status },
+      {
+        onSuccess: () => toast.success(`Marked as ${status}`),
+        onError: (error) => toast.error(error.message),
+      },
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <div className="mt-4 rounded-lg border p-4">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="mt-3 h-16 w-full" />
+      </div>
+    );
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-medium">Source Anomalies</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Open egress, parser, and artifact trust signals tied to this source.
+          </p>
+        </div>
+        <Link
+          to="/jobs"
+          search={{
+            page: 1,
+            pageSize: 25,
+            tab: "failures",
+            jobType: "all",
+            failureJobType: "source-anomaly",
+            failureStatus: "open",
+          }}
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          View all
+        </Link>
+      </div>
+      <div className="grid gap-2">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className="flex flex-col gap-3 rounded-md border bg-background/70 px-3 py-3 sm:flex-row sm:items-start sm:justify-between"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <SourceAnomalyBadge jobKey={item.jobKey} />
+                <span className="text-xs text-muted-foreground">
+                  opened <TimeAgo date={item.createdAt} />
+                </span>
+                {item.retryCount > 0 ? (
+                  <span className="text-xs text-muted-foreground">repeated {item.retryCount}x</span>
+                ) : null}
+              </div>
+              {item.errorMessage ? (
+                <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                  {item.errorMessage}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateStatus(item.id, "resolved")}
+                disabled={updateFailure.isPending}
+              >
+                <CheckCircle className="h-4 w-4" />
+                Resolve
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => updateStatus(item.id, "abandoned")}
+                disabled={updateFailure.isPending}
+              >
+                <Ban className="h-4 w-4" />
+                Abandon
+              </Button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -494,6 +612,31 @@ function FetchHistoryTable({
         cell: ({ row }) => (
           <span className="font-mono text-sm">{row.original.httpStatus ?? "--"}</span>
         ),
+      },
+      {
+        accessorKey: "fetchHostname",
+        meta: { label: "Host" },
+        enableSorting: false,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Host" />,
+        cell: ({ row }) => {
+          const fetchUrl = row.original.fetchUrl;
+          return (
+            <div className="flex min-w-0 flex-col gap-1 text-xs">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                {row.original.fetchScheme ? (
+                  <span className="rounded bg-muted px-1.5 py-0.5 font-mono uppercase text-muted-foreground">
+                    {row.original.fetchScheme}
+                  </span>
+                ) : null}
+                <span className="truncate font-mono">{row.original.fetchHostname ?? "--"}</span>
+              </div>
+              {fetchUrl ? (
+                <span className="truncate font-mono text-muted-foreground">{fetchUrl}</span>
+              ) : null}
+              <FetchFailureReasonBadge reason={row.original.failureReason} />
+            </div>
+          );
+        },
       },
       {
         accessorKey: "contentType",

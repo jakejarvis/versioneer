@@ -18,5 +18,19 @@ export { handleRecomputeLatest } from "./recompute";
 export { normalizeReleaseNotes } from "./release-notes";
 export { sanitizeHtml } from "./sanitize-html";
 export { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-body";
+export {
+  assertValidSourceFetchUrl,
+  getSourceFetchUrlMetadata,
+  isGitHubApiUrl,
+  resolvePublicDnsAddresses,
+  SourceUrlPolicyError,
+} from "./source-url-policy";
+export type {
+  SourceFetchFailureReason,
+  SourceFetchUrlMetadata,
+  SourceUrlPolicyOptions,
+} from "./source-url-policy";
+export { recordSourceAnomaly } from "./anomalies";
+export type { SourceAnomalyKind } from "./anomalies";
 export { enrichDiscoveredApp, lookupCaskTokenByBundleId } from "./enrich-discovered-app";
 export { handleCaskIndexSync, isCaskSyncDue } from "./cask-index-sync";

@@ -1,7 +1,25 @@
 const DNS_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
 
+export const sourceFetchFailureReasons = [
+  "invalid_url",
+  "non_https",
+  "blocked_hostname",
+  "dns_failed",
+  "dns_no_public_addresses",
+  "blocked_resolved_address",
+  "timeout",
+  "body_limit",
+  "http_error",
+  "network_error",
+] as const;
+
+export type SourceFetchFailureReason = (typeof sourceFetchFailureReasons)[number];
+
 export class SourceUrlPolicyError extends Error {
-  constructor(message: string) {
+  constructor(
+    readonly reason: SourceFetchFailureReason,
+    message: string,
+  ) {
     super(message);
     this.name = "SourceUrlPolicyError";
   }
@@ -11,8 +29,15 @@ export interface SourceUrlPolicyOptions {
   resolveAddresses?: (hostname: string) => Promise<string[]>;
 }
 
+export interface SourceFetchUrlMetadata {
+  rawUrl: string;
+  url: URL | null;
+  hostname: string | null;
+  scheme: string | null;
+}
+
 interface DnsJsonResponse {
-  Answer?: Array<{ data?: string }>;
+  Answer?: Array<{ type?: number; data?: string }>;
 }
 
 export async function assertValidSourceFetchUrl(
@@ -23,29 +48,47 @@ export async function assertValidSourceFetchUrl(
   try {
     url = new URL(rawUrl);
   } catch {
-    throw new SourceUrlPolicyError("Source validation URL is invalid");
+    throw new SourceUrlPolicyError("invalid_url", "Source fetch URL is invalid");
   }
 
   if (url.protocol !== "https:") {
-    throw new SourceUrlPolicyError("Source validation only allows https URLs");
+    throw new SourceUrlPolicyError("non_https", "Source fetch only allows https URLs");
   }
 
   const hostname = normalizeHostname(url.hostname);
   if (isBlockedHostname(hostname) || isBlockedAddress(hostname)) {
-    throw new SourceUrlPolicyError("Source validation URL resolves to a blocked host");
+    throw new SourceUrlPolicyError(
+      "blocked_hostname",
+      "Source fetch URL resolves to a blocked host",
+    );
   }
 
   if (options.resolveAddresses) {
-    const addresses = await options.resolveAddresses(hostname);
-    if (addresses.length === 0) {
-      throw new SourceUrlPolicyError("Source validation URL did not resolve to a public address");
+    let addresses: string[];
+    try {
+      addresses = await options.resolveAddresses(hostname);
+    } catch (error) {
+      if (error instanceof SourceUrlPolicyError) throw error;
+      throw new SourceUrlPolicyError(
+        "dns_failed",
+        error instanceof Error ? error.message : "DNS lookup failed",
+      );
     }
+
+    if (addresses.length === 0) {
+      throw new SourceUrlPolicyError(
+        "dns_no_public_addresses",
+        "Source fetch URL did not resolve to a public address",
+      );
+    }
+
     const blockedAddress = addresses.find((address) =>
       isBlockedAddress(normalizeHostname(address)),
     );
     if (blockedAddress) {
       throw new SourceUrlPolicyError(
-        `Source validation URL resolved to a blocked address (${blockedAddress})`,
+        "blocked_resolved_address",
+        `Source fetch URL resolved to a blocked address (${blockedAddress})`,
       );
     }
   }
@@ -71,6 +114,20 @@ export function isGitHubApiUrl(rawUrl: string): boolean {
   }
 }
 
+export function getSourceFetchUrlMetadata(rawUrl: string): SourceFetchUrlMetadata {
+  try {
+    const url = new URL(rawUrl);
+    return {
+      rawUrl,
+      url,
+      hostname: normalizeHostname(url.hostname),
+      scheme: url.protocol.replace(/:$/, "").toLowerCase(),
+    };
+  } catch {
+    return { rawUrl, url: null, hostname: null, scheme: null };
+  }
+}
+
 async function resolveDnsType(hostname: string, type: "A" | "AAAA"): Promise<string[]> {
   const url = new URL(DNS_JSON_ENDPOINT);
   url.searchParams.set("name", hostname);
@@ -81,11 +138,13 @@ async function resolveDnsType(hostname: string, type: "A" | "AAAA"): Promise<str
     signal: AbortSignal.timeout(5_000),
   });
   if (!response.ok) {
-    throw new SourceUrlPolicyError(`DNS lookup failed for ${hostname}`);
+    throw new SourceUrlPolicyError("dns_failed", `DNS lookup failed for ${hostname}`);
   }
 
   const body = (await response.json()) as DnsJsonResponse;
+  const expectedType = type === "A" ? 1 : 28;
   return (body.Answer ?? [])
+    .filter((answer) => answer.type === expectedType)
     .map((answer) => answer.data)
     .filter((address): address is string => typeof address === "string" && address.length > 0);
 }
@@ -131,20 +190,53 @@ function isBlockedIpv4(address: string): boolean {
 function isBlockedIpv6(address: string): boolean {
   if (!address.includes(":")) return false;
   const normalized = address.toLowerCase();
-  if (normalized === "::" || normalized === "::1") return true;
-  if (normalized.startsWith("2001:db8:") || normalized === "2001:db8::") return true;
+  const hextets = parseIpv6Hextets(normalized);
+  if (!hextets) return true;
 
-  const ipv4Mapped = normalized.match(/(?:^|:)(\d{1,3}(?:\.\d{1,3}){3})$/);
-  if (ipv4Mapped?.[1] && isBlockedIpv4(ipv4Mapped[1])) return true;
+  const isAllZero = hextets.every((hextet) => hextet === 0);
+  const isLoopback = hextets.slice(0, 7).every((hextet) => hextet === 0) && hextets[7] === 1;
+  if (isAllZero || isLoopback) return true;
 
-  const firstHextet = normalized
-    .split(":")
-    .find((part) => part.length > 0 && /^[0-9a-f]+$/.test(part));
-  if (!firstHextet) return true;
+  const isIpv4Mapped = hextets.slice(0, 5).every((hextet) => hextet === 0) && hextets[5] === 0xffff;
+  if (isIpv4Mapped) return true;
 
-  const value = Number.parseInt(firstHextet, 16);
-  if ((value & 0xfe00) === 0xfc00) return true; // unique local fc00::/7
-  if ((value & 0xffc0) === 0xfe80) return true; // link-local fe80::/10
-  if ((value & 0xff00) === 0xff00) return true; // multicast ff00::/8
+  const value = hextets[0]!;
+  if (value === 0x2001 && hextets[1] === 0x0db8) return true;
+  if ((value & 0xfe00) === 0xfc00) return true;
+  if ((value & 0xffc0) === 0xfe80) return true;
+  if ((value & 0xff00) === 0xff00) return true;
   return false;
+}
+
+function parseIpv6Hextets(address: string): number[] | null {
+  if (address.includes(".")) {
+    const ipv4Mapped = address.match(/(?:^|:)(\d{1,3}(?:\.\d{1,3}){3})$/);
+    if (ipv4Mapped?.[1] && isBlockedIpv4(ipv4Mapped[1])) return Array(8).fill(0);
+    return null;
+  }
+
+  const parts = address.split("::");
+  if (parts.length > 2) return null;
+
+  const left = splitIpv6Side(parts[0] ?? "");
+  const right = splitIpv6Side(parts[1] ?? "");
+  if (!left || !right) return null;
+
+  if (parts.length === 1) {
+    return left.length === 8 ? left : null;
+  }
+
+  const missing = 8 - left.length - right.length;
+  if (missing < 1) return null;
+  return [...left, ...Array(missing).fill(0), ...right];
+}
+
+function splitIpv6Side(side: string): number[] | null {
+  if (!side) return [];
+  const hextets: number[] = [];
+  for (const part of side.split(":")) {
+    if (!/^[0-9a-f]{1,4}$/.test(part)) return null;
+    hextets.push(Number.parseInt(part, 16));
+  }
+  return hextets;
 }

@@ -270,6 +270,10 @@ export interface SourceFetch {
   contentHash: string | null;
   r2Key: string | null;
   errorMessage: string | null;
+  fetchUrl: string | null;
+  fetchHostname: string | null;
+  fetchScheme: string | null;
+  failureReason: string | null;
   fetchedAt: string;
 }
 
@@ -313,6 +317,9 @@ export interface ReleaseDetail extends Release {
   app: AppSummary | null;
   isLatestForChannel: boolean;
   isPinnedLatest: boolean;
+  latestInstallStrategy: string | null;
+  latestArtifactId: string | null;
+  trustWarnings: string[];
 }
 
 export interface Artifact {
@@ -359,6 +366,7 @@ export interface AppLatestRelease {
   pinnedAt: string | null;
   pinnedBy: string | null;
   installStrategy: string | null;
+  trustWarnings: string[];
   updatedAt: string;
 }
 

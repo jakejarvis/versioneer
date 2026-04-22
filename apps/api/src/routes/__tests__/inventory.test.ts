@@ -25,6 +25,11 @@ type InventoryResponse = {
     homebrewCaskToken?: string | null;
     artifact: { id: string; downloadUrl: string; architecture: string | null } | null;
     installStrategy: string | null;
+    installTrust: {
+      status: "one_click" | "manual_only" | "external" | "none";
+      resolvedStrategy: string | null;
+      reasons: string[];
+    };
     staleSince: string | null;
     channel: string | null;
   }>;
@@ -194,12 +199,37 @@ describe("POST /v1/inventory/check", () => {
     expect(result.matchedAppId).toBe(catalog.appA.id);
     expect(result.latestVersion).toBe("130.0");
     expect(result.artifact).not.toBeNull();
-    expect(result.installStrategy).toBe("dmg_copy_replace");
+    expect(result.installStrategy).toBeNull();
+    expect(result.installTrust.status).toBe("none");
     expect(result.homebrewCaskToken).toBe("firefox");
     expect(result.localReasonCode).toBeNull();
   });
 
   it("matches an app by bundle_id — update available", async () => {
+    const res = await postInventory({
+      client: { osVersion: "15.0", systemArchitecture: "arm64" },
+      apps: [
+        {
+          appName: "Firefox",
+          bundleId: "org.mozilla.firefox",
+          teamId: "MOZILLA123",
+          version: "120.0",
+        },
+      ],
+    });
+    const body = await readInventoryResponse(res);
+    const result = body.results[0]!;
+    expect(result.decision).toBe("update_available");
+    expect(result.latestVersion).toBe("130.0");
+    expect(result.installStrategy).toBe("dmg_copy_replace");
+    expect(result.installTrust).toEqual({
+      status: "one_click",
+      resolvedStrategy: "dmg_copy_replace",
+      reasons: [],
+    });
+  });
+
+  it("keeps update visibility but suppresses one-click install when trust material is missing", async () => {
     const res = await postInventory({
       client: { osVersion: "15.0", systemArchitecture: "arm64" },
       apps: [{ appName: "Firefox", bundleId: "org.mozilla.firefox", version: "120.0" }],
@@ -208,6 +238,33 @@ describe("POST /v1/inventory/check", () => {
     const result = body.results[0]!;
     expect(result.decision).toBe("update_available");
     expect(result.latestVersion).toBe("130.0");
+    expect(result.artifact?.downloadUrl).toBe("https://download.mozilla.org/firefox-130.0.dmg");
+    expect(result.installStrategy).toBeNull();
+    expect(result.installTrust.status).toBe("manual_only");
+    expect(result.installTrust.reasons).toEqual(["missing_team_id"]);
+  });
+
+  it("marks Mac App Store catalog routes as external", async () => {
+    const res = await postInventory({
+      client: { osVersion: "15.0", systemArchitecture: "arm64" },
+      apps: [
+        {
+          appName: "Sketch",
+          bundleId: "com.bohemiancoding.sketch3",
+          version: "99.0",
+          isMasApp: true,
+        },
+      ],
+    });
+    const body = await readInventoryResponse(res);
+    const result = body.results[0]!;
+    expect(result.decision).toBe("update_available");
+    expect(result.installStrategy).toBeNull();
+    expect(result.installTrust).toEqual({
+      status: "external",
+      resolvedStrategy: "mac_app_store",
+      reasons: ["mac_app_store_external"],
+    });
   });
 
   it("returns ambiguous when no installed version provided", async () => {

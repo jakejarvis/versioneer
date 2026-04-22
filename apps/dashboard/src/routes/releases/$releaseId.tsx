@@ -8,6 +8,12 @@ import { DataTable } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { AppEntityLink } from "@/components/shared/entity-link";
 import { IdDisplay } from "@/components/shared/id-display";
+import {
+  ArtifactTrustBadges,
+  InstallStrategyBadge,
+  InstallTrustBadges,
+  InstallTrustReasonList,
+} from "@/components/shared/security-signals";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Button } from "@/components/ui/button";
@@ -79,6 +85,13 @@ function ReleaseDetailPage() {
               ) : null}
               {row.original.architecture ? <span>{row.original.architecture}</span> : null}
               {row.original.isPrimary ? <span>Primary</span> : null}
+              {row.original.sha256 ? (
+                <span className="font-mono">sha256 {row.original.sha256.slice(0, 12)}...</span>
+              ) : null}
+              <ArtifactTrustBadges
+                artifactType={row.original.artifactType}
+                sha256={row.original.sha256}
+              />
             </div>
           </div>
         ),
@@ -326,6 +339,27 @@ function ReleaseDetailPage() {
         releaseNotesHtml={release.releaseNotesHtml}
         releaseNotesUrl={release.releaseNotesUrl}
       />
+
+      <div className="mt-6 rounded-lg border p-4">
+        <h3 className="text-lg font-medium">Install Trust</h3>
+        {release.isLatestForChannel ? (
+          <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <InstallStrategyBadge
+                strategy={release.latestInstallStrategy}
+                reasons={release.trustWarnings}
+              />
+              <InstallTrustBadges reasons={release.trustWarnings} />
+              {release.latestArtifactId ? <IdDisplay id={release.latestArtifactId} /> : null}
+            </div>
+            <InstallTrustReasonList reasons={release.trustWarnings} />
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">
+            This release is not selected as the latest release for its channel.
+          </p>
+        )}
+      </div>
 
       <div className="mt-6">
         <div className="mb-3">

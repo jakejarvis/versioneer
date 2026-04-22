@@ -64,6 +64,10 @@ export const sourceFetches = sqliteTable(
     contentHash: text("content_hash"),
     r2Key: text("r2_key"),
     errorMessage: text("error_message"),
+    fetchUrl: text("fetch_url"),
+    fetchHostname: text("fetch_hostname"),
+    fetchScheme: text("fetch_scheme"),
+    failureReason: text("failure_reason"),
     fetchedAt: text("fetched_at").notNull(),
   },
   (table) => [

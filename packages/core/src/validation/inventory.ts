@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { channelSchema } from "./common";
-import { appArtifactSchema, installStrategySchema } from "./install";
+import { appArtifactSchema, installStrategySchema, installTrustSchema } from "./install";
 
 export const installedAppSchema = z.object({
   appName: z.string().min(1).max(500),
@@ -88,6 +88,7 @@ export const appDecisionSchema = z.object({
   iconUrl: z.string().nullable(),
   artifact: appArtifactSchema.nullable(),
   installStrategy: installStrategySchema.nullable(),
+  installTrust: installTrustSchema,
 });
 
 export type AppDecision = z.infer<typeof appDecisionSchema>;

@@ -34,6 +34,11 @@ describe("appDecisionSchema install payload", () => {
         sha256: "deadbeef",
       },
       installStrategy: "zip_replace",
+      installTrust: {
+        status: "one_click",
+        resolvedStrategy: "zip_replace",
+        reasons: [],
+      },
     });
 
     expect(parsed.artifact?.id).toBe("art_123");

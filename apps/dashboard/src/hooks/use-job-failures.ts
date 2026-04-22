@@ -9,6 +9,8 @@ import {
 
 interface UseJobFailuresParams {
   status?: "open" | "retrying" | "resolved" | "abandoned";
+  jobType?: string;
+  relatedId?: string;
   limit?: number;
   offset?: number;
   sortBy?: string;

@@ -22,6 +22,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
   let iconUrl: String?
   let artifact: Artifact?
   let installStrategy: InstallStrategy?
+  let installTrust: InstallTrust
   let localAppID: String?
 
   var id: String {
@@ -54,6 +55,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     iconUrl: String?,
     artifact: Artifact?,
     installStrategy: InstallStrategy?,
+    installTrust: InstallTrust? = nil,
     localAppID: String? = nil
   ) {
     self.appName = appName
@@ -76,6 +78,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     self.iconUrl = iconUrl
     self.artifact = artifact
     self.installStrategy = installStrategy
+    self.installTrust = installTrust ?? InstallTrust.default(for: installStrategy)
     self.localAppID = localAppID
   }
 
@@ -84,7 +87,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       matchConfidence, decision, trackingState, localReasonCode, latestVersion, latestVersionRaw,
       latestReleaseId, channel, availableChannels, homebrewCaskToken, releasedAt, staleSince,
       iconUrl,
-      artifact, installStrategy
+      artifact, installStrategy, installTrust
   }
 
   init(from decoder: Decoder) throws {
@@ -109,6 +112,9 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     iconUrl = try container.decodeIfPresent(String.self, forKey: .iconUrl)
     artifact = try container.decodeIfPresent(Artifact.self, forKey: .artifact)
     installStrategy = try container.decodeIfPresent(InstallStrategy.self, forKey: .installStrategy)
+    installTrust =
+      try container.decodeIfPresent(InstallTrust.self, forKey: .installTrust)
+      ?? InstallTrust.default(for: installStrategy)
     localAppID = nil
   }
 
@@ -140,6 +146,38 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     let artifactType: String?
     let sizeBytes: Int?
     let sha256: String?
+  }
+
+  struct InstallTrust: Codable, Hashable, Sendable {
+    let status: Status
+    let resolvedStrategy: InstallStrategy?
+    let reasons: [Reason]
+
+    enum Status: String, Codable, Sendable, CaseIterable {
+      case oneClick = "one_click"
+      case manualOnly = "manual_only"
+      case external
+      case none
+    }
+
+    enum Reason: String, Codable, Sendable, CaseIterable {
+      case missingArtifact = "missing_artifact"
+      case missingSHA256 = "missing_sha256"
+      case missingBundleID = "missing_bundle_id"
+      case missingTeamID = "missing_team_id"
+      case missingSparklePublicKey = "missing_sparkle_public_key"
+      case macAppStoreExternal = "mac_app_store_external"
+      case homebrewExternal = "homebrew_external"
+      case manualOnly = "manual_only"
+      case unsupportedStrategy = "unsupported_strategy"
+    }
+
+    static func `default`(for installStrategy: InstallStrategy?) -> InstallTrust {
+      if let installStrategy {
+        return InstallTrust(status: .oneClick, resolvedStrategy: installStrategy, reasons: [])
+      }
+      return InstallTrust(status: .none, resolvedStrategy: nil, reasons: [])
+    }
   }
 
   /// Whether this app has an installable update.
@@ -230,6 +268,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       iconUrl: iconUrl,
       artifact: artifact,
       installStrategy: installStrategy,
+      installTrust: installTrust,
       localAppID: installedApp?.id ?? localAppID
     )
   }
@@ -257,6 +296,7 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       iconUrl: iconUrl,
       artifact: artifact,
       installStrategy: installStrategy,
+      installTrust: installTrust,
       localAppID: localAppID
     )
   }

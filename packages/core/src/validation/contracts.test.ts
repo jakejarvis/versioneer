@@ -92,6 +92,11 @@ describe("public contract schemas", () => {
             sha256: "abc123",
           },
           installStrategy: "zip_replace",
+          installTrust: {
+            status: "one_click",
+            resolvedStrategy: "zip_replace",
+            reasons: [],
+          },
         },
       ],
     });

@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
 
 import { AppIcon } from "@/components/shared/app-icon";
 import { ReleaseEntityLink } from "@/components/shared/entity-link";
+import { SourceAnomalyBadge } from "@/components/shared/security-signals";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useHomepage } from "@/hooks/use-homepage";
 import { formatDuration } from "@/lib/format-duration";
+import { getJobFailureTypeLabel } from "@/lib/security-signals";
 import type {
   AtRiskSourceItem,
   CatalogSuggestion,
@@ -66,6 +68,7 @@ const failureSearch = {
   tab: "failures",
   failureStatus: "open",
   jobType: "all",
+  failureJobType: "all",
 } as const;
 const atRiskSourceSearch = { page: 1, pageSize: 25, status: "at_risk", type: "all" } as const;
 const jobsSearch = {
@@ -73,6 +76,7 @@ const jobsSearch = {
   pageSize: 25,
   tab: "runs",
   jobType: "all",
+  failureJobType: "all",
   failureStatus: "open",
 } as const;
 const releasesSearch = {
@@ -774,15 +778,24 @@ function AtRiskSourceRow({ item }: { item: AtRiskSourceItem }) {
 }
 
 function JobFailureRow({ item }: { item: JobFailureListItem }) {
+  const search =
+    item.jobType === "source-anomaly"
+      ? { ...failureSearch, failureJobType: "source-anomaly" as const }
+      : failureSearch;
+
   return (
     <Link
       to="/jobs"
-      search={failureSearch}
+      search={search}
       className="group flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60"
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{item.jobType}</Badge>
+          {item.jobType === "source-anomaly" ? (
+            <SourceAnomalyBadge jobKey={item.jobKey} />
+          ) : (
+            <Badge variant="outline">{getJobFailureTypeLabel(item.jobType, item.jobKey)}</Badge>
+          )}
           <StatusBadge status={item.status} />
         </div>
         {item.relatedRef ? (

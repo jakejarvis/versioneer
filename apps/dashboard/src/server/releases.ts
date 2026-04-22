@@ -8,10 +8,12 @@ import { releaseCreateSchema, releaseUpdateSchema } from "@versioneer/core/valid
 import { normalizeVersion, isPreRelease, inferChannel } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
 import {
+  appAliases,
   releases,
   artifacts,
   releaseObservations,
   appLatestReleases,
+  trustAssertions,
   auditLog,
   generateId,
   idPrefixes,
@@ -19,6 +21,7 @@ import {
 
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { scheduleRecomputeLatest } from "./followup-jobs";
+import { latestReleaseTrustWarnings } from "./install-trust";
 import { authMiddleware } from "./middleware";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
@@ -128,12 +131,39 @@ export const getRelease = createServerFn({ method: "GET" })
       .where(eq(appLatestReleases.releaseId, release.id))
       .get();
     const isPinnedLatest = latestRow?.pinnedReleaseId === release.id;
+    const latestArtifact = latestRow?.artifactId
+      ? await db
+          .select({ sha256: artifacts.sha256 })
+          .from(artifacts)
+          .where(eq(artifacts.id, latestRow.artifactId))
+          .get()
+      : undefined;
+    const trustRows = await db
+      .select({ assertionType: trustAssertions.assertionType })
+      .from(trustAssertions)
+      .where(eq(trustAssertions.appId, release.appId))
+      .all();
+    const aliasRows = await db
+      .select({ aliasType: appAliases.aliasType })
+      .from(appAliases)
+      .where(and(eq(appAliases.appId, release.appId), eq(appAliases.isActive, true)))
+      .all();
 
     return {
       ...release,
       app: appMap.get(release.appId) ? toAppSummary(appMap.get(release.appId)!) : null,
       isLatestForChannel: Boolean(latestRow),
       isPinnedLatest,
+      latestInstallStrategy: latestRow?.installStrategy ?? null,
+      latestArtifactId: latestRow?.artifactId ?? null,
+      trustWarnings: latestRow
+        ? latestReleaseTrustWarnings({
+            installStrategy: latestRow.installStrategy,
+            artifact: latestArtifact,
+            trustTypes: new Set(trustRows.map((row) => row.assertionType)),
+            aliasTypes: new Set(aliasRows.map((row) => row.aliasType)),
+          })
+        : [],
     };
   });
 

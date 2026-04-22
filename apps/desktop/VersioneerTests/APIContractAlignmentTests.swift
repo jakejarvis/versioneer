@@ -33,7 +33,12 @@ struct APIContractAlignmentTests {
               "sizeBytes": 182452384,
               "sha256": "abc123"
             },
-            "installStrategy": "zip_replace"
+            "installStrategy": "zip_replace",
+            "installTrust": {
+              "status": "one_click",
+              "resolvedStrategy": "zip_replace",
+              "reasons": []
+            }
           }
         ]
       }
@@ -45,6 +50,8 @@ struct APIContractAlignmentTests {
     #expect(result.latestReleaseId == "rel_firefox")
     #expect(result.iconUrl == "https://assets.example.com/firefox.png")
     #expect(result.installStrategy == .zipReplace)
+    #expect(result.installTrust.status == .oneClick)
+    #expect(result.installTrust.resolvedStrategy == .zipReplace)
     #expect(result.isVerified == true)
     #expect(result.canInstall == true)
   }

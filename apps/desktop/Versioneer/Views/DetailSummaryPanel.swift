@@ -47,6 +47,28 @@ struct DetailSummaryPanel: View {
     appState.manualUpdateAction(for: result)
   }
 
+  private var installTrustDetail: String? {
+    guard result.decision == .updateAvailable,
+      result.installTrust.status == .manualOnly,
+      !result.installTrust.reasons.isEmpty
+    else { return nil }
+
+    let labels = result.installTrust.reasons.map { reason in
+      switch reason {
+      case .missingArtifact: "download artifact"
+      case .missingSHA256: "SHA-256 checksum"
+      case .missingBundleID: "bundle identifier"
+      case .missingTeamID: "Developer Team ID"
+      case .missingSparklePublicKey: "Sparkle public key"
+      case .macAppStoreExternal: "Mac App Store route"
+      case .homebrewExternal: "Homebrew route"
+      case .manualOnly: "manual install policy"
+      case .unsupportedStrategy: "supported install strategy"
+      }
+    }
+    return "One-click install is disabled until Versioneer has: \(labels.joined(separator: ", "))."
+  }
+
   private var decisionTitle: String {
     if result.isLocalOnly {
       return result.localOnlyStatusTitle
@@ -359,6 +381,17 @@ struct DetailSummaryPanel: View {
           title: result.localOnlyStatusTitle,
           detail: result.localOnlyDescription,
           tone: result.decision == .updateAvailable ? .warning : .neutral
+        )
+      )
+    }
+
+    if let installTrustDetail {
+      callouts.append(
+        DetailCallout(
+          id: "install-trust",
+          title: "Trust Material Required",
+          detail: installTrustDetail,
+          tone: .warning
         )
       )
     }

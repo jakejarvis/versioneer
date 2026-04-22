@@ -128,6 +128,11 @@ describe("inventoryCheckResponseSchema", () => {
           iconUrl: null,
           artifact: null,
           installStrategy: null,
+          installTrust: {
+            status: "none",
+            resolvedStrategy: null,
+            reasons: [],
+          },
         },
       ],
       processedAt: "2026-01-01T00:00:00Z",

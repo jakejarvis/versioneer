@@ -8,6 +8,7 @@ import { z } from "zod";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
 import { DataTableColumnHeader } from "@/components/shared/data-table-column-header";
 import { EntityReferenceLink } from "@/components/shared/entity-link";
+import { SourceAnomalyBadge } from "@/components/shared/security-signals";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { Badge } from "@/components/ui/badge";
@@ -40,12 +41,18 @@ import {
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
+import {
+  canRetryJobFailure,
+  failureJobTypeOptions,
+  getJobFailureTypeLabel,
+} from "@/lib/security-signals";
 import type { JobFailureListItem } from "@/lib/types";
 
 const jobsSearchDefaults = {
   ...paginatedSearchDefaults,
   tab: "runs" as const,
   jobType: "all" as const,
+  failureJobType: "all" as const,
   failureStatus: "open" as const,
 };
 
@@ -56,6 +63,19 @@ const jobsSearchSchema = z.object({
     .enum(["all", "poll_sources", "cask_index_sync", "enrich_discovered_apps"])
     .default(jobsSearchDefaults.jobType)
     .catch(jobsSearchDefaults.jobType),
+  failureJobType: z
+    .enum([
+      "all",
+      "source-anomaly",
+      "source-fetch",
+      "source-parse",
+      "recompute-latest",
+      "poll_sources",
+      "cask_index_sync",
+      "enrich_discovered_apps",
+    ])
+    .default(jobsSearchDefaults.failureJobType)
+    .catch(jobsSearchDefaults.failureJobType),
   failureStatus: z
     .enum(["open", "retrying", "resolved", "abandoned"])
     .default(jobsSearchDefaults.failureStatus)
@@ -337,6 +357,7 @@ function FailuresTab() {
 
   const { data, isLoading } = useJobFailures({
     status: search.failureStatus,
+    jobType: search.failureJobType === "all" ? undefined : search.failureJobType,
     limit: pagination.pageSize,
     offset: pagination.pageIndex * pagination.pageSize,
     sortBy: search.sortBy,
@@ -346,7 +367,10 @@ function FailuresTab() {
   const handleRetry = useCallback(
     (id: string) => {
       retryFailure.mutate(id, {
-        onSuccess: () => toast.success("Job re-enqueued"),
+        onSuccess: (result) =>
+          result.count > 0
+            ? toast.success("Job re-enqueued")
+            : toast.info("This failure is informational; resolve or abandon it."),
         onError: (err) => toast.error(err.message),
       });
     },
@@ -372,7 +396,14 @@ function FailuresTab() {
         accessorKey: "jobType",
         meta: { label: "Job Type" },
         header: ({ column }) => <DataTableColumnHeader column={column} title="Job Type" />,
-        cell: ({ row }) => <Badge variant="secondary">{row.original.jobType}</Badge>,
+        cell: ({ row }) =>
+          row.original.jobType === "source-anomaly" ? (
+            <SourceAnomalyBadge jobKey={row.original.jobKey} />
+          ) : (
+            <Badge variant="secondary">
+              {getJobFailureTypeLabel(row.original.jobType, row.original.jobKey)}
+            </Badge>
+          ),
       },
       {
         id: "relatedRef",
@@ -431,10 +462,12 @@ function FailuresTab() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleRetry(row.original.id)}>
-                  <RefreshCw />
-                  Retry
-                </DropdownMenuItem>
+                {canRetryJobFailure(row.original.jobType) ? (
+                  <DropdownMenuItem onClick={() => handleRetry(row.original.id)}>
+                    <RefreshCw />
+                    Retry
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem onClick={() => handleStatusChange(row.original.id, "resolved")}>
                   <CheckCircle />
                   Resolve
@@ -455,7 +488,12 @@ function FailuresTab() {
     {
       label: "Retry Selected",
       onClick: async (rows) => {
-        for (const row of rows) handleRetry(row.id);
+        const retryable = rows.filter((row) => canRetryJobFailure(row.jobType));
+        if (retryable.length === 0) {
+          toast.info("Selected failures are informational; resolve or abandon them.");
+          return;
+        }
+        for (const row of retryable) handleRetry(row.id);
       },
     },
     {
@@ -477,7 +515,7 @@ function FailuresTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center">
+      <div className="flex flex-wrap items-center gap-3">
         <Select
           value={search.failureStatus}
           onValueChange={(value) =>
@@ -495,6 +533,30 @@ function FailuresTab() {
             <SelectItem value="retrying">Retrying</SelectItem>
             <SelectItem value="resolved">Resolved</SelectItem>
             <SelectItem value="abandoned">Abandoned</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={search.failureJobType}
+          onValueChange={(value) =>
+            void navigate({
+              to: "/jobs",
+              search: {
+                ...search,
+                page: 1,
+                failureJobType: value as typeof search.failureJobType,
+              },
+            })
+          }
+        >
+          <SelectTrigger className="w-full sm:w-52">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {failureJobTypeOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -535,8 +597,14 @@ function FailuresTab() {
             <div className="space-y-3">
               <div className="text-sm">
                 <span className="text-muted-foreground">Job Type: </span>
-                {selectedFailure.jobType}
+                {getJobFailureTypeLabel(selectedFailure.jobType, selectedFailure.jobKey)}
               </div>
+              {selectedFailure.jobType === "source-anomaly" ? (
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Signal: </span>
+                  <SourceAnomalyBadge jobKey={selectedFailure.jobKey} />
+                </div>
+              ) : null}
               <div className="text-sm">
                 <span className="text-muted-foreground">Job Key: </span>
                 {selectedFailure.jobKey ?? "--"}

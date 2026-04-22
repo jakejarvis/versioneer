@@ -10,6 +10,8 @@ import { normalizeBaseUrl, resolveSourceUrl } from "@versioneer/core/sources";
 import { installedAppSchema, inventoryRequestEnvelopeSchema } from "@versioneer/core/validation";
 import type {
   AppDecision,
+  InstallTrust,
+  InstallTrustReason,
   InstalledApp,
   InventoryClient,
   SkippedApp,
@@ -31,6 +33,7 @@ import {
   trustAssertions,
 } from "@versioneer/db";
 import type { AliasType } from "@versioneer/schemas/catalog";
+import type { InstallStrategy } from "@versioneer/schemas/releases";
 import type { SourceType, SourceRole } from "@versioneer/schemas/sources";
 import {
   defaultParserKeyForSourceType,
@@ -77,6 +80,75 @@ type PersistedDiscovery = {
   id: string;
   iconR2Key: string | null;
 };
+
+function deriveInstallTrust(params: {
+  decision: AppDecision["decision"];
+  resolvedStrategy: InstallStrategy | null;
+  artifact: AppDecision["artifact"];
+  installedApp: InstalledApp;
+  homebrewCaskToken: string | null;
+  hasApprovedSparklePublicKey: boolean;
+}): InstallTrust {
+  if (params.decision !== "update_available" || !params.resolvedStrategy) {
+    return { status: "none", resolvedStrategy: null, reasons: [] };
+  }
+
+  if (params.homebrewCaskToken && params.installedApp.isHomebrewInstalled) {
+    return {
+      status: "external",
+      resolvedStrategy: params.resolvedStrategy,
+      reasons: ["homebrew_external"],
+    };
+  }
+
+  if (params.resolvedStrategy === "mac_app_store") {
+    return {
+      status: "external",
+      resolvedStrategy: params.resolvedStrategy,
+      reasons: ["mac_app_store_external"],
+    };
+  }
+
+  if (params.resolvedStrategy === "manual_only") {
+    return {
+      status: "manual_only",
+      resolvedStrategy: params.resolvedStrategy,
+      reasons: ["manual_only"],
+    };
+  }
+
+  if (params.resolvedStrategy === "sparkle") {
+    if (params.installedApp.sparklePublicKey || params.hasApprovedSparklePublicKey) {
+      return { status: "one_click", resolvedStrategy: params.resolvedStrategy, reasons: [] };
+    }
+    return {
+      status: "manual_only",
+      resolvedStrategy: params.resolvedStrategy,
+      reasons: ["missing_sparkle_public_key"],
+    };
+  }
+
+  if (
+    params.resolvedStrategy === "zip_replace" ||
+    params.resolvedStrategy === "dmg_copy_replace" ||
+    params.resolvedStrategy === "pkg_install"
+  ) {
+    const reasons: InstallTrustReason[] = [];
+    if (!params.artifact?.downloadUrl) reasons.push("missing_artifact");
+    if (!params.artifact?.sha256) reasons.push("missing_sha256");
+    if (!params.installedApp.bundleId) reasons.push("missing_bundle_id");
+    if (!params.installedApp.teamId) reasons.push("missing_team_id");
+    return reasons.length === 0
+      ? { status: "one_click", resolvedStrategy: params.resolvedStrategy, reasons: [] }
+      : { status: "manual_only", resolvedStrategy: params.resolvedStrategy, reasons };
+  }
+
+  return {
+    status: "manual_only",
+    resolvedStrategy: params.resolvedStrategy,
+    reasons: ["unsupported_strategy"],
+  };
+}
 
 class RequestBodyTooLargeError extends Error {
   constructor(
@@ -865,6 +937,9 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
           ]
         : [],
     );
+    const approvedSparkleTrustByApp = new Set(
+      sparkleTrustAssertions.map((assertion) => assertion.appId),
+    );
 
     // Load all latest releases, indexed by appId → channel → release
     const latestReleases = await db.select().from(appLatestReleases).limit(10_000).all();
@@ -933,7 +1008,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       let releasedAt: string | null = null;
       let latestReleaseId: string | null = null;
       let matchedArtifact: AppDecision["artifact"] = null;
-      let installStrategy: AppDecision["installStrategy"] = null;
+      let resolvedInstallStrategy: InstallStrategy | null = null;
       let resolvedChannel: string | null = null;
       let staleSince: string | null = null;
 
@@ -978,7 +1053,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
               latestVersionNormalized = latest.versionNormalized;
               releasedAt = latest.releasedAt;
               latestReleaseId = latest.releaseId;
-              installStrategy = latest.installStrategy;
+              resolvedInstallStrategy = latest.installStrategy;
               resolvedChannel = latest.channel;
 
               if (compatibleArtifact) {
@@ -1033,7 +1108,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 latestVersionNormalized = found.versionNormalized;
                 releasedAt = found.releasedAt;
                 latestReleaseId = found.releaseId;
-                installStrategy = latest.installStrategy;
+                resolvedInstallStrategy = latest.installStrategy;
                 resolvedChannel = latest.channel;
                 matchedArtifact = {
                   id: found.artifactId,
@@ -1080,6 +1155,21 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       }
 
       const iconUrl = appInfo?.iconR2Key ? `${c.env.ASSETS_BASE_URL}/${appInfo.iconR2Key}` : null;
+      const homebrewCaskToken = matchResult.appId
+        ? (caskTokenByApp.get(matchResult.appId) ?? null)
+        : null;
+      const installTrust = deriveInstallTrust({
+        decision,
+        resolvedStrategy: resolvedInstallStrategy,
+        artifact: matchedArtifact,
+        installedApp,
+        homebrewCaskToken,
+        hasApprovedSparklePublicKey: matchResult.appId
+          ? approvedSparkleTrustByApp.has(matchResult.appId)
+          : false,
+      });
+      const installStrategy =
+        installTrust.status === "one_click" ? installTrust.resolvedStrategy : null;
 
       results.push({
         appName: installedApp.appName,
@@ -1093,9 +1183,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         localReasonCode,
         latestVersion,
         latestVersionRaw,
-        homebrewCaskToken: matchResult.appId
-          ? (caskTokenByApp.get(matchResult.appId) ?? null)
-          : null,
+        homebrewCaskToken,
         latestReleaseId,
         channel: resolvedChannel,
         availableChannels: matchResult.appId
@@ -1106,6 +1194,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         iconUrl,
         artifact: matchedArtifact,
         installStrategy,
+        installTrust,
       });
     }
 

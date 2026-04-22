@@ -2,7 +2,8 @@ import { env, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { SourceFetchJob } from "@versioneer/core/pipeline";
+import { handleSourceFetch, type SourceFetchJob } from "@versioneer/core/pipeline";
+import { normalizeVersion } from "@versioneer/core/versioning";
 import { createDb, generateId, idPrefixes, sourceFetches, sources } from "@versioneer/db";
 
 import { SourcePipelineWorkflow } from "../source-pipeline";
@@ -12,7 +13,10 @@ const TEST_NOW_ISO = TEST_NOW.toISOString();
 
 function createWorkflowInstance() {
   const instance = Object.create(SourcePipelineWorkflow.prototype);
-  instance.env = env;
+  instance.env = {
+    ...env,
+    resolveSourceHostAddresses: async () => ["93.184.216.34"],
+  };
   instance.ctx = {
     waitUntil: vi.fn<(promise: Promise<unknown>) => void>(),
     passThroughOnException: vi.fn<() => void>(),
@@ -48,6 +52,62 @@ afterEach(() => {
 });
 
 describe("SourcePipelineWorkflow", () => {
+  it("blocks unsafe source URLs before fetching and records failure metadata", async () => {
+    const db = createDb(env.DB);
+    const { apps } = await import("@versioneer/db");
+
+    const appId = generateId(idPrefixes.app);
+    await db.insert(apps).values({
+      id: appId,
+      slug: `wf-blocked-${appId.slice(-8)}`,
+      canonicalName: "Blocked Fetch Test",
+      status: "public",
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
+    });
+
+    const sourceId = generateId(idPrefixes.source);
+    await db.insert(sources).values({
+      id: sourceId,
+      appId,
+      sourceType: "sparkle",
+      parserKey: "sparkle",
+      baseUrl: "http://localhost/appcast.xml",
+      reviewStatus: "approved",
+      status: "active",
+      pollIntervalMinutes: 60,
+      ordinal: 0,
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
+    });
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await expect(
+      handleSourceFetch(
+        { sourceId, reason: "test", force: false },
+        {
+          ...env,
+          resolveSourceHostAddresses: async () => ["127.0.0.1"],
+        },
+      ),
+    ).rejects.toThrow("Source fetch only allows https URLs");
+
+    expect(fetchSpy).not.toHaveBeenCalledWith("http://localhost/appcast.xml", expect.anything());
+    const rows = await db
+      .select()
+      .from(sourceFetches)
+      .where(eq(sourceFetches.sourceId, sourceId))
+      .all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.fetchStatus).toBe("error");
+    expect(rows[0]!.fetchHostname).toBe("localhost");
+    expect(rows[0]!.fetchScheme).toBe("http");
+    expect(rows[0]!.failureReason).toBe("non_https");
+
+    const updatedSource = await db.select().from(sources).where(eq(sources.id, sourceId)).get();
+    expect(updatedSource?.lastFailureAt).toBe(TEST_NOW_ISO);
+  });
+
   it("runs fetch step and exits early when source returns 304 Not Modified", async () => {
     const db = createDb(env.DB);
     const { apps } = await import("@versioneer/db");
@@ -153,7 +213,7 @@ describe("SourcePipelineWorkflow", () => {
 
   it("runs all 3 steps when source returns new content", async () => {
     const db = createDb(env.DB);
-    const { apps } = await import("@versioneer/db");
+    const { apps, artifacts, jobFailures, releases } = await import("@versioneer/db");
 
     const appId = generateId(idPrefixes.app);
     await db.insert(apps).values({
@@ -178,6 +238,28 @@ describe("SourcePipelineWorkflow", () => {
       ordinal: 0,
       createdAt: TEST_NOW_ISO,
       updatedAt: TEST_NOW_ISO,
+    });
+    const priorReleaseId = generateId(idPrefixes.release);
+    await db.insert(releases).values({
+      id: priorReleaseId,
+      appId,
+      versionRaw: "1.0.0",
+      versionNormalized: normalizeVersion("1.0.0"),
+      channel: "stable",
+      status: "active",
+      isPrerelease: false,
+      publishedBySourceId: sourceId,
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
+    });
+    await db.insert(artifacts).values({
+      id: generateId(idPrefixes.artifact),
+      releaseId: priorReleaseId,
+      artifactType: "dmg",
+      url: "https://old-artifacts.example.com/app-1.0.0.dmg",
+      sha256: "abc123",
+      isPrimary: true,
+      createdAt: TEST_NOW_ISO,
     });
 
     // Mock fetch to return a minimal Sparkle appcast with one release
@@ -215,5 +297,16 @@ describe("SourcePipelineWorkflow", () => {
     expect(step.calls).toEqual(["fetch-source", "parse-source", "recompute-latest"]);
     expect(result).toHaveProperty("status", "completed");
     expect(result).toHaveProperty("releaseCount");
+    const anomalies = await db
+      .select()
+      .from(jobFailures)
+      .where(eq(jobFailures.jobType, "source-anomaly"))
+      .all();
+    expect(
+      anomalies.some(
+        (row) => row.jobKey === "missing_install_hash:https://example.com/app-2.0.0.dmg",
+      ),
+    ).toBe(true);
+    expect(anomalies.some((row) => row.jobKey === "new_artifact_hostname:example.com")).toBe(true);
   });
 });

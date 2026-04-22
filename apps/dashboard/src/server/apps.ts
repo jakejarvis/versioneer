@@ -11,14 +11,17 @@ import {
   apps,
   appAliases,
   appLatestReleases,
+  artifacts,
   sources,
   releases,
+  trustAssertions,
   auditLog,
   generateId,
   idPrefixes,
 } from "@versioneer/db";
 
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
+import { latestReleaseTrustWarnings } from "./install-trust";
 import { buildAppSortDescriptors } from "./list-helpers";
 import { authMiddleware } from "./middleware";
 
@@ -132,11 +135,45 @@ export const getApp = createServerFn({ method: "GET" })
     const app = await db.select().from(apps).where(eq(apps.id, id)).get();
     if (!app) throw new Error("Not found");
 
-    const latest = await db
+    const latestRows = await db
       .select()
       .from(appLatestReleases)
       .where(eq(appLatestReleases.appId, id))
       .all();
+    const latestArtifactIds = latestRows
+      .map((row) => row.artifactId)
+      .filter((artifactId): artifactId is string => Boolean(artifactId));
+    const latestArtifacts =
+      latestArtifactIds.length > 0
+        ? await db
+            .select({ id: artifacts.id, sha256: artifacts.sha256 })
+            .from(artifacts)
+            .where(inArray(artifacts.id, latestArtifactIds))
+            .all()
+        : [];
+    const artifactById = new Map(latestArtifacts.map((artifact) => [artifact.id, artifact]));
+    const trustRows = await db
+      .select({ assertionType: trustAssertions.assertionType })
+      .from(trustAssertions)
+      .where(eq(trustAssertions.appId, id))
+      .all();
+    const trustTypes = new Set(trustRows.map((row) => row.assertionType));
+    const aliasRows = await db
+      .select({ aliasType: appAliases.aliasType })
+      .from(appAliases)
+      .where(and(eq(appAliases.appId, id), eq(appAliases.isActive, true)))
+      .all();
+    const aliasTypes = new Set(aliasRows.map((row) => row.aliasType));
+    const latest = latestRows.map((row) =>
+      Object.assign({}, row, {
+        trustWarnings: latestReleaseTrustWarnings({
+          installStrategy: row.installStrategy,
+          artifact: row.artifactId ? artifactById.get(row.artifactId) : undefined,
+          trustTypes,
+          aliasTypes,
+        }),
+      }),
+    );
     const [sourceCount] = await db
       .select({ count: sql<number>`count(*)` })
       .from(sources)
@@ -347,11 +384,45 @@ export const getAppLatest = createServerFn({ method: "GET" })
   .inputValidator(z.object({ appId: z.string().min(1) }))
   .handler(async ({ data: { appId } }) => {
     const db = createDb(env.DB);
-    const items = await db
+    const rows = await db
       .select()
       .from(appLatestReleases)
       .where(eq(appLatestReleases.appId, appId))
       .all();
+    const artifactIds = rows
+      .map((row) => row.artifactId)
+      .filter((artifactId): artifactId is string => Boolean(artifactId));
+    const artifactRows =
+      artifactIds.length > 0
+        ? await db
+            .select({ id: artifacts.id, sha256: artifacts.sha256 })
+            .from(artifacts)
+            .where(inArray(artifacts.id, artifactIds))
+            .all()
+        : [];
+    const artifactById = new Map(artifactRows.map((artifact) => [artifact.id, artifact]));
+    const trustRows = await db
+      .select({ assertionType: trustAssertions.assertionType })
+      .from(trustAssertions)
+      .where(eq(trustAssertions.appId, appId))
+      .all();
+    const trustTypes = new Set(trustRows.map((row) => row.assertionType));
+    const aliasRows = await db
+      .select({ aliasType: appAliases.aliasType })
+      .from(appAliases)
+      .where(and(eq(appAliases.appId, appId), eq(appAliases.isActive, true)))
+      .all();
+    const aliasTypes = new Set(aliasRows.map((row) => row.aliasType));
+    const items = rows.map((row) =>
+      Object.assign({}, row, {
+        trustWarnings: latestReleaseTrustWarnings({
+          installStrategy: row.installStrategy,
+          artifact: row.artifactId ? artifactById.get(row.artifactId) : undefined,
+          trustTypes,
+          aliasTypes,
+        }),
+      }),
+    );
     return { items };
   });
 

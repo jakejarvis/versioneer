@@ -14,19 +14,19 @@ import {
   jsonParser,
   xmlParser,
 } from "@versioneer/core/parsers";
-import { readResponseTextLimited, ResponseBodyTooLargeError } from "@versioneer/core/pipeline";
+import {
+  assertValidSourceFetchUrl,
+  isGitHubApiUrl,
+  readResponseTextLimited,
+  resolvePublicDnsAddresses,
+  ResponseBodyTooLargeError,
+  SourceUrlPolicyError,
+} from "@versioneer/core/pipeline";
 import { getDescriptor } from "@versioneer/core/sources";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { sourceTypeSchema } from "@versioneer/schemas/sources";
 
 import { authMiddleware } from "./middleware";
-import {
-  assertValidSourceFetchUrl,
-  isGitHubApiUrl,
-  resolvePublicDnsAddresses,
-  SourceUrlPolicyError,
-} from "./source-url-policy";
-
 const MAX_VALIDATION_BODY_BYTES = 2 * 1024 * 1024;
 
 const validatableParsers: Partial<Record<SourceType, SourceParser>> = {
@@ -67,8 +67,6 @@ export const validateSource = createServerFn({ method: "POST" })
 
     const descriptor = getDescriptor(sourceType);
     const fetchUrls = descriptor.buildFetchUrls(url);
-    const token = fetchUrls.every(isGitHubApiUrl) ? env.GITHUB_TOKEN : undefined;
-    const headers = descriptor.fetchHeaders({ githubToken: token });
 
     let response: Response | undefined;
     let fetchedUrl: string | undefined;
@@ -77,6 +75,9 @@ export const validateSource = createServerFn({ method: "POST" })
         fetchedUrl = candidate;
         await assertValidSourceFetchUrl(candidate, {
           resolveAddresses: resolvePublicDnsAddresses,
+        });
+        const headers = descriptor.fetchHeaders({
+          githubToken: isGitHubApiUrl(candidate) ? env.GITHUB_TOKEN : undefined,
         });
         const res = await fetch(candidate, {
           signal: AbortSignal.timeout(10_000),

@@ -54,6 +54,7 @@ export async function seedInventoryCatalog(db: Database) {
   const artifactA = await seedArtifact(db, releaseA.id, {
     artifactType: "dmg",
     url: "https://download.mozilla.org/firefox-130.0.dmg",
+    sha256: "abc123",
     architecture: "universal",
     isPrimary: true,
   });
