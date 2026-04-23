@@ -126,7 +126,7 @@ final class InstallCoordinator {
     var stagedDirectory: URL?
     var usedPrivilegedHelper = false
     var plan: InstallPlan?
-    var executionId: String?
+    var preparedExecutionId: String?
     var executionRouteUsed: ExecutionRoute?
 
     do {
@@ -169,9 +169,8 @@ final class InstallCoordinator {
             installedApp: installedApp,
             executionRoute: route
           )
-          executionId = prepared.execution.id
+          preparedExecutionId = prepared.execution.id
         } catch {
-          executionId = installPlan.localId
           Logger.api.error(
             "Failed to prepare install execution for \(installedApp.name): \(error.localizedDescription)"
           )
@@ -184,11 +183,9 @@ final class InstallCoordinator {
             )
           )
         }
-      } else {
-        executionId = installPlan.localId
       }
 
-      let activeExecutionId = executionId ?? installPlan.localId
+      let activeExecutionId = preparedExecutionId ?? installPlan.localId
       stagedDirectory = try makeStagingDirectory(executionId: activeExecutionId)
 
       switch installPlan.strategy {
@@ -376,10 +373,16 @@ final class InstallCoordinator {
         recoveryAction: nil,
         helperStatus: usedPrivilegedHelper ? .ready : .notNeeded
       )
-      if let installPlan = plan, installPlan.isCatalogBacked, let route = executionRouteUsed {
+      if let installPlan = plan,
+        let route = executionRouteUsed,
+        let reportExecutionId = Self.reportableExecutionID(
+          for: installPlan,
+          preparedExecutionId: preparedExecutionId
+        )
+      {
         await reportInstallExecution(
           apiClient: apiClient,
-          executionId: activeExecutionId,
+          executionId: reportExecutionId,
           plan: installPlan,
           installedApp: installedApp,
           executionRoute: route,
@@ -422,8 +425,13 @@ final class InstallCoordinator {
         recoveryAction: recoveryAction(for: error),
         helperStatus: helperSetupState(for: error) ?? (usedPrivilegedHelper ? .failed : .notNeeded)
       )
-      if let installPlan = plan, installPlan.isCatalogBacked, let route = executionRouteUsed {
-        let reportExecutionId = executionId ?? installPlan.localId
+      if let installPlan = plan,
+        let route = executionRouteUsed,
+        let reportExecutionId = Self.reportableExecutionID(
+          for: installPlan,
+          preparedExecutionId: preparedExecutionId
+        )
+      {
         await reportInstallExecution(
           apiClient: apiClient,
           executionId: reportExecutionId,
@@ -449,6 +457,14 @@ final class InstallCoordinator {
       cleanupStagingDirectory(stagedDirectory)
       return false
     }
+  }
+
+  nonisolated static func reportableExecutionID(
+    for plan: InstallPlan,
+    preparedExecutionId: String?
+  ) -> String? {
+    guard plan.isCatalogBacked else { return nil }
+    return preparedExecutionId
   }
 
   private func installStatusString(for error: Error) -> String {

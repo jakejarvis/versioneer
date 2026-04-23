@@ -360,7 +360,8 @@ extension AppState {
     }
   }
 
-  private func findInstalledApp(for decision: InventoryResult, in apps: [InstalledApp]) -> InstalledApp?
+  private func findInstalledApp(for decision: InventoryResult, in apps: [InstalledApp])
+    -> InstalledApp?
   {
     if let localAppID = decision.localAppID {
       return apps.first { $0.id == localAppID }
@@ -381,7 +382,8 @@ extension AppState {
     return nameMatches[0]
   }
 
-  private func decisionFromVersion(latest: String?, installed: String?) -> InventoryResult.Decision {
+  private func decisionFromVersion(latest: String?, installed: String?) -> InventoryResult.Decision
+  {
     guard let latest, let installed else { return .localOnly }
     if latest == installed { return .upToDate }
     if compareVersionStrings(latest, isNewerThan: installed) {

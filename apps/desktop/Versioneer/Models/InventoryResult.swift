@@ -33,7 +33,9 @@ nonisolated struct InventoryResult: Identifiable, Codable, Hashable, Sendable {
     let staleSince: String?
 
     private enum CodingKeys: String, CodingKey {
-      case match, trackingState, localReasonCode, iconURL = "iconUrl", staleSince
+      case match, trackingState, localReasonCode
+      case iconURL = "iconUrl"
+      case staleSince
     }
   }
 
@@ -43,7 +45,8 @@ nonisolated struct InventoryResult: Identifiable, Codable, Hashable, Sendable {
     let confidence: Double?
 
     private enum CodingKeys: String, CodingKey {
-      case appID = "appId", appName, confidence
+      case appID = "appId"
+      case appName, confidence
     }
   }
 
@@ -56,7 +59,9 @@ nonisolated struct InventoryResult: Identifiable, Codable, Hashable, Sendable {
     let artifact: Artifact?
 
     private enum CodingKeys: String, CodingKey {
-      case version, versionRaw, releaseID = "releaseId", releasedAt, targetArchitecture, artifact
+      case version, versionRaw
+      case releaseID = "releaseId"
+      case releasedAt, targetArchitecture, artifact
     }
   }
 
@@ -271,7 +276,9 @@ extension InventoryResult {
   nonisolated var latestReleaseId: String? { release.releaseID }
   nonisolated var targetArchitecture: String? { release.targetArchitecture }
   nonisolated var channel: String? { channels.selected }
-  nonisolated var availableChannels: [String]? { channels.available.isEmpty ? nil : channels.available }
+  nonisolated var availableChannels: [String]? {
+    channels.available.isEmpty ? nil : channels.available
+  }
   nonisolated var homebrewCaskToken: String? { install.homebrewCaskToken }
   nonisolated var releasedAt: String? { release.releasedAt }
   nonisolated var staleSince: String? { catalog.staleSince }

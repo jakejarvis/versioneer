@@ -45,6 +45,30 @@ struct InstallCoordinatorRoutingTests {
     #expect(coordinator.executionRoute(for: plan) == .sparkle)
   }
 
+  @Test func catalogReportsRequirePreparedExecutionID() {
+    let catalogPlan = makePlan(strategy: .zipReplace)
+    let localPlan = InstallPlan(localId: "local_test", strategy: .zipReplace, origin: .local)
+
+    #expect(
+      InstallCoordinator.reportableExecutionID(
+        for: catalogPlan,
+        preparedExecutionId: "exec_prepared"
+      ) == "exec_prepared"
+    )
+    #expect(
+      InstallCoordinator.reportableExecutionID(
+        for: catalogPlan,
+        preparedExecutionId: nil
+      ) == nil
+    )
+    #expect(
+      InstallCoordinator.reportableExecutionID(
+        for: localPlan,
+        preparedExecutionId: "exec_prepared"
+      ) == nil
+    )
+  }
+
   @Test func bundleArchitectureSupportsUniversalAndRosettaCompatibleSlices() {
     #expect(
       InstallCoordinator.bundleArchitectureSupportsTarget(
