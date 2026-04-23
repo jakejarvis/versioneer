@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { refreshDismissedBundleIdsCache } from "@versioneer/core/cache";
@@ -10,26 +10,9 @@ import { discoveredApps, auditLog, generateId, idPrefixes } from "@versioneer/db
 
 import { captureAdminEvent } from "./analytics";
 import { authMiddleware } from "./middleware";
+import { discoveredAppOrderBy } from "./order-by";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
-
-function discoveredAppOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
-  const direction = sortDir === "asc" ? asc : desc;
-
-  switch (sortBy) {
-    case "confidenceScore":
-      return [direction(discoveredApps.confidenceScore), desc(discoveredApps.sightingCount)];
-    case "appName":
-      return [direction(discoveredApps.appName), desc(discoveredApps.lastSeenAt)];
-    case "status":
-      return [direction(discoveredApps.status), desc(discoveredApps.lastSeenAt)];
-    case "lastSeenAt":
-      return [direction(discoveredApps.lastSeenAt), desc(discoveredApps.sightingCount)];
-    case "sightingCount":
-    default:
-      return [desc(discoveredApps.sightingCount), desc(discoveredApps.lastSeenAt)];
-  }
-}
 
 export const listDiscoveredApps = createServerFn({ method: "GET" })
   .middleware([authMiddleware])

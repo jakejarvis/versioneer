@@ -28,6 +28,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  appsSearch,
+  atRiskSourceSearch,
+  discoveredSearch,
+  failedEnrichmentSearch,
+  feedbackSearch,
+  pendingEnrichmentSearch,
+  releasesSearch,
+  reviewSearch,
+} from "@/features/homepage/search-presets";
+import { jobsFailureSearch, jobsRunsSearch } from "@/features/jobs/search";
 import { useHomepage } from "@/hooks/use-homepage";
 import { formatDuration } from "@/lib/format-duration";
 import { getJobFailureTypeLabel } from "@/lib/security-signals";
@@ -42,59 +53,6 @@ import type {
   ReleaseListItem,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-const reviewSearch = { page: 1, pageSize: 25, status: "pending", queueType: "all" } as const;
-const appsSearch = { page: 1, pageSize: 25, search: "", status: "all" } as const;
-const discoveredSearch = {
-  page: 1,
-  pageSize: 25,
-  status: "pending",
-  enrichmentStatus: "all",
-  sortBy: "confidenceScore",
-  sortDir: "desc",
-} as const;
-const pendingEnrichmentSearch = {
-  ...discoveredSearch,
-  enrichmentStatus: "pending",
-} as const;
-const failedEnrichmentSearch = {
-  ...discoveredSearch,
-  enrichmentStatus: "failed",
-} as const;
-const feedbackSearch = { page: 1, pageSize: 25, status: "new", type: "all" } as const;
-const failureSearch = {
-  runPage: 1,
-  runPageSize: 25,
-  runJobType: "all",
-  runTrigger: "all",
-  runStatus: "all",
-  failurePage: 1,
-  failurePageSize: 25,
-  failureStatus: "open",
-  failureJobType: "all",
-  failureId: "",
-} as const;
-const atRiskSourceSearch = { page: 1, pageSize: 25, status: "at_risk", type: "all" } as const;
-const jobsSearch = {
-  runPage: 1,
-  runPageSize: 25,
-  runJobType: "all",
-  runTrigger: "all",
-  runStatus: "all",
-  failurePage: 1,
-  failurePageSize: 25,
-  failureJobType: "all",
-  failureStatus: "open",
-  failureId: "",
-} as const;
-const releasesSearch = {
-  page: 1,
-  pageSize: 25,
-  channel: "all",
-  status: "active",
-  sortBy: "createdAt",
-  sortDir: "desc",
-} as const;
 
 const EMPTY_HOMEPAGE_DATA: DashboardHomepageData = {
   overview: {
@@ -219,7 +177,7 @@ function DashboardPage() {
           </Link>
           <Link
             to="/jobs"
-            search={failureSearch}
+            search={jobsFailureSearch}
             className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-border hover:bg-background/80"
           >
             <MetricLabel label="Open failures" tone="red" />
@@ -399,7 +357,7 @@ function DashboardPage() {
             description="Newest unresolved job failures with related entities."
             icon={Package}
             action={
-              <Link to="/jobs" search={failureSearch} className={viewAllClassName}>
+              <Link to="/jobs" search={jobsFailureSearch} className={viewAllClassName}>
                 View all <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             }
@@ -422,7 +380,7 @@ function DashboardPage() {
             description="Latest poll and sync executions, including failures."
             icon={Timer}
             action={
-              <Link to="/jobs" search={jobsSearch} className={viewAllClassName}>
+              <Link to="/jobs" search={jobsRunsSearch} className={viewAllClassName}>
                 View all <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             }
@@ -789,13 +747,13 @@ function JobFailureRow({ item }: { item: JobFailureListItem }) {
   const search =
     item.jobType === "source-anomaly"
       ? {
-          ...failureSearch,
+          ...jobsFailureSearch,
           failureStatus: item.status,
           failureJobType: "source-anomaly" as const,
           failureId: item.id,
         }
       : {
-          ...failureSearch,
+          ...jobsFailureSearch,
           failureStatus: item.status,
           failureId: item.id,
         };
@@ -842,7 +800,7 @@ function RunRow({ item }: { item: HomepageRunItem }) {
   return (
     <Link
       to="/jobs"
-      search={jobsSearch}
+      search={jobsRunsSearch}
       className="group flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60"
     >
       <div className="min-w-0 flex-1">

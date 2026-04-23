@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { toISODate } from "@versioneer/core/dates";
@@ -34,28 +34,11 @@ import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { scheduleRecomputeLatest } from "./followup-jobs";
 import { latestReleaseTrustWarnings } from "./install-trust";
 import { authMiddleware } from "./middleware";
+import { releaseOrderBy } from "./order-by";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
 type ArtifactRow = typeof artifacts.$inferSelect;
 type ReleaseObservationRow = typeof releaseObservations.$inferSelect;
-
-function releaseOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
-  const direction = sortDir === "asc" ? asc : desc;
-
-  switch (sortBy) {
-    case "versionRaw":
-      return [direction(releases.versionNormalized), direction(releases.versionRaw)];
-    case "channel":
-      return [direction(releases.channel), desc(releases.createdAt)];
-    case "status":
-      return [direction(releases.status), desc(releases.createdAt)];
-    case "releasedAt":
-      return [direction(releases.releasedAt), desc(releases.createdAt)];
-    case "createdAt":
-    default:
-      return [desc(releases.createdAt)];
-  }
-}
 
 function collapseArtifacts(rows: ArtifactRow[]): ArtifactRow[] {
   const deduped = new Map<string, ArtifactRow>();

@@ -1,7 +1,6 @@
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useForm, useStore } from "@tanstack/react-form";
-import { format } from "date-fns";
 import {
   Check,
   CircleAlert,
@@ -13,9 +12,20 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import {
+  buildInitialValues,
+  formatDate,
+  reorderItems,
+  slugify,
+  type AliasEntry,
+  type OnboardingAliasType,
+  type OnboardingDiscoveredApp,
+  type OnboardingFormData,
+  type SourceEntry,
+} from "@/components/layout/onboarding-drawer.helpers";
 import { AppIcon } from "@/components/shared/app-icon";
 import { serializeConfig, SourceConfigFields } from "@/components/shared/source-config-fields";
 import { Badge } from "@/components/ui/badge";
@@ -42,25 +52,8 @@ import {
 import { useValidateSource } from "@/hooks/use-sources";
 import { SOURCE_CONFIG_FIELDS, SOURCE_TYPES } from "@/lib/source-types";
 import { resolveSourceUrl } from "@versioneer/core/sources";
-import { parseGitHubRepoUrl } from "@versioneer/core/validation";
-import type { AliasType } from "@versioneer/schemas/catalog";
 import type { SourceType } from "@versioneer/schemas/sources";
 import { SOURCE_TYPE_DEFAULTS } from "@versioneer/schemas/sources";
-
-// ──────────────────────────────────────────────────────────
-// Alias types — operator-managed identity matchers only
-// ──────────────────────────────────────────────────────────
-
-type OnboardingAliasType = Extract<
-  AliasType,
-  "bundle_id" | "name" | "team_id" | "homebrew_cask" | "mas_app_id" | "electron_update_url"
->;
-
-interface AliasEntry {
-  key: string;
-  aliasType: OnboardingAliasType;
-  value: string;
-}
 
 const ALIAS_COLORS: Record<OnboardingAliasType, string> = {
   bundle_id: "bg-blue-500/10 text-blue-400 border-blue-500/20",
@@ -79,131 +72,6 @@ const ALIAS_LABELS: Record<OnboardingAliasType, string> = {
   mas_app_id: "App Store",
   electron_update_url: "Electron Update URL",
 };
-
-// ──────────────────────────────────────────────────────────
-// Source types — update feeds
-// ──────────────────────────────────────────────────────────
-
-interface SourceEntry {
-  key: string;
-  sourceType: SourceType;
-  identifier: string;
-  pollIntervalMinutes: number;
-  label?: string;
-  status?: "active" | "paused";
-  config: Record<string, string>;
-}
-
-// ──────────────────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────────────────
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function formatDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return format(d, "MMM d, yyyy");
-}
-
-interface OnboardingFormData {
-  canonicalName: string;
-  slug: string;
-  vendorName: string;
-  homepageUrl: string;
-  notes: string;
-  aliases: AliasEntry[];
-  sources: SourceEntry[];
-  sourceValidated: boolean;
-}
-
-// ──────────────────────────────────────────────────────────
-// Build initial form values from a discovered app record
-// ──────────────────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildInitialValues(discoveredApp: any): OnboardingFormData {
-  const aliases: AliasEntry[] = [];
-  if (discoveredApp.bundleId) {
-    aliases.push({
-      key: crypto.randomUUID(),
-      aliasType: "bundle_id",
-      value: discoveredApp.bundleId,
-    });
-  }
-  aliases.push({ key: crypto.randomUUID(), aliasType: "name", value: discoveredApp.appName });
-  if (discoveredApp.teamId) {
-    aliases.push({ key: crypto.randomUUID(), aliasType: "team_id", value: discoveredApp.teamId });
-  }
-  if (discoveredApp.masAppId) {
-    aliases.push({
-      key: crypto.randomUUID(),
-      aliasType: "mas_app_id",
-      value: discoveredApp.masAppId,
-    });
-  }
-
-  const sources: SourceEntry[] = [];
-  if (discoveredApp.sparkleFeedUrl) {
-    sources.push({
-      key: crypto.randomUUID(),
-      sourceType: "sparkle",
-      identifier: discoveredApp.sparkleFeedUrl,
-      pollIntervalMinutes: 60,
-      status: "active",
-      config: {},
-    });
-  }
-  if (discoveredApp.electronUpdateUrl) {
-    const parsed = parseGitHubRepoUrl(discoveredApp.electronUpdateUrl);
-    if (parsed) {
-      sources.push({
-        key: crypto.randomUUID(),
-        sourceType: "github_releases",
-        identifier: `${parsed.owner}/${parsed.repo}`,
-        pollIntervalMinutes: 60,
-        status: "active",
-        config: {},
-      });
-    } else {
-      sources.push({
-        key: crypto.randomUUID(),
-        sourceType: "electron_generic",
-        identifier: discoveredApp.electronUpdateUrl,
-        pollIntervalMinutes: 60,
-        status: "active",
-        config: {},
-      });
-    }
-  }
-  if (discoveredApp.isMasApp && discoveredApp.bundleId && sources.length === 0) {
-    sources.push({
-      key: crypto.randomUUID(),
-      sourceType: "mac_app_store",
-      identifier: discoveredApp.bundleId,
-      pollIntervalMinutes: 1440,
-      status: "active",
-      config: {},
-    });
-  }
-
-  return {
-    canonicalName: discoveredApp.appName,
-    slug: slugify(discoveredApp.appName),
-    vendorName: discoveredApp.enrichedVendorName ?? "",
-    homepageUrl: discoveredApp.enrichedHomepageUrl ?? "",
-    notes: "",
-    aliases,
-    sources,
-    sourceValidated: discoveredApp.sourceValidationStatus === "valid",
-  };
-}
 
 // ──────────────────────────────────────────────────────────
 // Outer shell — data fetching + sheet chrome
@@ -280,63 +148,21 @@ function OnboardingFormContent({
   onOpenChange,
   onSuccess,
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  discoveredApp: any;
+  discoveredApp: OnboardingDiscoveredApp;
   discoveredAppId: string;
   onOpenChange: (open: boolean) => void;
   onSuccess?: (appId: string, status: "draft" | "public") => void;
 }) {
-  const onboard = useOnboardDiscoveredApp();
-
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on id; component remounts when id changes
   const initialValues = useMemo(() => buildInitialValues(discoveredApp), [discoveredApp.id]);
   const enrichmentHasReleases = (discoveredApp.enrichedReleaseCount ?? 0) > 0;
 
-  const form = useForm({
-    defaultValues: initialValues,
-    onSubmit: async ({ value }) => {
-      onboard.mutate(
-        {
-          discoveredAppId,
-          app: {
-            slug: value.slug,
-            canonicalName: value.canonicalName,
-            vendorName: value.vendorName || undefined,
-            homepageUrl: value.homepageUrl || undefined,
-            notes: value.notes || undefined,
-          },
-          aliases: value.aliases
-            .filter((a) => a.value.trim())
-            .map((a) => ({ aliasType: a.aliasType, value: a.value })),
-          sources: value.sources
-            .filter((s) => s.identifier.trim())
-            .map((s) => {
-              const baseUrl = resolveSourceUrl(s.sourceType, s.identifier);
-              return {
-                sourceType: s.sourceType,
-                baseUrl: baseUrl ?? "",
-                parserKey: s.sourceType,
-                pollIntervalMinutes: s.pollIntervalMinutes,
-                label: s.label,
-                status: s.status,
-                configJson: serializeConfig(s.config),
-              };
-            })
-            .filter((s) => s.baseUrl),
-          sourceValidated: value.sourceValidated,
-          enrichmentHasReleases,
-        },
-        {
-          onSuccess: (data) => {
-            onOpenChange(false);
-            onSuccess?.(data.id, data.status);
-          },
-          onError: (err) => {
-            toast.error(err.message || "Failed to onboard app");
-          },
-        },
-      );
-    },
+  const { form, onboard } = useOnboardingForm({
+    discoveredAppId,
+    initialValues,
+    enrichmentHasReleases,
+    onOpenChange,
+    onSuccess,
   });
 
   const slug = useStore(form.store, (s) => s.values.slug);
@@ -705,17 +531,16 @@ function OnboardingFormContent({
               {(sourcesField) =>
                 sourcesField.state.value.length > 0 ? (
                   <DragDropProvider
-                    onDragEnd={(event: any) => {
+                    onDragEnd={(event) => {
                       if (event.canceled) return;
                       const { source } = event.operation;
                       if (!source || !isSortable(source)) return;
                       const { initialIndex, index: newIndex } = source.sortable;
                       if (initialIndex === newIndex) return;
-                      const items = sourcesField.state.value;
-                      const reordered = [...items];
-                      const [moved] = reordered.splice(initialIndex, 1);
-                      reordered.splice(newIndex, 0, moved!);
-                      form.setFieldValue("sources", reordered);
+                      form.setFieldValue(
+                        "sources",
+                        reorderItems(sourcesField.state.value, initialIndex, newIndex),
+                      );
                     }}
                   >
                     <div className="mt-2.5 space-y-2.5">
@@ -773,6 +598,72 @@ function OnboardingFormContent({
   );
 }
 
+function useOnboardingForm({
+  discoveredAppId,
+  initialValues,
+  enrichmentHasReleases,
+  onOpenChange,
+  onSuccess,
+}: {
+  discoveredAppId: string;
+  initialValues: OnboardingFormData;
+  enrichmentHasReleases: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess?: (appId: string, status: "draft" | "public") => void;
+}) {
+  const onboard = useOnboardDiscoveredApp();
+  const form = useForm({
+    defaultValues: initialValues,
+    onSubmit: async ({ value }) => {
+      onboard.mutate(
+        {
+          discoveredAppId,
+          app: {
+            slug: value.slug,
+            canonicalName: value.canonicalName,
+            vendorName: value.vendorName || undefined,
+            homepageUrl: value.homepageUrl || undefined,
+            notes: value.notes || undefined,
+          },
+          aliases: value.aliases
+            .filter((alias) => alias.value.trim())
+            .map((alias) => ({ aliasType: alias.aliasType, value: alias.value })),
+          sources: value.sources
+            .filter((source) => source.identifier.trim())
+            .map((source) => {
+              const baseUrl = resolveSourceUrl(source.sourceType, source.identifier);
+              return {
+                sourceType: source.sourceType,
+                baseUrl: baseUrl ?? "",
+                parserKey: source.sourceType,
+                pollIntervalMinutes: source.pollIntervalMinutes,
+                label: source.label,
+                status: source.status,
+                configJson: serializeConfig(source.config),
+              };
+            })
+            .filter((source) => source.baseUrl),
+          sourceValidated: value.sourceValidated,
+          enrichmentHasReleases,
+        },
+        {
+          onSuccess: (data) => {
+            onOpenChange(false);
+            onSuccess?.(data.id, data.status);
+          },
+          onError: (error) => {
+            toast.error(error.message || "Failed to onboard app");
+          },
+        },
+      );
+    },
+  });
+
+  return { form, onboard };
+}
+
+type OnboardingFormApi = ReturnType<typeof useOnboardingForm>["form"];
+
 // ──────────────────────────────────────────────────────────
 // Sortable wrapper for source cards during onboarding
 // ──────────────────────────────────────────────────────────
@@ -784,7 +675,7 @@ function SortableSourceWrapper({
 }: {
   id: string;
   index: number;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { ref } = useSortable({ id, index });
 
@@ -807,8 +698,7 @@ function SourceCard({
   onRemove,
   onValidated,
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  form: any;
+  form: OnboardingFormApi;
   index: number;
   source: SourceEntry;
   onRemove: () => void;
@@ -817,15 +707,12 @@ function SourceCard({
   // Subscribe directly to current field values so the test button and handler
   // stay in sync as the user types (the `source` prop from the parent array
   // field does not re-render on nested field changes).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const currentSourceType: SourceType =
-    useStore(form.store, (s: any) => s.values.sources[index]?.sourceType) ?? source.sourceType;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    useStore(form.store, (state) => state.values.sources[index]?.sourceType) ?? source.sourceType;
   const currentIdentifier: string =
-    useStore(form.store, (s: any) => s.values.sources[index]?.identifier) ?? source.identifier;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    useStore(form.store, (state) => state.values.sources[index]?.identifier) ?? source.identifier;
   const currentConfig: Record<string, string> =
-    useStore(form.store, (s: any) => s.values.sources[index]?.config) ?? {};
+    useStore(form.store, (state) => state.values.sources[index]?.config) ?? {};
 
   const validateMutation = useValidateSource();
 
@@ -852,7 +739,7 @@ function SourceCard({
     <div className="space-y-2 rounded-md border border-border/40 bg-muted/20 p-2.5">
       <div className="flex items-center gap-2">
         <form.Field name={`sources[${index}].sourceType`}>
-          {(field: { state: { value: string }; handleChange: (v: string) => void }) => (
+          {(field) => (
             <select
               value={field.state.value}
               onChange={(e) => {
@@ -877,7 +764,7 @@ function SourceCard({
           )}
         </form.Field>
         <form.Field name={`sources[${index}].identifier`}>
-          {(field: { state: { value: string }; handleChange: (v: string) => void }) => (
+          {(field) => (
             <input
               value={field.state.value}
               onChange={(e) => {
@@ -902,10 +789,7 @@ function SourceCard({
 
       {SOURCE_CONFIG_FIELDS[currentSourceType] && (
         <form.Field name={`sources[${index}].config`}>
-          {(field: {
-            state: { value: Record<string, string> };
-            handleChange: (v: Record<string, string>) => void;
-          }) => (
+          {(field) => (
             <SourceConfigFields
               sourceType={currentSourceType}
               value={field.state.value ?? {}}

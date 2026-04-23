@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { and, asc, desc, eq, inArray, like, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { pipelineWorker } from "@/lib/pipeline";
@@ -25,44 +25,10 @@ import { captureAdminEvent } from "./analytics";
 import { invalidateInventoryMatchSnapshot } from "./cache";
 import { buildAppSourceHealth } from "./homepage-helpers";
 import { latestReleaseTrustWarnings } from "./install-trust";
-import { buildAppSortDescriptors } from "./list-helpers";
 import { authMiddleware } from "./middleware";
+import { appOrderBy, appReleaseOrderBy } from "./order-by";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
-
-function appOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
-  const sortColumns = {
-    canonicalName: apps.canonicalName,
-    slug: apps.slug,
-    vendorName: apps.vendorName,
-    status: apps.status,
-    updatedAt: apps.updatedAt,
-  };
-
-  return buildAppSortDescriptors(sortBy, sortDir).map((descriptor) =>
-    (descriptor.dir === "asc" ? asc : desc)(
-      sortColumns[descriptor.field as keyof typeof sortColumns],
-    ),
-  );
-}
-
-function appReleaseOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
-  const direction = sortDir === "asc" ? asc : desc;
-
-  switch (sortBy) {
-    case "versionRaw":
-      return [direction(releases.versionNormalized), direction(releases.versionRaw)];
-    case "channel":
-      return [direction(releases.channel), desc(releases.createdAt)];
-    case "status":
-      return [direction(releases.status), desc(releases.createdAt)];
-    case "releasedAt":
-      return [direction(releases.releasedAt), desc(releases.createdAt)];
-    case "createdAt":
-    default:
-      return [desc(releases.createdAt)];
-  }
-}
 
 // GET /apps - list with pagination, status/search filters
 export const listApps = createServerFn({ method: "GET" })

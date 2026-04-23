@@ -1,5 +1,5 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
-import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, or } from "drizzle-orm";
 
 import { createLogger } from "@versioneer/core/logger";
 import { captureServerEvent, captureServerException } from "@versioneer/core/observability";
@@ -10,7 +10,6 @@ import {
   isCaskSyncDue,
   recordJobFailure,
   resolveJobFailure,
-  computeNextPollAt,
   inventoryFollowupQueueMessageSchema,
 } from "@versioneer/core/pipeline";
 import type {
@@ -19,223 +18,29 @@ import type {
   RecomputeLatestJob,
 } from "@versioneer/core/pipeline";
 import { createDb } from "@versioneer/db";
-import { cronJobRuns, generateId, idPrefixes, inventoryFollowupJobs } from "@versioneer/db";
+import { cronJobRuns, generateId, idPrefixes } from "@versioneer/db";
 // Import parsers to trigger auto-registration
 import "@versioneer/core/parsers";
 import { runEnrichmentBatch } from "./enrichment";
+import {
+  claimInventoryFollowupJob,
+  INVENTORY_FOLLOWUP_RETRY_DELAY_SECONDS,
+  markInventoryFollowupQueueFailure,
+  repairInventoryFollowupQueue,
+} from "./inventory-followup-queue";
+import {
+  createSourcePipelineBatch,
+  updateNextPollAtForQueuedSources,
+} from "./source-pipeline-queue";
 
 // Re-export the Workflow class so wrangler can discover it
 export { EnrichmentDrainWorkflow } from "./workflows/enrichment-drain";
 export { InventoryFollowupWorkflow } from "./workflows/inventory-followup";
 export { SourcePipelineWorkflow } from "./workflows/source-pipeline";
 
-const SOURCE_PIPELINE_BATCH_SIZE = 100;
-const INVENTORY_FOLLOWUP_MAX_ATTEMPTS = 5;
-const INVENTORY_FOLLOWUP_RETRY_DELAY_SECONDS = 60;
-const INVENTORY_FOLLOWUP_REPAIR_BATCH_SIZE = 50;
-const INVENTORY_FOLLOWUP_REPAIR_STALE_MS = 5 * 60 * 1000;
-
 type SourcePipelineBinding = Env["SOURCE_PIPELINE"];
 type SourcePipelineCreateOptions = NonNullable<Parameters<SourcePipelineBinding["create"]>[0]>;
-type InventoryFollowupWorkflowBinding = Env["INVENTORY_FOLLOWUP"];
-type InventoryFollowupWorkflowCreateOptions = NonNullable<
-  Parameters<InventoryFollowupWorkflowBinding["create"]>[0]
->;
-type Logger = ReturnType<typeof createLogger>;
-
-type Db = ReturnType<typeof createDb>;
-
-type InventoryFollowupClaim =
-  | {
-      status: "claimed";
-      jobId: string;
-      attemptCount: number;
-      workflowInstanceId: string;
-      createOptions: InventoryFollowupWorkflowCreateOptions;
-    }
-  | { status: "skipped"; reason: string };
-
-async function createSourcePipelineBatch(
-  sourcePipeline: SourcePipelineBinding,
-  jobs: SourcePipelineCreateOptions[],
-  log: Logger,
-): Promise<number> {
-  let queued = 0;
-
-  for (let index = 0; index < jobs.length; index += SOURCE_PIPELINE_BATCH_SIZE) {
-    const chunk = jobs.slice(index, index + SOURCE_PIPELINE_BATCH_SIZE);
-    try {
-      const instances = await sourcePipeline.createBatch(chunk);
-      queued += instances.length;
-    } catch (error) {
-      log.error("failed to queue source pipeline batch", { batchSize: chunk.length, error });
-      for (const job of chunk) {
-        try {
-          await sourcePipeline.create(job);
-          queued++;
-        } catch (sourceError) {
-          log.error("failed to queue source pipeline", {
-            sourceId: job.params?.sourceId,
-            error: sourceError,
-          });
-        }
-      }
-    }
-  }
-
-  return queued;
-}
-
-async function claimInventoryFollowupJob(params: {
-  db: Db;
-  jobId: string;
-  now: string;
-}): Promise<InventoryFollowupClaim> {
-  const job = await params.db
-    .select({
-      id: inventoryFollowupJobs.id,
-      status: inventoryFollowupJobs.status,
-      attemptCount: inventoryFollowupJobs.attemptCount,
-    })
-    .from(inventoryFollowupJobs)
-    .where(eq(inventoryFollowupJobs.id, params.jobId))
-    .get();
-
-  if (!job) return { status: "skipped", reason: "missing-job" };
-  if (job.status === "completed" || job.status === "running" || job.status === "queued") {
-    return { status: "skipped", reason: job.status };
-  }
-  if (job.status === "failed" && job.attemptCount >= INVENTORY_FOLLOWUP_MAX_ATTEMPTS) {
-    return { status: "skipped", reason: "attempts-exhausted" };
-  }
-
-  const attemptCount = job.attemptCount + 1;
-  const workflowInstanceId = `${params.jobId}-${attemptCount}`;
-  const claimed = await params.db
-    .update(inventoryFollowupJobs)
-    .set({
-      status: "queued",
-      attemptCount,
-      workflowInstanceId,
-      queuedAt: params.now,
-      startedAt: null,
-      completedAt: null,
-      errorMessage: null,
-      updatedAt: params.now,
-    })
-    .where(
-      and(
-        eq(inventoryFollowupJobs.id, params.jobId),
-        or(eq(inventoryFollowupJobs.status, "pending"), eq(inventoryFollowupJobs.status, "failed")),
-      ),
-    )
-    .returning({
-      jobId: inventoryFollowupJobs.id,
-      attemptCount: inventoryFollowupJobs.attemptCount,
-      workflowInstanceId: inventoryFollowupJobs.workflowInstanceId,
-    });
-
-  const row = claimed[0];
-  if (!row?.workflowInstanceId) return { status: "skipped", reason: "already-claimed" };
-
-  return {
-    status: "claimed",
-    jobId: row.jobId,
-    attemptCount: row.attemptCount,
-    workflowInstanceId: row.workflowInstanceId,
-    createOptions: {
-      id: row.workflowInstanceId,
-      params: { jobId: row.jobId },
-    },
-  };
-}
-
-async function markInventoryFollowupQueueFailure(params: {
-  db: Db;
-  jobId: string;
-  errorMessage: string;
-  now: string;
-}) {
-  await params.db
-    .update(inventoryFollowupJobs)
-    .set({
-      status: "failed",
-      errorMessage: params.errorMessage,
-      updatedAt: params.now,
-      completedAt: params.now,
-    })
-    .where(eq(inventoryFollowupJobs.id, params.jobId));
-  await recordJobFailure({
-    db: params.db,
-    jobType: "inventory_followup",
-    relatedId: params.jobId,
-    jobKey: "queue",
-    errorMessage: params.errorMessage,
-  });
-}
-
-export async function repairInventoryFollowupQueue(params: {
-  db: Db;
-  queue: Queue<InventoryFollowupQueueMessage>;
-  log: Logger;
-  now: Date;
-}): Promise<number> {
-  const staleBefore = new Date(params.now.getTime() - INVENTORY_FOLLOWUP_REPAIR_STALE_MS);
-  const nowIso = params.now.toISOString();
-  const staleBeforeIso = staleBefore.toISOString();
-  const jobs = await params.db
-    .select({ id: inventoryFollowupJobs.id, status: inventoryFollowupJobs.status })
-    .from(inventoryFollowupJobs)
-    .where(
-      or(
-        and(
-          eq(inventoryFollowupJobs.status, "pending"),
-          lte(inventoryFollowupJobs.updatedAt, staleBeforeIso),
-        ),
-        and(
-          eq(inventoryFollowupJobs.status, "failed"),
-          lte(inventoryFollowupJobs.updatedAt, staleBeforeIso),
-          sql`${inventoryFollowupJobs.attemptCount} < ${INVENTORY_FOLLOWUP_MAX_ATTEMPTS}`,
-        ),
-      ),
-    )
-    .limit(INVENTORY_FOLLOWUP_REPAIR_BATCH_SIZE)
-    .all();
-
-  let enqueued = 0;
-  for (const job of jobs) {
-    try {
-      await params.queue.send({ jobId: job.id });
-      await params.db
-        .update(inventoryFollowupJobs)
-        .set({ updatedAt: nowIso })
-        .where(eq(inventoryFollowupJobs.id, job.id));
-      await resolveJobFailure({
-        db: params.db,
-        jobType: "inventory_followup",
-        relatedId: job.id,
-        jobKey: "repair",
-      });
-      enqueued++;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      params.log.error("failed to repair inventory follow-up queue", {
-        jobId: job.id,
-        status: job.status,
-        error,
-      });
-      await recordJobFailure({
-        db: params.db,
-        jobType: "inventory_followup",
-        relatedId: job.id,
-        jobKey: "repair",
-        errorMessage,
-      });
-    }
-  }
-
-  return enqueued;
-}
+export { repairInventoryFollowupQueue } from "./inventory-followup-queue";
 
 export default class PipelineWorker extends WorkerEntrypoint {
   private captureWorkerEvent(event: string, properties: Record<string, unknown> = {}) {
@@ -489,20 +294,7 @@ export default class PipelineWorker extends WorkerEntrypoint {
         }));
         const queued = await createSourcePipelineBatch(this.env.SOURCE_PIPELINE, jobs, log);
         if (queued === jobs.length && dueSources.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const writes: any[] = dueSources.map((source) =>
-            db
-              .update(sources)
-              .set({
-                nextPollAt: computeNextPollAt({
-                  baseTime: nowIso,
-                  pollIntervalMinutes: source.pollIntervalMinutes,
-                  now: nowIso,
-                }),
-              })
-              .where(eq(sources.id, source.id)),
-          );
-          await db.batch(writes as [(typeof writes)[0], ...typeof writes]);
+          await updateNextPollAtForQueuedSources({ db, dueSources, nowIso });
         }
         const status = queued === jobs.length ? "completed" : "failed";
         const errorMessage =

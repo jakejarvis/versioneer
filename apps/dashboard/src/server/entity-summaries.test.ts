@@ -1,20 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { toAppSummary, toReleaseSummary, toSourceSummary } from "@/server/entity-summaries";
-
-import { buildAppSortDescriptors } from "./list-helpers";
-
-describe("buildAppSortDescriptors", () => {
-  it("defaults to updatedAt descending", () => {
-    expect(buildAppSortDescriptors()).toEqual([{ field: "updatedAt", dir: "desc" }]);
-  });
-
-  it("respects explicit sortable fields and direction", () => {
-    expect(buildAppSortDescriptors("canonicalName", "asc")).toEqual([
-      { field: "canonicalName", dir: "asc" },
-    ]);
-  });
-});
+import { toAppSummary, toReleaseSummary, toSourceSummary } from "./entity-summaries";
 
 describe("entity summary shaping", () => {
   it("returns nested app, source, and release summaries for enriched list rows", () => {

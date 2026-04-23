@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { z } from "zod";
 
 import { ActionIconButton } from "@/components/shared/action-icon-button";
 import { DataTable, type BulkAction } from "@/components/shared/data-table";
@@ -37,6 +36,12 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import {
+  jobTypeSchema,
+  jobsSearchDefaults,
+  jobsSearchSchema,
+  type JobsSearch,
+} from "@/features/jobs/search";
+import {
   useJobFailure,
   useJobFailures,
   useRetryJobFailure,
@@ -51,7 +56,6 @@ import {
 import {
   applyPaginationToSearch,
   applySortingToSearch,
-  paginatedSearchDefaults,
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
@@ -63,80 +67,6 @@ import {
 } from "@/lib/security-signals";
 import type { JobFailureListItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-const pageSizeSchema = z
-  .union([z.literal(25), z.literal(50), z.literal(100)])
-  .default(paginatedSearchDefaults.pageSize)
-  .catch(paginatedSearchDefaults.pageSize);
-const pageSchema = z.coerce.number().int().min(1).default(1).catch(1);
-const sortDirSchema = z.enum(["asc", "desc"]).optional();
-const jobTypeSchema = z.enum(["poll_sources", "cask_index_sync", "enrich_discovered_apps"]);
-const runJobTypeFilterSchema = z.enum([
-  "all",
-  "poll_sources",
-  "cask_index_sync",
-  "enrich_discovered_apps",
-]);
-const runTriggerFilterSchema = z.enum(["all", "manual", "scheduled"]);
-const runStatusFilterSchema = z.enum(["all", "running", "completed", "failed"]);
-const failureStatusSchema = z.enum(["open", "retrying", "resolved", "abandoned"]);
-const failureJobTypeSchema = z.enum([
-  "all",
-  "source-anomaly",
-  "source-fetch",
-  "source-parse",
-  "recompute-latest",
-  "poll_sources",
-  "cask_index_sync",
-  "enrich_discovered_apps",
-  "inventory_followup",
-]);
-
-const jobsSearchDefaults = {
-  runPage: 1,
-  runPageSize: paginatedSearchDefaults.pageSize,
-  runJobType: "all" as const,
-  runTrigger: "all" as const,
-  runStatus: "all" as const,
-  failurePage: 1,
-  failurePageSize: paginatedSearchDefaults.pageSize,
-  failureJobType: "all" as const,
-  failureStatus: "open" as const,
-  failureId: "",
-};
-
-const jobsSearchSchema = z.object({
-  runPage: pageSchema.default(jobsSearchDefaults.runPage).catch(jobsSearchDefaults.runPage),
-  runPageSize: pageSizeSchema,
-  runSortBy: z.string().optional(),
-  runSortDir: sortDirSchema,
-  runJobType: runJobTypeFilterSchema
-    .default(jobsSearchDefaults.runJobType)
-    .catch(jobsSearchDefaults.runJobType),
-  runTrigger: runTriggerFilterSchema
-    .default(jobsSearchDefaults.runTrigger)
-    .catch(jobsSearchDefaults.runTrigger),
-  runStatus: runStatusFilterSchema
-    .default(jobsSearchDefaults.runStatus)
-    .catch(jobsSearchDefaults.runStatus),
-  failurePage: pageSchema
-    .default(jobsSearchDefaults.failurePage)
-    .catch(jobsSearchDefaults.failurePage),
-  failurePageSize: pageSizeSchema,
-  failureSortBy: z.string().optional(),
-  failureSortDir: sortDirSchema,
-  failureJobType: failureJobTypeSchema
-    .default(jobsSearchDefaults.failureJobType)
-    .catch(jobsSearchDefaults.failureJobType),
-  failureStatus: failureStatusSchema
-    .default(jobsSearchDefaults.failureStatus)
-    .catch(jobsSearchDefaults.failureStatus),
-  failureId: z.string().default(jobsSearchDefaults.failureId).catch(jobsSearchDefaults.failureId),
-  tab: z.enum(["runs", "failures"]).optional(),
-  jobType: runJobTypeFilterSchema.optional(),
-});
-
-type JobsSearch = z.infer<typeof jobsSearchSchema>;
 
 export const Route = createFileRoute("/jobs/")({
   validateSearch: jobsSearchSchema,

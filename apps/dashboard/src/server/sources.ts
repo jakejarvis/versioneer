@@ -31,49 +31,10 @@ import { loadAppsByIds, toAppSummary } from "./entity-summaries";
 import { scheduleSourceFetch, scheduleSourceReparse } from "./followup-jobs";
 import { atRiskSourceCondition } from "./homepage-helpers";
 import { authMiddleware } from "./middleware";
+import { sourceFetchOrderBy, sourceOrderBy } from "./order-by";
 import { prepareSyncSourceDerivedAliasWrites } from "./source-derived-aliases";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
-
-function sourceOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
-  const direction = sortDir === "asc" ? asc : desc;
-
-  switch (sortBy) {
-    case "label":
-      return [direction(sources.label), desc(sources.updatedAt)];
-    case "sourceType":
-      return [direction(sources.sourceType), desc(sources.updatedAt)];
-    case "parserKey":
-      return [direction(sources.parserKey), desc(sources.updatedAt)];
-    case "channel":
-      return [direction(sources.channel), desc(sources.updatedAt)];
-    case "status":
-      return [direction(sources.status), desc(sources.updatedAt)];
-    case "pollIntervalMinutes":
-      return [direction(sources.pollIntervalMinutes), desc(sources.updatedAt)];
-    case "lastFetchedAt":
-      return [direction(sources.lastFetchedAt), desc(sources.updatedAt)];
-    case "lastSuccessAt":
-      return [direction(sources.lastSuccessAt), desc(sources.updatedAt)];
-    case "updatedAt":
-    default:
-      return [desc(sources.updatedAt)];
-  }
-}
-
-function sourceFetchOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
-  const direction = sortDir === "asc" ? asc : desc;
-
-  switch (sortBy) {
-    case "fetchStatus":
-      return [direction(sourceFetches.fetchStatus), desc(sourceFetches.fetchedAt)];
-    case "httpStatus":
-      return [direction(sourceFetches.httpStatus), desc(sourceFetches.fetchedAt)];
-    case "fetchedAt":
-    default:
-      return [desc(sourceFetches.fetchedAt)];
-  }
-}
 
 async function prepareAuthorityHandoffInsert(params: {
   db: Db;
