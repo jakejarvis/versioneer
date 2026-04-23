@@ -5,7 +5,7 @@ import { NotFound } from "@/components/not-found";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SITE_NAME, SITE_URL } from "@/lib/seo";
 
-import "@/styles/app.css";
+import appCss from "@/styles/app.css?url";
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -27,6 +27,7 @@ export const Route = createRootRoute({
       { name: "twitter:image:alt", content: "Versioneer app icon" },
     ],
     links: [
+      { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/site.webmanifest" },

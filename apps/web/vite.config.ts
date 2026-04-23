@@ -12,10 +12,10 @@ export default defineConfig({
       autoCodeSplitting: true,
     }),
     react(),
+    tailwindcss(),
     babel({
       presets: [reactCompilerPreset()],
     }),
-    tailwindcss(),
     process.env.NODE_ENV === "production" &&
     process.env.POSTHOG_API_KEY &&
     process.env.POSTHOG_PROJECT_ID

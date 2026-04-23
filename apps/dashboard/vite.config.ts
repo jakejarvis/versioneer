@@ -2,11 +2,11 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 import posthog from "@posthog/rollup-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import react from "@vitejs/plugin-react";
 import { defineConfig, lazyPlugins } from "vite-plus";
 
 export default defineConfig({
   plugins: [
-    tailwindcss(),
     process.env.VITEST !== "true"
       ? lazyPlugins(() => [
           cloudflare({
@@ -18,6 +18,8 @@ export default defineConfig({
           tanstackStart(),
         ])
       : [],
+    react(),
+    tailwindcss(),
     process.env.NODE_ENV === "production" &&
     process.env.POSTHOG_API_KEY &&
     process.env.POSTHOG_PROJECT_ID
