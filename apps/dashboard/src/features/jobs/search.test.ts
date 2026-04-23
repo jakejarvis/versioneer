@@ -1,38 +1,58 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { jobsFailureSearch, jobsSearchDefaults, jobsSearchSchema } from "./search";
+import {
+  jobsFailuresSearch,
+  jobsFailuresSearchDefaults,
+  jobsFailuresSearchSchema,
+  jobsRunsSearch,
+  jobsRunsSearchDefaults,
+  jobsRunsSearchSchema,
+} from "./search";
 
 describe("jobs search defaults", () => {
-  it("preserves the existing failure-link search object", () => {
-    expect(jobsFailureSearch).toEqual({
-      runPage: jobsSearchDefaults.runPage,
-      runPageSize: jobsSearchDefaults.runPageSize,
-      runJobType: jobsSearchDefaults.runJobType,
-      runTrigger: jobsSearchDefaults.runTrigger,
-      runStatus: jobsSearchDefaults.runStatus,
-      failurePage: jobsSearchDefaults.failurePage,
-      failurePageSize: jobsSearchDefaults.failurePageSize,
-      failureJobType: jobsSearchDefaults.failureJobType,
-      failureStatus: jobsSearchDefaults.failureStatus,
-      failureId: jobsSearchDefaults.failureId,
+  it("preserves the runs link search object", () => {
+    expect(jobsRunsSearch).toEqual({
+      page: jobsRunsSearchDefaults.page,
+      pageSize: jobsRunsSearchDefaults.pageSize,
+      jobType: jobsRunsSearchDefaults.jobType,
+      trigger: jobsRunsSearchDefaults.trigger,
+      status: jobsRunsSearchDefaults.status,
     });
   });
 
-  it("uses the current defaults when search params are omitted or invalid", () => {
-    expect(jobsSearchSchema.parse({})).toMatchObject(jobsSearchDefaults);
+  it("preserves the failures link search object", () => {
+    expect(jobsFailuresSearch).toEqual({
+      page: jobsFailuresSearchDefaults.page,
+      pageSize: jobsFailuresSearchDefaults.pageSize,
+      jobType: jobsFailuresSearchDefaults.jobType,
+      status: jobsFailuresSearchDefaults.status,
+      failureId: jobsFailuresSearchDefaults.failureId,
+    });
+  });
+
+  it("uses the current run defaults when search params are omitted or invalid", () => {
+    expect(jobsRunsSearchSchema.parse({})).toEqual(jobsRunsSearch);
     expect(
-      jobsSearchSchema.parse({
-        runPage: 0,
-        runPageSize: 999,
-        runJobType: "nope",
-        runTrigger: "sometimes",
-        runStatus: "broken",
-        failurePage: -4,
-        failurePageSize: 999,
-        failureJobType: "bad",
-        failureStatus: "closed",
+      jobsRunsSearchSchema.parse({
+        page: 0,
+        pageSize: 999,
+        jobType: "nope",
+        trigger: "sometimes",
+        status: "broken",
+      }),
+    ).toEqual(jobsRunsSearch);
+  });
+
+  it("uses the current failure defaults when search params are omitted or invalid", () => {
+    expect(jobsFailuresSearchSchema.parse({})).toEqual(jobsFailuresSearch);
+    expect(
+      jobsFailuresSearchSchema.parse({
+        page: -4,
+        pageSize: 999,
+        jobType: "bad",
+        status: "closed",
         failureId: 7,
       }),
-    ).toMatchObject(jobsSearchDefaults);
+    ).toEqual(jobsFailuresSearch);
   });
 });

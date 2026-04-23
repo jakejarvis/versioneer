@@ -8,8 +8,8 @@ const pageSizeSchema = z
   .catch(paginatedSearchDefaults.pageSize);
 const pageSchema = z.coerce.number().int().min(1).default(1).catch(1);
 const sortDirSchema = z.enum(["asc", "desc"]).optional();
-export const jobTypeSchema = z.enum(["poll_sources", "cask_index_sync", "enrich_discovered_apps"]);
 
+export const jobTypeSchema = z.enum(["poll_sources", "cask_index_sync", "enrich_discovered_apps"]);
 export const runJobTypeFilterSchema = z.enum([
   "all",
   "poll_sources",
@@ -28,77 +28,78 @@ export const failureJobTypeSchema = z.enum([
   "poll_sources",
   "cask_index_sync",
   "enrich_discovered_apps",
-  "inventory_followup",
+  "inventory_ingestion",
 ]);
 
-export const jobsSearchDefaults = {
-  runPage: 1,
-  runPageSize: paginatedSearchDefaults.pageSize,
-  runJobType: "all" as const,
-  runTrigger: "all" as const,
-  runStatus: "all" as const,
-  failurePage: 1,
-  failurePageSize: paginatedSearchDefaults.pageSize,
-  failureJobType: "all" as const,
-  failureStatus: "open" as const,
+export const jobsRunsSearchDefaults = {
+  page: 1,
+  pageSize: paginatedSearchDefaults.pageSize,
+  sortBy: undefined as string | undefined,
+  sortDir: undefined as "asc" | "desc" | undefined,
+  jobType: "all" as const,
+  trigger: "all" as const,
+  status: "all" as const,
+};
+
+export const jobsRunsSearch = {
+  page: jobsRunsSearchDefaults.page,
+  pageSize: jobsRunsSearchDefaults.pageSize,
+  jobType: jobsRunsSearchDefaults.jobType,
+  trigger: jobsRunsSearchDefaults.trigger,
+  status: jobsRunsSearchDefaults.status,
+} as const;
+
+export const jobsRunsSearchSchema = z.object({
+  page: pageSchema.default(jobsRunsSearchDefaults.page).catch(jobsRunsSearchDefaults.page),
+  pageSize: pageSizeSchema,
+  sortBy: z.string().optional(),
+  sortDir: sortDirSchema,
+  jobType: runJobTypeFilterSchema
+    .default(jobsRunsSearchDefaults.jobType)
+    .catch(jobsRunsSearchDefaults.jobType),
+  trigger: runTriggerFilterSchema
+    .default(jobsRunsSearchDefaults.trigger)
+    .catch(jobsRunsSearchDefaults.trigger),
+  status: runStatusFilterSchema
+    .default(jobsRunsSearchDefaults.status)
+    .catch(jobsRunsSearchDefaults.status),
+});
+
+export type JobsRunsSearch = z.infer<typeof jobsRunsSearchSchema>;
+
+export const jobsFailuresSearchDefaults = {
+  page: 1,
+  pageSize: paginatedSearchDefaults.pageSize,
+  sortBy: undefined as string | undefined,
+  sortDir: undefined as "asc" | "desc" | undefined,
+  jobType: "all" as const,
+  status: "open" as const,
   failureId: "",
 };
 
-export const jobsFailureSearch = {
-  runPage: jobsSearchDefaults.runPage,
-  runPageSize: jobsSearchDefaults.runPageSize,
-  runJobType: jobsSearchDefaults.runJobType,
-  runTrigger: jobsSearchDefaults.runTrigger,
-  runStatus: jobsSearchDefaults.runStatus,
-  failurePage: jobsSearchDefaults.failurePage,
-  failurePageSize: jobsSearchDefaults.failurePageSize,
-  failureJobType: jobsSearchDefaults.failureJobType,
-  failureStatus: jobsSearchDefaults.failureStatus,
-  failureId: jobsSearchDefaults.failureId,
+export const jobsFailuresSearch = {
+  page: jobsFailuresSearchDefaults.page,
+  pageSize: jobsFailuresSearchDefaults.pageSize,
+  jobType: jobsFailuresSearchDefaults.jobType,
+  status: jobsFailuresSearchDefaults.status,
+  failureId: jobsFailuresSearchDefaults.failureId,
 } as const;
 
-export const jobsRunsSearch = {
-  runPage: jobsSearchDefaults.runPage,
-  runPageSize: jobsSearchDefaults.runPageSize,
-  runJobType: jobsSearchDefaults.runJobType,
-  runTrigger: jobsSearchDefaults.runTrigger,
-  runStatus: jobsSearchDefaults.runStatus,
-  failurePage: jobsSearchDefaults.failurePage,
-  failurePageSize: jobsSearchDefaults.failurePageSize,
-  failureJobType: jobsSearchDefaults.failureJobType,
-  failureStatus: jobsSearchDefaults.failureStatus,
-  failureId: jobsSearchDefaults.failureId,
-} as const;
-
-export const jobsSearchSchema = z.object({
-  runPage: pageSchema.default(jobsSearchDefaults.runPage).catch(jobsSearchDefaults.runPage),
-  runPageSize: pageSizeSchema,
-  runSortBy: z.string().optional(),
-  runSortDir: sortDirSchema,
-  runJobType: runJobTypeFilterSchema
-    .default(jobsSearchDefaults.runJobType)
-    .catch(jobsSearchDefaults.runJobType),
-  runTrigger: runTriggerFilterSchema
-    .default(jobsSearchDefaults.runTrigger)
-    .catch(jobsSearchDefaults.runTrigger),
-  runStatus: runStatusFilterSchema
-    .default(jobsSearchDefaults.runStatus)
-    .catch(jobsSearchDefaults.runStatus),
-  failurePage: pageSchema
-    .default(jobsSearchDefaults.failurePage)
-    .catch(jobsSearchDefaults.failurePage),
-  failurePageSize: pageSizeSchema,
-  failureSortBy: z.string().optional(),
-  failureSortDir: sortDirSchema,
-  failureJobType: failureJobTypeSchema
-    .default(jobsSearchDefaults.failureJobType)
-    .catch(jobsSearchDefaults.failureJobType),
-  failureStatus: failureStatusSchema
-    .default(jobsSearchDefaults.failureStatus)
-    .catch(jobsSearchDefaults.failureStatus),
-  failureId: z.string().default(jobsSearchDefaults.failureId).catch(jobsSearchDefaults.failureId),
-  tab: z.enum(["runs", "failures"]).optional(),
-  jobType: runJobTypeFilterSchema.optional(),
+export const jobsFailuresSearchSchema = z.object({
+  page: pageSchema.default(jobsFailuresSearchDefaults.page).catch(jobsFailuresSearchDefaults.page),
+  pageSize: pageSizeSchema,
+  sortBy: z.string().optional(),
+  sortDir: sortDirSchema,
+  jobType: failureJobTypeSchema
+    .default(jobsFailuresSearchDefaults.jobType)
+    .catch(jobsFailuresSearchDefaults.jobType),
+  status: failureStatusSchema
+    .default(jobsFailuresSearchDefaults.status)
+    .catch(jobsFailuresSearchDefaults.status),
+  failureId: z
+    .string()
+    .default(jobsFailuresSearchDefaults.failureId)
+    .catch(jobsFailuresSearchDefaults.failureId),
 });
 
-export type JobsSearch = z.infer<typeof jobsSearchSchema>;
+export type JobsFailuresSearch = z.infer<typeof jobsFailuresSearchSchema>;

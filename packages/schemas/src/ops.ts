@@ -20,15 +20,15 @@ export const cronRunStatusValues = ["running", "completed", "failed"] as const;
 export const cronRunStatusSchema = z.enum(cronRunStatusValues);
 export type CronRunStatus = z.infer<typeof cronRunStatusSchema>;
 
-export const inventoryFollowupJobStatusValues = [
+export const inventoryIngestionJobStatusValues = [
   "pending",
   "queued",
   "running",
   "completed",
   "failed",
 ] as const;
-export const inventoryFollowupJobStatusSchema = z.enum(inventoryFollowupJobStatusValues);
-export type InventoryFollowupJobStatus = z.infer<typeof inventoryFollowupJobStatusSchema>;
+export const inventoryIngestionJobStatusSchema = z.enum(inventoryIngestionJobStatusValues);
+export type InventoryIngestionJobStatus = z.infer<typeof inventoryIngestionJobStatusSchema>;
 
 export const executionRouteValues = [
   "sparkle",

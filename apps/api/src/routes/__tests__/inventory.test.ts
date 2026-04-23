@@ -5,11 +5,11 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { inventoryMatchSnapshotKey } from "@versioneer/core/cache";
 import {
-  inventoryFollowupPayloadSchema,
-  type InventoryFollowupQueueMessage,
+  inventoryIngestionPayloadSchema,
+  type InventoryIngestionQueueMessage,
 } from "@versioneer/core/pipeline";
 import { normalizeVersion } from "@versioneer/core/versioning";
-import { discoveredApps, inventoryFollowupJobs, jobFailures } from "@versioneer/db";
+import { discoveredApps, inventoryIngestionJobs, jobFailures } from "@versioneer/db";
 
 import {
   getDb,
@@ -26,34 +26,53 @@ import { seedInventoryCatalog } from "./fixtures/inventory-seed";
 
 type InventoryResponse = {
   results: Array<{
-    appName: string;
-    bundleId: string | null;
-    decision: string;
-    trackingState: string;
-    localReasonCode: string | null;
-    matchedAppId: string | null;
-    matchedAppName: string | null;
-    matchConfidence: number | null;
-    latestVersion: string | null;
-    latestReleaseId: string | null;
-    targetArchitecture: string | null;
-    homebrewCaskToken?: string | null;
-    artifact: {
-      id: string;
-      downloadUrl: string;
-      architecture: string | null;
-      artifactType: string | null;
-    } | null;
-    installStrategy: string | null;
-    installTrust: {
-      status: "one_click" | "manual_only" | "external" | "none";
-      resolvedStrategy: string | null;
-      reasons: string[];
+    app: {
+      name: string;
+      bundleId: string | null;
+      installedVersion: string | null;
     };
-    staleSince: string | null;
-    channel: string | null;
+    decision: string;
+    catalog: {
+      match: {
+        appId: string | null;
+        appName: string | null;
+        confidence: number | null;
+      };
+      trackingState: string;
+      localReasonCode: string | null;
+      iconUrl: string | null;
+      staleSince: string | null;
+    };
+    release: {
+      version: string | null;
+      versionRaw: string | null;
+      releaseId: string | null;
+      releasedAt: string | null;
+      targetArchitecture: string | null;
+      artifact: {
+        id: string;
+        downloadUrl: string;
+        architecture: string | null;
+        artifactType: string | null;
+      } | null;
+    };
+    install: {
+      strategy: string | null;
+      homebrewCaskToken?: string | null;
+      trust: {
+        status: "one_click" | "manual_only" | "external" | "none";
+        resolvedStrategy: string | null;
+        reasons: string[];
+      };
+    };
+    channels: {
+      selected: string | null;
+      available: string[];
+    };
   }>;
-  skipped?: Array<{ index: number; appName: string | null; reasons: string[] }>;
+  issues: {
+    invalidApps: Array<{ index: number; appName: string | null; reasons: string[] }>;
+  };
   processedAt: string;
 };
 
@@ -117,14 +136,14 @@ let catalog: Awaited<ReturnType<typeof seedInventoryCatalog>>;
 const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
 const TEST_ICON_BASE64 = btoa("test-icon");
 
-function createInventoryFollowupQueueMock() {
-  const send = vi.fn<(message: InventoryFollowupQueueMessage) => Promise<QueueSendResponse>>(
+function createInventoryIngestionQueueMock() {
+  const send = vi.fn<(message: InventoryIngestionQueueMessage) => Promise<QueueSendResponse>>(
     async () => ({
       metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
     }),
   );
   return {
-    queue: { send } as unknown as Queue<InventoryFollowupQueueMessage>,
+    queue: { send } as unknown as Queue<InventoryIngestionQueueMessage>,
     send,
   };
 }
@@ -229,15 +248,15 @@ describe("POST /v1/inventory/check", () => {
     expect(body.results).toHaveLength(1);
     const result = body.results[0]!;
     expect(result.decision).toBe("up_to_date");
-    expect(result.trackingState).toBe("public");
-    expect(result.matchedAppId).toBe(catalog.appA.id);
-    expect(result.latestVersion).toBe("130.0");
-    expect(result.targetArchitecture).toBe("arm64");
-    expect(result.artifact).not.toBeNull();
-    expect(result.installStrategy).toBeNull();
-    expect(result.installTrust.status).toBe("none");
-    expect(result.homebrewCaskToken).toBe("firefox");
-    expect(result.localReasonCode).toBeNull();
+    expect(result.catalog.trackingState).toBe("public");
+    expect(result.catalog.match.appId).toBe(catalog.appA.id);
+    expect(result.release.version).toBe("130.0");
+    expect(result.release.targetArchitecture).toBe("arm64");
+    expect(result.release.artifact).not.toBeNull();
+    expect(result.install.strategy).toBeNull();
+    expect(result.install.trust.status).toBe("none");
+    expect(result.install.homebrewCaskToken).toBe("firefox");
+    expect(result.catalog.localReasonCode).toBeNull();
     expect(await env.CACHE_KV.get(inventoryMatchSnapshotKey())).not.toBeNull();
   });
 
@@ -256,9 +275,9 @@ describe("POST /v1/inventory/check", () => {
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("update_available");
-    expect(result.latestVersion).toBe("130.0");
-    expect(result.installStrategy).toBe("dmg_copy_replace");
-    expect(result.installTrust).toEqual({
+    expect(result.release.version).toBe("130.0");
+    expect(result.install.strategy).toBe("dmg_copy_replace");
+    expect(result.install.trust).toEqual({
       status: "one_click",
       resolvedStrategy: "dmg_copy_replace",
       reasons: [],
@@ -273,11 +292,13 @@ describe("POST /v1/inventory/check", () => {
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("update_available");
-    expect(result.latestVersion).toBe("130.0");
-    expect(result.artifact?.downloadUrl).toBe("https://download.mozilla.org/firefox-130.0.dmg");
-    expect(result.installStrategy).toBeNull();
-    expect(result.installTrust.status).toBe("manual_only");
-    expect(result.installTrust.reasons).toEqual(["missing_team_id"]);
+    expect(result.release.version).toBe("130.0");
+    expect(result.release.artifact?.downloadUrl).toBe(
+      "https://download.mozilla.org/firefox-130.0.dmg",
+    );
+    expect(result.install.strategy).toBeNull();
+    expect(result.install.trust.status).toBe("manual_only");
+    expect(result.install.trust.reasons).toEqual(["missing_team_id"]);
   });
 
   it("keeps one-click install enabled when only the catalog hash is missing", async () => {
@@ -340,8 +361,8 @@ describe("POST /v1/inventory/check", () => {
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("update_available");
-    expect(result.installStrategy).toBe("dmg_copy_replace");
-    expect(result.installTrust).toEqual({
+    expect(result.install.strategy).toBe("dmg_copy_replace");
+    expect(result.install.trust).toEqual({
       status: "one_click",
       resolvedStrategy: "dmg_copy_replace",
       reasons: ["missing_sha256"],
@@ -400,8 +421,8 @@ describe("POST /v1/inventory/check", () => {
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("update_available");
-    expect(result.installStrategy).toBe("sparkle");
-    expect(result.installTrust).toEqual({
+    expect(result.install.strategy).toBe("sparkle");
+    expect(result.install.trust).toEqual({
       status: "one_click",
       resolvedStrategy: "sparkle",
       reasons: ["missing_sparkle_public_key"],
@@ -423,8 +444,8 @@ describe("POST /v1/inventory/check", () => {
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("update_available");
-    expect(result.installStrategy).toBeNull();
-    expect(result.installTrust).toEqual({
+    expect(result.install.strategy).toBeNull();
+    expect(result.install.trust).toEqual({
       status: "external",
       resolvedStrategy: "mac_app_store",
       reasons: ["mac_app_store_external"],
@@ -449,9 +470,9 @@ describe("POST /v1/inventory/check", () => {
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("local_only");
-    expect(result.trackingState).toBe("local_only");
-    expect(result.localReasonCode).toBe("not_found");
-    expect(result.matchedAppId).toBeNull();
+    expect(result.catalog.trackingState).toBe("local_only");
+    expect(result.catalog.localReasonCode).toBe("not_found");
+    expect(result.catalog.match.appId).toBeNull();
   });
 
   it("returns local_only / matched_draft for draft app", async () => {
@@ -462,7 +483,7 @@ describe("POST /v1/inventory/check", () => {
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("local_only");
-    expect(result.localReasonCode).toBe("matched_draft");
+    expect(result.catalog.localReasonCode).toBe("matched_draft");
   });
 
   it("returns local_only / no_approved_source for app without sources", async () => {
@@ -473,7 +494,7 @@ describe("POST /v1/inventory/check", () => {
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("local_only");
-    expect(result.localReasonCode).toBe("no_approved_source");
+    expect(result.catalog.localReasonCode).toBe("no_approved_source");
   });
 
   it("returns incompatible when no target-architecture latest row exists", async () => {
@@ -484,9 +505,9 @@ describe("POST /v1/inventory/check", () => {
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("incompatible");
-    expect(result.trackingState).toBe("public");
-    expect(result.localReasonCode).toBe("no_compatible_release");
-    expect(result.targetArchitecture).toBe("x86_64");
+    expect(result.catalog.trackingState).toBe("public");
+    expect(result.catalog.localReasonCode).toBe("no_compatible_release");
+    expect(result.release.targetArchitecture).toBe("x86_64");
   });
 
   it("returns incompatible when the latest artifact requires a newer OS", async () => {
@@ -497,7 +518,7 @@ describe("POST /v1/inventory/check", () => {
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("incompatible");
-    expect(result.localReasonCode).toBe("no_compatible_release");
+    expect(result.catalog.localReasonCode).toBe("no_compatible_release");
   });
 
   it("uses the fallback artifact install strategy when latest is unusable", async () => {
@@ -573,11 +594,11 @@ describe("POST /v1/inventory/check", () => {
     });
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
-    expect(result.latestReleaseId).toBe(fallbackRelease.id);
-    expect(result.artifact?.id).toBe(fallbackArtifact.id);
-    expect(result.artifact?.artifactType).toBe("dmg");
-    expect(result.installStrategy).toBe("dmg_copy_replace");
-    expect(result.installTrust.resolvedStrategy).toBe("dmg_copy_replace");
+    expect(result.release.releaseId).toBe(fallbackRelease.id);
+    expect(result.release.artifact?.id).toBe(fallbackArtifact.id);
+    expect(result.release.artifact?.artifactType).toBe("dmg");
+    expect(result.install.strategy).toBe("dmg_copy_replace");
+    expect(result.install.trust.resolvedStrategy).toBe("dmg_copy_replace");
   });
 
   it("returns different latest compatible releases for split arm64 and x86 clients", async () => {
@@ -594,15 +615,15 @@ describe("POST /v1/inventory/check", () => {
     const armBody = await readInventoryResponse(armRes);
     const x86Body = await readInventoryResponse(x86Res);
 
-    expect(armBody.results[0]!.latestVersion).toBe("3.0.0");
-    expect(armBody.results[0]!.latestReleaseId).toBe(catalog.releaseEArm.id);
-    expect(armBody.results[0]!.targetArchitecture).toBe("arm64");
-    expect(armBody.results[0]!.artifact?.architecture).toBe("arm64");
+    expect(armBody.results[0]!.release.version).toBe("3.0.0");
+    expect(armBody.results[0]!.release.releaseId).toBe(catalog.releaseEArm.id);
+    expect(armBody.results[0]!.release.targetArchitecture).toBe("arm64");
+    expect(armBody.results[0]!.release.artifact?.architecture).toBe("arm64");
 
-    expect(x86Body.results[0]!.latestVersion).toBe("2.5.0");
-    expect(x86Body.results[0]!.latestReleaseId).toBe(catalog.releaseEX86.id);
-    expect(x86Body.results[0]!.targetArchitecture).toBe("x86_64");
-    expect(x86Body.results[0]!.artifact?.architecture).toBe("x86_64");
+    expect(x86Body.results[0]!.release.version).toBe("2.5.0");
+    expect(x86Body.results[0]!.release.releaseId).toBe(catalog.releaseEX86.id);
+    expect(x86Body.results[0]!.release.targetArchitecture).toBe("x86_64");
+    expect(x86Body.results[0]!.release.artifact?.architecture).toBe("x86_64");
   });
 
   it("keeps unknown-architecture updates installable while flagging degraded trust", async () => {
@@ -620,17 +641,17 @@ describe("POST /v1/inventory/check", () => {
     const body = await readInventoryResponse(res);
     const result = body.results[0]!;
     expect(result.decision).toBe("update_available");
-    expect(result.latestReleaseId).toBe(catalog.releaseF.id);
-    expect(result.artifact?.architecture).toBe("unknown");
-    expect(result.installStrategy).toBe("dmg_copy_replace");
-    expect(result.installTrust).toEqual({
+    expect(result.release.releaseId).toBe(catalog.releaseF.id);
+    expect(result.release.artifact?.architecture).toBe("unknown");
+    expect(result.install.strategy).toBe("dmg_copy_replace");
+    expect(result.install.trust).toEqual({
       status: "one_click",
       resolvedStrategy: "dmg_copy_replace",
       reasons: ["unknown_architecture"],
     });
   });
 
-  it("reports skipped apps for invalid entries", async () => {
+  it("reports invalid apps through issues.invalidApps", async () => {
     const res = await postInventory({
       client: {},
       apps: [
@@ -640,9 +661,9 @@ describe("POST /v1/inventory/check", () => {
     });
     const body = await readInventoryResponse(res);
     expect(body.results).toHaveLength(1);
-    expect(body.skipped).toHaveLength(1);
-    expect(body.skipped![0]!.index).toBe(1);
-    expect(body.skipped![0]!.reasons.length).toBeGreaterThan(0);
+    expect(body.issues.invalidApps).toHaveLength(1);
+    expect(body.issues.invalidApps![0]!.index).toBe(1);
+    expect(body.issues.invalidApps![0]!.reasons.length).toBeGreaterThan(0);
   });
 
   it("persists unmatched apps to discoveredApps", async () => {
@@ -665,8 +686,8 @@ describe("POST /v1/inventory/check", () => {
     expect(rows[0]!.bundleId).toBe(uniqueBundle);
   });
 
-  it("creates a durable inventory follow-up payload, job row, and queue message", async () => {
-    const { queue, send } = createInventoryFollowupQueueMock();
+  it("creates a durable inventory ingestion payload, row, and queue message", async () => {
+    const { queue, send } = createInventoryIngestionQueueMock();
     const uniqueBundle = "com.test.followup.payload";
 
     const res = await postInventory(
@@ -688,7 +709,7 @@ describe("POST /v1/inventory/check", () => {
           },
         ],
       },
-      { INVENTORY_FOLLOWUP_QUEUE: queue } as Partial<Env>,
+      { INVENTORY_INGESTION_QUEUE: queue } as Partial<Env>,
     );
     expect(res.status).toBe(200);
     const body = await readInventoryResponse(res);
@@ -698,17 +719,17 @@ describe("POST /v1/inventory/check", () => {
     const message = send.mock.calls[0]![0];
     const job = await getDb(env.DB)
       .select()
-      .from(inventoryFollowupJobs)
-      .where(eq(inventoryFollowupJobs.id, message.jobId))
+      .from(inventoryIngestionJobs)
+      .where(eq(inventoryIngestionJobs.id, message.ingestionId))
       .get();
     expect(job).toBeDefined();
     expect(job!.status).toBe("pending");
     expect(job!.attemptCount).toBe(0);
-    expect(job!.payloadR2Key).toContain(message.jobId);
+    expect(job!.payloadR2Key).toContain(message.ingestionId);
 
     const payloadObject = await env.RAW_BUCKET.get(job!.payloadR2Key);
     expect(payloadObject).not.toBeNull();
-    const payload = inventoryFollowupPayloadSchema.parse(JSON.parse(await payloadObject!.text()));
+    const payload = inventoryIngestionPayloadSchema.parse(JSON.parse(await payloadObject!.text()));
     expect(payload.discoveredIconCandidates).toEqual([
       expect.objectContaining({
         lookupKey: `bid:${uniqueBundle}`,
@@ -726,13 +747,13 @@ describe("POST /v1/inventory/check", () => {
     ]);
   });
 
-  it("returns the inventory response when follow-up queue send fails", async () => {
-    const send = vi.fn<(message: InventoryFollowupQueueMessage) => Promise<QueueSendResponse>>(
+  it("returns the inventory response when ingestion queue send fails", async () => {
+    const send = vi.fn<(message: InventoryIngestionQueueMessage) => Promise<QueueSendResponse>>(
       async () => {
         throw new Error("queue unavailable");
       },
     );
-    const queue = { send } as unknown as Queue<InventoryFollowupQueueMessage>;
+    const queue = { send } as unknown as Queue<InventoryIngestionQueueMessage>;
     const res = await postInventory(
       {
         client: { osVersion: "15.0", systemArchitecture: "arm64" },
@@ -745,28 +766,28 @@ describe("POST /v1/inventory/check", () => {
           },
         ],
       },
-      { INVENTORY_FOLLOWUP_QUEUE: queue } as Partial<Env>,
+      { INVENTORY_INGESTION_QUEUE: queue } as Partial<Env>,
     );
 
     expect(res.status).toBe(200);
     const body = await readInventoryResponse(res);
     expect(body.results).toHaveLength(1);
     expect(send).toHaveBeenCalledTimes(1);
-    const jobId = send.mock.calls[0]![0].jobId;
+    const ingestionId = send.mock.calls[0]![0].ingestionId;
 
     const job = await getDb(env.DB)
       .select()
-      .from(inventoryFollowupJobs)
-      .where(eq(inventoryFollowupJobs.id, jobId))
+      .from(inventoryIngestionJobs)
+      .where(eq(inventoryIngestionJobs.id, ingestionId))
       .get();
     expect(job?.status).toBe("pending");
 
     const failure = await getDb(env.DB)
       .select()
       .from(jobFailures)
-      .where(eq(jobFailures.relatedId, jobId))
+      .where(eq(jobFailures.relatedId, ingestionId))
       .get();
-    expect(failure?.jobType).toBe("inventory_followup");
+    expect(failure?.jobType).toBe("inventory_ingestion");
     expect(failure?.jobKey).toBe("enqueue");
     expect(failure?.errorMessage).toContain("queue unavailable");
   });
@@ -784,7 +805,7 @@ describe("POST /v1/inventory/check", () => {
 
     const body = await readInventoryResponse(res);
     expect(body.results).toHaveLength(submittedApps.length);
-    expect(body.skipped ?? []).toHaveLength(0);
+    expect(body.issues.invalidApps ?? []).toHaveLength(0);
 
     const lookupKeys = submittedApps.map((submitted) => `bid:${submitted.bundleId}`);
     const rows = await selectDiscoveredByLookupKeys(lookupKeys);
@@ -807,7 +828,7 @@ describe("POST /v1/inventory/check", () => {
     for (const res of responses) {
       const body = await readInventoryResponse(res);
       expect(body.results).toHaveLength(submittedApps.length);
-      expect(body.skipped ?? []).toHaveLength(0);
+      expect(body.issues.invalidApps ?? []).toHaveLength(0);
     }
 
     const lookupKeys = submittedApps.map((submitted) => `bid:${submitted.bundleId}`);

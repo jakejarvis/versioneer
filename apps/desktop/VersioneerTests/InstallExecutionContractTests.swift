@@ -7,37 +7,47 @@ struct InstallExecutionContractTests {
   @Test func decodesPrepareResponseAndEncodesStatusPayload() throws {
     let prepareJson = """
       {
-        "executionId": "exec_123",
-        "status": "prepared"
+        "execution": {
+          "id": "exec_123",
+          "status": "prepared"
+        }
       }
       """
     let prepare = try JSONDecoder().decode(
-      InstallPrepareResponse.self, from: Data(prepareJson.utf8))
+      InstallExecutionCreateResponse.self, from: Data(prepareJson.utf8))
 
-    #expect(prepare.executionId == "exec_123")
-    #expect(prepare.status == "prepared")
+    #expect(prepare.execution.id == "exec_123")
+    #expect(prepare.execution.status == "prepared")
 
-    let payload = InstallExecutionStatusRequest(
+    let payload = InstallExecutionEventRequest(
       client: .init(
         platform: "macos",
         appVersion: "1.0.0",
         osVersion: "15.4",
         systemArchitecture: "arm64",
-        channelPreferences: nil
+        channels: nil
       ),
-      appId: "app_firefox",
-      releaseId: "rel_firefox",
-      artifactId: "art_firefox",
-      targetArchitecture: "arm64",
-      installStrategy: "zip_replace",
-      executionRoute: "local_replace",
-      channel: "stable",
-      previousVersion: "126.0",
-      installedVersion: "127.0",
-      bundleId: "org.mozilla.firefox",
-      teamId: "43AQ936H96",
-      status: "succeeded",
-      errorMessage: nil,
+      target: .init(
+        appId: "app_firefox",
+        releaseId: "rel_firefox",
+        artifactId: "art_firefox",
+        targetArchitecture: "arm64",
+        channel: "stable"
+      ),
+      install: .init(
+        strategy: "zip_replace",
+        executionRoute: "local_replace"
+      ),
+      expected: .init(
+        previousVersion: "126.0",
+        bundleId: "org.mozilla.firefox",
+        teamId: "43AQ936H96"
+      ),
+      event: .init(
+        status: "succeeded",
+        installedVersion: "127.0",
+        errorMessage: nil
+      ),
       verification: .init(
         strategy: "zip_replace",
         executionRoute: "local_replace",
@@ -58,11 +68,11 @@ struct InstallExecutionContractTests {
       JSONSerialization.jsonObject(with: encoded) as? [String: Any]
     )
 
-    #expect(json["status"] as? String == "succeeded")
-    #expect(json["executionRoute"] as? String == "local_replace")
-    #expect(json["installStrategy"] as? String == "zip_replace")
-    #expect(json["targetArchitecture"] as? String == "arm64")
-    #expect(json["previousVersion"] as? String == "126.0")
+    #expect((json["event"] as? [String: Any])?["status"] as? String == "succeeded")
+    #expect((json["install"] as? [String: Any])?["executionRoute"] as? String == "local_replace")
+    #expect((json["install"] as? [String: Any])?["strategy"] as? String == "zip_replace")
+    #expect((json["target"] as? [String: Any])?["targetArchitecture"] as? String == "arm64")
+    #expect((json["expected"] as? [String: Any])?["previousVersion"] as? String == "126.0")
     #expect((json["verification"] as? [String: Any])?["signatureVerified"] as? Bool == true)
   }
 

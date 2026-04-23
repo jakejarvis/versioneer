@@ -8,21 +8,39 @@ struct InventoryDecodingTests {
     let json = """
       {
         "processedAt": "2024-06-15T10:30:00Z",
+        "issues": { "invalidApps": [] },
         "results": [
           {
-            "appName": "Firefox",
-            "bundleId": "org.mozilla.firefox",
-            "installedVersion": "126.0",
-            "matchedAppId": "app_xyz",
-            "matchedAppName": "Mozilla Firefox",
-            "matchConfidence": 95.0,
+            "app": {
+              "name": "Firefox",
+              "bundleId": "org.mozilla.firefox",
+              "installedVersion": "126.0"
+            },
             "decision": "up_to_date",
-            "trackingState": "public",
-            "localReasonCode": null,
-            "latestVersion": "126.0",
-            "latestVersionRaw": "126.0",
-            "releasedAt": "2024-06-10T00:00:00Z",
-            "artifact": null
+            "catalog": {
+              "match": {
+                "appId": "app_xyz",
+                "appName": "Mozilla Firefox",
+                "confidence": 95.0
+              },
+              "trackingState": "public",
+              "localReasonCode": null,
+              "iconUrl": null,
+              "staleSince": null
+            },
+            "release": {
+              "version": "126.0",
+              "versionRaw": "126.0",
+              "releaseId": null,
+              "releasedAt": "2024-06-10T00:00:00Z",
+              "targetArchitecture": null,
+              "artifact": null
+            },
+            "install": {
+              "strategy": null,
+              "trust": { "status": "none", "resolvedStrategy": null, "reasons": [] }
+            },
+            "channels": { "selected": "stable", "available": ["stable"] }
           }
         ]
       }
@@ -49,21 +67,35 @@ struct InventoryDecodingTests {
     let json = """
       {
         "processedAt": "2024-06-15T10:30:00Z",
+        "issues": { "invalidApps": [] },
         "results": [
           {
-            "appName": "SomeApp",
-            "bundleId": null,
-            "installedVersion": null,
-            "matchedAppId": null,
-            "matchedAppName": null,
-            "matchConfidence": null,
+            "app": {
+              "name": "SomeApp",
+              "bundleId": null,
+              "installedVersion": null
+            },
             "decision": "local_only",
-            "trackingState": "local_only",
-            "localReasonCode": "not_found",
-            "latestVersion": null,
-            "latestVersionRaw": null,
-            "releasedAt": null,
-            "artifact": null
+            "catalog": {
+              "match": { "appId": null, "appName": null, "confidence": null },
+              "trackingState": "local_only",
+              "localReasonCode": "not_found",
+              "iconUrl": null,
+              "staleSince": null
+            },
+            "release": {
+              "version": null,
+              "versionRaw": null,
+              "releaseId": null,
+              "releasedAt": null,
+              "targetArchitecture": null,
+              "artifact": null
+            },
+            "install": {
+              "strategy": null,
+              "trust": { "status": "none", "resolvedStrategy": null, "reasons": [] }
+            },
+            "channels": { "selected": null, "available": [] }
           }
         ]
       }
@@ -108,21 +140,35 @@ struct InventoryDecodingTests {
       let json = """
         {
           "processedAt": "2024-01-01T00:00:00Z",
+          "issues": { "invalidApps": [] },
           "results": [
             {
-              "appName": "Test",
-              "bundleId": null,
-              "installedVersion": null,
-              "matchedAppId": null,
-              "matchedAppName": null,
-              "matchConfidence": null,
+              "app": {
+                "name": "Test",
+                "bundleId": null,
+                "installedVersion": null
+              },
               "decision": "\(decisionStr)",
-              "trackingState": "\(trackingState)",
-              "localReasonCode": \(localReasonCode.map { "\"\($0)\"" } ?? "null"),
-              "latestVersion": null,
-              "latestVersionRaw": null,
-              "releasedAt": null,
-              "artifact": null
+              "catalog": {
+                "match": { "appId": null, "appName": null, "confidence": null },
+                "trackingState": "\(trackingState)",
+                "localReasonCode": \(localReasonCode.map { "\"\($0)\"" } ?? "null"),
+                "iconUrl": null,
+                "staleSince": null
+              },
+              "release": {
+                "version": null,
+                "versionRaw": null,
+                "releaseId": null,
+                "releasedAt": null,
+                "targetArchitecture": null,
+                "artifact": null
+              },
+              "install": {
+                "strategy": null,
+                "trust": { "status": "none", "resolvedStrategy": null, "reasons": [] }
+              },
+              "channels": { "selected": null, "available": [] }
             }
           ]
         }
@@ -144,7 +190,7 @@ struct InventoryDecodingTests {
         appVersion: "1.0",
         osVersion: "14.5",
         systemArchitecture: "arm64",
-        channelPreferences: nil
+        channels: nil
       ),
       apps: [
         .init(

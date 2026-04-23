@@ -8,38 +8,52 @@ struct APIContractAlignmentTests {
     let json = """
       {
         "processedAt": "2026-03-26T18:00:00Z",
+        "issues": { "invalidApps": [] },
         "results": [
           {
-            "appName": "Firefox",
-            "bundleId": "org.mozilla.firefox",
-            "installedVersion": "126.0",
-            "matchedAppId": "app_firefox",
-            "matchedAppName": "Mozilla Firefox",
-            "matchConfidence": 98.0,
-            "decision": "update_available",
-            "trackingState": "public",
-            "localReasonCode": null,
-            "latestVersion": "127.0",
-            "latestVersionRaw": "127.0",
-            "latestReleaseId": "rel_firefox",
-            "targetArchitecture": "arm64",
-            "releasedAt": "2026-03-20T12:00:00Z",
-            "iconUrl": "https://assets.example.com/firefox.png",
-            "artifact": {
-              "id": "artifact_firefox",
-              "downloadUrl": "https://example.com/firefox.zip",
-              "architecture": "universal",
-              "minOsVersion": "13.0",
-              "artifactType": "zip",
-              "sizeBytes": 182452384,
-              "sha256": "abc123"
+            "app": {
+              "name": "Firefox",
+              "bundleId": "org.mozilla.firefox",
+              "installedVersion": "126.0"
             },
-            "installStrategy": "zip_replace",
-            "installTrust": {
-              "status": "one_click",
-              "resolvedStrategy": "zip_replace",
-              "reasons": []
-            }
+            "decision": "update_available",
+            "catalog": {
+              "match": {
+                "appId": "app_firefox",
+                "appName": "Mozilla Firefox",
+                "confidence": 98.0
+              },
+              "trackingState": "public",
+              "localReasonCode": null,
+              "iconUrl": "https://assets.example.com/firefox.png",
+              "staleSince": null
+            },
+            "release": {
+              "version": "127.0",
+              "versionRaw": "127.0",
+              "releaseId": "rel_firefox",
+              "targetArchitecture": "arm64",
+              "releasedAt": "2026-03-20T12:00:00Z",
+              "artifact": {
+                "id": "artifact_firefox",
+                "downloadUrl": "https://example.com/firefox.zip",
+                "architecture": "universal",
+                "minOsVersion": "13.0",
+                "artifactType": "zip",
+                "sizeBytes": 182452384,
+                "sha256": "abc123"
+              }
+            },
+            "install": {
+              "strategy": "zip_replace",
+              "trust": {
+                "status": "one_click",
+                "resolvedStrategy": "zip_replace",
+                "reasons": []
+              },
+              "homebrewCaskToken": null
+            },
+            "channels": { "selected": "stable", "available": ["stable", "beta"] }
           }
         ]
       }
@@ -58,30 +72,31 @@ struct APIContractAlignmentTests {
     #expect(result.canInstall == true)
   }
 
-  @Test func inventoryResponseDecodesSkippedApps() throws {
+  @Test func inventoryResponseDecodesInvalidApps() throws {
     let json = """
       {
         "processedAt": "2026-04-07T12:00:00Z",
         "results": [],
-        "skipped": [
-          {
-            "index": 112,
-            "appName": "BrokenApp",
-            "reasons": ["sparkleFeedUrl: Invalid URL"]
-          }
-        ]
+        "issues": {
+          "invalidApps": [
+            {
+              "index": 112,
+              "appName": "BrokenApp",
+              "reasons": ["sparkleFeedUrl: Invalid URL"]
+            }
+          ]
+        }
       }
       """
 
     let response = try JSONDecoder().decode(InventoryCheckResponse.self, from: Data(json.utf8))
-    let skipped = try #require(response.skipped)
-    #expect(skipped.count == 1)
-    #expect(skipped[0].index == 112)
-    #expect(skipped[0].appName == "BrokenApp")
-    #expect(skipped[0].reasons == ["sparkleFeedUrl: Invalid URL"])
+    #expect(response.issues.invalidApps.count == 1)
+    #expect(response.issues.invalidApps[0].index == 112)
+    #expect(response.issues.invalidApps[0].appName == "BrokenApp")
+    #expect(response.issues.invalidApps[0].reasons == ["sparkleFeedUrl: Invalid URL"])
   }
 
-  @Test func inventoryResponseDecodesWithoutSkippedField() throws {
+  @Test func inventoryResponseRequiresIssuesField() throws {
     let json = """
       {
         "processedAt": "2026-04-07T12:00:00Z",
@@ -89,36 +104,58 @@ struct APIContractAlignmentTests {
       }
       """
 
-    let response = try JSONDecoder().decode(InventoryCheckResponse.self, from: Data(json.utf8))
-    #expect(response.skipped == nil)
+    do {
+      _ = try JSONDecoder().decode(InventoryCheckResponse.self, from: Data(json.utf8))
+      Issue.record("Expected decoding to fail when issues is missing")
+    } catch {}
   }
 
-  @Test func inventoryCompletenessAcceptsResultsPlusSkipped() throws {
+  @Test func inventoryCompletenessAcceptsResultsPlusInvalidApps() throws {
     let json = """
       {
         "processedAt": "2026-04-07T12:00:00Z",
+        "issues": {
+          "invalidApps": [
+            {
+              "index": 1,
+              "appName": "Broken App",
+              "reasons": ["appName: Required"]
+            }
+          ]
+        },
         "results": [
           {
-            "appName": "Found App",
-            "bundleId": "com.example.found",
-            "installedVersion": "1.0",
-            "matchedAppId": null,
-            "matchedAppName": null,
-            "matchConfidence": null,
+            "app": {
+              "name": "Found App",
+              "bundleId": "com.example.found",
+              "installedVersion": "1.0"
+            },
             "decision": "local_only",
-            "trackingState": "local_only",
-            "localReasonCode": "not_found",
-            "latestVersion": null,
-            "latestVersionRaw": null,
-            "releasedAt": null,
-            "artifact": null
-          }
-        ],
-        "skipped": [
-          {
-            "index": 1,
-            "appName": "Broken App",
-            "reasons": ["appName: Required"]
+            "catalog": {
+              "match": { "appId": null, "appName": null, "confidence": null },
+              "trackingState": "local_only",
+              "localReasonCode": "not_found",
+              "iconUrl": null,
+              "staleSince": null
+            },
+            "release": {
+              "version": null,
+              "versionRaw": null,
+              "releaseId": null,
+              "releasedAt": null,
+              "targetArchitecture": null,
+              "artifact": null
+            },
+            "install": {
+              "strategy": null,
+              "trust": {
+                "status": "none",
+                "resolvedStrategy": null,
+                "reasons": []
+              },
+              "homebrewCaskToken": null
+            },
+            "channels": { "selected": null, "available": [] }
           }
         ]
       }
@@ -132,21 +169,40 @@ struct APIContractAlignmentTests {
     let json = """
       {
         "processedAt": "2026-04-07T12:00:00Z",
+        "issues": { "invalidApps": [] },
         "results": [
           {
-            "appName": "Only App",
-            "bundleId": "com.example.only",
-            "installedVersion": "1.0",
-            "matchedAppId": null,
-            "matchedAppName": null,
-            "matchConfidence": null,
+            "app": {
+              "name": "Only App",
+              "bundleId": "com.example.only",
+              "installedVersion": "1.0"
+            },
             "decision": "local_only",
-            "trackingState": "local_only",
-            "localReasonCode": "not_found",
-            "latestVersion": null,
-            "latestVersionRaw": null,
-            "releasedAt": null,
-            "artifact": null
+            "catalog": {
+              "match": { "appId": null, "appName": null, "confidence": null },
+              "trackingState": "local_only",
+              "localReasonCode": "not_found",
+              "iconUrl": null,
+              "staleSince": null
+            },
+            "release": {
+              "version": null,
+              "versionRaw": null,
+              "releaseId": null,
+              "releasedAt": null,
+              "targetArchitecture": null,
+              "artifact": null
+            },
+            "install": {
+              "strategy": null,
+              "trust": {
+                "status": "none",
+                "resolvedStrategy": null,
+                "reasons": []
+              },
+              "homebrewCaskToken": null
+            },
+            "channels": { "selected": null, "available": [] }
           }
         ]
       }

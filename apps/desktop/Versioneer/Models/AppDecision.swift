@@ -2,29 +2,35 @@ import Foundation
 
 /// A single backend decision about an installed app.
 nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
-  let appName: String
-  let bundleId: String?
-  let installedVersion: String?
-  let matchedAppId: String?
-  let matchedAppName: String?
-  let matchConfidence: Double?
+  let app: AppInfo
   let decision: Decision
-  let trackingState: TrackingState
-  let localReasonCode: LocalReasonCode?
-  let latestVersion: String?
-  let latestVersionRaw: String?
-  let latestReleaseId: String?
-  let targetArchitecture: String?
-  let channel: String?
-  let availableChannels: [String]?
-  let homebrewCaskToken: String?
-  let releasedAt: String?
-  let staleSince: String?
-  let iconUrl: String?
-  let artifact: Artifact?
-  let installStrategy: InstallStrategy?
-  let installTrust: InstallTrust
+  let catalog: CatalogInfo
+  let release: ReleaseInfo
+  let install: InstallInfo
+  let channels: ChannelInfo
   let localAppID: String?
+
+  var appName: String { app.name }
+  var bundleId: String? { app.bundleId }
+  var installedVersion: String? { app.installedVersion }
+  var matchedAppId: String? { catalog.match.appID }
+  var matchedAppName: String? { catalog.match.appName }
+  var matchConfidence: Double? { catalog.match.confidence }
+  var trackingState: TrackingState { catalog.trackingState }
+  var localReasonCode: LocalReasonCode? { catalog.localReasonCode }
+  var latestVersion: String? { release.version }
+  var latestVersionRaw: String? { release.versionRaw }
+  var latestReleaseId: String? { release.releaseID }
+  var targetArchitecture: String? { release.targetArchitecture }
+  var channel: String? { channels.selected }
+  var availableChannels: [String]? { channels.available.isEmpty ? nil : channels.available }
+  var homebrewCaskToken: String? { install.homebrewCaskToken }
+  var releasedAt: String? { release.releasedAt }
+  var staleSince: String? { catalog.staleSince }
+  var iconUrl: String? { catalog.iconURL }
+  var artifact: Artifact? { release.artifact }
+  var installStrategy: InstallStrategy? { install.strategy }
+  var installTrust: InstallTrust { install.trust }
 
   var id: String {
     Self.makeID(
@@ -33,6 +39,58 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
       matchedAppId: matchedAppId,
       localAppID: localAppID
     )
+  }
+
+  struct AppInfo: Codable, Hashable, Sendable {
+    let name: String
+    let bundleId: String?
+    let installedVersion: String?
+  }
+
+  struct CatalogInfo: Codable, Hashable, Sendable {
+    let match: Match
+    let trackingState: TrackingState
+    let localReasonCode: LocalReasonCode?
+    let iconURL: String?
+    let staleSince: String?
+
+    private enum CodingKeys: String, CodingKey {
+      case match, trackingState, localReasonCode, iconURL = "iconUrl", staleSince
+    }
+  }
+
+  struct Match: Codable, Hashable, Sendable {
+    let appID: String?
+    let appName: String?
+    let confidence: Double?
+
+    private enum CodingKeys: String, CodingKey {
+      case appID = "appId", appName, confidence
+    }
+  }
+
+  struct ReleaseInfo: Codable, Hashable, Sendable {
+    let version: String?
+    let versionRaw: String?
+    let releaseID: String?
+    let releasedAt: String?
+    let targetArchitecture: String?
+    let artifact: Artifact?
+
+    private enum CodingKeys: String, CodingKey {
+      case version, versionRaw, releaseID = "releaseId", releasedAt, targetArchitecture, artifact
+    }
+  }
+
+  struct InstallInfo: Codable, Hashable, Sendable {
+    let strategy: InstallStrategy?
+    let trust: InstallTrust
+    let homebrewCaskToken: String?
+  }
+
+  struct ChannelInfo: Codable, Hashable, Sendable {
+    let selected: String?
+    let available: [String]
   }
 
   init(
@@ -60,67 +118,55 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     installTrust: InstallTrust? = nil,
     localAppID: String? = nil
   ) {
-    self.appName = appName
-    self.bundleId = bundleId
-    self.installedVersion = installedVersion
-    self.matchedAppId = matchedAppId
-    self.matchedAppName = matchedAppName
-    self.matchConfidence = matchConfidence
+    self.app = AppInfo(name: appName, bundleId: bundleId, installedVersion: installedVersion)
     self.decision = decision
-    self.trackingState = trackingState
-    self.localReasonCode = localReasonCode
-    self.latestVersion = latestVersion
-    self.latestVersionRaw = latestVersionRaw
-    self.latestReleaseId = latestReleaseId
-    self.targetArchitecture = targetArchitecture
-    self.channel = channel
-    self.availableChannels = availableChannels
-    self.homebrewCaskToken = homebrewCaskToken
-    self.releasedAt = releasedAt
-    self.staleSince = staleSince
-    self.iconUrl = iconUrl
-    self.artifact = artifact
-    self.installStrategy = installStrategy
-    self.installTrust = installTrust ?? InstallTrust.default(for: installStrategy)
+    self.catalog = CatalogInfo(
+      match: Match(appID: matchedAppId, appName: matchedAppName, confidence: matchConfidence),
+      trackingState: trackingState,
+      localReasonCode: localReasonCode,
+      iconURL: iconUrl,
+      staleSince: staleSince
+    )
+    self.release = ReleaseInfo(
+      version: latestVersion,
+      versionRaw: latestVersionRaw,
+      releaseID: latestReleaseId,
+      releasedAt: releasedAt,
+      targetArchitecture: targetArchitecture,
+      artifact: artifact
+    )
+    self.install = InstallInfo(
+      strategy: installStrategy,
+      trust: installTrust ?? InstallTrust.default(for: installStrategy),
+      homebrewCaskToken: homebrewCaskToken
+    )
+    self.channels = ChannelInfo(selected: channel, available: availableChannels ?? [])
     self.localAppID = localAppID
   }
 
   private enum CodingKeys: String, CodingKey {
-    case appName, bundleId, installedVersion, matchedAppId, matchedAppName,
-      matchConfidence, decision, trackingState, localReasonCode, latestVersion, latestVersionRaw,
-      latestReleaseId, targetArchitecture, channel, availableChannels, homebrewCaskToken,
-      releasedAt,
-      staleSince, iconUrl,
-      artifact, installStrategy, installTrust
+    case app, decision, catalog, release, install, channels
   }
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    appName = try container.decode(String.self, forKey: .appName)
-    bundleId = try container.decodeIfPresent(String.self, forKey: .bundleId)
-    installedVersion = try container.decodeIfPresent(String.self, forKey: .installedVersion)
-    matchedAppId = try container.decodeIfPresent(String.self, forKey: .matchedAppId)
-    matchedAppName = try container.decodeIfPresent(String.self, forKey: .matchedAppName)
-    matchConfidence = try container.decodeIfPresent(Double.self, forKey: .matchConfidence)
+    app = try container.decode(AppInfo.self, forKey: .app)
     decision = try container.decode(Decision.self, forKey: .decision)
-    trackingState = try container.decode(TrackingState.self, forKey: .trackingState)
-    localReasonCode = try container.decodeIfPresent(LocalReasonCode.self, forKey: .localReasonCode)
-    latestVersion = try container.decodeIfPresent(String.self, forKey: .latestVersion)
-    latestVersionRaw = try container.decodeIfPresent(String.self, forKey: .latestVersionRaw)
-    latestReleaseId = try container.decodeIfPresent(String.self, forKey: .latestReleaseId)
-    targetArchitecture = try container.decodeIfPresent(String.self, forKey: .targetArchitecture)
-    channel = try container.decodeIfPresent(String.self, forKey: .channel)
-    availableChannels = try container.decodeIfPresent([String].self, forKey: .availableChannels)
-    homebrewCaskToken = try container.decodeIfPresent(String.self, forKey: .homebrewCaskToken)
-    releasedAt = try container.decodeIfPresent(String.self, forKey: .releasedAt)
-    staleSince = try container.decodeIfPresent(String.self, forKey: .staleSince)
-    iconUrl = try container.decodeIfPresent(String.self, forKey: .iconUrl)
-    artifact = try container.decodeIfPresent(Artifact.self, forKey: .artifact)
-    installStrategy = try container.decodeIfPresent(InstallStrategy.self, forKey: .installStrategy)
-    installTrust =
-      try container.decodeIfPresent(InstallTrust.self, forKey: .installTrust)
-      ?? InstallTrust.default(for: installStrategy)
+    catalog = try container.decode(CatalogInfo.self, forKey: .catalog)
+    release = try container.decode(ReleaseInfo.self, forKey: .release)
+    install = try container.decode(InstallInfo.self, forKey: .install)
+    channels = try container.decode(ChannelInfo.self, forKey: .channels)
     localAppID = nil
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(app, forKey: .app)
+    try container.encode(decision, forKey: .decision)
+    try container.encode(catalog, forKey: .catalog)
+    try container.encode(release, forKey: .release)
+    try container.encode(install, forKey: .install)
+    try container.encode(channels, forKey: .channels)
   }
 
   enum Decision: String, Codable, Sendable, CaseIterable {

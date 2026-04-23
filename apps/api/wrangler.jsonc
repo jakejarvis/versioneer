@@ -47,8 +47,8 @@
   "queues": {
     "producers": [
       {
-        "binding": "INVENTORY_FOLLOWUP_QUEUE",
-        "queue": "versioneer-inventory-followup-dev"
+        "binding": "INVENTORY_INGESTION_QUEUE",
+        "queue": "versioneer-inventory-ingestion-dev"
       }
     ]
   },
@@ -110,8 +110,8 @@
       "queues": {
         "producers": [
           {
-            "binding": "INVENTORY_FOLLOWUP_QUEUE",
-            "queue": "versioneer-inventory-followup-production"
+            "binding": "INVENTORY_INGESTION_QUEUE",
+            "queue": "versioneer-inventory-ingestion-production"
           }
         ]
       },

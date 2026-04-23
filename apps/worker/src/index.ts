@@ -10,10 +10,10 @@ import {
   isCaskSyncDue,
   recordJobFailure,
   resolveJobFailure,
-  inventoryFollowupQueueMessageSchema,
+  inventoryIngestionQueueMessageSchema,
 } from "@versioneer/core/pipeline";
 import type {
-  InventoryFollowupQueueMessage,
+  InventoryIngestionQueueMessage,
   SourceParseJob,
   RecomputeLatestJob,
 } from "@versioneer/core/pipeline";
@@ -23,11 +23,11 @@ import { cronJobRuns, generateId, idPrefixes } from "@versioneer/db";
 import "@versioneer/core/parsers";
 import { runEnrichmentBatch } from "./enrichment";
 import {
-  claimInventoryFollowupJob,
-  INVENTORY_FOLLOWUP_RETRY_DELAY_SECONDS,
-  markInventoryFollowupQueueFailure,
-  repairInventoryFollowupQueue,
-} from "./inventory-followup-queue";
+  claimInventoryIngestionJob,
+  INVENTORY_INGESTION_RETRY_DELAY_SECONDS,
+  markInventoryIngestionQueueFailure,
+  repairInventoryIngestionQueue,
+} from "./inventory-ingestion-queue";
 import {
   createSourcePipelineBatch,
   updateNextPollAtForQueuedSources,
@@ -35,12 +35,12 @@ import {
 
 // Re-export the Workflow class so wrangler can discover it
 export { EnrichmentDrainWorkflow } from "./workflows/enrichment-drain";
-export { InventoryFollowupWorkflow } from "./workflows/inventory-followup";
+export { InventoryIngestionWorkflow } from "./workflows/inventory-ingestion";
 export { SourcePipelineWorkflow } from "./workflows/source-pipeline";
 
 type SourcePipelineBinding = Env["SOURCE_PIPELINE"];
 type SourcePipelineCreateOptions = NonNullable<Parameters<SourcePipelineBinding["create"]>[0]>;
-export { repairInventoryFollowupQueue } from "./inventory-followup-queue";
+export { repairInventoryIngestionQueue } from "./inventory-ingestion-queue";
 
 export default class PipelineWorker extends WorkerEntrypoint {
   private captureWorkerEvent(event: string, properties: Record<string, unknown> = {}) {
@@ -134,37 +134,37 @@ export default class PipelineWorker extends WorkerEntrypoint {
   }
 
   /**
-   * RPC: re-enqueue a durable inventory follow-up job.
+   * RPC: re-enqueue a durable inventory ingestion.
    * Called via service binding from the dashboard failure queue.
    */
-  async retryInventoryFollowup(params: InventoryFollowupQueueMessage): Promise<void> {
-    const message = inventoryFollowupQueueMessageSchema.parse(params);
+  async retryInventoryIngestion(params: InventoryIngestionQueueMessage): Promise<void> {
+    const message = inventoryIngestionQueueMessageSchema.parse(params);
     try {
-      await this.env.INVENTORY_FOLLOWUP_QUEUE.send(message);
-      this.captureWorkerEvent("worker_inventory_followup_retry_queued", {
-        target_type: "inventory_followup_job",
-        target_id: message.jobId,
+      await this.env.INVENTORY_INGESTION_QUEUE.send(message);
+      this.captureWorkerEvent("worker_inventory_ingestion_retry_queued", {
+        target_type: "inventory_ingestion_job",
+        target_id: message.ingestionId,
         status: "queued",
       });
     } catch (error) {
       this.captureWorkerException(error, {
-        handler: "retryInventoryFollowup",
-        target_type: "inventory_followup_job",
-        target_id: message.jobId,
+        handler: "retryInventoryIngestion",
+        target_type: "inventory_ingestion_job",
+        target_id: message.ingestionId,
         status: "failed",
       });
       throw error;
     }
   }
 
-  async queue(batch: MessageBatch<InventoryFollowupQueueMessage>): Promise<void> {
+  async queue(batch: MessageBatch<InventoryIngestionQueueMessage>): Promise<void> {
     const db = createDb(this.env.DB);
-    const log = createLogger({ handler: "inventory_followup_queue", queue: batch.queue });
+    const log = createLogger({ handler: "inventory_ingestion_queue", queue: batch.queue });
 
     for (const message of batch.messages) {
-      const parsed = inventoryFollowupQueueMessageSchema.safeParse(message.body);
+      const parsed = inventoryIngestionQueueMessageSchema.safeParse(message.body);
       if (!parsed.success) {
-        log.error("invalid inventory follow-up queue message", {
+        log.error("invalid inventory ingestion queue message", {
           messageId: message.id,
           issues: parsed.error.issues,
         });
@@ -172,43 +172,43 @@ export default class PipelineWorker extends WorkerEntrypoint {
         continue;
       }
 
-      const { jobId } = parsed.data;
+      const { ingestionId } = parsed.data;
       try {
         const now = new Date().toISOString();
-        const claim = await claimInventoryFollowupJob({ db, jobId, now });
+        const claim = await claimInventoryIngestionJob({ db, ingestionId, now });
         if (claim.status === "skipped") {
           if (claim.reason === "missing-job") {
             await recordJobFailure({
               db,
-              jobType: "inventory_followup",
-              relatedId: jobId,
+              jobType: "inventory_ingestion",
+              relatedId: ingestionId,
               jobKey: "queue",
-              errorMessage: `Inventory follow-up job ${jobId} does not exist`,
+              errorMessage: `Inventory ingestion ${ingestionId} does not exist`,
             });
           }
-          log.info("inventory follow-up queue message skipped", {
-            jobId,
+          log.info("inventory ingestion queue message skipped", {
+            ingestionId,
             reason: claim.reason,
           });
           message.ack();
           continue;
         }
 
-        await this.env.INVENTORY_FOLLOWUP.create(claim.createOptions);
+        await this.env.INVENTORY_INGESTION.create(claim.createOptions);
         await resolveJobFailure({
           db,
-          jobType: "inventory_followup",
-          relatedId: jobId,
+          jobType: "inventory_ingestion",
+          relatedId: ingestionId,
           jobKey: "queue",
         });
-        log.info("inventory follow-up workflow queued", {
-          jobId,
+        log.info("inventory ingestion workflow queued", {
+          ingestionId,
           attemptCount: claim.attemptCount,
           workflowInstanceId: claim.workflowInstanceId,
         });
-        this.captureWorkerEvent("worker_inventory_followup_queued", {
-          target_type: "inventory_followup_job",
-          target_id: jobId,
+        this.captureWorkerEvent("worker_inventory_ingestion_queued", {
+          target_type: "inventory_ingestion_job",
+          target_id: ingestionId,
           attempt_count: claim.attemptCount,
           workflow_instance_id: claim.workflowInstanceId,
           status: "queued",
@@ -216,24 +216,27 @@ export default class PipelineWorker extends WorkerEntrypoint {
         message.ack();
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        log.error("failed to start inventory follow-up workflow", { jobId, error });
+        log.error("failed to start inventory ingestion workflow", { ingestionId, error });
         try {
-          await markInventoryFollowupQueueFailure({
+          await markInventoryIngestionQueueFailure({
             db,
-            jobId,
+            ingestionId,
             errorMessage,
             now: new Date().toISOString(),
           });
         } catch (markError) {
-          log.error("failed to mark inventory follow-up queue failure", { jobId, markError });
+          log.error("failed to mark inventory ingestion queue failure", {
+            ingestionId,
+            markError,
+          });
         }
         this.captureWorkerException(error, {
-          handler: "inventory_followup_queue",
-          target_type: "inventory_followup_job",
-          target_id: jobId,
+          handler: "inventory_ingestion_queue",
+          target_type: "inventory_ingestion_job",
+          target_id: ingestionId,
           status: "failed",
         });
-        message.retry({ delaySeconds: INVENTORY_FOLLOWUP_RETRY_DELAY_SECONDS });
+        message.retry({ delaySeconds: INVENTORY_INGESTION_RETRY_DELAY_SECONDS });
       }
     }
   }
@@ -248,22 +251,22 @@ export default class PipelineWorker extends WorkerEntrypoint {
 
     const now = new Date();
 
-    // --- Inventory Follow-up Queue Repair ---
+    // --- Inventory Ingestion Queue Repair ---
     {
       try {
-        const repaired = await repairInventoryFollowupQueue({
+        const repaired = await repairInventoryIngestionQueue({
           db,
-          queue: this.env.INVENTORY_FOLLOWUP_QUEUE,
+          queue: this.env.INVENTORY_INGESTION_QUEUE,
           log,
           now,
         });
         if (repaired > 0) {
-          log.info("inventory follow-up repair enqueued jobs", { repaired });
+          log.info("inventory ingestion repair enqueued jobs", { repaired });
         }
       } catch (error) {
-        log.error("inventory follow-up repair failed", { error });
+        log.error("inventory ingestion repair failed", { error });
         this.captureWorkerException(error, {
-          handler: "inventory_followup_repair",
+          handler: "inventory_ingestion_repair",
           status: "failed",
         });
       }

@@ -1,6 +1,7 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { ArrowUpRightIcon } from "lucide-react";
 
+import versioneerLogo from "@/assets/Versioneer-96x96.png";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
@@ -9,7 +10,7 @@ export function AppLayout() {
     <div className="mx-auto max-w-xl px-6 py-12 sm:py-16 md:py-20 space-y-10">
       <header className="flex items-center justify-between gap-2.5 text-white">
         <Link to="/" className="flex items-center gap-2.5">
-          <img src="/versioneer-96x96.png" alt="Versioneer" className="size-6 rounded-sm" />
+          <img src={versioneerLogo} alt="Versioneer" className="size-6 rounded-sm" />
           <h1 className="font-mono font-medium">Versioneer</h1>
           <Badge
             variant="secondary"

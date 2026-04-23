@@ -35,10 +35,10 @@ const inventoryClientSchema = z.object({
   appVersion: z.string().max(50).optional(),
   osVersion: z.string().max(50).optional(),
   systemArchitecture: z.string().max(50).optional(),
-  channelPreferences: z
+  channels: z
     .object({
-      defaultChannel: channelSchema.default("stable"),
-      perApp: z.record(z.string(), channelSchema).default({}),
+      default: channelSchema.default("stable"),
+      overrides: z.record(z.string(), channelSchema).default({}),
     })
     .optional(),
 });
@@ -61,53 +61,67 @@ export const inventoryCheckRequestSchema = z.object({
 
 export type InventoryCheckRequest = z.infer<typeof inventoryCheckRequestSchema>;
 
-export const appDecisionSchema = z.object({
-  appName: z.string(),
-  bundleId: z.string().nullable(),
-  installedVersion: z.string().nullable(),
-  matchedAppId: z.string().nullable(),
-  matchedAppName: z.string().nullable(),
-  matchConfidence: z.number().nullable(),
+export const inventoryResultSchema = z.object({
+  app: z.object({
+    name: z.string(),
+    bundleId: z.string().nullable(),
+    installedVersion: z.string().nullable(),
+  }),
   decision: z.enum(["up_to_date", "update_available", "ambiguous", "local_only", "incompatible"]),
-  trackingState: z.enum(["public", "local_only"]),
-  localReasonCode: z
-    .enum([
-      "no_public_identity",
-      "no_approved_source",
-      "matched_draft",
-      "ambiguous_match",
-      "not_found",
-      "no_compatible_release",
-    ])
-    .nullable(),
-  latestVersion: z.string().nullable(),
-  latestVersionRaw: z.string().nullable(),
-  latestReleaseId: z.string().nullable(),
-  targetArchitecture: targetArchitectureSchema.nullable(),
-  channel: z.string().nullable().optional(),
-  availableChannels: z.array(z.string()).optional(),
-  homebrewCaskToken: z.string().nullable().optional(),
-  releasedAt: z.string().nullable(),
-  staleSince: z.string().nullable(),
-  iconUrl: z.string().nullable(),
-  artifact: appArtifactSchema.nullable(),
-  installStrategy: installStrategySchema.nullable(),
-  installTrust: installTrustSchema,
+  catalog: z.object({
+    match: z.object({
+      appId: z.string().nullable(),
+      appName: z.string().nullable(),
+      confidence: z.number().nullable(),
+    }),
+    trackingState: z.enum(["public", "local_only"]),
+    localReasonCode: z
+      .enum([
+        "no_public_identity",
+        "no_approved_source",
+        "matched_draft",
+        "ambiguous_match",
+        "not_found",
+        "no_compatible_release",
+      ])
+      .nullable(),
+    iconUrl: z.string().nullable(),
+    staleSince: z.string().nullable(),
+  }),
+  release: z.object({
+    version: z.string().nullable(),
+    versionRaw: z.string().nullable(),
+    releaseId: z.string().nullable(),
+    releasedAt: z.string().nullable(),
+    targetArchitecture: targetArchitectureSchema.nullable(),
+    artifact: appArtifactSchema.nullable(),
+  }),
+  install: z.object({
+    strategy: installStrategySchema.nullable(),
+    trust: installTrustSchema,
+    homebrewCaskToken: z.string().nullable().optional(),
+  }),
+  channels: z.object({
+    selected: z.string().nullable().optional(),
+    available: z.array(z.string()).default([]),
+  }),
 });
 
-export type AppDecision = z.infer<typeof appDecisionSchema>;
+export type InventoryResult = z.infer<typeof inventoryResultSchema>;
 
-export const skippedAppSchema = z.object({
+export const invalidInventoryAppSchema = z.object({
   index: z.number(),
   appName: z.string().nullable(),
   reasons: z.array(z.string()),
 });
 
-export type SkippedApp = z.infer<typeof skippedAppSchema>;
+export type InvalidInventoryApp = z.infer<typeof invalidInventoryAppSchema>;
 
 export const inventoryCheckResponseSchema = z.object({
-  results: z.array(appDecisionSchema),
-  skipped: z.array(skippedAppSchema).optional(),
+  results: z.array(inventoryResultSchema),
+  issues: z.object({
+    invalidApps: z.array(invalidInventoryAppSchema).default([]),
+  }),
   processedAt: z.string(),
 });
 

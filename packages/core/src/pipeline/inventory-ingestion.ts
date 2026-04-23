@@ -24,7 +24,7 @@ import { deleteInventoryMatchSnapshot } from "../cache";
 import { normalizeAliasValue } from "../identity";
 import { normalizeBaseUrl, resolveSourceUrl } from "../sources/registry";
 
-const INVENTORY_FOLLOWUP_PAYLOAD_VERSION = 1;
+const INVENTORY_INGESTION_PAYLOAD_VERSION = 1;
 const D1_PARAM_LIMIT = 100;
 const MAX_ICON_BYTES = 512 * 1024;
 
@@ -32,22 +32,22 @@ type Db = ReturnType<typeof createDb>;
 
 const nullableStringSchema = z.string().nullable().optional();
 
-export const inventoryFollowupQueueMessageSchema = z
+export const inventoryIngestionQueueMessageSchema = z
   .object({
-    jobId: z.string().min(1),
+    ingestionId: z.string().min(1),
   })
   .strict();
 
-export type InventoryFollowupQueueMessage = z.infer<typeof inventoryFollowupQueueMessageSchema>;
+export type InventoryIngestionQueueMessage = z.infer<typeof inventoryIngestionQueueMessageSchema>;
 
-export const inventoryFollowupWorkflowPayloadSchema = z
+export const inventoryIngestionWorkflowPayloadSchema = z
   .object({
-    jobId: z.string().min(1),
+    ingestionId: z.string().min(1),
   })
   .strict();
 
-export type InventoryFollowupWorkflowPayload = z.infer<
-  typeof inventoryFollowupWorkflowPayloadSchema
+export type InventoryIngestionWorkflowPayload = z.infer<
+  typeof inventoryIngestionWorkflowPayloadSchema
 >;
 
 const discoveredIconCandidateSchema = z
@@ -76,45 +76,45 @@ const matchedAppCandidateSchema = z
   })
   .strict();
 
-export const inventoryFollowupPayloadSchema = z
+export const inventoryIngestionPayloadSchema = z
   .object({
-    version: z.literal(INVENTORY_FOLLOWUP_PAYLOAD_VERSION),
+    version: z.literal(INVENTORY_INGESTION_PAYLOAD_VERSION),
     processedAt: z.string().min(1),
     discoveredIconCandidates: z.array(discoveredIconCandidateSchema),
     matchedAppCandidates: z.array(matchedAppCandidateSchema),
   })
   .strict();
 
-export type InventoryFollowupPayload = z.infer<typeof inventoryFollowupPayloadSchema>;
-export type InventoryFollowupDiscoveredIconCandidate = z.infer<
+export type InventoryIngestionPayload = z.infer<typeof inventoryIngestionPayloadSchema>;
+export type InventoryIngestionDiscoveredIconCandidate = z.infer<
   typeof discoveredIconCandidateSchema
 >;
-export type InventoryFollowupMatchedAppCandidate = z.infer<typeof matchedAppCandidateSchema>;
+export type InventoryIngestionMatchedAppCandidate = z.infer<typeof matchedAppCandidateSchema>;
 
-type InventoryFollowupAppRow = Pick<
+type InventoryIngestionAppRow = Pick<
   typeof apps.$inferSelect,
   "id" | "slug" | "canonicalName" | "vendorName" | "homepageUrl" | "status" | "iconR2Key"
 >;
 
-export interface InventoryFollowupStepResult {
+export interface InventoryIngestionStepResult {
   attempted: number;
   succeeded: number;
   failed: number;
 }
 
-export interface InventoryCatalogIconResult extends InventoryFollowupStepResult {
+export interface InventoryCatalogIconResult extends InventoryIngestionStepResult {
   changed: number;
 }
 
-export function parseInventoryFollowupPayload(value: unknown): InventoryFollowupPayload {
-  return inventoryFollowupPayloadSchema.parse(value);
+export function parseInventoryIngestionPayload(value: unknown): InventoryIngestionPayload {
+  return inventoryIngestionPayloadSchema.parse(value);
 }
 
-export function inventoryFollowupPayloadR2Key(jobId: string, date = new Date()): string {
+export function inventoryIngestionPayloadR2Key(ingestionId: string, date = new Date()): string {
   const yyyy = date.getUTCFullYear();
   const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(date.getUTCDate()).padStart(2, "0");
-  return `inventory-followups/${yyyy}/${mm}/${dd}/${jobId}.json`;
+  return `inventory-ingestions/${yyyy}/${mm}/${dd}/${ingestionId}.json`;
 }
 
 export async function storeClientIcon(
@@ -164,11 +164,11 @@ function chunkStrings(values: string[], chunkSize: number): string[][] {
   return chunks;
 }
 
-export async function loadInventoryFollowupAppsByIds(
+export async function loadInventoryIngestionAppsByIds(
   db: Db,
   appIds: string[],
-): Promise<InventoryFollowupAppRow[]> {
-  const rows: InventoryFollowupAppRow[] = [];
+): Promise<InventoryIngestionAppRow[]> {
+  const rows: InventoryIngestionAppRow[] = [];
   for (const appChunk of chunkStrings(uniqueStrings(appIds), Math.max(1, D1_PARAM_LIMIT))) {
     rows.push(
       ...(await db
@@ -192,8 +192,8 @@ export async function loadInventoryFollowupAppsByIds(
 export async function storeDiscoveredInventoryIcons(params: {
   db: Db;
   assetsBucket: R2Bucket;
-  candidates: InventoryFollowupDiscoveredIconCandidate[];
-}): Promise<InventoryFollowupStepResult> {
+  candidates: InventoryIngestionDiscoveredIconCandidate[];
+}): Promise<InventoryIngestionStepResult> {
   let succeeded = 0;
 
   for (const candidate of params.candidates) {
@@ -216,12 +216,12 @@ export async function storeCatalogInventoryIcons(params: {
   db: Db;
   assetsBucket: R2Bucket;
   cacheKv: KVNamespace;
-  candidates: InventoryFollowupMatchedAppCandidate[];
+  candidates: InventoryIngestionMatchedAppCandidate[];
   now: string;
 }): Promise<InventoryCatalogIconResult> {
   let succeeded = 0;
   let changed = 0;
-  const appRows = await loadInventoryFollowupAppsByIds(
+  const appRows = await loadInventoryIngestionAppsByIds(
     params.db,
     params.candidates.map((candidate) => candidate.appId),
   );
@@ -545,12 +545,12 @@ async function createTrustAssertionSuggestion(params: {
   });
 }
 
-export async function createInventoryFollowupSuggestions(params: {
+export async function createInventoryIngestionSuggestions(params: {
   db: Db;
-  candidates: InventoryFollowupMatchedAppCandidate[];
+  candidates: InventoryIngestionMatchedAppCandidate[];
   now: string;
-}): Promise<InventoryFollowupStepResult> {
-  const appRows = await loadInventoryFollowupAppsByIds(
+}): Promise<InventoryIngestionStepResult> {
+  const appRows = await loadInventoryIngestionAppsByIds(
     params.db,
     params.candidates.map((candidate) => candidate.appId),
   );

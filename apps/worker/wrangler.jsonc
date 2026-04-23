@@ -23,9 +23,9 @@
       "class_name": "EnrichmentDrainWorkflow"
     },
     {
-      "name": "versioneer-inventory-followup-dev",
-      "binding": "INVENTORY_FOLLOWUP",
-      "class_name": "InventoryFollowupWorkflow"
+      "name": "versioneer-inventory-ingestion-dev",
+      "binding": "INVENTORY_INGESTION",
+      "class_name": "InventoryIngestionWorkflow"
     }
   ],
 
@@ -60,17 +60,17 @@
   "queues": {
     "producers": [
       {
-        "binding": "INVENTORY_FOLLOWUP_QUEUE",
-        "queue": "versioneer-inventory-followup-dev"
+        "binding": "INVENTORY_INGESTION_QUEUE",
+        "queue": "versioneer-inventory-ingestion-dev"
       }
     ],
     "consumers": [
       {
-        "queue": "versioneer-inventory-followup-dev",
+        "queue": "versioneer-inventory-ingestion-dev",
         "max_batch_size": 10,
         "max_batch_timeout": 5,
         "max_retries": 5,
-        "dead_letter_queue": "versioneer-inventory-followup-dlq-dev",
+        "dead_letter_queue": "versioneer-inventory-ingestion-dlq-dev",
         "retry_delay": 60
       }
     ]
@@ -109,9 +109,9 @@
           "class_name": "EnrichmentDrainWorkflow"
         },
         {
-          "name": "versioneer-inventory-followup-production",
-          "binding": "INVENTORY_FOLLOWUP",
-          "class_name": "InventoryFollowupWorkflow"
+          "name": "versioneer-inventory-ingestion-production",
+          "binding": "INVENTORY_INGESTION",
+          "class_name": "InventoryIngestionWorkflow"
         }
       ],
       "vars": {
@@ -138,17 +138,17 @@
       "queues": {
         "producers": [
           {
-            "binding": "INVENTORY_FOLLOWUP_QUEUE",
-            "queue": "versioneer-inventory-followup-production"
+            "binding": "INVENTORY_INGESTION_QUEUE",
+            "queue": "versioneer-inventory-ingestion-production"
           }
         ],
         "consumers": [
           {
-            "queue": "versioneer-inventory-followup-production",
+            "queue": "versioneer-inventory-ingestion-production",
             "max_batch_size": 10,
             "max_batch_timeout": 5,
             "max_retries": 5,
-            "dead_letter_queue": "versioneer-inventory-followup-dlq-production",
+            "dead_letter_queue": "versioneer-inventory-ingestion-dlq-production",
             "retry_delay": 60
           }
         ]

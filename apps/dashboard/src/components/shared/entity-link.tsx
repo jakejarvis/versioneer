@@ -100,7 +100,7 @@ function entityHref(ref: LinkedEntityRef) {
       const status = ["open", "retrying", "resolved", "abandoned"].includes(ref.description ?? "")
         ? ref.description
         : "open";
-      return `/jobs?failurePage=1&failurePageSize=25&failureJobType=all&failureStatus=${status}&failureId=${ref.id}`;
+      return `/jobs/failures?page=1&pageSize=25&jobType=all&status=${status}&failureId=${ref.id}`;
     }
     case "feedback":
       return `/feedback`;

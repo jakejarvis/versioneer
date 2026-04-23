@@ -21,7 +21,13 @@ import { Route as AuditLogIndexRouteImport } from './routes/audit-log/index'
 import { Route as AppsIndexRouteImport } from './routes/apps/index'
 import { Route as SourcesSourceIdRouteImport } from './routes/sources/$sourceId'
 import { Route as ReleasesReleaseIdRouteImport } from './routes/releases/$releaseId'
+import { Route as JobsRunsRouteImport } from './routes/jobs/runs'
+import { Route as JobsFailuresRouteImport } from './routes/jobs/failures'
 import { Route as AppsAppIdRouteImport } from './routes/apps/$appId'
+import { Route as AppsAppIdIndexRouteImport } from './routes/apps/$appId.index'
+import { Route as AppsAppIdSourcesRouteImport } from './routes/apps/$appId.sources'
+import { Route as AppsAppIdReleasesRouteImport } from './routes/apps/$appId.releases'
+import { Route as AppsAppIdAliasesRouteImport } from './routes/apps/$appId.aliases'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAssetsSplatRouteImport } from './routes/api/assets/$'
 
@@ -85,10 +91,40 @@ const ReleasesReleaseIdRoute = ReleasesReleaseIdRouteImport.update({
   path: '/releases/$releaseId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JobsRunsRoute = JobsRunsRouteImport.update({
+  id: '/jobs/runs',
+  path: '/jobs/runs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JobsFailuresRoute = JobsFailuresRouteImport.update({
+  id: '/jobs/failures',
+  path: '/jobs/failures',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppsAppIdRoute = AppsAppIdRouteImport.update({
   id: '/apps/$appId',
   path: '/apps/$appId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppsAppIdIndexRoute = AppsAppIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppsAppIdRoute,
+} as any)
+const AppsAppIdSourcesRoute = AppsAppIdSourcesRouteImport.update({
+  id: '/sources',
+  path: '/sources',
+  getParentRoute: () => AppsAppIdRoute,
+} as any)
+const AppsAppIdReleasesRoute = AppsAppIdReleasesRouteImport.update({
+  id: '/releases',
+  path: '/releases',
+  getParentRoute: () => AppsAppIdRoute,
+} as any)
+const AppsAppIdAliasesRoute = AppsAppIdAliasesRouteImport.update({
+  id: '/aliases',
+  path: '/aliases',
+  getParentRoute: () => AppsAppIdRoute,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
@@ -104,7 +140,9 @@ const ApiAssetsSplatRoute = ApiAssetsSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/apps/$appId': typeof AppsAppIdRoute
+  '/apps/$appId': typeof AppsAppIdRouteWithChildren
+  '/jobs/failures': typeof JobsFailuresRoute
+  '/jobs/runs': typeof JobsRunsRoute
   '/releases/$releaseId': typeof ReleasesReleaseIdRoute
   '/sources/$sourceId': typeof SourcesSourceIdRoute
   '/apps/': typeof AppsIndexRoute
@@ -117,11 +155,16 @@ export interface FileRoutesByFullPath {
   '/sources/': typeof SourcesIndexRoute
   '/api/assets/$': typeof ApiAssetsSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/apps/$appId/aliases': typeof AppsAppIdAliasesRoute
+  '/apps/$appId/releases': typeof AppsAppIdReleasesRoute
+  '/apps/$appId/sources': typeof AppsAppIdSourcesRoute
+  '/apps/$appId/': typeof AppsAppIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/apps/$appId': typeof AppsAppIdRoute
+  '/jobs/failures': typeof JobsFailuresRoute
+  '/jobs/runs': typeof JobsRunsRoute
   '/releases/$releaseId': typeof ReleasesReleaseIdRoute
   '/sources/$sourceId': typeof SourcesSourceIdRoute
   '/apps': typeof AppsIndexRoute
@@ -134,12 +177,18 @@ export interface FileRoutesByTo {
   '/sources': typeof SourcesIndexRoute
   '/api/assets/$': typeof ApiAssetsSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/apps/$appId/aliases': typeof AppsAppIdAliasesRoute
+  '/apps/$appId/releases': typeof AppsAppIdReleasesRoute
+  '/apps/$appId/sources': typeof AppsAppIdSourcesRoute
+  '/apps/$appId': typeof AppsAppIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/apps/$appId': typeof AppsAppIdRoute
+  '/apps/$appId': typeof AppsAppIdRouteWithChildren
+  '/jobs/failures': typeof JobsFailuresRoute
+  '/jobs/runs': typeof JobsRunsRoute
   '/releases/$releaseId': typeof ReleasesReleaseIdRoute
   '/sources/$sourceId': typeof SourcesSourceIdRoute
   '/apps/': typeof AppsIndexRoute
@@ -152,6 +201,10 @@ export interface FileRoutesById {
   '/sources/': typeof SourcesIndexRoute
   '/api/assets/$': typeof ApiAssetsSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/apps/$appId/aliases': typeof AppsAppIdAliasesRoute
+  '/apps/$appId/releases': typeof AppsAppIdReleasesRoute
+  '/apps/$appId/sources': typeof AppsAppIdSourcesRoute
+  '/apps/$appId/': typeof AppsAppIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -159,6 +212,8 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/apps/$appId'
+    | '/jobs/failures'
+    | '/jobs/runs'
     | '/releases/$releaseId'
     | '/sources/$sourceId'
     | '/apps/'
@@ -171,11 +226,16 @@ export interface FileRouteTypes {
     | '/sources/'
     | '/api/assets/$'
     | '/api/auth/$'
+    | '/apps/$appId/aliases'
+    | '/apps/$appId/releases'
+    | '/apps/$appId/sources'
+    | '/apps/$appId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
-    | '/apps/$appId'
+    | '/jobs/failures'
+    | '/jobs/runs'
     | '/releases/$releaseId'
     | '/sources/$sourceId'
     | '/apps'
@@ -188,11 +248,17 @@ export interface FileRouteTypes {
     | '/sources'
     | '/api/assets/$'
     | '/api/auth/$'
+    | '/apps/$appId/aliases'
+    | '/apps/$appId/releases'
+    | '/apps/$appId/sources'
+    | '/apps/$appId'
   id:
     | '__root__'
     | '/'
     | '/login'
     | '/apps/$appId'
+    | '/jobs/failures'
+    | '/jobs/runs'
     | '/releases/$releaseId'
     | '/sources/$sourceId'
     | '/apps/'
@@ -205,12 +271,18 @@ export interface FileRouteTypes {
     | '/sources/'
     | '/api/assets/$'
     | '/api/auth/$'
+    | '/apps/$appId/aliases'
+    | '/apps/$appId/releases'
+    | '/apps/$appId/sources'
+    | '/apps/$appId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
-  AppsAppIdRoute: typeof AppsAppIdRoute
+  AppsAppIdRoute: typeof AppsAppIdRouteWithChildren
+  JobsFailuresRoute: typeof JobsFailuresRoute
+  JobsRunsRoute: typeof JobsRunsRoute
   ReleasesReleaseIdRoute: typeof ReleasesReleaseIdRoute
   SourcesSourceIdRoute: typeof SourcesSourceIdRoute
   AppsIndexRoute: typeof AppsIndexRoute
@@ -311,12 +383,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReleasesReleaseIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/jobs/runs': {
+      id: '/jobs/runs'
+      path: '/jobs/runs'
+      fullPath: '/jobs/runs'
+      preLoaderRoute: typeof JobsRunsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/jobs/failures': {
+      id: '/jobs/failures'
+      path: '/jobs/failures'
+      fullPath: '/jobs/failures'
+      preLoaderRoute: typeof JobsFailuresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/apps/$appId': {
       id: '/apps/$appId'
       path: '/apps/$appId'
       fullPath: '/apps/$appId'
       preLoaderRoute: typeof AppsAppIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/apps/$appId/': {
+      id: '/apps/$appId/'
+      path: '/'
+      fullPath: '/apps/$appId/'
+      preLoaderRoute: typeof AppsAppIdIndexRouteImport
+      parentRoute: typeof AppsAppIdRoute
+    }
+    '/apps/$appId/sources': {
+      id: '/apps/$appId/sources'
+      path: '/sources'
+      fullPath: '/apps/$appId/sources'
+      preLoaderRoute: typeof AppsAppIdSourcesRouteImport
+      parentRoute: typeof AppsAppIdRoute
+    }
+    '/apps/$appId/releases': {
+      id: '/apps/$appId/releases'
+      path: '/releases'
+      fullPath: '/apps/$appId/releases'
+      preLoaderRoute: typeof AppsAppIdReleasesRouteImport
+      parentRoute: typeof AppsAppIdRoute
+    }
+    '/apps/$appId/aliases': {
+      id: '/apps/$appId/aliases'
+      path: '/aliases'
+      fullPath: '/apps/$appId/aliases'
+      preLoaderRoute: typeof AppsAppIdAliasesRouteImport
+      parentRoute: typeof AppsAppIdRoute
     }
     '/api/auth/$': {
       id: '/api/auth/$'
@@ -335,10 +449,30 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppsAppIdRouteChildren {
+  AppsAppIdAliasesRoute: typeof AppsAppIdAliasesRoute
+  AppsAppIdReleasesRoute: typeof AppsAppIdReleasesRoute
+  AppsAppIdSourcesRoute: typeof AppsAppIdSourcesRoute
+  AppsAppIdIndexRoute: typeof AppsAppIdIndexRoute
+}
+
+const AppsAppIdRouteChildren: AppsAppIdRouteChildren = {
+  AppsAppIdAliasesRoute: AppsAppIdAliasesRoute,
+  AppsAppIdReleasesRoute: AppsAppIdReleasesRoute,
+  AppsAppIdSourcesRoute: AppsAppIdSourcesRoute,
+  AppsAppIdIndexRoute: AppsAppIdIndexRoute,
+}
+
+const AppsAppIdRouteWithChildren = AppsAppIdRoute._addFileChildren(
+  AppsAppIdRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
-  AppsAppIdRoute: AppsAppIdRoute,
+  AppsAppIdRoute: AppsAppIdRouteWithChildren,
+  JobsFailuresRoute: JobsFailuresRoute,
+  JobsRunsRoute: JobsRunsRoute,
   ReleasesReleaseIdRoute: ReleasesReleaseIdRoute,
   SourcesSourceIdRoute: SourcesSourceIdRoute,
   AppsIndexRoute: AppsIndexRoute,

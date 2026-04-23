@@ -9,7 +9,7 @@ export type {
   SourceParseJob,
   RecomputeLatestJob,
   EnrichmentDrainJob,
-  InventoryFollowupJob,
+  InventoryIngestionJob,
   FetchStepResult,
   ParseStepResult,
 } from "./types";
@@ -57,23 +57,23 @@ export {
 export type { TrackedJobFailureType, TrackedJobResult } from "./job-failures";
 export { handleCaskIndexSync, isCaskSyncDue } from "./cask-index-sync";
 export {
-  createInventoryFollowupSuggestions,
-  inventoryFollowupPayloadR2Key,
-  inventoryFollowupPayloadSchema,
-  inventoryFollowupQueueMessageSchema,
-  inventoryFollowupWorkflowPayloadSchema,
-  loadInventoryFollowupAppsByIds,
-  parseInventoryFollowupPayload,
+  createInventoryIngestionSuggestions,
+  inventoryIngestionPayloadR2Key,
+  inventoryIngestionPayloadSchema,
+  inventoryIngestionQueueMessageSchema,
+  inventoryIngestionWorkflowPayloadSchema,
+  loadInventoryIngestionAppsByIds,
+  parseInventoryIngestionPayload,
   storeCatalogInventoryIcons,
   storeClientIcon,
   storeDiscoveredInventoryIcons,
-} from "./inventory-followup";
+} from "./inventory-ingestion";
 export type {
   InventoryCatalogIconResult,
-  InventoryFollowupDiscoveredIconCandidate,
-  InventoryFollowupMatchedAppCandidate,
-  InventoryFollowupPayload,
-  InventoryFollowupQueueMessage,
-  InventoryFollowupStepResult,
-  InventoryFollowupWorkflowPayload,
-} from "./inventory-followup";
+  InventoryIngestionDiscoveredIconCandidate,
+  InventoryIngestionMatchedAppCandidate,
+  InventoryIngestionPayload,
+  InventoryIngestionQueueMessage,
+  InventoryIngestionStepResult,
+  InventoryIngestionWorkflowPayload,
+} from "./inventory-ingestion";

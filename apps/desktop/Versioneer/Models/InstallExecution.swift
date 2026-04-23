@@ -14,44 +14,56 @@ nonisolated struct InstallVerificationSummary: Codable, Sendable {
   var observedVersion: String? = nil
 }
 
-nonisolated struct InstallPrepareRequest: Codable, Sendable {
+nonisolated struct InstallExecutionCreateRequest: Codable, Sendable {
   let client: InventoryCheckRequest.ClientInfo
-  let appId: String
-  let releaseId: String
-  let artifactId: String?
-  let targetArchitecture: String?
-  let installStrategy: String
-  let executionRoute: String?
-  let channel: String?
-  let previousVersion: String?
-  let bundleId: String?
-  let teamId: String?
+  let target: Target
+  let install: Install
+  let expected: Expected
+
+  struct Target: Codable, Sendable {
+    let appId: String
+    let releaseId: String
+    let artifactId: String?
+    let targetArchitecture: String?
+    let channel: String?
+  }
+
+  struct Install: Codable, Sendable {
+    let strategy: String
+    let executionRoute: String?
+  }
+
+  struct Expected: Codable, Sendable {
+    let previousVersion: String?
+    let bundleId: String?
+    let teamId: String?
+  }
 }
 
-nonisolated struct InstallPrepareResponse: Codable, Sendable {
-  let executionId: String
-  let status: String
+nonisolated struct InstallExecutionCreateResponse: Codable, Sendable {
+  let execution: Execution
+
+  struct Execution: Codable, Sendable {
+    let id: String
+    let status: String
+  }
 }
 
-nonisolated struct InstallExecutionStatusRequest: Codable, Sendable {
+nonisolated struct InstallExecutionEventRequest: Codable, Sendable {
   let client: InventoryCheckRequest.ClientInfo
-  let appId: String
-  let releaseId: String
-  let artifactId: String?
-  let targetArchitecture: String?
-  let installStrategy: String
-  let executionRoute: String?
-  let channel: String?
-  let previousVersion: String?
-  let installedVersion: String?
-  let bundleId: String?
-  let teamId: String?
-  let status: String
-  let errorMessage: String?
+  let target: InstallExecutionCreateRequest.Target
+  let install: InstallExecutionCreateRequest.Install
+  let expected: InstallExecutionCreateRequest.Expected
+  let event: Event
   let verification: InstallVerificationSummary?
+
+  struct Event: Codable, Sendable {
+    let status: String
+    let installedVersion: String?
+    let errorMessage: String?
+  }
 }
 
-nonisolated struct InstallExecutionStatusResponse: Codable, Sendable {
-  let executionId: String
-  let status: String
+nonisolated struct InstallExecutionEventResponse: Codable, Sendable {
+  let execution: InstallExecutionCreateResponse.Execution
 }

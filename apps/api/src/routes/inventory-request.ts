@@ -2,7 +2,11 @@ import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 
 import { installedAppSchema, inventoryRequestEnvelopeSchema } from "@versioneer/core/validation";
-import type { InstalledApp, InventoryClient, SkippedApp } from "@versioneer/core/validation";
+import type {
+  InstalledApp,
+  InvalidInventoryApp,
+  InventoryClient,
+} from "@versioneer/core/validation";
 
 import {
   MAX_INVENTORY_GZIP_BYTES,
@@ -116,7 +120,7 @@ export type InventoryEnv = {
       apps: InstalledApp[];
       scanDurationMs?: number;
     };
-    skippedApps: SkippedApp[];
+    invalidInventoryApps: InvalidInventoryApp[];
   };
 };
 
@@ -154,7 +158,7 @@ export const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next)
   }
 
   const validApps: InstalledApp[] = [];
-  const skippedApps: SkippedApp[] = [];
+  const invalidInventoryApps: InvalidInventoryApp[] = [];
 
   for (let index = 0; index < envelope.data.apps.length; index += 1) {
     const raw = envelope.data.apps[index];
@@ -166,7 +170,7 @@ export const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next)
 
     const rawObject =
       typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : null;
-    skippedApps.push({
+    invalidInventoryApps.push({
       index,
       appName: typeof rawObject?.appName === "string" ? rawObject.appName : null,
       reasons: parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`),
@@ -178,6 +182,6 @@ export const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next)
     apps: validApps,
     scanDurationMs: envelope.data.scanDurationMs,
   });
-  c.set("skippedApps", skippedApps);
+  c.set("invalidInventoryApps", invalidInventoryApps);
   await next();
 });

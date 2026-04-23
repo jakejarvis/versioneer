@@ -11,12 +11,17 @@ nonisolated struct InventoryCheckRequest: Codable, Sendable {
     let appVersion: String?
     let osVersion: String?
     let systemArchitecture: String?
-    let channelPreferences: ChannelPreferences?
+    let channels: Channels?
   }
 
-  struct ChannelPreferences: Codable, Sendable {
+  struct Channels: Codable, Sendable {
     let defaultChannel: String
-    let perApp: [String: String]
+    let overrides: [String: String]
+
+    private enum CodingKeys: String, CodingKey {
+      case defaultChannel = "default"
+      case overrides
+    }
   }
 
   /// The per-app payload shape expected by the backend.

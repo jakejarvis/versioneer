@@ -98,9 +98,9 @@ async function retryFailure(
       });
       await markJobFailureRetrying({ db, id: failure.id });
       return "retrying";
-    case "inventory_followup":
+    case "inventory_ingestion":
       if (!failure.relatedId) return null;
-      await pipelineWorker.retryInventoryFollowup({ jobId: failure.relatedId });
+      await pipelineWorker.retryInventoryIngestion({ ingestionId: failure.relatedId });
       await markJobFailureRetrying({ db, id: failure.id });
       return "retrying";
     default:

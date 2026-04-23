@@ -4,21 +4,21 @@ import { eq } from "drizzle-orm";
 import { createLogger } from "@versioneer/core/logger";
 import { captureServerEvent, captureServerException } from "@versioneer/core/observability";
 import {
-  createInventoryFollowupSuggestions,
-  inventoryFollowupWorkflowPayloadSchema,
-  parseInventoryFollowupPayload,
+  createInventoryIngestionSuggestions,
+  inventoryIngestionWorkflowPayloadSchema,
+  parseInventoryIngestionPayload,
   recordJobFailure,
   resolveJobFailure,
   storeCatalogInventoryIcons,
   storeDiscoveredInventoryIcons,
   type InventoryCatalogIconResult,
-  type InventoryFollowupPayload,
-  type InventoryFollowupStepResult,
-  type InventoryFollowupWorkflowPayload,
+  type InventoryIngestionPayload,
+  type InventoryIngestionStepResult,
+  type InventoryIngestionWorkflowPayload,
 } from "@versioneer/core/pipeline";
-import { createDb, inventoryFollowupJobs } from "@versioneer/db";
+import { createDb, inventoryIngestionJobs } from "@versioneer/db";
 
-const INVENTORY_FOLLOWUP_FAILURE_KEYS = [
+const INVENTORY_INGESTION_FAILURE_KEYS = [
   "handoff",
   "enqueue",
   "queue",
@@ -26,26 +26,26 @@ const INVENTORY_FOLLOWUP_FAILURE_KEYS = [
   "workflow",
 ] as const;
 
-type InventoryFollowupJobRow = Pick<
-  typeof inventoryFollowupJobs.$inferSelect,
+type InventoryIngestionJobRow = Pick<
+  typeof inventoryIngestionJobs.$inferSelect,
   "id" | "status" | "payloadR2Key" | "itemsTotal"
 >;
 
-interface LoadedInventoryFollowup {
+interface LoadedInventoryIngestion {
   alreadyCompleted: boolean;
-  job: InventoryFollowupJobRow;
-  payload: InventoryFollowupPayload | null;
+  job: InventoryIngestionJobRow;
+  payload: InventoryIngestionPayload | null;
   itemsTotal: number;
 }
 
-interface InventoryFollowupTotals {
+interface InventoryIngestionTotals {
   itemsTotal: number;
-  discoveredIcons: InventoryFollowupStepResult;
+  discoveredIcons: InventoryIngestionStepResult;
   catalogIcons: InventoryCatalogIconResult;
-  suggestions: InventoryFollowupStepResult;
+  suggestions: InventoryIngestionStepResult;
 }
 
-function emptyStepResult(): InventoryFollowupStepResult {
+function emptyStepResult(): InventoryIngestionStepResult {
   return { attempted: 0, succeeded: 0, failed: 0 };
 }
 
@@ -53,37 +53,37 @@ function emptyCatalogIconResult(): InventoryCatalogIconResult {
   return { attempted: 0, succeeded: 0, failed: 0, changed: 0 };
 }
 
-function payloadItemCount(payload: InventoryFollowupPayload): number {
+function payloadItemCount(payload: InventoryIngestionPayload): number {
   return payload.discoveredIconCandidates.length + payload.matchedAppCandidates.length;
 }
 
-function countFailedItems(totals: InventoryFollowupTotals): number {
+function countFailedItems(totals: InventoryIngestionTotals): number {
   return totals.discoveredIcons.failed + totals.catalogIcons.failed + totals.suggestions.failed;
 }
 
-async function resolveInventoryFollowupFailures(
+async function resolveInventoryIngestionFailures(
   db: ReturnType<typeof createDb>,
-  jobId: string,
+  ingestionId: string,
 ): Promise<void> {
-  for (const jobKey of INVENTORY_FOLLOWUP_FAILURE_KEYS) {
+  for (const jobKey of INVENTORY_INGESTION_FAILURE_KEYS) {
     await resolveJobFailure({
       db,
-      jobType: "inventory_followup",
-      relatedId: jobId,
+      jobType: "inventory_ingestion",
+      relatedId: ingestionId,
       jobKey,
     });
   }
 }
 
-export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
+export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
   Env,
-  InventoryFollowupWorkflowPayload
+  InventoryIngestionWorkflowPayload
 > {
-  async run(event: WorkflowEvent<InventoryFollowupWorkflowPayload>, step: WorkflowStep) {
-    const { jobId } = inventoryFollowupWorkflowPayloadSchema.parse(event.payload);
+  async run(event: WorkflowEvent<InventoryIngestionWorkflowPayload>, step: WorkflowStep) {
+    const { ingestionId } = inventoryIngestionWorkflowPayloadSchema.parse(event.payload);
     const db = createDb(this.env.DB);
-    const log = createLogger({ workflow: "inventory_followup", jobId });
-    const totals: InventoryFollowupTotals = {
+    const log = createLogger({ workflow: "inventory_ingestion", ingestionId });
+    const totals: InventoryIngestionTotals = {
       itemsTotal: 0,
       discoveredIcons: emptyStepResult(),
       catalogIcons: emptyCatalogIconResult(),
@@ -92,20 +92,20 @@ export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
     let payloadR2Key: string | null = null;
 
     try {
-      const loaded = await step.do<LoadedInventoryFollowup>("load-followup-payload", async () => {
+      const loaded = await step.do<LoadedInventoryIngestion>("load-ingestion-payload", async () => {
         const now = new Date().toISOString();
         const job = await db
           .select({
-            id: inventoryFollowupJobs.id,
-            status: inventoryFollowupJobs.status,
-            payloadR2Key: inventoryFollowupJobs.payloadR2Key,
-            itemsTotal: inventoryFollowupJobs.itemsTotal,
+            id: inventoryIngestionJobs.id,
+            status: inventoryIngestionJobs.status,
+            payloadR2Key: inventoryIngestionJobs.payloadR2Key,
+            itemsTotal: inventoryIngestionJobs.itemsTotal,
           })
-          .from(inventoryFollowupJobs)
-          .where(eq(inventoryFollowupJobs.id, jobId))
+          .from(inventoryIngestionJobs)
+          .where(eq(inventoryIngestionJobs.id, ingestionId))
           .get();
         if (!job) {
-          throw new Error(`Inventory follow-up job ${jobId} does not exist`);
+          throw new Error(`Inventory ingestion ${ingestionId} does not exist`);
         }
 
         if (job.status === "completed") {
@@ -119,26 +119,26 @@ export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
 
         const object = await this.env.RAW_BUCKET.get(job.payloadR2Key);
         if (!object) {
-          throw new Error(`Inventory follow-up payload ${job.payloadR2Key} does not exist`);
+          throw new Error(`Inventory ingestion payload ${job.payloadR2Key} does not exist`);
         }
 
         let parsed: unknown;
         try {
           parsed = JSON.parse(await object.text());
         } catch {
-          throw new Error(`Inventory follow-up payload ${job.payloadR2Key} is invalid JSON`);
+          throw new Error(`Inventory ingestion payload ${job.payloadR2Key} is invalid JSON`);
         }
-        const payload = parseInventoryFollowupPayload(parsed);
+        const payload = parseInventoryIngestionPayload(parsed);
 
         await db
-          .update(inventoryFollowupJobs)
+          .update(inventoryIngestionJobs)
           .set({
             status: "running",
             startedAt: now,
             updatedAt: now,
             errorMessage: null,
           })
-          .where(eq(inventoryFollowupJobs.id, jobId));
+          .where(eq(inventoryIngestionJobs.id, ingestionId));
 
         return {
           alreadyCompleted: false,
@@ -156,7 +156,7 @@ export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
         return { status: "completed", skipped: true };
       }
 
-      totals.discoveredIcons = await step.do<InventoryFollowupStepResult>(
+      totals.discoveredIcons = await step.do<InventoryIngestionStepResult>(
         "store-discovered-icons",
         { retries: { limit: 2, delay: "10 seconds", backoff: "exponential" } },
         async () =>
@@ -180,11 +180,11 @@ export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
           }),
       );
 
-      totals.suggestions = await step.do<InventoryFollowupStepResult>(
+      totals.suggestions = await step.do<InventoryIngestionStepResult>(
         "create-suggestions",
         { retries: { limit: 2, delay: "10 seconds", backoff: "exponential" } },
         async () =>
-          createInventoryFollowupSuggestions({
+          createInventoryIngestionSuggestions({
             db,
             candidates: loaded.payload!.matchedAppCandidates,
             now: loaded.payload!.processedAt,
@@ -195,7 +195,7 @@ export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
         const now = new Date().toISOString();
         const failedItems = countFailedItems(totals);
         await db
-          .update(inventoryFollowupJobs)
+          .update(inventoryIngestionJobs)
           .set({
             status: "completed",
             itemsTotal: totals.itemsTotal,
@@ -205,20 +205,20 @@ export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
             updatedAt: now,
             completedAt: now,
           })
-          .where(eq(inventoryFollowupJobs.id, jobId));
+          .where(eq(inventoryIngestionJobs.id, ingestionId));
 
-        await resolveInventoryFollowupFailures(db, jobId);
+        await resolveInventoryIngestionFailures(db, ingestionId);
         await this.env.RAW_BUCKET.delete(loaded.job.payloadR2Key);
       });
 
       log.info("workflow completed", { totals });
       this.ctx.waitUntil(
         captureServerEvent(this.env, {
-          event: "worker_inventory_followup_completed",
+          event: "worker_inventory_ingestion_completed",
           properties: {
             surface: "worker",
-            target_type: "inventory_followup_job",
-            target_id: jobId,
+            target_type: "inventory_ingestion_job",
+            target_id: ingestionId,
             status: "completed",
             items_total: totals.itemsTotal,
             discovered_icons_failed: totals.discoveredIcons.failed,
@@ -235,7 +235,7 @@ export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
       log.error("workflow failed", { error });
 
       await db
-        .update(inventoryFollowupJobs)
+        .update(inventoryIngestionJobs)
         .set({
           status: "failed",
           itemsTotal: totals.itemsTotal || null,
@@ -248,18 +248,18 @@ export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
           updatedAt: now,
           completedAt: now,
         })
-        .where(eq(inventoryFollowupJobs.id, jobId));
+        .where(eq(inventoryIngestionJobs.id, ingestionId));
 
       await recordJobFailure({
         db,
-        jobType: "inventory_followup",
-        relatedId: jobId,
+        jobType: "inventory_ingestion",
+        relatedId: ingestionId,
         jobKey: "workflow",
         errorMessage,
       });
 
       if (payloadR2Key) {
-        log.info("preserved follow-up payload after failure", { payloadR2Key });
+        log.info("preserved ingestion payload after failure", { payloadR2Key });
       }
 
       this.ctx.waitUntil(
@@ -267,9 +267,9 @@ export class InventoryFollowupWorkflow extends WorkflowEntrypoint<
           error,
           properties: {
             surface: "worker",
-            workflow: "inventory_followup",
-            target_type: "inventory_followup_job",
-            target_id: jobId,
+            workflow: "inventory_ingestion",
+            target_type: "inventory_ingestion_job",
+            target_id: ingestionId,
             status: "failed",
             items_total: totals.itemsTotal,
           },

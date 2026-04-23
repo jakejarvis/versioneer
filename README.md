@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://versioneer.app"><img width="72" height="72" alt="Versioneer" src="https://assets-prod.versioneer.app/icons/b4b037ffcfcd.png" /></a><br />
+  <a href="https://versioneer.app"><img width="72" height="72" alt="Versioneer" src="https://github.com/user-attachments/assets/9a030449-f2db-4962-991e-b44171438989" /></a><br />
   <a href="https://versioneer.app"><strong>Versioneer</strong></a> — macOS App Updater
 </p>
 

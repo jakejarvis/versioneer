@@ -14,7 +14,7 @@ describe("canRetryJobFailure", () => {
     expect(canRetryJobFailure("poll_sources")).toBe(true);
     expect(canRetryJobFailure("cask_index_sync")).toBe(true);
     expect(canRetryJobFailure("enrich_discovered_apps")).toBe(true);
-    expect(canRetryJobFailure("inventory_followup")).toBe(true);
+    expect(canRetryJobFailure("inventory_ingestion")).toBe(true);
   });
 
   it("keeps informational failures non-retryable", () => {

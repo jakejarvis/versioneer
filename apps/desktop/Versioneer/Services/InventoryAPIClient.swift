@@ -53,7 +53,7 @@ nonisolated struct InventoryAPIClient: Sendable {
   func checkInventory(
     apps: [InstalledApp],
     scanDurationMs: Int?,
-    channelPreferences: InventoryCheckRequest.ChannelPreferences?
+    channels: InventoryCheckRequest.Channels?
   ) async throws
     -> InventoryCheckResponse
   {
@@ -64,7 +64,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     await authorize(&request)
 
     let payload = buildRequest(
-      from: apps, scanDurationMs: scanDurationMs, channelPreferences: channelPreferences)
+      from: apps, scanDurationMs: scanDurationMs, channels: channels)
 
     let encoder = JSONEncoder()
     let jsonData = try encoder.encode(payload)
@@ -109,7 +109,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     _ response: InventoryCheckResponse,
     submittedAppCount: Int
   ) throws {
-    let handledCount = response.results.count + (response.skipped?.count ?? 0)
+    let handledCount = response.results.count + response.issues.invalidApps.count
     guard handledCount == submittedAppCount else {
       throw APIError.incompleteInventoryResponse(
         expected: submittedAppCount, received: handledCount)
@@ -119,7 +119,7 @@ nonisolated struct InventoryAPIClient: Sendable {
   private func buildRequest(
     from apps: [InstalledApp],
     scanDurationMs: Int?,
-    channelPreferences: InventoryCheckRequest.ChannelPreferences?
+    channels: InventoryCheckRequest.Channels?
   ) -> InventoryCheckRequest {
     let inventoryApps = apps.map { app in
       InventoryCheckRequest.InventoryApp(
@@ -147,7 +147,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     }
 
     return InventoryCheckRequest(
-      client: buildClientInfo(channelPreferences: channelPreferences),
+      client: buildClientInfo(channels: channels),
       apps: inventoryApps,
       scanDurationMs: scanDurationMs
     )
@@ -157,31 +157,37 @@ nonisolated struct InventoryAPIClient: Sendable {
     plan: InstallPlan,
     installedApp: InstalledApp,
     executionRoute: InstallCoordinator.ExecutionRoute
-  ) async throws -> InstallPrepareResponse {
+  ) async throws -> InstallExecutionCreateResponse {
     guard let appId = plan.appId,
       let releaseId = plan.releaseId
     else {
       throw APIError.invalidRequest("Catalog-backed install plan required")
     }
 
-    let endpoint = baseURL.appendingPathComponent("v1/install/prepare")
+    let endpoint = baseURL.appendingPathComponent("v1/install/executions")
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     await authorize(&request)
 
-    let payload = InstallPrepareRequest(
-      client: buildClientInfo(channelPreferences: nil),
-      appId: appId,
-      releaseId: releaseId,
-      artifactId: plan.artifact?.id,
-      targetArchitecture: plan.targetArchitecture,
-      installStrategy: plan.strategy.rawValue,
-      executionRoute: executionRoute.rawValue,
-      channel: plan.channel,
-      previousVersion: installedApp.version,
-      bundleId: installedApp.bundleId,
-      teamId: installedApp.teamId
+    let payload = InstallExecutionCreateRequest(
+      client: buildClientInfo(channels: nil),
+      target: .init(
+        appId: appId,
+        releaseId: releaseId,
+        artifactId: plan.artifact?.id,
+        targetArchitecture: plan.targetArchitecture,
+        channel: plan.channel
+      ),
+      install: .init(
+        strategy: plan.strategy.rawValue,
+        executionRoute: executionRoute.rawValue
+      ),
+      expected: .init(
+        previousVersion: installedApp.version,
+        bundleId: installedApp.bundleId,
+        teamId: installedApp.teamId
+      )
     )
     request.httpBody = try JSONEncoder().encode(payload)
 
@@ -197,7 +203,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     }
 
     do {
-      return try JSONDecoder().decode(InstallPrepareResponse.self, from: data)
+      return try JSONDecoder().decode(InstallExecutionCreateResponse.self, from: data)
     } catch {
       throw APIError.decodingFailed(error.localizedDescription)
     }
@@ -212,34 +218,42 @@ nonisolated struct InventoryAPIClient: Sendable {
     installedVersion: String?,
     errorMessage: String?,
     verification: InstallVerificationSummary?
-  ) async throws -> InstallExecutionStatusResponse {
+  ) async throws -> InstallExecutionEventResponse {
     guard let appId = plan.appId,
       let releaseId = plan.releaseId
     else {
       throw APIError.invalidRequest("Catalog-backed install plan required")
     }
 
-    let endpoint = baseURL.appendingPathComponent("v1/install/executions/\(executionId)/status")
+    let endpoint = baseURL.appendingPathComponent("v1/install/executions/\(executionId)/events")
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     await authorize(&request)
 
-    let payload = InstallExecutionStatusRequest(
-      client: buildClientInfo(channelPreferences: nil),
-      appId: appId,
-      releaseId: releaseId,
-      artifactId: plan.artifact?.id,
-      targetArchitecture: plan.targetArchitecture,
-      installStrategy: plan.strategy.rawValue,
-      executionRoute: executionRoute.rawValue,
-      channel: plan.channel,
-      previousVersion: installedApp.version,
-      installedVersion: installedVersion ?? installedApp.version,
-      bundleId: installedApp.bundleId,
-      teamId: installedApp.teamId,
-      status: status,
-      errorMessage: errorMessage,
+    let payload = InstallExecutionEventRequest(
+      client: buildClientInfo(channels: nil),
+      target: .init(
+        appId: appId,
+        releaseId: releaseId,
+        artifactId: plan.artifact?.id,
+        targetArchitecture: plan.targetArchitecture,
+        channel: plan.channel
+      ),
+      install: .init(
+        strategy: plan.strategy.rawValue,
+        executionRoute: executionRoute.rawValue
+      ),
+      expected: .init(
+        previousVersion: installedApp.version,
+        bundleId: installedApp.bundleId,
+        teamId: installedApp.teamId
+      ),
+      event: .init(
+        status: status,
+        installedVersion: installedVersion ?? installedApp.version,
+        errorMessage: errorMessage
+      ),
       verification: verification
     )
     request.httpBody = try JSONEncoder().encode(payload)
@@ -256,7 +270,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     }
 
     do {
-      return try JSONDecoder().decode(InstallExecutionStatusResponse.self, from: data)
+      return try JSONDecoder().decode(InstallExecutionEventResponse.self, from: data)
     } catch {
       throw APIError.decodingFailed(error.localizedDescription)
     }
@@ -269,7 +283,7 @@ nonisolated struct InventoryAPIClient: Sendable {
   }
 
   private func buildClientInfo(
-    channelPreferences: InventoryCheckRequest.ChannelPreferences?
+    channels: InventoryCheckRequest.Channels?
   ) -> InventoryCheckRequest.ClientInfo {
     let osVer = ProcessInfo.processInfo.operatingSystemVersion
     let osVersion = "\(osVer.majorVersion).\(osVer.minorVersion).\(osVer.patchVersion)"
@@ -280,7 +294,7 @@ nonisolated struct InventoryAPIClient: Sendable {
       appVersion: appVersion,
       osVersion: osVersion,
       systemArchitecture: Self.systemArchitecture(),
-      channelPreferences: channelPreferences
+      channels: channels
     )
   }
 

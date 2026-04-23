@@ -7,7 +7,7 @@ import { getInventoryMatchSnapshot } from "@versioneer/core/cache";
 import { toEpochMs } from "@versioneer/core/dates";
 import { matchApp } from "@versioneer/core/identity";
 import type {
-  AppDecision,
+  InventoryResult,
   InstallTrust,
   InstallTrustReason,
   InstalledApp,
@@ -28,13 +28,13 @@ import type { InstallStrategy } from "@versioneer/schemas/releases";
 import { D1_PARAM_LIMIT } from "../lib/constants";
 import { computeStaleSince, isOsVersionCompatible } from "./helpers";
 import {
-  buildInventoryFollowupPayload,
+  buildInventoryIngestionPayload,
   collectUnmatchedApps,
   computeLookupKey,
-  inventoryFollowupItemCount,
-  persistAndEnqueueInventoryFollowup,
+  inventoryIngestionItemCount,
+  persistAndEnqueueInventoryIngestion,
   upsertDiscoveredApps,
-} from "./inventory-followup-handoff";
+} from "./inventory-ingestion-handoff";
 import { type InventoryEnv, gzipJsonMiddleware } from "./inventory-request";
 
 type LatestReleaseRow = typeof appLatestReleases.$inferSelect;
@@ -56,7 +56,7 @@ type CompatibleReleaseCandidate = {
   versionNormalized: string;
   versionRaw: string;
   releasedAt: string | null;
-  artifact: AppDecision["artifact"];
+  artifact: InventoryResult["release"]["artifact"];
   installStrategy: InstallStrategy | null;
 };
 
@@ -84,9 +84,9 @@ function installTrustBlocksOneClick(reasons: InstallTrustReason[]): boolean {
 }
 
 function deriveInstallTrust(params: {
-  decision: AppDecision["decision"];
+  decision: InventoryResult["decision"];
   resolvedStrategy: InstallStrategy | null;
-  artifact: AppDecision["artifact"];
+  artifact: InventoryResult["release"]["artifact"];
   targetArchitecture: TargetArchitecture | null;
   installedApp: InstalledApp;
   homebrewCaskToken: string | null;
@@ -325,7 +325,9 @@ function latestRowsForRequestedChannel(
   return stableRows ? { channel: "stable", rows: stableRows } : null;
 }
 
-function artifactForDecision(artifact: ArtifactRow | null | undefined): AppDecision["artifact"] {
+function artifactForResult(
+  artifact: ArtifactRow | null | undefined,
+): InventoryResult["release"]["artifact"] {
   if (!artifact) return null;
   return {
     id: artifact.id,
@@ -494,9 +496,9 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
     );
 
     // Extract channel preferences from client request
-    const channelPrefs = request.client.channelPreferences;
-    const defaultChannel = channelPrefs?.defaultChannel ?? "stable";
-    const perAppChannels = channelPrefs?.perApp ?? {};
+    const channels = request.client.channels;
+    const defaultChannel = channels?.default ?? "stable";
+    const overrides = channels?.overrides ?? {};
     const clientTargetArchitecture = normalizeTargetArchitecture(request.client.systemArchitecture);
 
     const matchPlans: InventoryMatchPlan[] = request.apps.map((installedApp) => {
@@ -523,7 +525,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         appInfo,
         isPublic,
         requestedChannel: matchResult.appId
-          ? (perAppChannels[matchResult.appId] ?? defaultChannel)
+          ? (overrides[matchResult.appId] ?? defaultChannel)
           : null,
       };
     });
@@ -566,18 +568,18 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
     const latestSourceSuccessByApp = await selectLatestSourceSuccessByApp(db, publicMatchedAppIds);
 
     // Process each app
-    const results: AppDecision[] = [];
+    const results: InventoryResult[] = [];
 
     for (const { installedApp, matchResult, appInfo, isPublic, requestedChannel } of matchPlans) {
-      let decision: AppDecision["decision"] = "local_only";
-      let trackingState: AppDecision["trackingState"] = "local_only";
-      let localReasonCode: AppDecision["localReasonCode"] = "not_found";
+      let decision: InventoryResult["decision"] = "local_only";
+      let trackingState: InventoryResult["catalog"]["trackingState"] = "local_only";
+      let localReasonCode: InventoryResult["catalog"]["localReasonCode"] = "not_found";
       let latestVersion: string | null = null;
       let latestVersionRaw: string | null = null;
       let latestVersionNormalized: string | null = null;
       let releasedAt: string | null = null;
       let latestReleaseId: string | null = null;
-      let matchedArtifact: AppDecision["artifact"] = null;
+      let matchedArtifact: InventoryResult["release"]["artifact"] = null;
       let resolvedInstallStrategy: InstallStrategy | null = null;
       let resolvedChannel: string | null = null;
       let staleSince: string | null = null;
@@ -620,7 +622,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
                 versionNormalized: latest.versionNormalized,
                 versionRaw: latest.versionRaw,
                 releasedAt: latest.releasedAt,
-                artifact: artifactForDecision(latestArtifact),
+                artifact: artifactForResult(latestArtifact),
                 installStrategy: latest.installStrategy,
               };
               resolvedInstallStrategy = latest.installStrategy;
@@ -696,35 +698,47 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         installTrust.status === "one_click" ? installTrust.resolvedStrategy : null;
 
       results.push({
-        appName: installedApp.appName,
-        bundleId: installedApp.bundleId ?? null,
-        installedVersion: installedApp.version ?? null,
-        matchedAppId: matchResult.appId,
-        matchedAppName: matchResult.appName,
-        matchConfidence: matchResult.confidence,
+        app: {
+          name: installedApp.appName,
+          bundleId: installedApp.bundleId ?? null,
+          installedVersion: installedApp.version ?? null,
+        },
         decision,
-        trackingState,
-        localReasonCode,
-        latestVersion,
-        latestVersionRaw,
-        homebrewCaskToken,
-        latestReleaseId,
-        targetArchitecture: clientTargetArchitecture,
-        channel: resolvedChannel,
-        availableChannels: matchResult.appId
-          ? (availableChannelsByApp.get(matchResult.appId) ?? [])
-          : undefined,
-        releasedAt,
-        staleSince,
-        iconUrl,
-        artifact: matchedArtifact,
-        installStrategy,
-        installTrust,
+        catalog: {
+          match: {
+            appId: matchResult.appId,
+            appName: matchResult.appName,
+            confidence: matchResult.confidence,
+          },
+          trackingState,
+          localReasonCode,
+          iconUrl,
+          staleSince,
+        },
+        release: {
+          version: latestVersion,
+          versionRaw: latestVersionRaw,
+          releaseId: latestReleaseId,
+          releasedAt,
+          targetArchitecture: clientTargetArchitecture,
+          artifact: matchedArtifact,
+        },
+        install: {
+          strategy: installStrategy,
+          trust: installTrust,
+          homebrewCaskToken,
+        },
+        channels: {
+          selected: resolvedChannel,
+          available: matchResult.appId ? (availableChannelsByApp.get(matchResult.appId) ?? []) : [],
+        },
       });
     }
 
     const resultByLookupKey = new Map(
-      results.map((result) => [computeLookupKey(result.appName, result.bundleId), result] as const),
+      results.map(
+        (result) => [computeLookupKey(result.app.name, result.app.bundleId), result] as const,
+      ),
     );
     const unmatchedByKey = collectUnmatchedApps(request.apps, resultByLookupKey);
     const persistedDiscoveries = await upsertDiscoveredApps({
@@ -733,37 +747,40 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       now,
     });
 
-    const followupPayload = buildInventoryFollowupPayload({
+    const ingestionPayload = buildInventoryIngestionPayload({
       requestApps: request.apps,
       resultsByLookupKey: resultByLookupKey,
       unmatchedByKey,
       persistedDiscoveries,
       processedAt: now,
     });
-    await persistAndEnqueueInventoryFollowup({
+    await persistAndEnqueueInventoryIngestion({
       db,
       env: c.env,
-      payload: followupPayload,
+      payload: ingestionPayload,
       now,
     });
 
-    const skippedApps = c.get("skippedApps");
+    const invalidInventoryApps = c.get("invalidInventoryApps");
     captureApiEvent(c, "client_inventory_submitted", {
       target_type: "inventory",
       status: "processed",
       app_count: request.apps.length,
-      skipped_count: skippedApps.length,
+      invalid_app_count: invalidInventoryApps.length,
       result_count: results.length,
       update_available_count: results.filter((result) => result.decision === "update_available")
         .length,
-      local_only_count: results.filter((result) => result.trackingState === "local_only").length,
+      local_only_count: results.filter((result) => result.catalog.trackingState === "local_only")
+        .length,
       discovered_count: unmatchedByKey.size,
-      followup_count: inventoryFollowupItemCount(followupPayload),
+      ingestion_count: inventoryIngestionItemCount(ingestionPayload),
       scan_duration_ms: request.scanDurationMs ?? null,
     });
     return c.json({
       results,
-      ...(skippedApps.length > 0 ? { skipped: skippedApps } : {}),
+      issues: {
+        invalidApps: invalidInventoryApps,
+      },
       processedAt: now,
     });
   });

@@ -38,7 +38,7 @@ import {
   releasesSearch,
   reviewSearch,
 } from "@/features/homepage/search-presets";
-import { jobsFailureSearch, jobsRunsSearch } from "@/features/jobs/search";
+import { jobsFailuresSearch, jobsRunsSearch } from "@/features/jobs/search";
 import { useHomepage } from "@/hooks/use-homepage";
 import { formatDuration } from "@/lib/format-duration";
 import { getJobFailureTypeLabel } from "@/lib/security-signals";
@@ -176,8 +176,8 @@ function DashboardPage() {
             <MetricValue value={homepage.overview.needsAttention.pendingFeedback} />
           </Link>
           <Link
-            to="/jobs"
-            search={jobsFailureSearch}
+            to="/jobs/failures"
+            search={jobsFailuresSearch}
             className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-border hover:bg-background/80"
           >
             <MetricLabel label="Open failures" tone="red" />
@@ -357,7 +357,7 @@ function DashboardPage() {
             description="Newest unresolved job failures with related entities."
             icon={Package}
             action={
-              <Link to="/jobs" search={jobsFailureSearch} className={viewAllClassName}>
+              <Link to="/jobs/failures" search={jobsFailuresSearch} className={viewAllClassName}>
                 View all <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             }
@@ -380,7 +380,7 @@ function DashboardPage() {
             description="Latest poll and sync executions, including failures."
             icon={Timer}
             action={
-              <Link to="/jobs" search={jobsRunsSearch} className={viewAllClassName}>
+              <Link to="/jobs/runs" search={jobsRunsSearch} className={viewAllClassName}>
                 View all <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             }
@@ -747,20 +747,20 @@ function JobFailureRow({ item }: { item: JobFailureListItem }) {
   const search =
     item.jobType === "source-anomaly"
       ? {
-          ...jobsFailureSearch,
-          failureStatus: item.status,
-          failureJobType: "source-anomaly" as const,
+          ...jobsFailuresSearch,
+          status: item.status,
+          jobType: "source-anomaly" as const,
           failureId: item.id,
         }
       : {
-          ...jobsFailureSearch,
-          failureStatus: item.status,
+          ...jobsFailuresSearch,
+          status: item.status,
           failureId: item.id,
         };
 
   return (
     <Link
-      to="/jobs"
+      to="/jobs/failures"
       search={search}
       className="group flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60"
     >
@@ -799,7 +799,7 @@ function JobFailureRow({ item }: { item: JobFailureListItem }) {
 function RunRow({ item }: { item: HomepageRunItem }) {
   return (
     <Link
-      to="/jobs"
+      to="/jobs/runs"
       search={jobsRunsSearch}
       className="group flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60"
     >

@@ -343,12 +343,12 @@ function SourceAnomaliesPanel({
           </p>
         </div>
         <Link
-          to="/jobs"
+          to="/jobs/failures"
           search={{
-            failurePage: 1,
-            failurePageSize: 25,
-            failureJobType: "source-anomaly",
-            failureStatus: "open",
+            page: 1,
+            pageSize: 25,
+            jobType: "source-anomaly",
+            status: "open",
             failureId: "",
           }}
           className="text-xs text-muted-foreground hover:text-foreground"

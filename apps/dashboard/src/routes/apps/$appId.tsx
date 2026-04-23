@@ -1,7 +1,7 @@
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useForm } from "@tanstack/react-form";
-import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { type ColumnDef, type PaginationState, type SortingState } from "@tanstack/react-table";
 import {
   ArrowLeft,
@@ -18,9 +18,16 @@ import {
   Upload,
   Zap,
 } from "lucide-react";
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
-import { z } from "zod";
 
 import { AppIcon } from "@/components/shared/app-icon";
 import { CreateSourceDialog } from "@/components/shared/create-source-dialog";
@@ -66,7 +73,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useApp,
   useAppAliases,
@@ -84,10 +91,6 @@ import { useReorderSources } from "@/hooks/use-sources";
 import type { AppAlias, AppDetail, AppLatestRelease, Release, Source } from "@/lib/types";
 import type { AliasType } from "@versioneer/schemas/catalog";
 
-const appDetailSearchDefaults = {
-  tab: "overview" as const,
-};
-
 const ALIAS_TYPE_LABELS: Partial<Record<AliasType, string>> = {
   bundle_id: "Bundle ID",
   name: "Name",
@@ -101,28 +104,38 @@ const ALIAS_TYPE_LABELS: Partial<Record<AliasType, string>> = {
   homebrew_cask: "Homebrew Cask",
 };
 
-const appDetailSearchSchema = z.object({
-  tab: z
-    .enum(["overview", "aliases", "sources", "releases"])
-    .default(appDetailSearchDefaults.tab)
-    .catch(appDetailSearchDefaults.tab),
-});
-
 export const Route = createFileRoute("/apps/$appId")({
-  validateSearch: appDetailSearchSchema,
-  search: { middlewares: [stripSearchParams(appDetailSearchDefaults)] },
   component: AppDetailPage,
 });
 
+type AppDetailTab = "overview" | "aliases" | "sources" | "releases";
+
+const AppDetailPageContext = createContext<{ appId: string; app: AppDetail } | null>(null);
+
+export function useAppDetailPageContext() {
+  const value = useContext(AppDetailPageContext);
+  if (!value) {
+    throw new Error("App detail context is unavailable");
+  }
+  return value;
+}
+
+function activeTabFromPathname(pathname: string): AppDetailTab {
+  if (pathname.endsWith("/aliases")) return "aliases";
+  if (pathname.endsWith("/sources")) return "sources";
+  if (pathname.endsWith("/releases")) return "releases";
+  return "overview";
+}
+
 function AppDetailPage() {
   const { appId } = Route.useParams();
-  const { tab } = Route.useSearch();
-  const navigate = Route.useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { data: app, isLoading } = useApp(appId);
   const [editOpen, setEditOpen] = useState(false);
   const uploadIconMutation = useUploadAppIcon(appId);
   const deleteIconMutation = useDeleteAppIcon(appId);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const activeTab = activeTabFromPathname(pathname);
 
   if (isLoading) {
     return (
@@ -146,6 +159,8 @@ function AppDetailPage() {
       </Empty>
     );
   }
+
+  const pageContext = useMemo(() => ({ appId, app }), [app, appId]);
 
   return (
     <div>
@@ -238,41 +253,42 @@ function AppDetailPage() {
         </Button>
       </div>
 
-      <Tabs
-        value={tab}
-        onValueChange={(value) =>
-          void navigate({
-            search: { tab: value as typeof tab },
-          })
-        }
-        className="mt-6"
-      >
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="aliases">Aliases</TabsTrigger>
-          <TabsTrigger value="sources">Sources</TabsTrigger>
-          <TabsTrigger value="releases">Releases</TabsTrigger>
-        </TabsList>
-        <TabsContent value="overview" className="mt-4">
-          <OverviewTab appId={appId} app={app} />
-        </TabsContent>
-        <TabsContent value="aliases" className="mt-4">
-          <AliasesTab appId={appId} />
-        </TabsContent>
-        <TabsContent value="sources" className="mt-4">
-          <SourcesTab appId={appId} />
-        </TabsContent>
-        <TabsContent value="releases" className="mt-4">
-          <ReleasesTab appId={appId} />
-        </TabsContent>
-      </Tabs>
+      <AppDetailPageContext.Provider value={pageContext}>
+        <Tabs value={activeTab} className="mt-6">
+          <TabsList>
+            <TabsTrigger value="overview" asChild>
+              <Link to="/apps/$appId" params={{ appId }}>
+                Overview
+              </Link>
+            </TabsTrigger>
+            <TabsTrigger value="aliases" asChild>
+              <Link to="/apps/$appId/aliases" params={{ appId }}>
+                Aliases
+              </Link>
+            </TabsTrigger>
+            <TabsTrigger value="sources" asChild>
+              <Link to="/apps/$appId/sources" params={{ appId }}>
+                Sources
+              </Link>
+            </TabsTrigger>
+            <TabsTrigger value="releases" asChild>
+              <Link to="/apps/$appId/releases" params={{ appId }}>
+                Releases
+              </Link>
+            </TabsTrigger>
+          </TabsList>
+          <div className="mt-4">
+            <Outlet />
+          </div>
+        </Tabs>
+      </AppDetailPageContext.Provider>
 
       <EditAppDialog app={app} open={editOpen} onOpenChange={setEditOpen} />
     </div>
   );
 }
 
-function OverviewTab({ appId, app }: { appId: string; app: AppDetail }) {
+export function OverviewTab({ appId, app }: { appId: string; app: AppDetail }) {
   const recomputeLatest = useRecomputeLatest();
 
   return (
@@ -444,7 +460,7 @@ function SourceHealthBadge({ status }: { status: AppDetail["sourceHealth"]["stat
   return <Badge variant="outline">Unknown</Badge>;
 }
 
-function AliasesTab({ appId }: { appId: string }) {
+export function AliasesTab({ appId }: { appId: string }) {
   const { data, isLoading } = useAppAliases(appId);
   const [createOpen, setCreateOpen] = useState(false);
   const updateAlias = useUpdateAlias(appId);
@@ -776,7 +792,7 @@ function SortableSourceRow({
   );
 }
 
-function SourcesTab({ appId }: { appId: string }) {
+export function SourcesTab({ appId }: { appId: string }) {
   const { data, isLoading } = useAppSources(appId);
   const triggerFetch = useTriggerFetch();
   const reorderMutation = useReorderSources();
@@ -877,7 +893,7 @@ function SourcesTab({ appId }: { appId: string }) {
   );
 }
 
-function ReleasesTab({ appId }: { appId: string }) {
+export function ReleasesTab({ appId }: { appId: string }) {
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 });
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
 

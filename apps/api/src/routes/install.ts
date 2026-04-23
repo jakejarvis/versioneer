@@ -6,8 +6,8 @@ import { HTTPException } from "hono/http-exception";
 import { captureApiEvent } from "@/lib/observability";
 import { clientRateLimit } from "@/middleware/rate-limit";
 import {
-  installExecutionStatusRequestSchema,
-  installPrepareRequestSchema,
+  installExecutionCreateRequestSchema,
+  installExecutionEventRequestSchema,
 } from "@versioneer/core/validation";
 import { createDb } from "@versioneer/db";
 import {
@@ -272,9 +272,9 @@ async function createReleaseDiscrepancySuggestion(params: {
 
 export const installRoutes = new Hono<{ Bindings: Env }>()
   .post(
-    "/install/prepare",
+    "/install/executions",
     clientRateLimit,
-    zValidator("json", installPrepareRequestSchema, (result) => {
+    zValidator("json", installExecutionCreateRequestSchema, (result) => {
       if (!result.success) {
         throw new HTTPException(400, { res: validationErrorResponse(result) });
       }
@@ -283,26 +283,33 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
       const data = c.req.valid("json");
       const db = createDb(c.env.DB);
       const now = new Date().toISOString();
-      const target = await validateInstallTarget(db, data);
+      const target = await validateInstallTarget(db, {
+        appId: data.target.appId,
+        releaseId: data.target.releaseId,
+        artifactId: data.target.artifactId ?? null,
+        installStrategy: data.install.strategy,
+        targetArchitecture: data.target.targetArchitecture,
+        client: data.client,
+      });
       const executionId = generateId(idPrefixes.installExecution);
 
       await db.insert(installExecutions).values({
         id: executionId,
         appId: target.app.id,
         releaseId: target.release.id,
-        artifactId: data.artifactId ?? null,
+        artifactId: data.target.artifactId ?? null,
         clientPlatform: data.client.platform,
         clientAppVersion: data.client.appVersion ?? null,
         clientOsVersion: data.client.osVersion ?? null,
         clientSystemArchitecture: data.client.systemArchitecture ?? null,
         targetArchitecture: target.targetArchitecture ?? null,
-        channel: data.channel ?? null,
-        installStrategy: data.installStrategy,
-        executionRoute: data.executionRoute ?? null,
+        channel: data.target.channel ?? null,
+        installStrategy: data.install.strategy,
+        executionRoute: data.install.executionRoute ?? null,
         status: "prepared",
-        expectedBundleId: data.bundleId ?? null,
-        expectedTeamId: data.teamId ?? null,
-        previousVersion: data.previousVersion ?? null,
+        expectedBundleId: data.expected.bundleId ?? null,
+        expectedTeamId: data.expected.teamId ?? null,
+        previousVersion: data.expected.previousVersion ?? null,
         installedVersion: null,
         errorMessage: null,
         verificationJson: null,
@@ -320,33 +327,33 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         targetType: "install_execution",
         targetId: executionId,
         payloadJson: JSON.stringify({
-          appId: data.appId,
-          releaseId: data.releaseId,
-          artifactId: data.artifactId ?? null,
+          appId: data.target.appId,
+          releaseId: data.target.releaseId,
+          artifactId: data.target.artifactId ?? null,
           targetArchitecture: target.targetArchitecture ?? null,
-          installStrategy: data.installStrategy,
-          executionRoute: data.executionRoute ?? null,
+          installStrategy: data.install.strategy,
+          executionRoute: data.install.executionRoute ?? null,
         }),
         createdAt: now,
       });
-      captureApiEvent(c, "client_install_prepare_requested", {
+      captureApiEvent(c, "client_install_execution_created", {
         target_type: "install_execution",
         target_id: executionId,
-        app_id: data.appId,
-        release_id: data.releaseId,
-        artifact_id: data.artifactId ?? null,
-        install_strategy: data.installStrategy,
+        app_id: data.target.appId,
+        release_id: data.target.releaseId,
+        artifact_id: data.target.artifactId ?? null,
+        install_strategy: data.install.strategy,
         target_architecture: target.targetArchitecture ?? null,
         status: "prepared",
       });
 
-      return c.json({ executionId, status: "prepared" as const });
+      return c.json({ execution: { id: executionId, status: "prepared" as const } });
     },
   )
   .post(
-    "/install/executions/:executionId/status",
+    "/install/executions/:executionId/events",
     clientRateLimit,
-    zValidator("json", installExecutionStatusRequestSchema, (result) => {
+    zValidator("json", installExecutionEventRequestSchema, (result) => {
       if (!result.success) {
         throw new HTTPException(400, { res: validationErrorResponse(result) });
       }
@@ -356,40 +363,52 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
       const data = c.req.valid("json");
       const db = createDb(c.env.DB);
       const now = new Date().toISOString();
-      const target = await validateInstallTarget(db, data);
+      const target = await validateInstallTarget(db, {
+        appId: data.target.appId,
+        releaseId: data.target.releaseId,
+        artifactId: data.target.artifactId ?? null,
+        installStrategy: data.install.strategy,
+        targetArchitecture: data.target.targetArchitecture,
+        client: data.client,
+      });
       const existing = await db
         .select()
         .from(installExecutions)
         .where(eq(installExecutions.id, executionId))
         .get();
 
-      if (existing && (existing.appId !== data.appId || existing.releaseId !== data.releaseId)) {
+      if (
+        existing &&
+        (existing.appId !== data.target.appId || existing.releaseId !== data.target.releaseId)
+      ) {
         throw new HTTPException(409, { message: "Execution does not match install target" });
       }
 
       const verificationJson = data.verification ? JSON.stringify(data.verification) : null;
-      const completedAt = data.status === "started" ? null : now;
+      const completedAt = data.event.status === "started" ? null : now;
 
       if (existing) {
         await db
           .update(installExecutions)
           .set({
-            artifactId: data.artifactId ?? existing.artifactId,
+            artifactId: data.target.artifactId ?? existing.artifactId,
             clientPlatform: data.client.platform,
             clientAppVersion: data.client.appVersion ?? null,
             clientOsVersion: data.client.osVersion ?? null,
             clientSystemArchitecture: data.client.systemArchitecture ?? null,
             targetArchitecture: target.targetArchitecture ?? existing.targetArchitecture,
-            channel: data.channel ?? existing.channel,
-            installStrategy: data.installStrategy,
+            channel: data.target.channel ?? existing.channel,
+            installStrategy: data.install.strategy,
             executionRoute:
-              data.executionRoute ?? data.verification?.executionRoute ?? existing.executionRoute,
-            status: data.status,
-            expectedBundleId: data.bundleId ?? existing.expectedBundleId,
-            expectedTeamId: data.teamId ?? existing.expectedTeamId,
-            previousVersion: data.previousVersion ?? existing.previousVersion,
-            installedVersion: data.installedVersion ?? existing.installedVersion,
-            errorMessage: data.errorMessage ?? null,
+              data.install.executionRoute ??
+              data.verification?.executionRoute ??
+              existing.executionRoute,
+            status: data.event.status,
+            expectedBundleId: data.expected.bundleId ?? existing.expectedBundleId,
+            expectedTeamId: data.expected.teamId ?? existing.expectedTeamId,
+            previousVersion: data.expected.previousVersion ?? existing.previousVersion,
+            installedVersion: data.event.installedVersion ?? existing.installedVersion,
+            errorMessage: data.event.errorMessage ?? null,
             verificationJson,
             completedAt,
             updatedAt: now,
@@ -400,21 +419,21 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
           id: executionId,
           appId: target.app.id,
           releaseId: target.release.id,
-          artifactId: data.artifactId ?? null,
+          artifactId: data.target.artifactId ?? null,
           clientPlatform: data.client.platform,
           clientAppVersion: data.client.appVersion ?? null,
           clientOsVersion: data.client.osVersion ?? null,
           clientSystemArchitecture: data.client.systemArchitecture ?? null,
           targetArchitecture: target.targetArchitecture ?? null,
-          channel: data.channel ?? null,
-          installStrategy: data.installStrategy,
-          executionRoute: data.executionRoute ?? data.verification?.executionRoute ?? null,
-          status: data.status,
-          expectedBundleId: data.bundleId ?? null,
-          expectedTeamId: data.teamId ?? null,
-          previousVersion: data.previousVersion ?? null,
-          installedVersion: data.installedVersion ?? null,
-          errorMessage: data.errorMessage ?? null,
+          channel: data.target.channel ?? null,
+          installStrategy: data.install.strategy,
+          executionRoute: data.install.executionRoute ?? data.verification?.executionRoute ?? null,
+          status: data.event.status,
+          expectedBundleId: data.expected.bundleId ?? null,
+          expectedTeamId: data.expected.teamId ?? null,
+          previousVersion: data.expected.previousVersion ?? null,
+          installedVersion: data.event.installedVersion ?? null,
+          errorMessage: data.event.errorMessage ?? null,
           verificationJson,
           preparedAt: now,
           completedAt,
@@ -431,19 +450,19 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         sourceId: target.release.publishedBySourceId ?? null,
       });
       const evidencePayloadJson = JSON.stringify({
-        status: data.status,
-        errorMessage: data.errorMessage ?? null,
-        installStrategy: data.installStrategy,
+        status: data.event.status,
+        errorMessage: data.event.errorMessage ?? null,
+        installStrategy: data.install.strategy,
         targetArchitecture: target.targetArchitecture ?? null,
-        executionRoute: data.executionRoute ?? data.verification?.executionRoute ?? null,
-        previousVersion: data.previousVersion ?? null,
-        installedVersion: data.installedVersion ?? null,
-        bundleId: data.bundleId ?? null,
-        teamId: data.teamId ?? null,
+        executionRoute: data.install.executionRoute ?? data.verification?.executionRoute ?? null,
+        previousVersion: data.expected.previousVersion ?? null,
+        installedVersion: data.event.installedVersion ?? null,
+        bundleId: data.expected.bundleId ?? null,
+        teamId: data.expected.teamId ?? null,
         verification: data.verification ?? null,
       });
 
-      if (data.status === "succeeded" && data.verification) {
+      if (data.event.status === "succeeded" && data.verification) {
         if (data.verification.bundleIdMatch && data.verification.observedBundleId) {
           await createTrustSuggestion({
             db,
@@ -502,16 +521,16 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         }
       }
 
-      if (data.status === "failed") {
+      if (data.event.status === "failed") {
         const issues = new Set<string>();
         if (data.verification?.bundleIdMatch === false) issues.add("bundle_id_mismatch");
         if (data.verification?.teamIdMatch === false) issues.add("team_id_mismatch");
         if (data.verification?.versionMatch === false) issues.add("version_mismatch");
-        if (data.errorMessage?.toLowerCase().includes("hash"))
+        if (data.event.errorMessage?.toLowerCase().includes("hash"))
           issues.add("hash_verification_failed");
-        if (data.errorMessage?.toLowerCase().includes("signature"))
+        if (data.event.errorMessage?.toLowerCase().includes("signature"))
           issues.add("signature_verification_failed");
-        if (data.errorMessage?.toLowerCase().includes("notar"))
+        if (data.event.errorMessage?.toLowerCase().includes("notar"))
           issues.add("notarization_verification_failed");
         if (issues.size === 0) issues.add("install_failed");
 
@@ -539,25 +558,25 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         targetType: "install_execution",
         targetId: executionId,
         payloadJson: JSON.stringify({
-          appId: data.appId,
-          releaseId: data.releaseId,
-          status: data.status,
-          errorMessage: data.errorMessage ?? null,
+          appId: data.target.appId,
+          releaseId: data.target.releaseId,
+          status: data.event.status,
+          errorMessage: data.event.errorMessage ?? null,
         }),
         createdAt: now,
       });
-      captureApiEvent(c, "client_install_status_reported", {
+      captureApiEvent(c, "client_install_execution_event_recorded", {
         target_type: "install_execution",
         target_id: executionId,
-        app_id: data.appId,
-        release_id: data.releaseId,
-        artifact_id: data.artifactId ?? null,
-        install_strategy: data.installStrategy,
+        app_id: data.target.appId,
+        release_id: data.target.releaseId,
+        artifact_id: data.target.artifactId ?? null,
+        install_strategy: data.install.strategy,
         target_architecture: target.targetArchitecture ?? null,
-        status: data.status,
+        status: data.event.status,
         has_verification: Boolean(data.verification),
       });
 
-      return c.json({ executionId, status: "recorded" as const });
+      return c.json({ execution: { id: executionId, status: "recorded" as const } });
     },
   );

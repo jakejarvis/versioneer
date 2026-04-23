@@ -2,8 +2,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   clientPreflightResponseSchema,
-  installExecutionStatusResponseSchema,
-  installPrepareResponseSchema,
+  installExecutionCreateResponseSchema,
+  installExecutionEventResponseSchema,
   inventoryCheckRequestSchema,
   inventoryCheckResponseSchema,
 } from "./index";
@@ -67,60 +67,79 @@ describe("public contract schemas", () => {
       processedAt: "2026-03-26T18:00:00Z",
       results: [
         {
-          appName: "Firefox",
-          bundleId: "org.mozilla.firefox",
-          installedVersion: "126.0",
-          matchedAppId: "app_firefox",
-          matchedAppName: "Mozilla Firefox",
-          matchConfidence: 98,
-          decision: "update_available",
-          trackingState: "public",
-          localReasonCode: null,
-          latestVersion: "127.0",
-          latestVersionRaw: "127.0",
-          latestReleaseId: "rel_firefox",
-          targetArchitecture: "arm64",
-          releasedAt: "2026-03-20T12:00:00Z",
-          staleSince: null,
-          iconUrl: "https://assets.example.com/firefox.png",
-          artifact: {
-            id: "artifact_firefox",
-            downloadUrl: "https://example.com/firefox.zip",
-            architecture: "universal",
-            minOsVersion: "13.0",
-            artifactType: "zip",
-            sizeBytes: 182452384,
-            sha256: "abc123",
+          app: {
+            name: "Firefox",
+            bundleId: "org.mozilla.firefox",
+            installedVersion: "126.0",
           },
-          installStrategy: "zip_replace",
-          installTrust: {
-            status: "one_click",
-            resolvedStrategy: "zip_replace",
-            reasons: [],
+          decision: "update_available",
+          catalog: {
+            match: {
+              appId: "app_firefox",
+              appName: "Mozilla Firefox",
+              confidence: 98,
+            },
+            trackingState: "public",
+            localReasonCode: null,
+            iconUrl: "https://assets.example.com/firefox.png",
+            staleSince: null,
+          },
+          release: {
+            version: "127.0",
+            versionRaw: "127.0",
+            releaseId: "rel_firefox",
+            releasedAt: "2026-03-20T12:00:00Z",
+            targetArchitecture: "arm64",
+            artifact: {
+              id: "artifact_firefox",
+              downloadUrl: "https://example.com/firefox.zip",
+              architecture: "universal",
+              minOsVersion: "13.0",
+              artifactType: "zip",
+              sizeBytes: 182452384,
+              sha256: "abc123",
+            },
+          },
+          install: {
+            strategy: "zip_replace",
+            trust: {
+              status: "one_click",
+              resolvedStrategy: "zip_replace",
+              reasons: [],
+            },
+          },
+          channels: {
+            selected: "stable",
+            available: ["stable", "beta"],
           },
         },
       ],
+      issues: {
+        invalidApps: [],
+      },
     });
 
-    expect(parsed.results[0]?.iconUrl).toBe("https://assets.example.com/firefox.png");
-    expect(parsed.results[0]?.installStrategy).toBe("zip_replace");
+    expect(parsed.results[0]?.catalog.iconUrl).toBe("https://assets.example.com/firefox.png");
+    expect(parsed.results[0]?.install.strategy).toBe("zip_replace");
   });
 
-  it("accepts inventory response with skipped apps", () => {
+  it("accepts inventory response with invalid app issues", () => {
     const parsed = inventoryCheckResponseSchema.parse({
       processedAt: "2026-04-07T12:00:00Z",
       results: [],
-      skipped: [
-        {
-          index: 112,
-          appName: "BrokenApp",
-          reasons: ["sparkleFeedUrl: Invalid URL"],
-        },
-      ],
+      issues: {
+        invalidApps: [
+          {
+            index: 112,
+            appName: "BrokenApp",
+            reasons: ["sparkleFeedUrl: Invalid URL"],
+          },
+        ],
+      },
     });
 
-    expect(parsed.skipped).toHaveLength(1);
-    expect(parsed.skipped![0]?.appName).toBe("BrokenApp");
+    expect(parsed.issues.invalidApps).toHaveLength(1);
+    expect(parsed.issues.invalidApps[0]?.appName).toBe("BrokenApp");
   });
 
   it("accepts preflight response with dismissed bundle IDs", () => {
@@ -140,16 +159,20 @@ describe("public contract schemas", () => {
   });
 
   it("accepts install prepare and status response payloads", () => {
-    const prepare = installPrepareResponseSchema.parse({
-      executionId: "exec_123",
-      status: "prepared",
+    const prepare = installExecutionCreateResponseSchema.parse({
+      execution: {
+        id: "exec_123",
+        status: "prepared",
+      },
     });
-    const status = installExecutionStatusResponseSchema.parse({
-      executionId: "exec_123",
-      status: "recorded",
+    const status = installExecutionEventResponseSchema.parse({
+      execution: {
+        id: "exec_123",
+        status: "recorded",
+      },
     });
 
-    expect(prepare.executionId).toBe("exec_123");
-    expect(status.status).toBe("recorded");
+    expect(prepare.execution.id).toBe("exec_123");
+    expect(status.execution.status).toBe("recorded");
   });
 });

@@ -1,6 +1,6 @@
 import type {
   EnrichmentDrainJob,
-  InventoryFollowupJob,
+  InventoryIngestionJob,
   RecomputeLatestJob,
   SourceFetchJob,
   SourceParseJob,
@@ -13,7 +13,7 @@ import type {
  */
 export interface PipelineWorkerStub extends Fetcher {
   recomputeLatest(params: RecomputeLatestJob): Promise<void>;
-  retryInventoryFollowup(params: InventoryFollowupJob): Promise<void>;
+  retryInventoryIngestion(params: InventoryIngestionJob): Promise<void>;
   reparse(params: SourceParseJob): Promise<void>;
 }
 

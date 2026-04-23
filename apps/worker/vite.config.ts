@@ -21,7 +21,7 @@ export default defineConfig({
       },
       additionalExports: {
         EnrichmentDrainWorkflow: "WorkflowEntrypoint",
-        InventoryFollowupWorkflow: "WorkflowEntrypoint",
+        InventoryIngestionWorkflow: "WorkflowEntrypoint",
         SourcePipelineWorkflow: "WorkflowEntrypoint",
       },
     }),

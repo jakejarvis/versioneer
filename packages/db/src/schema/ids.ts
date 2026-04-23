@@ -27,7 +27,7 @@ export const idPrefixes = {
   auditLog: "al",
   feedback: "fb",
   discoveredApp: "dapp",
-  inventoryFollowupJob: "ifj",
+  inventoryIngestionJob: "ing",
   cronJobRun: "cjr",
   deviceAttestation: "da",
 } as const;

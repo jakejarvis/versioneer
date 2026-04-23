@@ -1,74 +1,96 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  appDecisionSchema,
-  installExecutionStatusRequestSchema,
-  installPrepareRequestSchema,
+  installExecutionCreateRequestSchema,
+  installExecutionEventRequestSchema,
+  inventoryResultSchema,
 } from "../index";
 
-describe("appDecisionSchema install payload", () => {
+describe("inventoryResultSchema install payload", () => {
   it("parses install and artifact metadata", () => {
-    const parsed = appDecisionSchema.parse({
-      appName: "Foo",
-      bundleId: "com.example.foo",
-      installedVersion: "1.0.0",
-      matchedAppId: "app_123",
-      matchedAppName: "Foo",
-      matchConfidence: 99,
-      decision: "update_available",
-      trackingState: "public",
-      localReasonCode: null,
-      latestVersion: "2.0.0",
-      latestVersionRaw: "2.0.0",
-      latestReleaseId: "rel_123",
-      targetArchitecture: "arm64",
-      releasedAt: "2026-03-26T12:00:00Z",
-      staleSince: null,
-      iconUrl: null,
-      artifact: {
-        id: "art_123",
-        downloadUrl: "https://example.com/foo.zip",
-        architecture: "universal",
-        minOsVersion: "13.0",
-        artifactType: "zip",
-        sizeBytes: 123,
-        sha256: "deadbeef",
+    const parsed = inventoryResultSchema.parse({
+      app: {
+        name: "Foo",
+        bundleId: "com.example.foo",
+        installedVersion: "1.0.0",
       },
-      installStrategy: "zip_replace",
-      installTrust: {
-        status: "one_click",
-        resolvedStrategy: "zip_replace",
-        reasons: [],
+      decision: "update_available",
+      catalog: {
+        match: {
+          appId: "app_123",
+          appName: "Foo",
+          confidence: 99,
+        },
+        trackingState: "public",
+        localReasonCode: null,
+        iconUrl: null,
+        staleSince: null,
+      },
+      release: {
+        version: "2.0.0",
+        versionRaw: "2.0.0",
+        releaseId: "rel_123",
+        releasedAt: "2026-03-26T12:00:00Z",
+        targetArchitecture: "arm64",
+        artifact: {
+          id: "art_123",
+          downloadUrl: "https://example.com/foo.zip",
+          architecture: "universal",
+          minOsVersion: "13.0",
+          artifactType: "zip",
+          sizeBytes: 123,
+          sha256: "deadbeef",
+        },
+      },
+      install: {
+        strategy: "zip_replace",
+        trust: {
+          status: "one_click",
+          resolvedStrategy: "zip_replace",
+          reasons: [],
+        },
+      },
+      channels: {
+        selected: "stable",
+        available: ["stable"],
       },
     });
 
-    expect(parsed.artifact?.id).toBe("art_123");
-    expect(parsed.installStrategy).toBe("zip_replace");
+    expect(parsed.release.artifact?.id).toBe("art_123");
+    expect(parsed.install.strategy).toBe("zip_replace");
   });
 
   it("parses install execution prepare and terminal status payloads", () => {
-    const prepare = installPrepareRequestSchema.parse({
+    const prepare = installExecutionCreateRequestSchema.parse({
       client: {
         platform: "macos",
         appVersion: "1.0.0",
         osVersion: "15.4",
         systemArchitecture: "arm64",
       },
-      appId: "app_123",
-      releaseId: "rel_123",
-      artifactId: "art_123",
-      targetArchitecture: "arm64",
-      installStrategy: "zip_replace",
-      executionRoute: "local_replace",
-      previousVersion: "1.0.0",
-      bundleId: "com.example.foo",
-      teamId: "TEAM123456",
+      target: {
+        appId: "app_123",
+        releaseId: "rel_123",
+        artifactId: "art_123",
+        targetArchitecture: "arm64",
+      },
+      install: {
+        strategy: "zip_replace",
+        executionRoute: "local_replace",
+      },
+      expected: {
+        previousVersion: "1.0.0",
+        bundleId: "com.example.foo",
+        teamId: "TEAM123456",
+      },
     });
 
-    const status = installExecutionStatusRequestSchema.parse({
+    const status = installExecutionEventRequestSchema.parse({
       ...prepare,
-      status: "succeeded",
-      installedVersion: "2.0.0",
+      event: {
+        status: "succeeded",
+        installedVersion: "2.0.0",
+      },
       verification: {
         strategy: "zip_replace",
         executionRoute: "local_replace",
@@ -84,7 +106,7 @@ describe("appDecisionSchema install payload", () => {
     });
 
     expect(status.verification?.signatureVerified).toBe(true);
-    expect(status.targetArchitecture).toBe("arm64");
-    expect(status.executionRoute).toBe("local_replace");
+    expect(status.target.targetArchitecture).toBe("arm64");
+    expect(status.install.executionRoute).toBe("local_replace");
   });
 });

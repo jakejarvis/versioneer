@@ -69,37 +69,57 @@ export const installVerificationSummarySchema = z.object({
   observedVersion: z.string().max(200).nullable().optional(),
 });
 
-const installExecutionBaseSchema = z.object({
-  client: installExecutionClientSchema,
+export const installExecutionTargetSchema = z.object({
   appId: z.string().min(1),
   releaseId: z.string().min(1),
   artifactId: z.string().min(1).nullable().optional(),
   targetArchitecture: targetArchitectureSchema.nullable().optional(),
-  installStrategy: installStrategySchema,
-  executionRoute: installExecutionRouteSchema.optional(),
   channel: z.string().max(100).nullable().optional(),
+});
+
+export const installExecutionPlanSchema = z.object({
+  strategy: installStrategySchema,
+  executionRoute: installExecutionRouteSchema.optional(),
+});
+
+export const installExecutionExpectedSchema = z.object({
   previousVersion: z.string().max(200).nullable().optional(),
   bundleId: z.string().max(500).nullable().optional(),
   teamId: z.string().max(100).nullable().optional(),
 });
 
-export const installPrepareRequestSchema = installExecutionBaseSchema;
-
-export const installPrepareResponseSchema = z.object({
-  executionId: z.string().min(1),
-  status: z.literal("prepared"),
+export const installExecutionCreateRequestSchema = z.object({
+  client: installExecutionClientSchema,
+  target: installExecutionTargetSchema,
+  install: installExecutionPlanSchema,
+  expected: installExecutionExpectedSchema,
 });
 
-export const installExecutionStatusRequestSchema = installExecutionBaseSchema.extend({
-  status: z.enum(["started", "succeeded", "failed", "cancelled"]),
-  installedVersion: z.string().max(200).nullable().optional(),
-  errorMessage: z.string().max(4000).nullable().optional(),
+export const installExecutionCreateResponseSchema = z.object({
+  execution: z.object({
+    id: z.string().min(1),
+    status: z.literal("prepared"),
+  }),
+});
+
+export const installExecutionEventRequestSchema = z.object({
+  client: installExecutionClientSchema,
+  target: installExecutionTargetSchema,
+  install: installExecutionPlanSchema,
+  expected: installExecutionExpectedSchema,
+  event: z.object({
+    status: z.enum(["started", "succeeded", "failed", "cancelled"]),
+    installedVersion: z.string().max(200).nullable().optional(),
+    errorMessage: z.string().max(4000).nullable().optional(),
+  }),
   verification: installVerificationSummarySchema.nullable().optional(),
 });
 
-export const installExecutionStatusResponseSchema = z.object({
-  executionId: z.string().min(1),
-  status: z.literal("recorded"),
+export const installExecutionEventResponseSchema = z.object({
+  execution: z.object({
+    id: z.string().min(1),
+    status: z.literal("recorded"),
+  }),
 });
 
 export type { InstallStrategy, InstallExecutionRoute, InstallExecutionStatus };
@@ -110,7 +130,10 @@ export type AppArtifact = z.infer<typeof appArtifactSchema>;
 export type InstallExecutionClient = z.infer<typeof installExecutionClientSchema>;
 export type { TargetArchitecture };
 export type InstallVerificationSummary = z.infer<typeof installVerificationSummarySchema>;
-export type InstallPrepareRequest = z.infer<typeof installPrepareRequestSchema>;
-export type InstallPrepareResponse = z.infer<typeof installPrepareResponseSchema>;
-export type InstallExecutionStatusRequest = z.infer<typeof installExecutionStatusRequestSchema>;
-export type InstallExecutionStatusResponse = z.infer<typeof installExecutionStatusResponseSchema>;
+export type InstallExecutionTarget = z.infer<typeof installExecutionTargetSchema>;
+export type InstallExecutionPlan = z.infer<typeof installExecutionPlanSchema>;
+export type InstallExecutionExpected = z.infer<typeof installExecutionExpectedSchema>;
+export type InstallExecutionCreateRequest = z.infer<typeof installExecutionCreateRequestSchema>;
+export type InstallExecutionCreateResponse = z.infer<typeof installExecutionCreateResponseSchema>;
+export type InstallExecutionEventRequest = z.infer<typeof installExecutionEventRequestSchema>;
+export type InstallExecutionEventResponse = z.infer<typeof installExecutionEventResponseSchema>;

@@ -95,14 +95,14 @@ describe("inventoryRequestEnvelopeSchema", () => {
   it("parses channel preferences", () => {
     const result = inventoryRequestEnvelopeSchema.parse({
       client: {
-        channelPreferences: {
-          defaultChannel: "beta",
-          perApp: { app_123: "stable" },
+        channels: {
+          default: "beta",
+          overrides: { app_123: "stable" },
         },
       },
       apps: [],
     });
-    expect(result.client.channelPreferences?.defaultChannel).toBe("beta");
+    expect(result.client.channels?.default).toBe("beta");
   });
 });
 
@@ -111,43 +111,62 @@ describe("inventoryCheckResponseSchema", () => {
     const result = inventoryCheckResponseSchema.parse({
       results: [
         {
-          appName: "Foo",
-          bundleId: "com.example.foo",
-          installedVersion: "1.0.0",
-          matchedAppId: "app_123",
-          matchedAppName: "Foo",
-          matchConfidence: 100,
+          app: {
+            name: "Foo",
+            bundleId: "com.example.foo",
+            installedVersion: "1.0.0",
+          },
           decision: "up_to_date",
-          trackingState: "public",
-          localReasonCode: null,
-          latestVersion: "1.0.0",
-          latestVersionRaw: "1.0.0",
-          latestReleaseId: "rel_123",
-          targetArchitecture: "arm64",
-          releasedAt: "2026-01-01T00:00:00Z",
-          staleSince: null,
-          iconUrl: null,
-          artifact: null,
-          installStrategy: null,
-          installTrust: {
-            status: "none",
-            resolvedStrategy: null,
-            reasons: [],
+          catalog: {
+            match: {
+              appId: "app_123",
+              appName: "Foo",
+              confidence: 100,
+            },
+            trackingState: "public",
+            localReasonCode: null,
+            iconUrl: null,
+            staleSince: null,
+          },
+          release: {
+            version: "1.0.0",
+            versionRaw: "1.0.0",
+            releaseId: "rel_123",
+            releasedAt: "2026-01-01T00:00:00Z",
+            targetArchitecture: "arm64",
+            artifact: null,
+          },
+          install: {
+            strategy: null,
+            trust: {
+              status: "none",
+              resolvedStrategy: null,
+              reasons: [],
+            },
+          },
+          channels: {
+            selected: "stable",
+            available: ["stable"],
           },
         },
       ],
+      issues: {
+        invalidApps: [],
+      },
       processedAt: "2026-01-01T00:00:00Z",
     });
     expect(result.results).toHaveLength(1);
     expect(result.results[0]!.decision).toBe("up_to_date");
   });
 
-  it("accepts optional skipped array", () => {
+  it("accepts invalid app issues", () => {
     const result = inventoryCheckResponseSchema.parse({
       results: [],
-      skipped: [{ index: 0, appName: null, reasons: ["Invalid bundleId"] }],
+      issues: {
+        invalidApps: [{ index: 0, appName: null, reasons: ["Invalid bundleId"] }],
+      },
       processedAt: "2026-01-01T00:00:00Z",
     });
-    expect(result.skipped).toHaveLength(1);
+    expect(result.issues.invalidApps).toHaveLength(1);
   });
 });

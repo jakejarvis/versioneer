@@ -2,16 +2,16 @@ import { inArray, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import {
-  inventoryFollowupPayloadR2Key,
+  inventoryIngestionPayloadR2Key,
   recordJobFailure,
-  type InventoryFollowupDiscoveredIconCandidate,
-  type InventoryFollowupMatchedAppCandidate,
-  type InventoryFollowupPayload,
-  type InventoryFollowupQueueMessage,
+  type InventoryIngestionDiscoveredIconCandidate,
+  type InventoryIngestionMatchedAppCandidate,
+  type InventoryIngestionPayload,
+  type InventoryIngestionQueueMessage,
 } from "@versioneer/core/pipeline";
-import type { AppDecision, InstalledApp } from "@versioneer/core/validation";
+import type { InstalledApp, InventoryResult } from "@versioneer/core/validation";
 import { createDb } from "@versioneer/db";
-import { discoveredApps, generateId, idPrefixes, inventoryFollowupJobs } from "@versioneer/db";
+import { discoveredApps, generateId, idPrefixes, inventoryIngestionJobs } from "@versioneer/db";
 
 import { D1_PARAM_LIMIT } from "../lib/constants";
 
@@ -108,14 +108,14 @@ function nextSampleVersions(existing: string | null, version?: string | null): s
 
 export function collectUnmatchedApps(
   installedApps: InstalledApp[],
-  resultByLookupKey: ReadonlyMap<string, AppDecision>,
+  resultByLookupKey: ReadonlyMap<string, InventoryResult>,
 ): Map<string, DiscoveryCandidate> {
   const unmatchedByKey = new Map<string, DiscoveryCandidate>();
 
   for (const installedApp of installedApps) {
     const lookupKey = computeLookupKey(installedApp.appName, installedApp.bundleId);
     const result = resultByLookupKey.get(lookupKey);
-    if (result?.trackingState === "public" || unmatchedByKey.has(lookupKey)) {
+    if (result?.catalog.trackingState === "public" || unmatchedByKey.has(lookupKey)) {
       continue;
     }
 
@@ -223,7 +223,7 @@ export async function upsertDiscoveredApps(params: {
   if (writes.length > 0) {
     const firstWrite = writes[0];
     if (!firstWrite) {
-      throw new Error("Expected discovered app writes for inventory follow-up handoff");
+      throw new Error("Expected discovered app writes for inventory ingestion handoff");
     }
     await db.batch([firstWrite, ...writes.slice(1)]);
   }
@@ -253,14 +253,14 @@ function candidateHasSuggestionData(app: InstalledApp): boolean {
   );
 }
 
-export function buildInventoryFollowupPayload(params: {
+export function buildInventoryIngestionPayload(params: {
   requestApps: InstalledApp[];
-  resultsByLookupKey: ReadonlyMap<string, AppDecision>;
+  resultsByLookupKey: ReadonlyMap<string, InventoryResult>;
   unmatchedByKey: ReadonlyMap<string, DiscoveryCandidate>;
   persistedDiscoveries: ReadonlyMap<string, PersistedDiscovery>;
   processedAt: string;
-}): InventoryFollowupPayload {
-  const discoveredIconCandidates: InventoryFollowupDiscoveredIconCandidate[] = [];
+}): InventoryIngestionPayload {
+  const discoveredIconCandidates: InventoryIngestionDiscoveredIconCandidate[] = [];
   for (const [lookupKey, app] of params.unmatchedByKey) {
     if (!app.iconBase64) continue;
     const persisted = params.persistedDiscoveries.get(lookupKey);
@@ -272,18 +272,18 @@ export function buildInventoryFollowupPayload(params: {
     });
   }
 
-  const matchedAppCandidates: InventoryFollowupMatchedAppCandidate[] = [];
+  const matchedAppCandidates: InventoryIngestionMatchedAppCandidate[] = [];
   for (const installedApp of params.requestApps) {
     const lookupKey = computeLookupKey(installedApp.appName, installedApp.bundleId);
     const result = params.resultsByLookupKey.get(lookupKey);
-    if (!result?.matchedAppId) continue;
+    if (!result?.catalog.match.appId) continue;
 
     const createSuggestions =
-      result.trackingState === "public" && candidateHasSuggestionData(installedApp);
+      result.catalog.trackingState === "public" && candidateHasSuggestionData(installedApp);
     if (!installedApp.iconBase64 && !createSuggestions) continue;
 
     matchedAppCandidates.push({
-      appId: result.matchedAppId,
+      appId: result.catalog.match.appId,
       lookupKey,
       createSuggestions,
       iconBase64: installedApp.iconBase64 ?? null,
@@ -307,29 +307,29 @@ export function buildInventoryFollowupPayload(params: {
   };
 }
 
-export function inventoryFollowupItemCount(payload: InventoryFollowupPayload): number {
+export function inventoryIngestionItemCount(payload: InventoryIngestionPayload): number {
   return payload.discoveredIconCandidates.length + payload.matchedAppCandidates.length;
 }
 
-export async function persistAndEnqueueInventoryFollowup(params: {
+export async function persistAndEnqueueInventoryIngestion(params: {
   db: Db;
   env: Env;
-  payload: InventoryFollowupPayload;
+  payload: InventoryIngestionPayload;
   now: string;
 }): Promise<void> {
-  const itemsTotal = inventoryFollowupItemCount(params.payload);
+  const itemsTotal = inventoryIngestionItemCount(params.payload);
   if (itemsTotal === 0) return;
 
-  const jobId = generateId(idPrefixes.inventoryFollowupJob);
-  const payloadR2Key = inventoryFollowupPayloadR2Key(jobId, new Date(params.now));
+  const ingestionId = generateId(idPrefixes.inventoryIngestionJob);
+  const payloadR2Key = inventoryIngestionPayloadR2Key(ingestionId, new Date(params.now));
 
   try {
     await params.env.RAW_BUCKET.put(payloadR2Key, JSON.stringify(params.payload), {
       httpMetadata: { contentType: "application/json" },
     });
 
-    await params.db.insert(inventoryFollowupJobs).values({
-      id: jobId,
+    await params.db.insert(inventoryIngestionJobs).values({
+      id: ingestionId,
       status: "pending",
       payloadR2Key,
       attemptCount: 0,
@@ -339,15 +339,15 @@ export async function persistAndEnqueueInventoryFollowup(params: {
     });
 
     try {
-      await params.env.INVENTORY_FOLLOWUP_QUEUE.send({
-        jobId,
-      } satisfies InventoryFollowupQueueMessage);
+      await params.env.INVENTORY_INGESTION_QUEUE.send({
+        ingestionId,
+      } satisfies InventoryIngestionQueueMessage);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       await recordJobFailure({
         db: params.db,
-        jobType: "inventory_followup",
-        relatedId: jobId,
+        jobType: "inventory_ingestion",
+        relatedId: ingestionId,
         jobKey: "enqueue",
         errorMessage,
       });
@@ -357,8 +357,8 @@ export async function persistAndEnqueueInventoryFollowup(params: {
     try {
       await recordJobFailure({
         db: params.db,
-        jobType: "inventory_followup",
-        relatedId: jobId,
+        jobType: "inventory_ingestion",
+        relatedId: ingestionId,
         jobKey: "handoff",
         errorMessage,
       });

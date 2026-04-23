@@ -12,7 +12,7 @@ export type TrackedJobFailureType =
   | "poll_sources"
   | "cask_index_sync"
   | "enrich_discovered_apps"
-  | "inventory_followup";
+  | "inventory_ingestion";
 
 export type TrackedJobResult = {
   ok: boolean;

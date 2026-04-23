@@ -82,6 +82,6 @@ export interface EnrichmentDrainJob {
   failureJobKey?: string | null;
 }
 
-export interface InventoryFollowupJob {
-  jobId: string;
+export interface InventoryIngestionJob {
+  ingestionId: string;
 }
