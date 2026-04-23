@@ -1,4 +1,4 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 
 import { createDb } from "@versioneer/db";
 import {
@@ -24,16 +24,12 @@ import { getParser } from "../parsers";
 import { getDescriptor } from "../sources/registry";
 import { normalizeVersion, inferChannel } from "../versioning";
 import { recordSourceAnomaly } from "./anomalies";
+import { buildArtifactIdentity, buildReleaseObservationIdentity } from "./artifact-identity";
 import { normalizeReleaseNotes } from "./release-notes";
 import { getSourceFetchUrlMetadata } from "./source-url-policy";
 import type { ParseStepResult, SourceParseEnv, SourceParseJob } from "./types";
 
 const INSTALLABLE_ARTIFACT_TYPES = new Set(["zip", "dmg", "pkg"]);
-
-async function artifactUrlHash(url: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(url));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 function artifactHostname(rawUrl: string): string | null {
   return getSourceFetchUrlMetadata(rawUrl).hostname;
@@ -311,55 +307,118 @@ export async function handleSourceParse(
       observedReleaseIds.add(releaseId);
 
       // Insert observation
-      await db.insert(releaseObservations).values({
-        id: observationId,
-        parserRunId,
-        appId: source.appId,
-        releaseId,
-        observedVersionRaw: parsedRelease.versionRaw,
+      const observationIdentity = buildReleaseObservationIdentity({
         observedVersionNormalized: versionNormalized,
         observedBuildNumber: parsedRelease.buildNumber ?? null,
         observedChannel: channel,
         observedPublishedAt: toISODate(parsedRelease.publishedAt),
         observedReleaseNotesUrl: parsedRelease.releaseNotesUrl ?? null,
         observedDownloadUrl: parsedRelease.downloadUrl ?? null,
-        confidence: output.confidence,
-        observationJson: parsedRelease.metadata ? JSON.stringify(parsedRelease.metadata) : null,
-        createdAt: now,
       });
 
-      // Upsert artifacts — query once, then insert only new URLs
+      await db
+        .insert(releaseObservations)
+        .values({
+          id: observationId,
+          parserRunId,
+          appId: source.appId,
+          releaseId,
+          observedVersionRaw: parsedRelease.versionRaw,
+          observedVersionNormalized: versionNormalized,
+          observedBuildNumber: parsedRelease.buildNumber ?? null,
+          observedChannel: channel,
+          observedPublishedAt: toISODate(parsedRelease.publishedAt),
+          observedReleaseNotesUrl: parsedRelease.releaseNotesUrl ?? null,
+          observedDownloadUrl: observationIdentity.canonicalObservedDownloadUrl,
+          observationKey: observationIdentity.observationKey,
+          confidence: output.confidence,
+          observationJson: parsedRelease.metadata ? JSON.stringify(parsedRelease.metadata) : null,
+          createdAt: now,
+          lastSeenAt: now,
+          seenCount: 1,
+        })
+        .onConflictDoUpdate({
+          target: [releaseObservations.releaseId, releaseObservations.observationKey],
+          set: {
+            parserRunId,
+            appId: source.appId,
+            observedVersionRaw: parsedRelease.versionRaw,
+            observedVersionNormalized: versionNormalized,
+            observedBuildNumber: parsedRelease.buildNumber ?? null,
+            observedChannel: channel,
+            observedPublishedAt: toISODate(parsedRelease.publishedAt),
+            observedReleaseNotesUrl: parsedRelease.releaseNotesUrl ?? null,
+            observedDownloadUrl: observationIdentity.canonicalObservedDownloadUrl,
+            confidence: output.confidence,
+            observationJson: parsedRelease.metadata ? JSON.stringify(parsedRelease.metadata) : null,
+            lastSeenAt: now,
+            seenCount: sql`${releaseObservations.seenCount} + 1`,
+          },
+        });
+
+      // Upsert artifacts using stable identity instead of raw presigned URLs.
       const existingArtifacts = await db
         .select({
           id: artifacts.id,
           url: artifacts.url,
-          urlHash: artifacts.urlHash,
+          canonicalUrl: artifacts.canonicalUrl,
+          identityKey: artifacts.identityKey,
+          sha256: artifacts.sha256,
           architecture: artifacts.architecture,
         })
         .from(artifacts)
         .where(eq(artifacts.releaseId, releaseId))
         .all();
       const existingByUrl = new Map(existingArtifacts.map((a) => [a.url, a] as const));
-      const existingByUrlHash = new Map(
-        existingArtifacts.filter((a) => a.urlHash).map((a) => [a.urlHash!, a] as const),
+      const existingByCanonicalUrl = new Map(
+        existingArtifacts.map((a) => [a.canonicalUrl, a] as const),
       );
+      const existingByIdentityKey = new Map(
+        existingArtifacts.map((a) => [a.identityKey, a] as const),
+      );
+      for (const artifact of existingArtifacts) {
+        const derivedIdentity = buildArtifactIdentity({
+          url: artifact.url,
+          sha256: artifact.sha256,
+        });
+        existingByCanonicalUrl.set(derivedIdentity.canonicalUrl, artifact);
+        existingByIdentityKey.set(derivedIdentity.identityKey, artifact);
+      }
 
       for (const parsedArtifact of parsedRelease.artifacts) {
         const architecture = normalizeArtifactArchitecture(parsedArtifact.architecture);
-        const urlHash = await artifactUrlHash(parsedArtifact.url);
+        const artifactIdentity = buildArtifactIdentity({
+          url: parsedArtifact.url,
+          sha256: parsedArtifact.sha256,
+        });
         const existingArtifact =
-          existingByUrlHash.get(urlHash) ?? existingByUrl.get(parsedArtifact.url);
+          existingByIdentityKey.get(artifactIdentity.identityKey) ??
+          existingByCanonicalUrl.get(artifactIdentity.canonicalUrl) ??
+          existingByUrl.get(parsedArtifact.url);
         if (existingArtifact) {
           await db
             .update(artifacts)
             .set({
-              urlHash,
+              url: parsedArtifact.url,
+              canonicalUrl: artifactIdentity.canonicalUrl,
+              identityKey: artifactIdentity.identityKey,
               sha256: parsedArtifact.sha256 ?? undefined,
               sizeBytes: parsedArtifact.sizeBytes ?? undefined,
               architecture: mergeArtifactArchitectures(existingArtifact.architecture, architecture),
               minOsVersion: parsedArtifact.minOsVersion ?? undefined,
             })
             .where(eq(artifacts.id, existingArtifact.id));
+          const mergedArtifact = {
+            ...existingArtifact,
+            url: parsedArtifact.url,
+            canonicalUrl: artifactIdentity.canonicalUrl,
+            identityKey: artifactIdentity.identityKey,
+            sha256: parsedArtifact.sha256 ?? existingArtifact.sha256,
+            architecture: mergeArtifactArchitectures(existingArtifact.architecture, architecture),
+          };
+          existingByUrl.set(parsedArtifact.url, mergedArtifact);
+          existingByCanonicalUrl.set(artifactIdentity.canonicalUrl, mergedArtifact);
+          existingByIdentityKey.set(artifactIdentity.identityKey, mergedArtifact);
           continue;
         }
         const hostname = artifactHostname(parsedArtifact.url);
@@ -381,23 +440,26 @@ export async function handleSourceParse(
           !parsedArtifact.sha256 &&
           !parsedArtifact.signature
         ) {
+          const missingHashFingerprint = artifactIdentity.canonicalUrl;
           await recordSourceAnomaly({
             db,
             sourceId: source.id,
             kind: "missing_install_hash",
-            fingerprint: parsedArtifact.url,
-            message: `Installable ${parsedArtifact.type} artifact is missing SHA-256: ${parsedArtifact.url}`,
+            fingerprint: missingHashFingerprint,
+            message: `Installable ${parsedArtifact.type} artifact is missing SHA-256: ${artifactIdentity.canonicalUrl}`,
             now,
           });
         }
+        const artifactId = generateId(idPrefixes.artifact);
         await db
           .insert(artifacts)
           .values({
-            id: generateId(idPrefixes.artifact),
+            id: artifactId,
             releaseId,
             artifactType: parsedArtifact.type,
             url: parsedArtifact.url,
-            urlHash,
+            canonicalUrl: artifactIdentity.canonicalUrl,
+            identityKey: artifactIdentity.identityKey,
             sha256: parsedArtifact.sha256 ?? null,
             sizeBytes: parsedArtifact.sizeBytes ?? null,
             architecture,
@@ -406,16 +468,28 @@ export async function handleSourceParse(
             createdAt: now,
           })
           .onConflictDoUpdate({
-            target: [artifacts.releaseId, artifacts.urlHash],
+            target: [artifacts.releaseId, artifacts.identityKey],
             set: {
               artifactType: parsedArtifact.type,
               url: parsedArtifact.url,
-              sha256: parsedArtifact.sha256 ?? null,
-              sizeBytes: parsedArtifact.sizeBytes ?? null,
+              canonicalUrl: artifactIdentity.canonicalUrl,
+              sha256: parsedArtifact.sha256 ?? undefined,
+              sizeBytes: parsedArtifact.sizeBytes ?? undefined,
               architecture,
-              minOsVersion: parsedArtifact.minOsVersion ?? null,
+              minOsVersion: parsedArtifact.minOsVersion ?? undefined,
             },
           });
+        const insertedArtifact = {
+          id: artifactId,
+          url: parsedArtifact.url,
+          canonicalUrl: artifactIdentity.canonicalUrl,
+          identityKey: artifactIdentity.identityKey,
+          sha256: parsedArtifact.sha256 ?? null,
+          architecture,
+        };
+        existingByUrl.set(parsedArtifact.url, insertedArtifact);
+        existingByCanonicalUrl.set(artifactIdentity.canonicalUrl, insertedArtifact);
+        existingByIdentityKey.set(artifactIdentity.identityKey, insertedArtifact);
       }
 
       // Ensure exactly one primary artifact per release (prefer newest)

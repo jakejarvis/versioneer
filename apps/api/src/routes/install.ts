@@ -23,7 +23,6 @@ import {
   trustAssertions,
 } from "@versioneer/db";
 import {
-  artifactCompatibilityIsKnown,
   artifactSupportsTarget,
   normalizeTargetArchitecture,
   type TargetArchitecture,
@@ -109,11 +108,6 @@ async function validateInstallTarget(
     if (targetArchitecture && !artifactSupportsTarget(artifact.architecture, targetArchitecture)) {
       throw new HTTPException(409, {
         message: "Artifact is not compatible with target architecture",
-      });
-    }
-    if (!artifactCompatibilityIsKnown(artifact.architecture, targetArchitecture)) {
-      throw new HTTPException(409, {
-        message: "Artifact architecture compatibility is not established",
       });
     }
   }

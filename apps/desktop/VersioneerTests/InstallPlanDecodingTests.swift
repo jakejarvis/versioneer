@@ -95,6 +95,50 @@ struct InstallPlanTests {
     #expect(plan == nil)
   }
 
+  @Test func createsInstallPlanWhenCatalogTrustIsDegradedButNotBlocked() throws {
+    let json = """
+      {
+        "appName": "Firefox",
+        "bundleId": "org.mozilla.firefox",
+        "installedVersion": "126.0",
+        "matchedAppId": "app_firefox",
+        "matchedAppName": "Mozilla Firefox",
+        "matchConfidence": 98.0,
+        "decision": "update_available",
+        "trackingState": "public",
+        "localReasonCode": null,
+        "latestVersion": "127.0",
+        "latestVersionRaw": "127.0",
+        "latestReleaseId": "rel_456",
+        "targetArchitecture": "arm64",
+        "releasedAt": "2026-03-20T12:00:00Z",
+        "iconUrl": null,
+        "artifact": {
+          "id": "art_789",
+          "downloadUrl": "https://example.com/firefox.zip",
+          "architecture": "unknown",
+          "minOsVersion": "13.0",
+          "artifactType": "zip",
+          "sizeBytes": 123456,
+          "sha256": null
+        },
+        "installStrategy": "zip_replace",
+        "installTrust": {
+          "status": "one_click",
+          "resolvedStrategy": "zip_replace",
+          "reasons": ["missing_sha256", "unknown_architecture"]
+        }
+      }
+      """
+
+    let decision = try JSONDecoder().decode(AppDecision.self, from: Data(json.utf8))
+    let plan = try #require(InstallPlan(result: decision, installedApp: nil))
+
+    #expect(decision.installTrust.status == .oneClick)
+    #expect(decision.installTrust.reasons == [.missingSHA256, .unknownArchitecture])
+    #expect(plan.strategy == .zipReplace)
+  }
+
   @Test func returnsNilForUninstallableDecision() throws {
     let json = """
       {

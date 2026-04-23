@@ -43,6 +43,10 @@ final class SelfUpdateService {
     syncFromClient()
   }
 
+  static func preview() -> SelfUpdateService {
+    Self(client: PreviewSelfUpdateClient())
+  }
+
   func setAutomaticallyChecksForUpdates(_ value: Bool) {
     guard isAvailable else { return }
     client.automaticallyChecksForUpdates = value
@@ -62,6 +66,23 @@ final class SelfUpdateService {
     lastUpdateCheckDate = client.lastUpdateCheckDate
     configurationIssue = client.configurationIssue
   }
+}
+
+@MainActor
+private final class PreviewSelfUpdateClient: SelfUpdateClient {
+  var onChange: (() -> Void)?
+  var canCheckForUpdates = false
+  var automaticallyChecksForUpdates = false
+  var feedURL: URL?
+  var lastUpdateCheckDate: Date?
+  var configurationIssue: String? = "Unavailable in previews."
+
+  func start() {}
+
+  @discardableResult
+  func clearFeedURLFromUserDefaults() -> URL? { nil }
+
+  func checkForUpdates() {}
 }
 
 @MainActor

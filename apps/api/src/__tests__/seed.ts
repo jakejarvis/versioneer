@@ -1,3 +1,4 @@
+import { buildArtifactIdentity } from "@versioneer/core/pipeline";
 import {
   type Database,
   appAliases,
@@ -118,13 +119,19 @@ export async function seedArtifact(
   releaseId: string,
   overrides: Partial<typeof artifacts.$inferInsert> = {},
 ) {
+  const url = overrides.url ?? "https://example.com/app.dmg";
+  const sha256 = overrides.sha256 ?? null;
+  const artifactIdentity = buildArtifactIdentity({ url, sha256 });
   const [row] = await db
     .insert(artifacts)
     .values({
       id: overrides.id ?? generateId(idPrefixes.artifact),
       releaseId,
       artifactType: "dmg",
-      url: "https://example.com/app.dmg",
+      url,
+      canonicalUrl: overrides.canonicalUrl ?? artifactIdentity.canonicalUrl,
+      identityKey: overrides.identityKey ?? artifactIdentity.identityKey,
+      sha256,
       isPrimary: true,
       createdAt: now(),
       ...overrides,

@@ -123,6 +123,17 @@ function inferInstallStrategy(
   return "manual_only";
 }
 
+function installTrustBlocksOneClick(reasons: InstallTrustReason[]): boolean {
+  return reasons.some(
+    (reason) =>
+      reason === "missing_artifact" ||
+      reason === "missing_bundle_id" ||
+      reason === "missing_team_id" ||
+      reason === "manual_only" ||
+      reason === "unsupported_strategy",
+  );
+}
+
 function deriveInstallTrust(params: {
   decision: AppDecision["decision"];
   resolvedStrategy: InstallStrategy | null;
@@ -160,29 +171,21 @@ function deriveInstallTrust(params: {
     };
   }
 
-  if (
-    (params.resolvedStrategy === "sparkle" ||
-      params.resolvedStrategy === "zip_replace" ||
-      params.resolvedStrategy === "dmg_copy_replace" ||
-      params.resolvedStrategy === "pkg_install") &&
-    params.artifact?.architecture &&
-    !artifactCompatibilityIsKnown(params.artifact.architecture, params.targetArchitecture)
-  ) {
-    return {
-      status: "manual_only",
-      resolvedStrategy: params.resolvedStrategy,
-      reasons: ["unknown_architecture"],
-    };
-  }
-
   if (params.resolvedStrategy === "sparkle") {
-    if (params.installedApp.sparklePublicKey || params.hasApprovedSparklePublicKey) {
-      return { status: "one_click", resolvedStrategy: params.resolvedStrategy, reasons: [] };
+    const reasons: InstallTrustReason[] = [];
+    if (!params.installedApp.sparklePublicKey && !params.hasApprovedSparklePublicKey) {
+      reasons.push("missing_sparkle_public_key");
+    }
+    if (
+      params.artifact?.architecture &&
+      !artifactCompatibilityIsKnown(params.artifact.architecture, params.targetArchitecture)
+    ) {
+      reasons.push("unknown_architecture");
     }
     return {
-      status: "manual_only",
+      status: "one_click",
       resolvedStrategy: params.resolvedStrategy,
-      reasons: ["missing_sparkle_public_key"],
+      reasons,
     };
   }
 
@@ -196,9 +199,15 @@ function deriveInstallTrust(params: {
     if (!params.artifact?.sha256) reasons.push("missing_sha256");
     if (!params.installedApp.bundleId) reasons.push("missing_bundle_id");
     if (!params.installedApp.teamId) reasons.push("missing_team_id");
-    return reasons.length === 0
-      ? { status: "one_click", resolvedStrategy: params.resolvedStrategy, reasons: [] }
-      : { status: "manual_only", resolvedStrategy: params.resolvedStrategy, reasons };
+    if (
+      params.artifact?.architecture &&
+      !artifactCompatibilityIsKnown(params.artifact.architecture, params.targetArchitecture)
+    ) {
+      reasons.push("unknown_architecture");
+    }
+    return installTrustBlocksOneClick(reasons)
+      ? { status: "manual_only", resolvedStrategy: params.resolvedStrategy, reasons }
+      : { status: "one_click", resolvedStrategy: params.resolvedStrategy, reasons };
   }
 
   return {

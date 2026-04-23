@@ -20,8 +20,9 @@ export const installTrustReasonCopy: Record<string, SecuritySignalCopy> = {
   },
   missing_sha256: {
     label: "Missing SHA-256",
-    description: "One-click replacement and package installs require an artifact hash.",
-    tone: "danger",
+    description:
+      "Versioneer can still install this release, but the catalog does not pin the artifact with a SHA-256 checksum.",
+    tone: "warning",
   },
   missing_bundle_id: {
     label: "Missing bundle ID",
@@ -35,8 +36,9 @@ export const installTrustReasonCopy: Record<string, SecuritySignalCopy> = {
   },
   missing_sparkle_public_key: {
     label: "Missing Sparkle key",
-    description: "Sparkle installs require a local or approved public key.",
-    tone: "danger",
+    description:
+      "Versioneer could not confirm the Sparkle public key ahead of time, so Sparkle's own runtime validation becomes the trust anchor.",
+    tone: "warning",
   },
   mac_app_store_external: {
     label: "Mac App Store",
@@ -60,8 +62,9 @@ export const installTrustReasonCopy: Record<string, SecuritySignalCopy> = {
   },
   unknown_architecture: {
     label: "Unknown architecture",
-    description: "One-click install needs confirmed processor compatibility.",
-    tone: "danger",
+    description:
+      "The catalog could not confirm processor compatibility ahead of time. Versioneer will rely on local inspection when it can.",
+    tone: "warning",
   },
 };
 
@@ -83,8 +86,9 @@ export const sourceAnomalyCopy: Record<string, SecuritySignalCopy> = {
   },
   missing_install_hash: {
     label: "Missing install hash",
-    description: "An installable artifact was found without SHA-256 material.",
-    tone: "danger",
+    description:
+      "An installable artifact was found without SHA-256 material. Treat it as a degraded-trust release, not a hard stop.",
+    tone: "warning",
   },
   parser_error_spike: {
     label: "Parser error spike",

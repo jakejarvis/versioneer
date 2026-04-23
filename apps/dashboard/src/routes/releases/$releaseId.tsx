@@ -93,9 +93,10 @@ function ReleaseDetailPage() {
               href={row.original.url}
               target="_blank"
               rel="noopener noreferrer"
+              title={row.original.canonicalUrl}
               className="truncate font-mono text-xs text-blue-600 hover:underline dark:text-blue-400"
             >
-              {row.original.url}
+              {displayArtifactUrl(row.original.canonicalUrl)}
             </a>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {row.original.sizeBytes ? (
@@ -103,6 +104,9 @@ function ReleaseDetailPage() {
               ) : null}
               {row.original.architecture ? <span>{row.original.architecture}</span> : null}
               {row.original.isPrimary ? <span>Primary</span> : null}
+              {row.original.url !== row.original.canonicalUrl ? (
+                <span>Signed query params hidden</span>
+              ) : null}
               {row.original.sha256 ? (
                 <span className="font-mono">sha256 {row.original.sha256.slice(0, 12)}...</span>
               ) : null}
@@ -145,6 +149,9 @@ function ReleaseDetailPage() {
                 ? `Build ${row.original.observedBuildNumber}`
                 : "--"}
             </span>
+            {row.original.seenCount > 1 ? (
+              <span className="text-xs text-muted-foreground">Seen {row.original.seenCount}x</span>
+            ) : null}
           </div>
         ),
       },
@@ -182,9 +189,10 @@ function ReleaseDetailPage() {
               href={row.original.observedDownloadUrl}
               target="_blank"
               rel="noopener noreferrer"
+              title={row.original.observedDownloadUrl}
               className="block max-w-64 truncate text-xs text-blue-600 hover:underline dark:text-blue-400"
             >
-              {row.original.observedDownloadUrl}
+              {displayArtifactUrl(row.original.observedDownloadUrl)}
             </a>
           ) : (
             "--"
@@ -210,10 +218,10 @@ function ReleaseDetailPage() {
           ),
       },
       {
-        accessorKey: "createdAt",
-        meta: { label: "Observed" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Observed" />,
-        cell: ({ row }) => <TimeAgo date={row.original.createdAt} />,
+        accessorKey: "lastSeenAt",
+        meta: { label: "Last Seen" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Last Seen" />,
+        cell: ({ row }) => <TimeAgo date={row.original.lastSeenAt} />,
       },
     ],
     [],
@@ -430,7 +438,7 @@ function ReleaseDetailPage() {
               },
               {
                 onSuccess: () => {
-                  toast.success("Artifact added");
+                  toast.success("Artifact saved");
                   setArtifactDraft({
                     artifactType: "dmg",
                     architecture: "universal",
@@ -540,6 +548,15 @@ function ReleaseDetailPage() {
       </div>
     </div>
   );
+}
+
+function displayArtifactUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl);
+    return `${url.host}${url.pathname}${url.search}`;
+  } catch {
+    return rawUrl;
+  }
 }
 
 const NOTES_PROSE_CLASSES =

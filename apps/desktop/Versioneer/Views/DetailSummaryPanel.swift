@@ -47,19 +47,14 @@ struct DetailSummaryPanel: View {
     appState.manualUpdateAction(for: result)
   }
 
-  private var installTrustDetail: String? {
-    guard result.decision == .updateAvailable,
-      result.installTrust.status == .manualOnly,
-      !result.installTrust.reasons.isEmpty
-    else { return nil }
-
-    let labels = result.installTrust.reasons.map { reason in
+  private var installTrustLabels: [String] {
+    result.installTrust.reasons.map { reason in
       switch reason {
       case .missingArtifact: "download artifact"
-      case .missingSHA256: "SHA-256 checksum"
+      case .missingSHA256: "catalog SHA-256 checksum"
       case .missingBundleID: "bundle identifier"
       case .missingTeamID: "Developer Team ID"
-      case .missingSparklePublicKey: "Sparkle public key"
+      case .missingSparklePublicKey: "approved Sparkle public key"
       case .macAppStoreExternal: "Mac App Store route"
       case .homebrewExternal: "Homebrew route"
       case .manualOnly: "manual install policy"
@@ -67,7 +62,33 @@ struct DetailSummaryPanel: View {
       case .unknownArchitecture: "confirmed processor compatibility"
       }
     }
-    return "One-click install is disabled until Versioneer has: \(labels.joined(separator: ", "))."
+  }
+
+  private var installTrustCallout: DetailCallout? {
+    guard result.decision == .updateAvailable, !result.installTrust.reasons.isEmpty else {
+      return nil
+    }
+
+    let labels = installTrustLabels.joined(separator: ", ")
+    switch result.installTrust.status {
+    case .manualOnly:
+      return DetailCallout(
+        id: "install-trust-required",
+        title: "Trust Material Required",
+        detail: "One-click install is disabled until Versioneer has: \(labels).",
+        tone: .warning
+      )
+    case .oneClick:
+      return DetailCallout(
+        id: "install-trust-warning",
+        title: "Install Trust Warning",
+        detail:
+          "Versioneer can still install this update, but the catalog is missing: \(labels). Runtime verification still runs during install.",
+        tone: .warning
+      )
+    case .external, .none:
+      return nil
+    }
   }
 
   private var decisionTitle: String {
@@ -389,15 +410,8 @@ struct DetailSummaryPanel: View {
       )
     }
 
-    if let installTrustDetail {
-      callouts.append(
-        DetailCallout(
-          id: "install-trust",
-          title: "Trust Material Required",
-          detail: installTrustDetail,
-          tone: .warning
-        )
-      )
+    if let installTrustCallout {
+      callouts.append(installTrustCallout)
     }
 
     if let manualUpdateAction,

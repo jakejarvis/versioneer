@@ -73,14 +73,21 @@ export const releaseObservations = sqliteTable(
     observedPublishedAt: text("observed_published_at"),
     observedReleaseNotesUrl: text("observed_release_notes_url"),
     observedDownloadUrl: text("observed_download_url"),
+    observationKey: text("observation_key").notNull(),
     confidence: integer("confidence"),
     observationJson: text("observation_json"),
     createdAt: text("created_at").notNull(),
+    lastSeenAt: text("last_seen_at").notNull(),
+    seenCount: integer("seen_count").notNull().default(1),
   },
   (table) => [
     index("idx_observations_parser_run").on(table.parserRunId),
     index("idx_observations_app_id").on(table.appId),
     index("idx_observations_release_id").on(table.releaseId),
+    uniqueIndex("idx_observations_release_observation_key").on(
+      table.releaseId,
+      table.observationKey,
+    ),
   ],
 );
 
@@ -93,7 +100,8 @@ export const artifacts = sqliteTable(
       .references(() => releases.id),
     artifactType: text("artifact_type", { enum: artifactTypeValues }).notNull(),
     url: text("url").notNull(),
-    urlHash: text("url_hash"),
+    canonicalUrl: text("canonical_url").notNull(),
+    identityKey: text("identity_key").notNull(),
     sha256: text("sha256"),
     sizeBytes: integer("size_bytes"),
     architecture: text("architecture", { enum: artifactArchitectureValues })
@@ -105,7 +113,7 @@ export const artifacts = sqliteTable(
   },
   (table) => [
     index("idx_artifacts_release_id").on(table.releaseId),
-    uniqueIndex("idx_artifacts_release_url_hash").on(table.releaseId, table.urlHash),
+    uniqueIndex("idx_artifacts_release_identity_key").on(table.releaseId, table.identityKey),
   ],
 );
 

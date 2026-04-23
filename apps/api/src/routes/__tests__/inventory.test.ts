@@ -280,6 +280,134 @@ describe("POST /v1/inventory/check", () => {
     expect(result.installTrust.reasons).toEqual(["missing_team_id"]);
   });
 
+  it("keeps one-click install enabled when only the catalog hash is missing", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db, {
+      canonicalName: "Hash Optional App",
+      status: "public",
+    });
+    await seedAlias(db, testApp.id, {
+      aliasType: "bundle_id",
+      value: "com.example.hashoptional",
+      normalizedValue: "com.example.hashoptional",
+    });
+    const source = await seedSource(db, testApp.id, {
+      sourceType: "github_releases",
+      parserKey: "github_releases",
+      reviewStatus: "approved",
+      role: "authority",
+      status: "active",
+      lastSuccessAt: TEST_NOW.toISOString(),
+    });
+    const release = await seedRelease(db, testApp.id, {
+      versionRaw: "2.0.0",
+      versionNormalized: normalizeVersion("2.0.0"),
+      channel: "stable",
+      status: "active",
+      publishedBySourceId: source.id,
+      releasedAt: "2026-03-12T00:00:00Z",
+    });
+    const artifact = await seedArtifact(db, release.id, {
+      artifactType: "dmg",
+      url: "https://example.com/hash-optional-2.0.0.dmg",
+      architecture: "universal",
+      sha256: null,
+      isPrimary: true,
+    });
+    await seedLatestRelease(db, {
+      appId: testApp.id,
+      releaseId: release.id,
+      authoritySourceId: source.id,
+      artifactId: artifact.id,
+      targetArchitecture: "arm64",
+      versionNormalized: release.versionNormalized,
+      versionRaw: release.versionRaw,
+      releasedAt: release.releasedAt!,
+      installStrategy: "dmg_copy_replace",
+    });
+
+    const res = await postInventory({
+      client: { osVersion: "15.0", systemArchitecture: "arm64" },
+      apps: [
+        {
+          appName: "Hash Optional App",
+          bundleId: "com.example.hashoptional",
+          teamId: "TEAM123456",
+          version: "1.0.0",
+        },
+      ],
+    });
+    const body = await readInventoryResponse(res);
+    const result = body.results[0]!;
+    expect(result.decision).toBe("update_available");
+    expect(result.installStrategy).toBe("dmg_copy_replace");
+    expect(result.installTrust).toEqual({
+      status: "one_click",
+      resolvedStrategy: "dmg_copy_replace",
+      reasons: ["missing_sha256"],
+    });
+  });
+
+  it("keeps Sparkle installs enabled when the public key is not pre-approved", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db, {
+      canonicalName: "Sparkle Key Optional App",
+      status: "public",
+    });
+    await seedAlias(db, testApp.id, {
+      aliasType: "bundle_id",
+      value: "com.example.sparkleoptional",
+      normalizedValue: "com.example.sparkleoptional",
+    });
+    const source = await seedSource(db, testApp.id, {
+      sourceType: "sparkle",
+      parserKey: "sparkle",
+      reviewStatus: "approved",
+      role: "authority",
+      status: "active",
+      lastSuccessAt: TEST_NOW.toISOString(),
+    });
+    const release = await seedRelease(db, testApp.id, {
+      versionRaw: "5.0.0",
+      versionNormalized: normalizeVersion("5.0.0"),
+      channel: "stable",
+      status: "active",
+      publishedBySourceId: source.id,
+      releasedAt: "2026-03-13T00:00:00Z",
+    });
+    await seedLatestRelease(db, {
+      appId: testApp.id,
+      releaseId: release.id,
+      authoritySourceId: source.id,
+      artifactId: null,
+      targetArchitecture: "arm64",
+      versionNormalized: release.versionNormalized,
+      versionRaw: release.versionRaw,
+      releasedAt: release.releasedAt!,
+      installStrategy: "sparkle",
+    });
+
+    const res = await postInventory({
+      client: { osVersion: "15.0", systemArchitecture: "arm64" },
+      apps: [
+        {
+          appName: "Sparkle Key Optional App",
+          bundleId: "com.example.sparkleoptional",
+          version: "4.0.0",
+        },
+      ],
+    });
+    const body = await readInventoryResponse(res);
+    const result = body.results[0]!;
+    expect(result.decision).toBe("update_available");
+    expect(result.installStrategy).toBe("sparkle");
+    expect(result.installTrust).toEqual({
+      status: "one_click",
+      resolvedStrategy: "sparkle",
+      reasons: ["missing_sparkle_public_key"],
+    });
+  });
+
   it("marks Mac App Store catalog routes as external", async () => {
     const res = await postInventory({
       client: { osVersion: "15.0", systemArchitecture: "arm64" },
@@ -477,11 +605,16 @@ describe("POST /v1/inventory/check", () => {
     expect(x86Body.results[0]!.artifact?.architecture).toBe("x86_64");
   });
 
-  it("keeps unknown-architecture updates visible but disables one-click install", async () => {
+  it("keeps unknown-architecture updates installable while flagging degraded trust", async () => {
     const res = await postInventory({
       client: { osVersion: "15.0", systemArchitecture: "arm64" },
       apps: [
-        { appName: "Unknown Arch App", bundleId: "com.example.unknownarch", version: "1.0.0" },
+        {
+          appName: "Unknown Arch App",
+          bundleId: "com.example.unknownarch",
+          teamId: "TEAM123456",
+          version: "1.0.0",
+        },
       ],
     });
     const body = await readInventoryResponse(res);
@@ -489,9 +622,9 @@ describe("POST /v1/inventory/check", () => {
     expect(result.decision).toBe("update_available");
     expect(result.latestReleaseId).toBe(catalog.releaseF.id);
     expect(result.artifact?.architecture).toBe("unknown");
-    expect(result.installStrategy).toBeNull();
+    expect(result.installStrategy).toBe("dmg_copy_replace");
     expect(result.installTrust).toEqual({
-      status: "manual_only",
+      status: "one_click",
       resolvedStrategy: "dmg_copy_replace",
       reasons: ["unknown_architecture"],
     });

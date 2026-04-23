@@ -361,7 +361,8 @@ export interface Artifact {
   releaseId: string;
   artifactType: ArtifactType;
   url: string;
-  urlHash: string | null;
+  canonicalUrl: string;
+  identityKey: string;
   sha256: string | null;
   sizeBytes: number | null;
   architecture: string | null;
@@ -382,9 +383,12 @@ export interface ReleaseObservation {
   observedPublishedAt: string | null;
   observedReleaseNotesUrl: string | null;
   observedDownloadUrl: string | null;
+  observationKey: string;
   confidence: number | null;
   observationJson: string | null;
   createdAt: string;
+  lastSeenAt: string;
+  seenCount: number;
 }
 
 export interface AppLatestRelease {

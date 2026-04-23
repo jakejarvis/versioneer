@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { getCachedLatest, setCachedLatest } from "@versioneer/core/cache";
 import {
+  buildArtifactIdentity,
   handleRecomputeLatest,
   handleSourceFetch,
   type SourceFetchJob,
@@ -17,6 +18,7 @@ import {
   generateId,
   idPrefixes,
   releases,
+  releaseObservations,
   sourceFetches,
   sources,
 } from "@versioneer/db";
@@ -269,6 +271,12 @@ describe("SourcePipelineWorkflow", () => {
       releaseId: priorReleaseId,
       artifactType: "dmg",
       url: "https://old-artifacts.example.com/app-1.0.0.dmg",
+      canonicalUrl: buildArtifactIdentity({
+        url: "https://old-artifacts.example.com/app-1.0.0.dmg",
+      }).canonicalUrl,
+      identityKey: buildArtifactIdentity({
+        url: "https://old-artifacts.example.com/app-1.0.0.dmg",
+      }).identityKey,
       sha256: "abc123",
       isPrimary: true,
       createdAt: TEST_NOW_ISO,
@@ -334,6 +342,119 @@ describe("SourcePipelineWorkflow", () => {
     expect(parsedRelease?.releaseNotesHtml).toBeNull();
   });
 
+  it("dedupes rotating signed artifact URLs into one artifact and one rolled-up observation", async () => {
+    const db = createDb(env.DB);
+
+    const appId = generateId(idPrefixes.app);
+    await db.insert(apps).values({
+      id: appId,
+      slug: `wf-signed-${appId.slice(-8)}`,
+      canonicalName: "Signed URL App",
+      status: "public",
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
+    });
+
+    const sourceId = generateId(idPrefixes.source);
+    await db.insert(sources).values({
+      id: sourceId,
+      appId,
+      sourceType: "sparkle",
+      parserKey: "sparkle",
+      baseUrl: "https://downloads.example.com/appcast.xml",
+      reviewStatus: "approved",
+      status: "active",
+      pollIntervalMinutes: 60,
+      ordinal: 0,
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
+    });
+
+    const firstSignedUrl =
+      "https://binaries.example.com/145.2.7632.4581/comet_latest.dmg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=300&X-Amz-Signature=first";
+    const secondSignedUrl =
+      "https://binaries.example.com/145.2.7632.4581/comet_latest.dmg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=300&X-Amz-Signature=second";
+
+    const firstAppcast = `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <sparkle:version>145.2.7632.4581</sparkle:version>
+      <enclosure url="${firstSignedUrl}" sparkle:edSignature="sig-1" />
+    </item>
+  </channel>
+</rss>`;
+    const secondAppcast = `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <sparkle:version>145.2.7632.4581</sparkle:version>
+      <enclosure url="${secondSignedUrl}" sparkle:edSignature="sig-1" />
+    </item>
+  </channel>
+</rss>`;
+
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(firstAppcast, {
+          status: 200,
+          headers: { "content-type": "application/xml" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(secondAppcast, {
+          status: 200,
+          headers: { "content-type": "application/xml" },
+        }),
+      );
+
+    const workflow = createWorkflowInstance();
+    await workflow.run(
+      {
+        payload: { sourceId, reason: "scheduled" as const, force: false },
+        timestamp: TEST_NOW,
+        instanceId: `wf_signed_${sourceId}_1`,
+      },
+      createMockStep(),
+    );
+    await workflow.run(
+      {
+        payload: { sourceId, reason: "scheduled" as const, force: false },
+        timestamp: TEST_NOW,
+        instanceId: `wf_signed_${sourceId}_2`,
+      },
+      createMockStep(),
+    );
+
+    const release = await db.select().from(releases).where(eq(releases.appId, appId)).get();
+    expect(release).toBeTruthy();
+
+    const artifactRows = await db
+      .select()
+      .from(artifacts)
+      .where(eq(artifacts.releaseId, release!.id))
+      .all();
+    expect(artifactRows).toHaveLength(1);
+    expect(artifactRows[0]!.canonicalUrl).toBe(
+      "https://binaries.example.com/145.2.7632.4581/comet_latest.dmg",
+    );
+    expect(artifactRows[0]!.identityKey).toBe(
+      "url:https://binaries.example.com/145.2.7632.4581/comet_latest.dmg",
+    );
+    expect(artifactRows[0]!.url).toBe(secondSignedUrl);
+
+    const observationRows = await db
+      .select()
+      .from(releaseObservations)
+      .where(eq(releaseObservations.releaseId, release!.id))
+      .all();
+    expect(observationRows).toHaveLength(1);
+    expect(observationRows[0]!.observedDownloadUrl).toBe(
+      "https://binaries.example.com/145.2.7632.4581/comet_latest.dmg",
+    );
+    expect(observationRows[0]!.seenCount).toBe(2);
+  });
+
   it("clears latest rows and cache for channels without active releases", async () => {
     const db = createDb(env.DB);
 
@@ -365,6 +486,12 @@ describe("SourcePipelineWorkflow", () => {
       releaseId: stableReleaseId,
       artifactType: "dmg",
       url: "https://example.com/stale-latest-2.0.0.dmg",
+      canonicalUrl: buildArtifactIdentity({
+        url: "https://example.com/stale-latest-2.0.0.dmg",
+      }).canonicalUrl,
+      identityKey: buildArtifactIdentity({
+        url: "https://example.com/stale-latest-2.0.0.dmg",
+      }).identityKey,
       architecture: "universal",
       isPrimary: true,
       createdAt: TEST_NOW_ISO,

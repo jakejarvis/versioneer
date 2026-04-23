@@ -79,6 +79,15 @@ struct SelfUpdateServiceTests {
     #expect(service.automaticallyChecksForUpdates)
     #expect(service.lastUpdateCheckDate == Date(timeIntervalSince1970: 1_743_000_000))
   }
+
+  @Test func previewServiceUsesPreviewSafeClient() {
+    let service = SelfUpdateService.preview()
+
+    #expect(!service.isAvailable)
+    #expect(service.configurationIssue == "Unavailable in previews.")
+    #expect(!service.canCheckForUpdates)
+    #expect(service.feedURL == nil)
+  }
 }
 
 @MainActor

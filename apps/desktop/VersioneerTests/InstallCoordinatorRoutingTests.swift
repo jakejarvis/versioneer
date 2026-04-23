@@ -45,6 +45,30 @@ struct InstallCoordinatorRoutingTests {
     #expect(coordinator.executionRoute(for: plan) == .sparkle)
   }
 
+  @Test func bundleArchitectureSupportsUniversalAndRosettaCompatibleSlices() {
+    #expect(
+      InstallCoordinator.bundleArchitectureSupportsTarget(
+        bundleArchitecture: "universal",
+        targetArchitecture: "arm64"
+      )
+    )
+    #expect(
+      InstallCoordinator.bundleArchitectureSupportsTarget(
+        bundleArchitecture: "x86_64",
+        targetArchitecture: "arm64"
+      )
+    )
+  }
+
+  @Test func bundleArchitectureRejectsKnownIncompatibleSlices() {
+    #expect(
+      !InstallCoordinator.bundleArchitectureSupportsTarget(
+        bundleArchitecture: "arm64",
+        targetArchitecture: "x86_64"
+      )
+    )
+  }
+
   private func makePlan(
     strategy: InstallStrategy
   ) -> InstallPlan {

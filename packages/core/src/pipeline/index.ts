@@ -20,6 +20,11 @@ export { handleRecomputeLatest } from "./recompute";
 export { normalizeReleaseNotes } from "./release-notes";
 export type { ReleaseNotesFormat } from "./release-notes";
 export { renderReleaseNotesHtml, renderReleaseNotesMarkdownHtml } from "./release-notes-render";
+export {
+  buildArtifactIdentity,
+  buildReleaseObservationIdentity,
+  canonicalizeArtifactUrl,
+} from "./artifact-identity";
 export { sanitizeHtml } from "./sanitize-html";
 export {
   readResponseArrayBufferLimited,

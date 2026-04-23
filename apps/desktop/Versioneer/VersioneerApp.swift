@@ -2,8 +2,18 @@ import SwiftUI
 
 @main
 struct VersioneerApp: App {
-  @State private var appState = AppState()
-  @State private var selfUpdateService = SelfUpdateService()
+  @State private var appState: AppState
+  @State private var selfUpdateService: SelfUpdateService
+
+  init() {
+    let isPreviewRuntime = PreviewRuntime.isActive
+    _appState = State(
+      initialValue: AppState(enableLiveServices: !isPreviewRuntime)
+    )
+    _selfUpdateService = State(
+      initialValue: isPreviewRuntime ? SelfUpdateService.preview() : SelfUpdateService()
+    )
+  }
 
   private var selectedMenuResult: AppDecision? {
     guard let id = appState.selectedAppID else { return nil }

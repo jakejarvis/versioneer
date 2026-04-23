@@ -240,6 +240,7 @@ final class InstallCoordinator {
           bundleURL: preparedBundle.appBundleURL,
           downloadedArtifactURL: artifactURL,
           expectedHash: installPlan.artifact?.sha256,
+          targetArchitecture: installPlan.targetArchitecture ?? Self.systemArchitecture(),
           installedApp: installedApp,
           strategy: installPlan.strategy,
           executionRoute: executionRouteUsed
@@ -924,6 +925,7 @@ final class InstallCoordinator {
     bundleURL: URL,
     downloadedArtifactURL: URL,
     expectedHash: String?,
+    targetArchitecture: String?,
     installedApp: InstalledApp,
     strategy: InstallStrategy,
     executionRoute: ExecutionRoute?
@@ -943,6 +945,17 @@ final class InstallCoordinator {
     summary.observedBundleId = metadata.bundleId
     summary.observedVersion = metadata.version
     summary.observedTeamId = metadata.teamId
+    if let targetArchitecture,
+      let bundleArchitecture = metadata.architecture,
+      !Self.bundleArchitectureSupportsTarget(
+        bundleArchitecture: bundleArchitecture,
+        targetArchitecture: targetArchitecture
+      )
+    {
+      throw InstallError.verificationFailed(
+        "Downloaded app architecture \(bundleArchitecture) is not compatible with target architecture \(targetArchitecture)"
+      )
+    }
 
     // Always verify code signature
     let result = try await ProcessRunner.runSuccessful(
@@ -996,11 +1009,6 @@ final class InstallCoordinator {
       guard installedApp.teamId?.isEmpty == false else {
         throw InstallError.missingInstallTrustMaterial(
           "Catalog-backed installs require the installed app's Developer Team ID before Versioneer can replace it."
-        )
-      }
-      guard plan.artifact?.sha256?.isEmpty == false else {
-        throw InstallError.missingInstallTrustMaterial(
-          "Catalog-backed installs require a SHA-256 checksum before Versioneer can replace or install with elevated privileges."
         )
       }
     case .sparkle, .macAppStore, .manualOnly:
@@ -1280,16 +1288,76 @@ final class InstallCoordinator {
     let bundleId: String?
     let version: String?
     let teamId: String?
+    let architecture: String?
   }
 
   private func readBundleMetadata(at bundleURL: URL) -> BundleMetadata {
     guard let bundle = Bundle(url: bundleURL) else {
-      return BundleMetadata(bundleId: nil, version: nil, teamId: nil)
+      return BundleMetadata(bundleId: nil, version: nil, teamId: nil, architecture: nil)
     }
     let info = bundle.infoDictionary ?? [:]
     let bundleId = info["CFBundleIdentifier"] as? String
     let version = info["CFBundleShortVersionString"] as? String
-    return BundleMetadata(bundleId: bundleId, version: version, teamId: nil)
+    let architecture = BundleMetadataReader.readApp(at: bundleURL)?.architecture
+    return BundleMetadata(
+      bundleId: bundleId, version: version, teamId: nil, architecture: architecture)
+  }
+
+  nonisolated static func bundleArchitectureSupportsTarget(
+    bundleArchitecture: String?,
+    targetArchitecture: String?
+  ) -> Bool {
+    guard let normalizedBundle = normalizedArchitecture(bundleArchitecture),
+      let normalizedTarget = normalizedArchitecture(targetArchitecture)
+    else {
+      return true
+    }
+
+    if normalizedBundle == "universal" || normalizedBundle == normalizedTarget {
+      return true
+    }
+
+    return normalizedTarget == "arm64" && normalizedBundle == "x86_64"
+  }
+
+  nonisolated static func systemArchitecture() -> String? {
+    var size = 256
+    var machine = [CChar](repeating: 0, count: size)
+    guard sysctlbyname("hw.machine", &machine, &size, nil, 0) == 0 else {
+      return nil
+    }
+
+    let reported = String(
+      decoding: machine.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) },
+      as: UTF8.self
+    )
+
+    if reported == "x86_64" {
+      var translated: Int32 = 0
+      var translatedSize = MemoryLayout<Int32>.size
+      if sysctlbyname("sysctl.proc_translated", &translated, &translatedSize, nil, 0) == 0,
+        translated == 1
+      {
+        return "arm64"
+      }
+    }
+
+    return normalizedArchitecture(reported)
+  }
+
+  nonisolated private static func normalizedArchitecture(_ value: String?) -> String? {
+    guard let value else { return nil }
+    let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    switch normalized {
+    case "arm64", "aarch64":
+      return "arm64"
+    case "x86_64", "x86-64", "amd64", "intel":
+      return "x86_64"
+    case "universal", "universal2", "fat":
+      return "universal"
+    default:
+      return nil
+    }
   }
 
   private func readInstalledVersion(at appURL: URL) -> String? {

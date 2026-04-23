@@ -132,7 +132,7 @@ describe("POST /v1/install/prepare", () => {
     expect(res.status).toBe(409);
   });
 
-  it("rejects artifacts whose architecture compatibility is unknown", async () => {
+  it("accepts artifacts whose architecture compatibility is unknown", async () => {
     const db = getDb(env.DB);
     const testApp = await seedApp(db);
     const source = await seedSource(db, testApp.id);
@@ -149,7 +149,7 @@ describe("POST /v1/install/prepare", () => {
       env,
     );
 
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
   });
 });
 
@@ -224,6 +224,31 @@ describe("POST /v1/install/executions/:id/status", () => {
       },
       env,
     );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string };
+    expect(body.status).toBe("recorded");
+  });
+
+  it("records status updates for unknown-architecture artifacts", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db);
+    const source = await seedSource(db, testApp.id);
+    const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
+    const artifact = await seedArtifact(db, release.id, { architecture: "unknown" });
+
+    const res = await app.request(
+      `/v1/install/executions/exec_unknownarch/status`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...prepareBody(testApp.id, release.id, artifact.id),
+          status: "started",
+        }),
+      },
+      env,
+    );
+
     expect(res.status).toBe(200);
     const body = (await res.json()) as { status: string };
     expect(body.status).toBe("recorded");

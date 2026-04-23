@@ -139,15 +139,18 @@ final class AppState {
   }
 
   var loadState: LoadState = .idle
+  let liveServicesEnabled: Bool
 
   // MARK: - Init
 
   init(
     settings: SettingsStore = SettingsStore(),
-    cacheStore: ScanCacheStore = ScanCacheStore()
+    cacheStore: ScanCacheStore = ScanCacheStore(),
+    enableLiveServices: Bool = true
   ) {
     self.settings = settings
     self.cacheStore = cacheStore
+    self.liveServicesEnabled = enableLiveServices
     resultsSort = settings.resultsSortMode
 
     installCoordinator.onStateChange = { [weak self] in
@@ -162,17 +165,19 @@ final class AppState {
       refreshDisplayedResults()
     }
 
-    configureDirectoryWatcher()
-    PostHogTelemetry.configureIfNeeded(
-      analyticsEnabled: settings.analyticsEnabled,
-      crashReportingEnabled: settings.crashReportingEnabled
-    )
-    PostHogTelemetry.capture(
-      "desktop_app_launched",
-      properties: [
-        "has_cached_results": hasCachedResults
-      ]
-    )
+    if enableLiveServices {
+      configureDirectoryWatcher()
+      PostHogTelemetry.configureIfNeeded(
+        analyticsEnabled: settings.analyticsEnabled,
+        crashReportingEnabled: settings.crashReportingEnabled
+      )
+      PostHogTelemetry.capture(
+        "desktop_app_launched",
+        properties: [
+          "has_cached_results": hasCachedResults
+        ]
+      )
+    }
   }
 
   /// Watches app directories for changes and triggers a rescan when apps are
@@ -605,7 +610,8 @@ final class AppState {
     let rules = ignoredAppRules(matching: result)
     let ruleIDs = Set(rules.map(\.id))
     guard !ruleIDs.isEmpty else { return }
-    PostHogTelemetry.capture("desktop_result_unignored", properties: telemetryProperties(for: result))
+    PostHogTelemetry.capture(
+      "desktop_result_unignored", properties: telemetryProperties(for: result))
 
     withUndo("Unignore \(result.appName)", undoManager: undoManager) { state in
       state.settings.ignoredAppRules = state.settings.ignoredAppRules.filter {

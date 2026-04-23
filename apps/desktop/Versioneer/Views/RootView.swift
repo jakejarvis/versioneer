@@ -38,13 +38,14 @@ struct RootView: View {
     .versioneerTelemetryScreen(name: "main_window", screenClass: "RootView")
     .task {
       appState.windowUndoManager = undoManager
-      guard !isRunningPreview else { return }
+      guard appState.liveServicesEnabled else { return }
       await appState.loadPreflight()
       guard appState.settings.scanOnLaunch else { return }
       await Task.yield()
       await appState.scanAndSubmit()
     }
     .task(id: appState.visibleUpdateCount) {
+      guard appState.liveServicesEnabled else { return }
       updateDockBadge(with: appState.visibleUpdateCount)
     }
     .alert(
@@ -71,9 +72,5 @@ struct RootView: View {
   private func updateDockBadge(with count: Int) {
     NSApp.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
     NSApp.dockTile.display()
-  }
-
-  private var isRunningPreview: Bool {
-    ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
   }
 }

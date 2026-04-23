@@ -113,7 +113,8 @@
         .appendingPathComponent("ScanCache.json")
       let state = AppState(
         settings: settings,
-        cacheStore: ScanCacheStore(fileURLOverride: cacheURL)
+        cacheStore: ScanCacheStore(fileURLOverride: cacheURL),
+        enableLiveServices: false
       )
       state.installedApps = results.map(makeInstalledApp)
       state.rawInventoryResults = results
@@ -249,7 +250,7 @@
 
   private struct SettingsPreviewHost: View {
     let appState: AppState
-    @State private var selfUpdateService = SelfUpdateService()
+    @State private var selfUpdateService = SelfUpdateService.preview()
 
     var body: some View {
       SettingsView()

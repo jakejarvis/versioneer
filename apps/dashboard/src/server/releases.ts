@@ -4,7 +4,11 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { toISODate } from "@versioneer/core/dates";
-import { normalizeReleaseNotes } from "@versioneer/core/pipeline";
+import {
+  buildArtifactIdentity,
+  buildReleaseObservationIdentity,
+  normalizeReleaseNotes,
+} from "@versioneer/core/pipeline";
 import { releaseCreateSchema, releaseUpdateSchema } from "@versioneer/core/validation";
 import { normalizeVersion, isPreRelease, inferChannel } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
@@ -32,6 +36,8 @@ import { latestReleaseTrustWarnings } from "./install-trust";
 import { authMiddleware } from "./middleware";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
+type ArtifactRow = typeof artifacts.$inferSelect;
+type ReleaseObservationRow = typeof releaseObservations.$inferSelect;
 
 function releaseOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
   const direction = sortDir === "asc" ? asc : desc;
@@ -49,6 +55,84 @@ function releaseOrderBy(sortBy?: string, sortDir?: "asc" | "desc") {
     default:
       return [desc(releases.createdAt)];
   }
+}
+
+function collapseArtifacts(rows: ArtifactRow[]): ArtifactRow[] {
+  const deduped = new Map<string, ArtifactRow>();
+
+  for (const row of rows) {
+    const normalized = buildArtifactIdentity({ url: row.url, sha256: row.sha256 });
+    const artifact = {
+      ...row,
+      canonicalUrl: normalized.canonicalUrl,
+      identityKey: normalized.identityKey,
+    };
+    const existing = deduped.get(normalized.identityKey);
+    if (!existing || shouldPreferArtifact(existing, artifact)) {
+      deduped.set(normalized.identityKey, artifact);
+    }
+  }
+
+  return [...deduped.values()].sort((left, right) => {
+    if (left.isPrimary !== right.isPrimary) return Number(right.isPrimary) - Number(left.isPrimary);
+    if (left.createdAt > right.createdAt) return -1;
+    if (left.createdAt < right.createdAt) return 1;
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function shouldPreferArtifact(current: ArtifactRow, candidate: ArtifactRow): boolean {
+  if (candidate.isPrimary !== current.isPrimary) return candidate.isPrimary;
+  if (candidate.createdAt !== current.createdAt) return candidate.createdAt > current.createdAt;
+  return candidate.id > current.id;
+}
+
+function collapseReleaseObservations(rows: ReleaseObservationRow[]): ReleaseObservationRow[] {
+  const deduped = new Map<string, ReleaseObservationRow>();
+
+  for (const row of rows) {
+    const normalized = buildReleaseObservationIdentity({
+      observedVersionNormalized: row.observedVersionNormalized,
+      observedBuildNumber: row.observedBuildNumber,
+      observedChannel: row.observedChannel,
+      observedPublishedAt: row.observedPublishedAt,
+      observedReleaseNotesUrl: row.observedReleaseNotesUrl,
+      observedDownloadUrl: row.observedDownloadUrl,
+    });
+    const observation = {
+      ...row,
+      observedDownloadUrl: normalized.canonicalObservedDownloadUrl,
+      observationKey: normalized.observationKey,
+      lastSeenAt: row.lastSeenAt,
+      seenCount: row.seenCount,
+    };
+    const existing = deduped.get(normalized.observationKey);
+    if (!existing) {
+      deduped.set(normalized.observationKey, observation);
+      continue;
+    }
+
+    const existingLastSeen = existing.lastSeenAt;
+    const nextLastSeen =
+      observation.lastSeenAt > existingLastSeen ? observation.lastSeenAt : existingLastSeen;
+    const latestRow = observation.lastSeenAt >= existingLastSeen ? observation : existing;
+
+    deduped.set(normalized.observationKey, {
+      ...latestRow,
+      createdAt:
+        observation.createdAt < existing.createdAt ? observation.createdAt : existing.createdAt,
+      lastSeenAt: nextLastSeen,
+      seenCount: existing.seenCount + observation.seenCount,
+    });
+  }
+
+  return [...deduped.values()].sort((left, right) => {
+    if (left.lastSeenAt > right.lastSeenAt) return -1;
+    if (left.lastSeenAt < right.lastSeenAt) return 1;
+    if (left.createdAt > right.createdAt) return -1;
+    if (left.createdAt < right.createdAt) return 1;
+    return left.id.localeCompare(right.id);
+  });
 }
 
 // GET /releases - list with pagination and filters
@@ -329,8 +413,13 @@ export const getReleaseArtifacts = createServerFn({ method: "GET" })
   .inputValidator(z.object({ releaseId: z.string().min(1) }))
   .handler(async ({ data: { releaseId } }) => {
     const db = createDb(env.DB);
-    const items = await db.select().from(artifacts).where(eq(artifacts.releaseId, releaseId)).all();
-    return { items };
+    const items = await db
+      .select()
+      .from(artifacts)
+      .where(eq(artifacts.releaseId, releaseId))
+      .orderBy(desc(artifacts.isPrimary), desc(artifacts.createdAt))
+      .all();
+    return { items: collapseArtifacts(items) };
   });
 
 export const createReleaseArtifact = createServerFn({ method: "POST" })
@@ -352,49 +441,92 @@ export const createReleaseArtifact = createServerFn({ method: "POST" })
     if (!release) throw new Error("Not found");
 
     const now = new Date().toISOString();
-    const artifactId = generateId(idPrefixes.artifact);
-    await db.batch([
-      db.insert(artifacts).values({
+    const artifactIdentity = buildArtifactIdentity({
+      url: data.url,
+      sha256: data.sha256?.trim() || null,
+    });
+    const releaseArtifacts = await db
+      .select()
+      .from(artifacts)
+      .where(eq(artifacts.releaseId, release.id))
+      .all();
+    const existingArtifact = releaseArtifacts.find((artifact) => {
+      const existingIdentity = buildArtifactIdentity({
+        url: artifact.url,
+        sha256: artifact.sha256,
+      });
+      return (
+        existingIdentity.identityKey === artifactIdentity.identityKey ||
+        existingIdentity.canonicalUrl === artifactIdentity.canonicalUrl ||
+        artifact.url === data.url
+      );
+    });
+
+    const artifactId = existingArtifact?.id ?? generateId(idPrefixes.artifact);
+    const auditEventType = existingArtifact
+      ? "release_artifact_updated"
+      : "release_artifact_created";
+
+    if (existingArtifact) {
+      await db
+        .update(artifacts)
+        .set({
+          artifactType: data.artifactType,
+          url: data.url,
+          canonicalUrl: artifactIdentity.canonicalUrl,
+          identityKey: artifactIdentity.identityKey,
+          sha256: data.sha256?.trim() || null,
+          sizeBytes: data.sizeBytes ?? null,
+          architecture: data.architecture,
+          minOsVersion: data.minOsVersion?.trim() || null,
+        })
+        .where(eq(artifacts.id, artifactId));
+    } else {
+      await db.insert(artifacts).values({
         id: artifactId,
         releaseId: release.id,
         artifactType: data.artifactType,
         url: data.url,
-        urlHash: null,
+        canonicalUrl: artifactIdentity.canonicalUrl,
+        identityKey: artifactIdentity.identityKey,
         sha256: data.sha256?.trim() || null,
         sizeBytes: data.sizeBytes ?? null,
         architecture: data.architecture,
         minOsVersion: data.minOsVersion?.trim() || null,
         isPrimary: false,
         createdAt: now,
+      });
+    }
+
+    await db.insert(auditLog).values({
+      id: generateId(idPrefixes.auditLog),
+      eventType: auditEventType,
+      actorType: "admin",
+      actorId: context.user.email,
+      targetType: "artifact",
+      targetId: artifactId,
+      payloadJson: JSON.stringify({
+        releaseId: release.id,
+        artifactType: data.artifactType,
+        architecture: data.architecture,
+        url: data.url,
+        canonicalUrl: artifactIdentity.canonicalUrl,
+        identityKey: artifactIdentity.identityKey,
       }),
-      db.insert(auditLog).values({
-        id: generateId(idPrefixes.auditLog),
-        eventType: "release_artifact_created",
-        actorType: "admin",
-        actorId: context.user.email,
-        targetType: "artifact",
-        targetId: artifactId,
-        payloadJson: JSON.stringify({
-          releaseId: release.id,
-          artifactType: data.artifactType,
-          architecture: data.architecture,
-          url: data.url,
-        }),
-        createdAt: now,
-      }),
-    ]);
+      createdAt: now,
+    });
 
     await scheduleRecomputeLatest({ db, appId: release.appId, channel: release.channel });
-    await captureAdminEvent(context.user, "release_artifact_created", {
+    await captureAdminEvent(context.user, auditEventType, {
       target_type: "artifact",
       target_id: artifactId,
       release_id: release.id,
       app_id: release.appId,
       artifact_type: data.artifactType,
       architecture: data.architecture,
-      status: "created",
+      status: existingArtifact ? "updated" : "created",
     });
-    return { id: artifactId, status: "created" };
+    return { id: artifactId, status: existingArtifact ? "updated" : "created" };
   });
 
 // POST /releases/:id/pin - pin release as latest
@@ -484,7 +616,7 @@ export const getReleaseObservations = createServerFn({ method: "GET" })
       .select()
       .from(releaseObservations)
       .where(eq(releaseObservations.releaseId, releaseId))
-      .orderBy(desc(releaseObservations.createdAt))
+      .orderBy(desc(releaseObservations.lastSeenAt), desc(releaseObservations.createdAt))
       .all();
-    return { items };
+    return { items: collapseReleaseObservations(items) };
   });
