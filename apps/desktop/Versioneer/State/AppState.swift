@@ -23,8 +23,6 @@ final class AppState {
   let appStoreChecker = AppStoreChecker()
   let homebrewChecker = HomebrewChecker()
   let installCoordinator = InstallCoordinator()
-  private var _attestClient: AppAttestClient?
-  private var _attestClientBaseURL: URL?
 
   enum InstallConfirmationRequest: Equatable {
     case none
@@ -32,25 +30,15 @@ final class AppState {
     case installResult(String)
   }
 
-  var attestClient: AppAttestClient {
-    let url = settings.baseURL
-    if let existing = _attestClient, _attestClientBaseURL == url {
-      return existing
-    }
-    let client = AppAttestClient(baseURL: url)
-    _attestClient = client
-    _attestClientBaseURL = url
-    return client
-  }
   private let cacheStore: ScanCacheStore
   @ObservationIgnored private var directoryWatcher: DirectoryWatcher?
 
   var apiClient: InventoryAPIClient {
-    InventoryAPIClient(baseURL: settings.baseURL, tokenProvider: attestClient)
+    InventoryAPIClient(baseURL: settings.baseURL)
   }
 
   var feedbackClient: FeedbackAPIClient {
-    FeedbackAPIClient(baseURL: settings.baseURL, tokenProvider: attestClient)
+    FeedbackAPIClient(baseURL: settings.baseURL)
   }
 
   var preflightClient: PreflightAPIClient {

@@ -1,5 +1,4 @@
 export * from "./admin-auth";
-export * from "./attest";
 export * from "./catalog";
 export * from "./discovery";
 export * from "./feedback";

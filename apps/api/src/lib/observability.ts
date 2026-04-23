@@ -6,12 +6,6 @@ import {
   type ObservabilityProperties,
 } from "@versioneer/core/observability";
 
-function jwtSubject(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const subject = (payload as { sub?: unknown }).sub;
-  return typeof subject === "string" && subject.length > 0 ? subject : null;
-}
-
 type ApiObservabilityContext = {
   env: Env;
   req: Context<{ Bindings: Env }>["req"];
@@ -20,7 +14,7 @@ type ApiObservabilityContext = {
 };
 
 function apiDistinctId(c: ApiObservabilityContext): string {
-  return jwtSubject(c.get("jwtPayload")) ?? c.req.header("cf-ray") ?? "anonymous-api-client";
+  return c.req.header("cf-ray") ?? "anonymous-api-client";
 }
 
 function baseApiProperties(c: ApiObservabilityContext): ObservabilityProperties {

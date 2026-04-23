@@ -7,7 +7,6 @@ import {
   artifacts,
   clientFeedback,
   createDb,
-  deviceAttestations,
   discoveredApps,
   generateId,
   idPrefixes,
@@ -181,25 +180,6 @@ export async function seedDiscoveredApp(
       sourceValidationStatus: "untested",
       createdAt: now(),
       updatedAt: now(),
-      ...overrides,
-    })
-    .returning();
-  return row!;
-}
-
-export async function seedDeviceAttestation(
-  db: Database,
-  overrides: Partial<typeof deviceAttestations.$inferInsert> = {},
-) {
-  const id = overrides.id ?? generateId(idPrefixes.deviceAttestation);
-  const [row] = await db
-    .insert(deviceAttestations)
-    .values({
-      id,
-      keyId: overrides.keyId ?? `key-${id.slice(-8)}`,
-      publicKey: "test-public-key",
-      counter: 0,
-      createdAt: now(),
       ...overrides,
     })
     .returning();

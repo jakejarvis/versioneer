@@ -3,14 +3,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { clientRateLimit } from "../rate-limit";
 
-function testApp(params: { jwtPayload?: unknown } = {}) {
+function testApp() {
   const app = new Hono<{ Bindings: Env }>();
-  if ("jwtPayload" in params) {
-    app.use("*", async (c, next) => {
-      c.set("jwtPayload", params.jwtPayload);
-      await next();
-    });
-  }
   app.post("/test", clientRateLimit, (c) => c.text("ok"));
   return app;
 }
@@ -27,17 +21,7 @@ function envWithRateLimit(keys: string[], success = true): Env {
 }
 
 describe("clientRateLimit", () => {
-  it("keys protected desktop requests by verified App Attest device id", async () => {
-    const keys: string[] = [];
-    const app = testApp({ jwtPayload: { sub: "device_123" } });
-
-    const response = await app.request("/test", { method: "POST" }, envWithRateLimit(keys));
-
-    expect(response.status).toBe(200);
-    expect(keys).toEqual(["client:device:device_123"]);
-  });
-
-  it("does not use IP headers when an Authorization fallback is available", async () => {
+  it("keys requests by hashed Cloudflare client IP", async () => {
     const keys: string[] = [];
     const app = testApp();
 
@@ -46,7 +30,6 @@ describe("clientRateLimit", () => {
       {
         method: "POST",
         headers: {
-          Authorization: "Bearer local-dev-token",
           "cf-connecting-ip": "203.0.113.10",
         },
       },
@@ -54,22 +37,37 @@ describe("clientRateLimit", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(keys[0]).toMatch(/^client:auth:/);
+    expect(keys[0]).toMatch(/^client:ip:/);
     expect(keys[0]).not.toContain("203.0.113.10");
-    expect(keys[0]).not.toContain("local-dev-token");
   });
 
-  it("silently bypasses the limiter when attestation is globally disabled", async () => {
+  it("uses x-forwarded-for when the Cloudflare header is absent", async () => {
     const keys: string[] = [];
     const app = testApp();
-    const rateLimitEnv = envWithRateLimit(keys, false);
 
-    const response = await app.request("/test", { method: "POST" }, {
-      ...rateLimitEnv,
-      REQUIRE_ATTESTATION: "false",
-    } as Env);
+    const response = await app.request(
+      "/test",
+      {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": "203.0.113.10, 198.51.100.4",
+        },
+      },
+      envWithRateLimit(keys),
+    );
 
     expect(response.status).toBe(200);
-    expect(keys).toEqual([]);
+    expect(keys[0]).toMatch(/^client:ip:/);
+    expect(keys[0]).not.toContain("203.0.113.10");
+  });
+
+  it("falls back to an anonymous bucket when no client address is available", async () => {
+    const keys: string[] = [];
+    const app = testApp();
+
+    const response = await app.request("/test", { method: "POST" }, envWithRateLimit(keys));
+
+    expect(response.status).toBe(200);
+    expect(keys).toEqual(["client:anonymous"]);
   });
 });

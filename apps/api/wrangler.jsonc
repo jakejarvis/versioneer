@@ -14,8 +14,7 @@
 
   "vars": {
     "ENVIRONMENT": "dev",
-    "ASSETS_BASE_URL": "http://localhost:8787/assets",
-    "REQUIRE_ATTESTATION": "false"
+    "ASSETS_BASE_URL": "http://localhost:8787/assets"
   },
 
   "ratelimits": [
@@ -80,7 +79,6 @@
       "preview_urls": false,
       "vars": {
         "ENVIRONMENT": "production",
-        "REQUIRE_ATTESTATION": "false",
         "ASSETS_BASE_URL": "https://assets-prod.versioneer.app",
         "POSTHOG_HOST": "https://us.i.posthog.com"
       },

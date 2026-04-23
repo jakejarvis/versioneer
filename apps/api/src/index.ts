@@ -5,7 +5,7 @@ import { HTTPException } from "hono/http-exception";
 import { createLogger } from "@versioneer/core/logger";
 
 import { captureApiException } from "./lib/observability";
-import { openRoutes, protectedRoutes } from "./routes";
+import { routes } from "./routes";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -28,8 +28,7 @@ app.get("/health", (c) => {
   return c.json({ status: "ok", environment: c.env.ENVIRONMENT });
 });
 
-app.route("/v1", openRoutes);
-app.route("/v1", protectedRoutes);
+app.route("/v1", routes);
 
 app.notFound((c) => {
   return c.json({ error: "Not found" }, 404);

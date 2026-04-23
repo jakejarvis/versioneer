@@ -6,10 +6,15 @@ export interface RateLimitOptions {
   prefix: string;
 }
 
-function jwtSubject(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const subject = (payload as { sub?: unknown }).sub;
-  return typeof subject === "string" && subject.length > 0 ? subject : null;
+function requestAddress(c: Context<{ Bindings: Env }>): string | null {
+  const cloudflareIp = c.req.header("cf-connecting-ip")?.trim();
+  if (cloudflareIp) return cloudflareIp;
+
+  const forwardedFor = c.req.header("x-forwarded-for");
+  if (!forwardedFor) return null;
+
+  const firstAddress = forwardedFor.split(",")[0]?.trim();
+  return firstAddress && firstAddress.length > 0 ? firstAddress : null;
 }
 
 async function hashKeyPart(value: string): Promise<string> {
@@ -22,26 +27,14 @@ async function hashKeyPart(value: string): Promise<string> {
 }
 
 async function rateLimitKey(c: Context<{ Bindings: Env }>, prefix: string) {
-  // requireAttestation verifies the token first, so sub is our stable desktop device actor key.
-  // Avoid IP-based keys: NATs, mobile networks, and privacy proxies can group unrelated users.
-  const deviceId = jwtSubject(c.get("jwtPayload"));
-  if (deviceId) return `${prefix}:device:${deviceId}`;
-
-  // Local/dev paths may still send Authorization; hash it so bearer material never becomes a key.
-  const authorization = c.req.header("Authorization");
-  if (authorization) return `${prefix}:auth:${await hashKeyPart(authorization)}`;
+  const clientAddress = requestAddress(c);
+  if (clientAddress) return `${prefix}:ip:${await hashKeyPart(clientAddress)}`;
 
   return `${prefix}:anonymous`;
 }
 
 export function createRateLimit(options: RateLimitOptions) {
   return createMiddleware<{ Bindings: Env }>(async (c, next) => {
-    // If attestation is globally disabled, disable this limiter too; fallback buckets are too broad.
-    if (c.env.REQUIRE_ATTESTATION === "false") {
-      await next();
-      return;
-    }
-
     const key = await rateLimitKey(c, options.prefix);
     const outcome = await c.env.CLIENT_RATE_LIMITER.limit({ key });
 

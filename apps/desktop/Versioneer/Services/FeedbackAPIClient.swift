@@ -4,11 +4,9 @@ import Logging
 /// Submits user feedback about incorrect matches or versions.
 nonisolated struct FeedbackAPIClient: Sendable {
   let baseURL: URL
-  let tokenProvider: any TokenProvider
 
-  init(baseURL: URL, tokenProvider: any TokenProvider) {
+  init(baseURL: URL) {
     self.baseURL = baseURL
-    self.tokenProvider = tokenProvider
   }
 
   func submitWrongMatch(_ feedback: FeedbackRequest.WrongMatch) async throws {
@@ -28,7 +26,6 @@ nonisolated struct FeedbackAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    await authorize(&request)
     request.httpBody = try JSONEncoder().encode(body)
 
     Logger.feedback.info("Submitting feedback to \(endpoint.absoluteString)")
@@ -43,12 +40,6 @@ nonisolated struct FeedbackAPIClient: Sendable {
       let body = String(data: data, encoding: .utf8) ?? ""
       Logger.feedback.error("Feedback API returned \(httpResponse.statusCode): \(body)")
       throw APIError.httpError(statusCode: httpResponse.statusCode, body: body)
-    }
-  }
-
-  private func authorize(_ request: inout URLRequest) async {
-    if let token = await tokenProvider.validToken() {
-      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
   }
 }

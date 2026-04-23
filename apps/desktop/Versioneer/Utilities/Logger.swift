@@ -11,5 +11,4 @@ extension Logger {
   nonisolated static let homebrew = Logger(label: "com.jakejarvis.versioneer.Homebrew")
   nonisolated static let install = Logger(label: "com.jakejarvis.versioneer.Install")
   nonisolated static let mas = Logger(label: "com.jakejarvis.versioneer.MAS")
-  nonisolated static let attest = Logger(label: "com.jakejarvis.versioneer.Attest")
 }

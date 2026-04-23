@@ -4,7 +4,7 @@ const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
 const SYSTEM_DISTINCT_ID = "versioneer-system";
 const MAX_PROPERTY_STRING_LENGTH = 500;
 const SENSITIVE_PROPERTY_PATTERN =
-  /authorization|cookie|password|secret|token|jwt|signature|attestation|credential|private|body|payload/i;
+  /authorization|cookie|password|secret|token|jwt|signature|credential|private|body|payload/i;
 const SENSITIVE_TEXT_PATTERNS: Array<[RegExp, string]> = [
   [
     /\b(authorization|cookie|password|secret|token|api[_-]?key)=(?:Bearer\s+)?([^&\s]+)/gi,

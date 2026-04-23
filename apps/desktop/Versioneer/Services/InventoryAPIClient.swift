@@ -6,11 +6,9 @@ import zlib
 /// Submits app inventory to the backend and decodes update decisions.
 nonisolated struct InventoryAPIClient: Sendable {
   let baseURL: URL
-  let tokenProvider: any TokenProvider
 
-  init(baseURL: URL, tokenProvider: any TokenProvider) {
+  init(baseURL: URL) {
     self.baseURL = baseURL
-    self.tokenProvider = tokenProvider
   }
 
   /// Response from the release notes endpoint.
@@ -29,7 +27,6 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "GET"
     request.setValue("application/json", forHTTPHeaderField: "Accept")
-    await authorize(&request)
 
     let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -61,7 +58,6 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    await authorize(&request)
 
     let payload = buildRequest(
       from: apps, scanDurationMs: scanDurationMs, channels: channels)
@@ -168,7 +164,6 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    await authorize(&request)
 
     let payload = InstallExecutionCreateRequest(
       client: buildClientInfo(channels: nil),
@@ -220,7 +215,6 @@ nonisolated struct InventoryAPIClient: Sendable {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    await authorize(&request)
 
     let payload = InstallExecutionEventRequest(
       event: .init(
@@ -247,12 +241,6 @@ nonisolated struct InventoryAPIClient: Sendable {
       return try JSONDecoder().decode(InstallExecutionEventResponse.self, from: data)
     } catch {
       throw APIError.decodingFailed(error.localizedDescription)
-    }
-  }
-
-  private func authorize(_ request: inout URLRequest) async {
-    if let token = await tokenProvider.validToken() {
-      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
   }
 
