@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 
 import { createDb } from "@versioneer/db";
 import { sources, sourceFetches, generateId, idPrefixes } from "@versioneer/db";
@@ -132,18 +132,33 @@ async function recordNewFetchHostnameAnomaly(params: {
 }) {
   if (!params.hostname) return;
 
-  const priorRows = await params.db
-    .select({ id: sourceFetches.id, fetchHostname: sourceFetches.fetchHostname })
+  const existingHostname = await params.db
+    .select({ id: sourceFetches.id })
     .from(sourceFetches)
-    .where(eq(sourceFetches.sourceId, params.sourceId))
-    .all();
-  const priorHosts = new Set(
-    priorRows
-      .filter((row) => row.id !== params.fetchId)
-      .map((row) => row.fetchHostname)
-      .filter((hostname): hostname is string => Boolean(hostname)),
-  );
-  if (priorHosts.size === 0 || priorHosts.has(params.hostname)) return;
+    .where(
+      and(
+        eq(sourceFetches.sourceId, params.sourceId),
+        eq(sourceFetches.fetchHostname, params.hostname),
+        ne(sourceFetches.id, params.fetchId),
+      ),
+    )
+    .limit(1)
+    .get();
+  if (existingHostname) return;
+
+  const priorHostname = await params.db
+    .select({ id: sourceFetches.id })
+    .from(sourceFetches)
+    .where(
+      and(
+        eq(sourceFetches.sourceId, params.sourceId),
+        isNotNull(sourceFetches.fetchHostname),
+        ne(sourceFetches.id, params.fetchId),
+      ),
+    )
+    .limit(1)
+    .get();
+  if (!priorHostname) return;
 
   await recordSourceAnomaly({
     db: params.db,

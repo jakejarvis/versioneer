@@ -33,6 +33,7 @@ import { authMiddleware } from "./middleware";
 import { sourceFetchOrderBy, sourceOrderBy } from "./order-by";
 import { scheduleSourceFetch, scheduleSourceReparse } from "./pipeline-jobs";
 import { prepareSyncSourceDerivedAliasWrites } from "./source-derived-aliases";
+import { computeReorderedSourceRoles, validateSourceReorderInput } from "./source-reorder";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
 
@@ -619,26 +620,31 @@ export const reorderSources = createServerFn({ method: "POST" })
 
     // Verify all source IDs belong to the app
     const appSources = await db
-      .select({ id: sources.id, role: sources.role, sourceType: sources.sourceType })
+      .select({
+        id: sources.id,
+        role: sources.role,
+        sourceType: sources.sourceType,
+        channel: sources.channel,
+      })
       .from(sources)
       .where(eq(sources.appId, data.appId))
       .all();
-    const appSourceIds = new Set(appSources.map((s) => s.id));
-    for (const id of data.sourceIds) {
-      if (!appSourceIds.has(id)) throw new Error(`Source ${id} does not belong to app`);
-    }
+    const reorderValidationError = validateSourceReorderInput({
+      appSourceIds: appSources.map((source) => source.id),
+      requestedSourceIds: data.sourceIds,
+    });
+    if (reorderValidationError) throw new Error(reorderValidationError);
+
+    const reorderedRoles = computeReorderedSourceRoles({
+      sources: appSources,
+      requestedSourceIds: data.sourceIds,
+    });
 
     // Update ordinals and roles based on position
     for (let i = 0; i < data.sourceIds.length; i++) {
       const sourceId = data.sourceIds[i]!;
-      const source = appSources.find((s) => s.id === sourceId)!;
-      const isPrimary = i === 0;
-      const defaultRole = defaultRoleForSourceType(source.sourceType);
-      const role = isPrimary
-        ? defaultRole
-        : defaultRole === "authority"
-          ? "corroborating"
-          : defaultRole;
+      const role = reorderedRoles.get(sourceId);
+      if (!role) continue;
 
       await db
         .update(sources)

@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, like, ne, or } from "drizzle-orm";
 
 import { normalizeAliasValue } from "@versioneer/core/identity";
 import { getDescriptor } from "@versioneer/core/sources";
@@ -10,6 +10,10 @@ import type { Db, DbExecutor } from "./db-types";
 
 function sourceAliasTag(sourceId: string, aliasType: string): string {
   return `source:${sourceId}:${aliasType}`;
+}
+
+function sourceAliasTagPrefix(sourceId: string): string {
+  return `source:${sourceId}:`;
 }
 
 function resolveDerivedAlias(
@@ -27,6 +31,17 @@ function resolveDerivedAlias(
   };
 }
 
+export function shouldKeepDerivedSourceAlias(
+  ownedAlias: { aliasType: AliasType; normalizedValue: string },
+  derivedAlias: { aliasType: AliasType; normalizedValue: string } | null,
+): boolean {
+  return (
+    derivedAlias !== null &&
+    ownedAlias.aliasType === derivedAlias.aliasType &&
+    ownedAlias.normalizedValue === derivedAlias.normalizedValue
+  );
+}
+
 export async function syncSourceDerivedAliases(params: {
   db: DbExecutor;
   appId: string;
@@ -36,23 +51,24 @@ export async function syncSourceDerivedAliases(params: {
   now: string;
 }): Promise<void> {
   const derived = resolveDerivedAlias(params.sourceType, params.baseUrl);
-  const supportedAliasTypes = derived ? [derived.aliasType] : [];
-
-  for (const aliasType of supportedAliasTypes) {
-    const where = [
-      eq(appAliases.appId, params.appId),
-      eq(appAliases.aliasType, aliasType),
-      eq(appAliases.source, sourceAliasTag(params.sourceId, aliasType)),
-      eq(appAliases.isActive, true),
-    ];
-    if (derived) {
-      where.push(ne(appAliases.normalizedValue, derived.normalizedValue));
+  const deactivateWhere = [
+    eq(appAliases.appId, params.appId),
+    like(appAliases.source, `${sourceAliasTagPrefix(params.sourceId)}%`),
+    eq(appAliases.isActive, true),
+  ];
+  if (derived) {
+    const deactivateMismatch = or(
+      ne(appAliases.aliasType, derived.aliasType),
+      ne(appAliases.normalizedValue, derived.normalizedValue),
+    );
+    if (deactivateMismatch) {
+      deactivateWhere.push(deactivateMismatch);
     }
-    await params.db
-      .update(appAliases)
-      .set({ isActive: false })
-      .where(and(...where));
   }
+  await params.db
+    .update(appAliases)
+    .set({ isActive: false })
+    .where(and(...deactivateWhere));
 
   if (!derived) return;
 
@@ -166,28 +182,30 @@ export async function prepareSyncSourceDerivedAliasWrites(
   },
 ) {
   const derived = resolveDerivedAlias(params.sourceType, params.baseUrl);
-  const supportedAliasTypes = derived ? [derived.aliasType] : [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- collected for db.batch()
   const writes: any[] = [];
 
-  for (const aliasType of supportedAliasTypes) {
-    const where = [
-      eq(appAliases.appId, params.appId),
-      eq(appAliases.aliasType, aliasType),
-      eq(appAliases.source, sourceAliasTag(params.sourceId, aliasType)),
-      eq(appAliases.isActive, true),
-    ];
-    if (derived) {
-      where.push(ne(appAliases.normalizedValue, derived.normalizedValue));
-    }
-    writes.push(
-      db
-        .update(appAliases)
-        .set({ isActive: false })
-        .where(and(...where)),
+  const deactivateWhere = [
+    eq(appAliases.appId, params.appId),
+    like(appAliases.source, `${sourceAliasTagPrefix(params.sourceId)}%`),
+    eq(appAliases.isActive, true),
+  ];
+  if (derived) {
+    const deactivateMismatch = or(
+      ne(appAliases.aliasType, derived.aliasType),
+      ne(appAliases.normalizedValue, derived.normalizedValue),
     );
+    if (deactivateMismatch) {
+      deactivateWhere.push(deactivateMismatch);
+    }
   }
+  writes.push(
+    db
+      .update(appAliases)
+      .set({ isActive: false })
+      .where(and(...deactivateWhere)),
+  );
 
   if (!derived) return writes;
 

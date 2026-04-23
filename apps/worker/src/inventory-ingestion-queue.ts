@@ -10,7 +10,8 @@ import { createDb, inventoryIngestionJobs } from "@versioneer/db";
 
 const INVENTORY_INGESTION_MAX_ATTEMPTS = 5;
 const INVENTORY_INGESTION_REPAIR_BATCH_SIZE = 50;
-const INVENTORY_INGESTION_REPAIR_STALE_MS = 5 * 60 * 1000;
+const INVENTORY_INGESTION_REPAIR_QUEUE_STALE_MS = 5 * 60 * 1000;
+const INVENTORY_INGESTION_REPAIR_RUNNING_STALE_MS = 60 * 60 * 1000;
 
 type Logger = ReturnType<typeof createLogger>;
 type Db = ReturnType<typeof createDb>;
@@ -128,21 +129,41 @@ export async function repairInventoryIngestionQueue(params: {
   log: Logger;
   now: Date;
 }): Promise<number> {
-  const staleBefore = new Date(params.now.getTime() - INVENTORY_INGESTION_REPAIR_STALE_MS);
+  const queueStaleBefore = new Date(
+    params.now.getTime() - INVENTORY_INGESTION_REPAIR_QUEUE_STALE_MS,
+  );
+  const runningStaleBefore = new Date(
+    params.now.getTime() - INVENTORY_INGESTION_REPAIR_RUNNING_STALE_MS,
+  );
   const nowIso = params.now.toISOString();
-  const staleBeforeIso = staleBefore.toISOString();
+  const queueStaleBeforeIso = queueStaleBefore.toISOString();
+  const runningStaleBeforeIso = runningStaleBefore.toISOString();
   const jobs = await params.db
-    .select({ id: inventoryIngestionJobs.id, status: inventoryIngestionJobs.status })
+    .select({
+      id: inventoryIngestionJobs.id,
+      status: inventoryIngestionJobs.status,
+      updatedAt: inventoryIngestionJobs.updatedAt,
+    })
     .from(inventoryIngestionJobs)
     .where(
       or(
         and(
           eq(inventoryIngestionJobs.status, "pending"),
-          lte(inventoryIngestionJobs.updatedAt, staleBeforeIso),
+          lte(inventoryIngestionJobs.updatedAt, queueStaleBeforeIso),
         ),
         and(
           eq(inventoryIngestionJobs.status, "failed"),
-          lte(inventoryIngestionJobs.updatedAt, staleBeforeIso),
+          lte(inventoryIngestionJobs.updatedAt, queueStaleBeforeIso),
+          sql`${inventoryIngestionJobs.attemptCount} < ${INVENTORY_INGESTION_MAX_ATTEMPTS}`,
+        ),
+        and(
+          eq(inventoryIngestionJobs.status, "queued"),
+          lte(inventoryIngestionJobs.updatedAt, queueStaleBeforeIso),
+          sql`${inventoryIngestionJobs.attemptCount} < ${INVENTORY_INGESTION_MAX_ATTEMPTS}`,
+        ),
+        and(
+          eq(inventoryIngestionJobs.status, "running"),
+          lte(inventoryIngestionJobs.updatedAt, runningStaleBeforeIso),
           sql`${inventoryIngestionJobs.attemptCount} < ${INVENTORY_INGESTION_MAX_ATTEMPTS}`,
         ),
       ),
@@ -153,6 +174,26 @@ export async function repairInventoryIngestionQueue(params: {
   let enqueued = 0;
   for (const job of jobs) {
     try {
+      if (job.status === "queued" || job.status === "running") {
+        const reclaimed = await params.db
+          .update(inventoryIngestionJobs)
+          .set({
+            status: "pending",
+            workflowInstanceId: null,
+          })
+          .where(
+            and(
+              eq(inventoryIngestionJobs.id, job.id),
+              eq(inventoryIngestionJobs.status, job.status),
+              eq(inventoryIngestionJobs.updatedAt, job.updatedAt),
+            ),
+          )
+          .returning({ id: inventoryIngestionJobs.id });
+        if (!reclaimed[0]) {
+          continue;
+        }
+      }
+
       await params.queue.send({ ingestionId: job.id });
       await params.db
         .update(inventoryIngestionJobs)

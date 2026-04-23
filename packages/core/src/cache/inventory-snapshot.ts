@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { appAliases, apps, trustAssertions } from "@versioneer/db";
 import type { createDb } from "@versioneer/db";
@@ -25,6 +25,16 @@ export interface InventoryMatchSnapshot {
 }
 
 type Db = ReturnType<typeof createDb>;
+
+const INVENTORY_MATCH_ALIAS_TYPES = [
+  "bundle_id",
+  "name",
+  "team_id",
+  "sparkle_feed",
+  "mas_app_id",
+  "electron_update_url",
+  "homebrew_cask",
+] as const;
 
 function preferredAliasMap(
   aliases: Array<{
@@ -91,7 +101,12 @@ export async function buildInventoryMatchSnapshot(db: Db): Promise<InventoryMatc
       confidenceWeight: appAliases.confidenceWeight,
     })
     .from(appAliases)
-    .where(eq(appAliases.isActive, true))
+    .where(
+      and(
+        eq(appAliases.isActive, true),
+        inArray(appAliases.aliasType, INVENTORY_MATCH_ALIAS_TYPES),
+      ),
+    )
     .all();
 
   const aliases: AliasRecord[] = aliasRows.map((alias) => ({

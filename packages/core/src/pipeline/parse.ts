@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { createDb } from "@versioneer/db";
 import {
@@ -30,9 +30,107 @@ import { getSourceFetchUrlMetadata } from "./source-url-policy";
 import type { ParseStepResult, SourceParseEnv, SourceParseJob } from "./types";
 
 const INSTALLABLE_ARTIFACT_TYPES = new Set(["zip", "dmg", "pkg"]);
+const D1_PARAM_LIMIT = 100;
+
+type ReleaseRow = typeof releases.$inferSelect;
+type ArtifactRow = typeof artifacts.$inferSelect;
 
 function artifactHostname(rawUrl: string): string | null {
   return getSourceFetchUrlMetadata(rawUrl).hostname;
+}
+
+function releaseKey(channel: string, versionNormalized: string): string {
+  return `${channel}\u0000${versionNormalized}`;
+}
+
+function uniqueStrings(values: Iterable<string>): string[] {
+  return [...new Set(values)];
+}
+
+function chunkStrings(values: string[], chunkSize: number): string[][] {
+  const chunks: string[][] = [];
+  for (let index = 0; index < values.length; index += chunkSize) {
+    chunks.push(values.slice(index, index + chunkSize));
+  }
+  return chunks;
+}
+
+async function selectExistingReleasesForParse(params: {
+  db: ReturnType<typeof createDb>;
+  appId: string;
+  channels: string[];
+  versionNormalizedValues: string[];
+}): Promise<Map<string, ReleaseRow>> {
+  const releasesByKey = new Map<string, ReleaseRow>();
+  if (params.channels.length === 0 || params.versionNormalizedValues.length === 0) {
+    return releasesByKey;
+  }
+
+  const channelChunks = chunkStrings(params.channels, Math.max(1, Math.floor(D1_PARAM_LIMIT / 2)));
+  for (const channelChunk of channelChunks) {
+    const versionChunkSize = Math.max(1, D1_PARAM_LIMIT - channelChunk.length - 1);
+    for (const versionChunk of chunkStrings(params.versionNormalizedValues, versionChunkSize)) {
+      const rows = await params.db
+        .select()
+        .from(releases)
+        .where(
+          and(
+            eq(releases.appId, params.appId),
+            inArray(releases.channel, channelChunk),
+            inArray(releases.versionNormalized, versionChunk),
+          ),
+        )
+        .all();
+      for (const row of rows) {
+        releasesByKey.set(releaseKey(row.channel, row.versionNormalized), row);
+      }
+    }
+  }
+
+  return releasesByKey;
+}
+
+async function selectArtifactsByReleaseIds(params: {
+  db: ReturnType<typeof createDb>;
+  releaseIds: string[];
+}): Promise<Map<string, ArtifactRow[]>> {
+  const artifactsByRelease = new Map<string, ArtifactRow[]>();
+  for (const releaseChunk of chunkStrings(params.releaseIds, D1_PARAM_LIMIT)) {
+    const rows = await params.db
+      .select()
+      .from(artifacts)
+      .where(inArray(artifacts.releaseId, releaseChunk))
+      .all();
+    for (const row of rows) {
+      const existing = artifactsByRelease.get(row.releaseId) ?? [];
+      existing.push(row);
+      artifactsByRelease.set(row.releaseId, existing);
+    }
+  }
+  return artifactsByRelease;
+}
+
+function upsertArtifactRow(rows: ArtifactRow[], artifact: ArtifactRow): void {
+  const existingIndex = rows.findIndex((row) => row.id === artifact.id);
+  if (existingIndex >= 0) {
+    rows[existingIndex] = artifact;
+    return;
+  }
+  rows.push(artifact);
+}
+
+function selectPrimaryArtifact(rows: ArtifactRow[]): ArtifactRow | null {
+  let best: ArtifactRow | null = null;
+  for (const row of rows) {
+    if (!best) {
+      best = row;
+      continue;
+    }
+    if (row.createdAt > best.createdAt || (row.createdAt === best.createdAt && row.id > best.id)) {
+      best = row;
+    }
+  }
+  return best;
 }
 
 async function recordParserErrorSpike(params: {
@@ -198,66 +296,88 @@ export async function handleSourceParse(
         .map((row) => artifactHostname(row.url))
         .filter((hostname): hostname is string => Boolean(hostname)),
     );
+    const parsedReleaseRecords = await Promise.all(
+      output.releases.map(async (parsedRelease) => {
+        const versionNormalized = normalizeVersion(parsedRelease.versionRaw);
+        const channel =
+          source.channel ?? parsedRelease.channel ?? inferChannel(parsedRelease.versionRaw);
+        return {
+          parsedRelease,
+          versionNormalized,
+          channel,
+          releasedAt: toISODate(parsedRelease.publishedAt),
+          releaseNotesMarkdown: parsedRelease.releaseNotesBody
+            ? await normalizeReleaseNotes(
+                parsedRelease.releaseNotesBody,
+                parsedRelease.releaseNotesFormat ?? "html",
+              )
+            : null,
+        };
+      }),
+    );
+    const existingReleasesByKey = await selectExistingReleasesForParse({
+      db,
+      appId: source.appId,
+      channels: uniqueStrings(parsedReleaseRecords.map((record) => record.channel)),
+      versionNormalizedValues: uniqueStrings(
+        parsedReleaseRecords.map((record) => record.versionNormalized),
+      ),
+    });
+    const artifactsByRelease = await selectArtifactsByReleaseIds({
+      db,
+      releaseIds: uniqueStrings([...existingReleasesByKey.values()].map((release) => release.id)),
+    });
 
     // Process each parsed release
-    for (const parsedRelease of output.releases) {
+    for (const record of parsedReleaseRecords) {
+      const { parsedRelease, versionNormalized, channel, releasedAt, releaseNotesMarkdown } =
+        record;
       const observationId = generateId(idPrefixes.releaseObservation);
-      const versionNormalized = normalizeVersion(parsedRelease.versionRaw);
-      const channel =
-        source.channel ?? parsedRelease.channel ?? inferChannel(parsedRelease.versionRaw);
-
-      // Upsert release: check if version already exists for this app + channel
-      let releaseId: string | undefined;
-      const matchingRelease = await db
-        .select()
-        .from(releases)
-        .where(
-          and(
-            eq(releases.appId, source.appId),
-            eq(releases.versionNormalized, versionNormalized),
-            eq(releases.channel, channel),
-          ),
-        )
-        .get();
+      const key = releaseKey(channel, versionNormalized);
+      let matchingRelease = existingReleasesByKey.get(key);
 
       if (matchingRelease) {
-        releaseId = matchingRelease.id;
-        // Update if we have newer info; re-activate if previously withdrawn
-        const parsedNotesMarkdown = parsedRelease.releaseNotesBody
-          ? await normalizeReleaseNotes(
-              parsedRelease.releaseNotesBody,
-              parsedRelease.releaseNotesFormat ?? "html",
-            )
-          : null;
         const updatedNotesMarkdown = parsedRelease.releaseNotesBody
-          ? (parsedNotesMarkdown ?? matchingRelease.releaseNotesMarkdown)
+          ? (releaseNotesMarkdown ?? matchingRelease.releaseNotesMarkdown)
           : matchingRelease.releaseNotesMarkdown;
         const updatedNotesHtml = parsedRelease.releaseNotesBody
-          ? parsedNotesMarkdown
+          ? releaseNotesMarkdown
             ? null
             : matchingRelease.releaseNotesHtml
           : matchingRelease.releaseNotesHtml;
+        matchingRelease = {
+          ...matchingRelease,
+          versionRaw: parsedRelease.versionRaw,
+          buildNumber: parsedRelease.buildNumber ?? matchingRelease.buildNumber,
+          releasedAt: releasedAt ?? matchingRelease.releasedAt,
+          isPrerelease: parsedRelease.isPrerelease,
+          sourceConfidence: output.confidence,
+          publishedBySourceId: source.id,
+          status: "active",
+          releaseNotesMarkdown: updatedNotesMarkdown,
+          releaseNotesHtml: updatedNotesHtml,
+          releaseNotesUrl: parsedRelease.releaseNotesUrl ?? matchingRelease.releaseNotesUrl,
+          updatedAt: now,
+        };
         await db
           .update(releases)
           .set({
-            status: "active",
-            releasedAt: toISODate(parsedRelease.publishedAt) ?? matchingRelease.releasedAt,
-            sourceConfidence: output.confidence,
-            releaseNotesMarkdown: updatedNotesMarkdown,
-            releaseNotesHtml: updatedNotesHtml,
-            releaseNotesUrl: parsedRelease.releaseNotesUrl ?? matchingRelease.releaseNotesUrl,
-            updatedAt: new Date().toISOString(),
+            versionRaw: matchingRelease.versionRaw,
+            buildNumber: matchingRelease.buildNumber,
+            releasedAt: matchingRelease.releasedAt,
+            isPrerelease: matchingRelease.isPrerelease,
+            sourceConfidence: matchingRelease.sourceConfidence,
+            publishedBySourceId: matchingRelease.publishedBySourceId,
+            status: matchingRelease.status,
+            releaseNotesMarkdown: matchingRelease.releaseNotesMarkdown,
+            releaseNotesHtml: matchingRelease.releaseNotesHtml,
+            releaseNotesUrl: matchingRelease.releaseNotesUrl,
+            updatedAt: matchingRelease.updatedAt,
           })
-          .where(eq(releases.id, releaseId));
+          .where(eq(releases.id, matchingRelease.id));
       } else {
-        releaseId = generateId(idPrefixes.release);
-        const releaseNotesMarkdown = parsedRelease.releaseNotesBody
-          ? await normalizeReleaseNotes(
-              parsedRelease.releaseNotesBody,
-              parsedRelease.releaseNotesFormat ?? "html",
-            )
-          : null;
-        await db
+        const releaseId = generateId(idPrefixes.release);
+        const [persistedRelease] = await db
           .insert(releases)
           .values({
             id: releaseId,
@@ -280,8 +400,11 @@ export async function handleSourceParse(
           .onConflictDoUpdate({
             target: [releases.appId, releases.channel, releases.versionNormalized],
             set: {
+              versionRaw: parsedRelease.versionRaw,
+              buildNumber: parsedRelease.buildNumber ?? undefined,
               status: "active",
-              releasedAt: toISODate(parsedRelease.publishedAt) ?? undefined,
+              releasedAt: releasedAt ?? undefined,
+              isPrerelease: parsedRelease.isPrerelease,
               sourceConfidence: output.confidence,
               publishedBySourceId: source.id,
               releaseNotesMarkdown: releaseNotesMarkdown ?? undefined,
@@ -289,21 +412,28 @@ export async function handleSourceParse(
               releaseNotesUrl: parsedRelease.releaseNotesUrl ?? undefined,
               updatedAt: now,
             },
+          })
+          .returning();
+        if (!persistedRelease) {
+          throw new Error(
+            `Failed to persist release ${source.appId}:${channel}:${versionNormalized}`,
+          );
+        }
+        matchingRelease = persistedRelease;
+        if (!artifactsByRelease.has(matchingRelease.id)) {
+          const persistedArtifacts = await selectArtifactsByReleaseIds({
+            db,
+            releaseIds: [matchingRelease.id],
           });
-        const persistedRelease = await db
-          .select({ id: releases.id })
-          .from(releases)
-          .where(
-            and(
-              eq(releases.appId, source.appId),
-              eq(releases.versionNormalized, versionNormalized),
-              eq(releases.channel, channel),
-            ),
-          )
-          .get();
-        if (persistedRelease) releaseId = persistedRelease.id;
+          artifactsByRelease.set(
+            matchingRelease.id,
+            persistedArtifacts.get(matchingRelease.id) ?? [],
+          );
+        }
       }
 
+      existingReleasesByKey.set(key, matchingRelease);
+      const releaseId = matchingRelease.id;
       observedReleaseIds.add(releaseId);
 
       // Insert observation
@@ -311,7 +441,7 @@ export async function handleSourceParse(
         observedVersionNormalized: versionNormalized,
         observedBuildNumber: parsedRelease.buildNumber ?? null,
         observedChannel: channel,
-        observedPublishedAt: toISODate(parsedRelease.publishedAt),
+        observedPublishedAt: releasedAt,
         observedReleaseNotesUrl: parsedRelease.releaseNotesUrl ?? null,
         observedDownloadUrl: parsedRelease.downloadUrl ?? null,
       });
@@ -327,7 +457,7 @@ export async function handleSourceParse(
           observedVersionNormalized: versionNormalized,
           observedBuildNumber: parsedRelease.buildNumber ?? null,
           observedChannel: channel,
-          observedPublishedAt: toISODate(parsedRelease.publishedAt),
+          observedPublishedAt: releasedAt,
           observedReleaseNotesUrl: parsedRelease.releaseNotesUrl ?? null,
           observedDownloadUrl: observationIdentity.canonicalObservedDownloadUrl,
           observationKey: observationIdentity.observationKey,
@@ -346,7 +476,7 @@ export async function handleSourceParse(
             observedVersionNormalized: versionNormalized,
             observedBuildNumber: parsedRelease.buildNumber ?? null,
             observedChannel: channel,
-            observedPublishedAt: toISODate(parsedRelease.publishedAt),
+            observedPublishedAt: releasedAt,
             observedReleaseNotesUrl: parsedRelease.releaseNotesUrl ?? null,
             observedDownloadUrl: observationIdentity.canonicalObservedDownloadUrl,
             confidence: output.confidence,
@@ -357,26 +487,17 @@ export async function handleSourceParse(
         });
 
       // Upsert artifacts using stable identity instead of raw presigned URLs.
-      const existingArtifacts = await db
-        .select({
-          id: artifacts.id,
-          url: artifacts.url,
-          canonicalUrl: artifacts.canonicalUrl,
-          identityKey: artifacts.identityKey,
-          sha256: artifacts.sha256,
-          architecture: artifacts.architecture,
-        })
-        .from(artifacts)
-        .where(eq(artifacts.releaseId, releaseId))
-        .all();
-      const existingByUrl = new Map(existingArtifacts.map((a) => [a.url, a] as const));
+      const releaseArtifacts = artifactsByRelease.get(releaseId) ?? [];
+      const existingByUrl = new Map(
+        releaseArtifacts.map((artifact) => [artifact.url, artifact] as const),
+      );
       const existingByCanonicalUrl = new Map(
-        existingArtifacts.map((a) => [a.canonicalUrl, a] as const),
+        releaseArtifacts.map((artifact) => [artifact.canonicalUrl, artifact] as const),
       );
       const existingByIdentityKey = new Map(
-        existingArtifacts.map((a) => [a.identityKey, a] as const),
+        releaseArtifacts.map((artifact) => [artifact.identityKey, artifact] as const),
       );
-      for (const artifact of existingArtifacts) {
+      for (const artifact of releaseArtifacts) {
         const derivedIdentity = buildArtifactIdentity({
           url: artifact.url,
           sha256: artifact.sha256,
@@ -391,36 +512,6 @@ export async function handleSourceParse(
           url: parsedArtifact.url,
           sha256: parsedArtifact.sha256,
         });
-        const existingArtifact =
-          existingByIdentityKey.get(artifactIdentity.identityKey) ??
-          existingByCanonicalUrl.get(artifactIdentity.canonicalUrl) ??
-          existingByUrl.get(parsedArtifact.url);
-        if (existingArtifact) {
-          await db
-            .update(artifacts)
-            .set({
-              url: parsedArtifact.url,
-              canonicalUrl: artifactIdentity.canonicalUrl,
-              identityKey: artifactIdentity.identityKey,
-              sha256: parsedArtifact.sha256 ?? undefined,
-              sizeBytes: parsedArtifact.sizeBytes ?? undefined,
-              architecture: mergeArtifactArchitectures(existingArtifact.architecture, architecture),
-              minOsVersion: parsedArtifact.minOsVersion ?? undefined,
-            })
-            .where(eq(artifacts.id, existingArtifact.id));
-          const mergedArtifact = {
-            ...existingArtifact,
-            url: parsedArtifact.url,
-            canonicalUrl: artifactIdentity.canonicalUrl,
-            identityKey: artifactIdentity.identityKey,
-            sha256: parsedArtifact.sha256 ?? existingArtifact.sha256,
-            architecture: mergeArtifactArchitectures(existingArtifact.architecture, architecture),
-          };
-          existingByUrl.set(parsedArtifact.url, mergedArtifact);
-          existingByCanonicalUrl.set(artifactIdentity.canonicalUrl, mergedArtifact);
-          existingByIdentityKey.set(artifactIdentity.identityKey, mergedArtifact);
-          continue;
-        }
         const hostname = artifactHostname(parsedArtifact.url);
         if (hostname) {
           if (knownArtifactHosts.size > 0 && !knownArtifactHosts.has(hostname)) {
@@ -450,8 +541,49 @@ export async function handleSourceParse(
             now,
           });
         }
+
+        const existingArtifact =
+          existingByIdentityKey.get(artifactIdentity.identityKey) ??
+          existingByCanonicalUrl.get(artifactIdentity.canonicalUrl) ??
+          existingByUrl.get(parsedArtifact.url);
+        if (existingArtifact) {
+          const mergedArchitecture = mergeArtifactArchitectures(
+            existingArtifact.architecture,
+            architecture,
+          );
+          await db
+            .update(artifacts)
+            .set({
+              artifactType: parsedArtifact.type,
+              url: parsedArtifact.url,
+              canonicalUrl: artifactIdentity.canonicalUrl,
+              identityKey: artifactIdentity.identityKey,
+              sha256: parsedArtifact.sha256 ?? undefined,
+              sizeBytes: parsedArtifact.sizeBytes ?? undefined,
+              architecture: mergedArchitecture,
+              minOsVersion: parsedArtifact.minOsVersion ?? undefined,
+            })
+            .where(eq(artifacts.id, existingArtifact.id));
+          const mergedArtifact = {
+            ...existingArtifact,
+            artifactType: parsedArtifact.type,
+            url: parsedArtifact.url,
+            canonicalUrl: artifactIdentity.canonicalUrl,
+            identityKey: artifactIdentity.identityKey,
+            sha256: parsedArtifact.sha256 ?? existingArtifact.sha256,
+            sizeBytes: parsedArtifact.sizeBytes ?? existingArtifact.sizeBytes,
+            architecture: mergedArchitecture,
+            minOsVersion: parsedArtifact.minOsVersion ?? existingArtifact.minOsVersion,
+          };
+          upsertArtifactRow(releaseArtifacts, mergedArtifact);
+          existingByUrl.set(parsedArtifact.url, mergedArtifact);
+          existingByCanonicalUrl.set(artifactIdentity.canonicalUrl, mergedArtifact);
+          existingByIdentityKey.set(artifactIdentity.identityKey, mergedArtifact);
+          continue;
+        }
+
         const artifactId = generateId(idPrefixes.artifact);
-        await db
+        const [persistedArtifact] = await db
           .insert(artifacts)
           .values({
             id: artifactId,
@@ -478,29 +610,28 @@ export async function handleSourceParse(
               architecture,
               minOsVersion: parsedArtifact.minOsVersion ?? undefined,
             },
-          });
-        const insertedArtifact = {
-          id: artifactId,
-          url: parsedArtifact.url,
-          canonicalUrl: artifactIdentity.canonicalUrl,
-          identityKey: artifactIdentity.identityKey,
-          sha256: parsedArtifact.sha256 ?? null,
-          architecture,
-        };
-        existingByUrl.set(parsedArtifact.url, insertedArtifact);
-        existingByCanonicalUrl.set(artifactIdentity.canonicalUrl, insertedArtifact);
-        existingByIdentityKey.set(artifactIdentity.identityKey, insertedArtifact);
+          })
+          .returning();
+        if (!persistedArtifact) {
+          throw new Error(
+            `Failed to persist artifact ${releaseId}:${artifactIdentity.identityKey}`,
+          );
+        }
+        upsertArtifactRow(releaseArtifacts, persistedArtifact);
+        existingByUrl.set(parsedArtifact.url, persistedArtifact);
+        existingByCanonicalUrl.set(artifactIdentity.canonicalUrl, persistedArtifact);
+        existingByIdentityKey.set(artifactIdentity.identityKey, persistedArtifact);
       }
 
       // Ensure exactly one primary artifact per release (prefer newest)
-      const allReleaseArtifacts = await db
-        .select({ id: artifacts.id })
-        .from(artifacts)
-        .where(eq(artifacts.releaseId, releaseId))
-        .orderBy(desc(artifacts.createdAt))
-        .all();
-      const firstArtifact = allReleaseArtifacts[0];
-      if (firstArtifact) {
+      const primaryArtifact = selectPrimaryArtifact(releaseArtifacts);
+      const activePrimaryIds = releaseArtifacts
+        .filter((artifact) => artifact.isPrimary)
+        .map((artifact) => artifact.id);
+      if (
+        primaryArtifact &&
+        (activePrimaryIds.length !== 1 || activePrimaryIds[0] !== primaryArtifact.id)
+      ) {
         await db
           .update(artifacts)
           .set({ isPrimary: false })
@@ -508,7 +639,10 @@ export async function handleSourceParse(
         await db
           .update(artifacts)
           .set({ isPrimary: true })
-          .where(eq(artifacts.id, firstArtifact.id));
+          .where(eq(artifacts.id, primaryArtifact.id));
+        for (const artifact of releaseArtifacts) {
+          artifact.isPrimary = artifact.id === primaryArtifact.id;
+        }
       }
     }
 
@@ -529,16 +663,16 @@ export async function handleSourceParse(
         )
         .all();
 
-      let withdrawnCount = 0;
-      for (const prior of priorReleases) {
-        if (!observedReleaseIds.has(prior.id)) {
-          await db
-            .update(releases)
-            .set({ status: "withdrawn", updatedAt: new Date().toISOString() })
-            .where(eq(releases.id, prior.id));
-          withdrawnCount++;
-        }
+      const withdrawnIds = priorReleases
+        .filter((prior) => !observedReleaseIds.has(prior.id))
+        .map((prior) => prior.id);
+      for (const withdrawnChunk of chunkStrings(withdrawnIds, D1_PARAM_LIMIT)) {
+        await db
+          .update(releases)
+          .set({ status: "withdrawn", updatedAt: now })
+          .where(inArray(releases.id, withdrawnChunk));
       }
+      const withdrawnCount = withdrawnIds.length;
       if (withdrawnCount > 0) {
         log.info("withdrew releases absent from feed", { count: withdrawnCount });
       }

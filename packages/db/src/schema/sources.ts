@@ -42,6 +42,15 @@ export const sources = sqliteTable(
   },
   (table) => [
     index("idx_sources_app_id").on(table.appId),
+    index("idx_sources_app_status_review_role_channel_success").on(
+      table.appId,
+      table.status,
+      table.reviewStatus,
+      table.role,
+      table.channel,
+      table.lastSuccessAt,
+    ),
+    index("idx_sources_app_type_base_url").on(table.appId, table.sourceType, table.baseUrl),
     index("idx_sources_status").on(table.status),
     index("idx_sources_type").on(table.sourceType),
     index("idx_sources_review_status").on(table.reviewStatus),
@@ -75,6 +84,7 @@ export const sourceFetches = sqliteTable(
   (table) => [
     index("idx_fetches_source_id").on(table.sourceId),
     index("idx_fetches_source_fetched").on(table.sourceId, table.fetchedAt),
+    index("idx_fetches_source_hostname").on(table.sourceId, table.fetchHostname),
     index("idx_fetches_status").on(table.fetchStatus),
   ],
 );

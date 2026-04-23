@@ -17,6 +17,7 @@ import PipelineWorker, { repairInventoryIngestionQueue } from "../index";
 const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
 const TEST_NOW_ISO = TEST_NOW.toISOString();
 const TEST_STALE_ISO = new Date(TEST_NOW.getTime() - 10 * 60 * 1000).toISOString();
+const TEST_LONG_STALE_ISO = new Date(TEST_NOW.getTime() - 2 * 60 * 60 * 1000).toISOString();
 
 type MockWorkflowCreateOptions = {
   id?: string;
@@ -204,5 +205,68 @@ describe("inventory ingestion repair", () => {
       { ingestionId: stalePendingId },
       { ingestionId: retryableFailedId },
     ]);
+  });
+
+  it("reclaims stale queued and long-stale running jobs before re-enqueueing them", async () => {
+    const db = createDb(env.DB);
+    const staleQueuedId = await insertIngestionJob(db, {
+      status: "queued",
+      attemptCount: 1,
+      workflowInstanceId: "wf-stale-queued",
+      updatedAt: TEST_STALE_ISO,
+      queuedAt: TEST_STALE_ISO,
+    });
+    const staleRunningId = await insertIngestionJob(db, {
+      status: "running",
+      attemptCount: 1,
+      workflowInstanceId: "wf-stale-running",
+      updatedAt: TEST_LONG_STALE_ISO,
+      queuedAt: TEST_LONG_STALE_ISO,
+      startedAt: TEST_LONG_STALE_ISO,
+    });
+    await insertIngestionJob(db, {
+      status: "running",
+      attemptCount: 1,
+      workflowInstanceId: "wf-fresh-running",
+      updatedAt: TEST_STALE_ISO,
+      queuedAt: TEST_STALE_ISO,
+      startedAt: TEST_STALE_ISO,
+    });
+
+    const send = vi.fn<(message: InventoryIngestionQueueMessage) => Promise<QueueSendResponse>>(
+      async () => ({
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+      }),
+    );
+    const queue = { send } as unknown as Queue<InventoryIngestionQueueMessage>;
+
+    const repaired = await repairInventoryIngestionQueue({
+      db,
+      queue,
+      log: createLogger({ test: "inventory_ingestion_repair_reclaim" }),
+      now: TEST_NOW,
+    });
+
+    expect(repaired).toBe(2);
+    expect(send.mock.calls.map((call) => call[0])).toEqual([
+      { ingestionId: staleQueuedId },
+      { ingestionId: staleRunningId },
+    ]);
+
+    const staleQueuedJob = await db
+      .select()
+      .from(inventoryIngestionJobs)
+      .where(eq(inventoryIngestionJobs.id, staleQueuedId))
+      .get();
+    expect(staleQueuedJob?.status).toBe("pending");
+    expect(staleQueuedJob?.workflowInstanceId).toBeNull();
+
+    const staleRunningJob = await db
+      .select()
+      .from(inventoryIngestionJobs)
+      .where(eq(inventoryIngestionJobs.id, staleRunningId))
+      .get();
+    expect(staleRunningJob?.status).toBe("pending");
+    expect(staleRunningJob?.workflowInstanceId).toBeNull();
   });
 });

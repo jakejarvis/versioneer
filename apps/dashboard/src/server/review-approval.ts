@@ -25,6 +25,7 @@ import {
 
 import { assertNoConflictingExactAlias } from "./alias-conflicts";
 import { scheduleRecomputeLatest, scheduleSourceFetch } from "./pipeline-jobs";
+import { buildApprovedSuggestionSourceInsert } from "./review-approval-source";
 import { syncSourceDerivedAliases } from "./source-derived-aliases";
 
 type Db = ReturnType<typeof createDb>;
@@ -316,31 +317,21 @@ async function approveNewSourceSuggestion(params: {
       .where(eq(sources.id, duplicate.id));
   } else {
     sourceId = generateId(idPrefixes.source);
-    await db.insert(sources).values({
-      id: sourceId,
-      appId,
-      sourceType: payload.sourceType,
-      label: payload.label ?? defaultLabelForSourceType(payload.sourceType),
-      baseUrl: normalizedBaseUrl,
-      configJson: null,
-      parserKey,
-      channel: payload.channel ?? null,
-      pollIntervalMinutes: 60,
-      reviewStatus: "approved",
-      role: persistedRole,
-      status: runtimeStatus,
-      nextPollAt: initialNextPollAt({
+    await db.insert(sources).values(
+      buildApprovedSuggestionSourceInsert({
+        id: sourceId,
+        appId,
+        sourceType: payload.sourceType,
+        label: payload.label ?? defaultLabelForSourceType(payload.sourceType),
+        baseUrl: normalizedBaseUrl,
+        parserKey,
+        channel: payload.channel ?? null,
+        role: persistedRole,
         status: runtimeStatus,
-        pollIntervalMinutes: 60,
+        reviewer,
         now,
       }),
-      discoveredVia: "catalog_suggestion",
-      approvedAt: now,
-      reviewedAt: now,
-      reviewedBy: reviewer,
-      createdAt: now,
-      updatedAt: now,
-    });
+    );
   }
 
   if (sourceId) {

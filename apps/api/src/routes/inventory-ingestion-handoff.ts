@@ -47,7 +47,7 @@ export function computeLookupKey(appName: string, bundleId?: string | null): str
   return `name:${appName
     .toLowerCase()
     .trim()
-    .replace(/\\.app$/, "")}`;
+    .replace(/\.app$/, "")}`;
 }
 
 async function selectDiscoveredAppsByLookupKeys(db: Db, lookupKeys: string[]) {

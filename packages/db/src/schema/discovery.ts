@@ -73,6 +73,29 @@ export const discoveredApps = sqliteTable(
   (table) => [
     uniqueIndex("idx_discovered_apps_lookup_key").on(table.lookupKey),
     index("idx_discovered_apps_status").on(table.status),
+    index("idx_discovered_apps_pending_last_seen").on(
+      table.status,
+      table.enrichmentStatus,
+      table.lastSeenAt,
+    ),
+    index("idx_discovered_apps_enrichment_updated_last_seen").on(
+      table.status,
+      table.enrichmentStatus,
+      table.updatedAt,
+      table.lastSeenAt,
+    ),
+    index("idx_discovered_apps_in_progress_started_last_seen").on(
+      table.status,
+      table.enrichmentStatus,
+      table.enrichmentStartedAt,
+      table.lastSeenAt,
+    ),
+    index("idx_discovered_apps_success_enriched_last_seen").on(
+      table.status,
+      table.enrichmentStatus,
+      table.enrichedAt,
+      table.lastSeenAt,
+    ),
     index("idx_discovered_apps_sighting_count").on(table.sightingCount),
     index("idx_discovered_apps_enrichment_status").on(table.enrichmentStatus),
     index("idx_discovered_apps_confidence_score").on(table.confidenceScore),

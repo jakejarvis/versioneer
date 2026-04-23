@@ -42,6 +42,11 @@ export const appAliases = sqliteTable(
   },
   (table) => [
     index("idx_aliases_app_id").on(table.appId),
+    index("idx_aliases_app_type_normalized").on(
+      table.appId,
+      table.aliasType,
+      table.normalizedValue,
+    ),
     index("idx_aliases_type_value").on(table.aliasType, table.normalizedValue),
     index("idx_aliases_type_active").on(table.aliasType, table.isActive),
     uniqueIndex("idx_aliases_unique_active_exact_bundle_id")
