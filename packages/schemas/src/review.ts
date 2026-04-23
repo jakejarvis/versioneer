@@ -11,7 +11,14 @@ export const queueTypeValues = [
 export const queueTypeSchema = z.enum(queueTypeValues);
 export type QueueType = z.infer<typeof queueTypeSchema>;
 
-export const suggestionStatusValues = ["pending", "approved", "rejected", "superseded"] as const;
+export const suggestionStatusValues = [
+  "pending",
+  "processing",
+  "failed",
+  "approved",
+  "rejected",
+  "superseded",
+] as const;
 export const suggestionStatusSchema = z.enum(suggestionStatusValues);
 export type SuggestionStatus = z.infer<typeof suggestionStatusSchema>;
 

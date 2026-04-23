@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
 import { asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 
+import { attentionCatalogSuggestionStatuses } from "@/lib/review-lifecycle";
 import type {
   DashboardHomepageData,
   FeedbackListItem,
@@ -94,7 +95,7 @@ export const getHomepage = createServerFn({ method: "GET" })
       db
         .select({ count: sql<number>`count(*)` })
         .from(catalogSuggestions)
-        .where(eq(catalogSuggestions.status, "pending")),
+        .where(inArray(catalogSuggestions.status, attentionCatalogSuggestionStatuses)),
       db
         .select({ count: sql<number>`count(*)` })
         .from(jobFailures)
@@ -110,8 +111,12 @@ export const getHomepage = createServerFn({ method: "GET" })
       db
         .select()
         .from(catalogSuggestions)
-        .where(eq(catalogSuggestions.status, "pending"))
-        .orderBy(asc(catalogSuggestions.firstSeenAt), asc(catalogSuggestions.createdAt))
+        .where(inArray(catalogSuggestions.status, attentionCatalogSuggestionStatuses))
+        .orderBy(
+          sql`case when ${catalogSuggestions.status} = 'failed' then 0 else 1 end`,
+          asc(catalogSuggestions.firstSeenAt),
+          asc(catalogSuggestions.createdAt),
+        )
         .limit(5),
       db
         .select()

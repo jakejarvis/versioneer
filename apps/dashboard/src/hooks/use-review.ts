@@ -6,17 +6,12 @@ import {
   listCatalogSuggestions,
   rejectCatalogSuggestion,
 } from "@/server/review";
+import type { QueueType, SuggestionStatus } from "@versioneer/schemas/review";
 
 export function useCatalogSuggestions(
   params: {
-    status?: "pending" | "approved" | "rejected" | "superseded";
-    queueType?:
-      | "new_app"
-      | "new_source"
-      | "metadata_change"
-      | "authority_handoff"
-      | "merge_proposal"
-      | "release_discrepancy";
+    status?: SuggestionStatus;
+    queueType?: QueueType;
     limit?: number;
     offset?: number;
     sortBy?: string;
@@ -42,7 +37,7 @@ export function useApproveCatalogSuggestion() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => approveCatalogSuggestion({ data: { id } }),
-    onSuccess: (_result, id) => {
+    onSettled: async (_result, _error, id) => {
       void qc.invalidateQueries({ queryKey: ["catalog-suggestions"] });
       void qc.invalidateQueries({ queryKey: ["catalog-suggestions", id] });
       void qc.invalidateQueries({ queryKey: ["homepage"] });
@@ -58,7 +53,7 @@ export function useRejectCatalogSuggestion() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => rejectCatalogSuggestion({ data: { id } }),
-    onSuccess: (_result, id) => {
+    onSettled: async (_result, _error, id) => {
       void qc.invalidateQueries({ queryKey: ["catalog-suggestions"] });
       void qc.invalidateQueries({ queryKey: ["catalog-suggestions", id] });
       void qc.invalidateQueries({ queryKey: ["homepage"] });

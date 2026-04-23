@@ -1,8 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { REVIEW_APPROVAL_STALE_MS } from "@/lib/review-lifecycle";
+import { createLogger } from "@versioneer/core/logger";
 import { createDb } from "@versioneer/db";
 import {
   auditLog,
@@ -11,23 +13,22 @@ import {
   idPrefixes,
   suggestionEvidence,
 } from "@versioneer/db";
+import { queueTypeSchema, suggestionStatusSchema } from "@versioneer/schemas/review";
 
 import { captureAdminEvent } from "./analytics";
 import { invalidateInventoryMatchSnapshot } from "./cache";
 import { loadAppsByIds, loadSourcesByIds, toAppSummary, toSourceSummary } from "./entity-summaries";
 import { authMiddleware } from "./middleware";
 import { catalogSuggestionOrderBy } from "./order-by";
-import { applySuggestionApproval } from "./review-approval";
+import { scheduleRecomputeLatest, scheduleSourceFetch } from "./pipeline-jobs";
+import {
+  applySuggestionApproval,
+  type ReviewApprovalResult,
+  type ReviewPostCommitJob,
+} from "./review-approval";
 
-const suggestionStatusSchema = z.enum(["pending", "approved", "rejected", "superseded"]);
-const suggestionQueueTypeSchema = z.enum([
-  "new_app",
-  "new_source",
-  "metadata_change",
-  "authority_handoff",
-  "merge_proposal",
-  "release_discrepancy",
-]);
+const suggestionQueueTypeSchema = queueTypeSchema;
+const log = createLogger({ component: "dashboard", module: "review" });
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
 
@@ -39,6 +40,242 @@ const listSuggestionsSchema = z.object({
   sortBy: z.string().optional(),
   sortDir: sortDirectionSchema,
 });
+
+type Db = ReturnType<typeof createDb>;
+type SuggestionRow = typeof catalogSuggestions.$inferSelect;
+
+function buildSuggestionAuditPayload(
+  suggestion: SuggestionRow,
+  extra: Record<string, unknown> = {},
+) {
+  return JSON.stringify({
+    queueType: suggestion.queueType,
+    appId: suggestion.appId,
+    sourceId: suggestion.sourceId,
+    ...extra,
+  });
+}
+
+async function getSuggestionOrThrow(db: Db, id: string) {
+  const suggestion = await db
+    .select()
+    .from(catalogSuggestions)
+    .where(eq(catalogSuggestions.id, id))
+    .get();
+  if (!suggestion) throw new Error("Not found");
+  return suggestion;
+}
+
+async function claimCatalogSuggestionApproval(params: {
+  db: Db;
+  id: string;
+  reviewer: string;
+  now: string;
+}) {
+  const staleBefore = new Date(Date.parse(params.now) - REVIEW_APPROVAL_STALE_MS).toISOString();
+  const claimed = await params.db
+    .update(catalogSuggestions)
+    .set({
+      status: "processing",
+      processingStartedAt: params.now,
+      processingBy: params.reviewer,
+      lastError: null,
+      reviewedAt: null,
+      reviewedBy: null,
+      approvalAttemptCount: sql`${catalogSuggestions.approvalAttemptCount} + 1`,
+      updatedAt: params.now,
+    })
+    .where(
+      and(
+        eq(catalogSuggestions.id, params.id),
+        or(
+          eq(catalogSuggestions.status, "pending"),
+          eq(catalogSuggestions.status, "failed"),
+          and(
+            eq(catalogSuggestions.status, "processing"),
+            or(
+              sql`${catalogSuggestions.processingStartedAt} is null`,
+              lte(catalogSuggestions.processingStartedAt, staleBefore),
+            ),
+          ),
+        ),
+      ),
+    )
+    .returning();
+
+  const suggestion = claimed[0];
+  if (suggestion) {
+    return { status: "claimed" as const, suggestion };
+  }
+
+  return {
+    status: "skipped" as const,
+    suggestion: await getSuggestionOrThrow(params.db, params.id),
+  };
+}
+
+async function rejectCatalogSuggestionIfClaimable(params: {
+  db: Db;
+  id: string;
+  reviewer: string;
+  now: string;
+}) {
+  const rejected = await params.db
+    .update(catalogSuggestions)
+    .set({
+      status: "rejected",
+      processingStartedAt: null,
+      processingBy: null,
+      lastError: null,
+      reviewedAt: params.now,
+      reviewedBy: params.reviewer,
+      updatedAt: params.now,
+    })
+    .where(
+      and(
+        eq(catalogSuggestions.id, params.id),
+        or(eq(catalogSuggestions.status, "pending"), eq(catalogSuggestions.status, "failed")),
+      ),
+    )
+    .returning();
+
+  const suggestion = rejected[0];
+  if (suggestion) {
+    return { status: "rejected" as const, suggestion };
+  }
+
+  return {
+    status: "skipped" as const,
+    suggestion: await getSuggestionOrThrow(params.db, params.id),
+  };
+}
+
+async function finalizeCatalogSuggestionApproval(params: {
+  db: Db;
+  id: string;
+  reviewer: string;
+  now: string;
+  suggestion: SuggestionRow;
+  result: ReviewApprovalResult;
+}) {
+  const writes = [
+    params.db
+      .update(catalogSuggestions)
+      .set({
+        status: "approved",
+        processingStartedAt: null,
+        processingBy: null,
+        lastError: null,
+        reviewedAt: params.now,
+        reviewedBy: params.reviewer,
+        updatedAt: params.now,
+      })
+      .where(eq(catalogSuggestions.id, params.id)),
+    params.db.insert(auditLog).values({
+      id: generateId(idPrefixes.auditLog),
+      eventType: "catalog_suggestion_approved",
+      actorType: "admin",
+      actorId: params.reviewer,
+      targetType: "catalog_suggestion",
+      targetId: params.id,
+      payloadJson: buildSuggestionAuditPayload(params.suggestion),
+      createdAt: params.now,
+    }),
+    ...params.result.auditEntries.map((entry) =>
+      params.db.insert(auditLog).values({
+        id: generateId(idPrefixes.auditLog),
+        createdAt: params.now,
+        ...entry,
+      }),
+    ),
+  ];
+
+  await params.db.batch(writes as [(typeof writes)[0], ...typeof writes]);
+}
+
+async function markCatalogSuggestionApprovalFailed(params: {
+  db: Db;
+  id: string;
+  reviewer: string;
+  now: string;
+  suggestion: SuggestionRow;
+  errorMessage: string;
+}) {
+  await params.db.batch([
+    params.db
+      .update(catalogSuggestions)
+      .set({
+        status: "failed",
+        processingStartedAt: null,
+        processingBy: null,
+        lastError: params.errorMessage,
+        reviewedAt: null,
+        reviewedBy: null,
+        updatedAt: params.now,
+      })
+      .where(eq(catalogSuggestions.id, params.id)),
+    params.db.insert(auditLog).values({
+      id: generateId(idPrefixes.auditLog),
+      eventType: "catalog_suggestion_approval_failed",
+      actorType: "admin",
+      actorId: params.reviewer,
+      targetType: "catalog_suggestion",
+      targetId: params.id,
+      payloadJson: buildSuggestionAuditPayload(params.suggestion, {
+        errorMessage: params.errorMessage,
+      }),
+      createdAt: params.now,
+    }),
+  ]);
+}
+
+async function runApprovalPostCommitJobs(params: { db: Db; jobs: ReviewPostCommitJob[] }) {
+  let failedJobs = 0;
+
+  for (const job of params.jobs) {
+    const result =
+      job.type === "source-fetch"
+        ? await scheduleSourceFetch({
+            db: params.db,
+            sourceId: job.sourceId,
+            reason: job.reason,
+            force: job.force,
+          })
+        : await scheduleRecomputeLatest({
+            db: params.db,
+            appId: job.appId,
+            channel: job.channel,
+          });
+
+    if (!result.ok) {
+      failedJobs += 1;
+      log.error("review approval post-commit job failed", {
+        jobType: job.type,
+        relatedId: job.type === "source-fetch" ? job.sourceId : job.appId,
+        jobKey: job.type === "recompute-latest" ? job.channel : null,
+        errorMessage: result.errorMessage,
+      });
+    }
+  }
+
+  return failedJobs;
+}
+
+async function captureAdminEventSafely(
+  actor: { id: string },
+  event: string,
+  properties: Record<string, unknown>,
+) {
+  try {
+    await captureAdminEvent(actor, event, properties);
+  } catch (error) {
+    log.error("failed to capture admin analytics event", {
+      event,
+      properties,
+      error,
+    });
+  }
+}
 
 export const listCatalogSuggestions = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
@@ -148,55 +385,81 @@ export const approveCatalogSuggestion = createServerFn({ method: "POST" })
   .handler(async ({ data: { id }, context }) => {
     const db = createDb(env.DB);
     const now = new Date().toISOString();
-    const suggestion = await db
-      .select()
-      .from(catalogSuggestions)
-      .where(eq(catalogSuggestions.id, id))
-      .get();
-    if (!suggestion) throw new Error("Not found");
-    if (suggestion.status !== "pending") {
-      return { status: suggestion.status };
-    }
-
-    await applySuggestionApproval({
+    const claim = await claimCatalogSuggestionApproval({
       db,
-      suggestion,
+      id,
       reviewer: context.user.email,
       now,
     });
 
-    await db
-      .update(catalogSuggestions)
-      .set({
-        status: "approved",
-        reviewedAt: now,
-        reviewedBy: context.user.email,
-        updatedAt: now,
-      })
-      .where(eq(catalogSuggestions.id, id));
+    if (claim.status === "skipped") {
+      return { status: claim.suggestion.status };
+    }
 
-    await db.insert(auditLog).values({
-      id: generateId(idPrefixes.auditLog),
-      eventType: "catalog_suggestion_approved",
-      actorType: "admin",
-      actorId: context.user.email,
-      targetType: "catalog_suggestion",
-      targetId: id,
-      payloadJson: JSON.stringify({
-        queueType: suggestion.queueType,
-        appId: suggestion.appId,
-        sourceId: suggestion.sourceId,
-      }),
-      createdAt: now,
+    let approvalResult: ReviewApprovalResult;
+    try {
+      approvalResult = await applySuggestionApproval({
+        db,
+        suggestion: claim.suggestion,
+        reviewer: context.user.email,
+        now,
+      });
+
+      await finalizeCatalogSuggestionApproval({
+        db,
+        id,
+        reviewer: context.user.email,
+        now,
+        suggestion: claim.suggestion,
+        result: approvalResult,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      try {
+        await markCatalogSuggestionApprovalFailed({
+          db,
+          id,
+          reviewer: context.user.email,
+          now,
+          suggestion: claim.suggestion,
+          errorMessage,
+        });
+      } catch (markFailedError) {
+        log.error("failed to persist catalog suggestion approval failure", {
+          suggestionId: id,
+          errorMessage,
+          markFailedError,
+        });
+      }
+
+      await captureAdminEventSafely(context.user, "review_approval_failed", {
+        target_type: "catalog_suggestion",
+        target_id: id,
+        queue_type: claim.suggestion.queueType,
+        app_id: claim.suggestion.appId ?? null,
+        source_id: claim.suggestion.sourceId ?? null,
+        status: "failed",
+        error_message: errorMessage,
+      });
+      throw new Error(errorMessage, { cause: error });
+    }
+
+    if (approvalResult.invalidateInventorySnapshot) {
+      await invalidateInventoryMatchSnapshot(env);
+    }
+    const postCommitFailures = await runApprovalPostCommitJobs({
+      db,
+      jobs: approvalResult.postCommitJobs,
     });
-    await invalidateInventoryMatchSnapshot(env);
-    await captureAdminEvent(context.user, "review_approved", {
+    await captureAdminEventSafely(context.user, "review_approved", {
       target_type: "catalog_suggestion",
       target_id: id,
-      queue_type: suggestion.queueType,
-      app_id: suggestion.appId ?? null,
-      source_id: suggestion.sourceId ?? null,
+      queue_type: claim.suggestion.queueType,
+      app_id: claim.suggestion.appId ?? null,
+      source_id: claim.suggestion.sourceId ?? null,
       status: "approved",
+      post_commit_failures: postCommitFailures,
     });
 
     return { status: "approved" };
@@ -208,25 +471,15 @@ export const rejectCatalogSuggestion = createServerFn({ method: "POST" })
   .handler(async ({ data: { id }, context }) => {
     const db = createDb(env.DB);
     const now = new Date().toISOString();
-    const suggestion = await db
-      .select()
-      .from(catalogSuggestions)
-      .where(eq(catalogSuggestions.id, id))
-      .get();
-    if (!suggestion) throw new Error("Not found");
-    if (suggestion.status !== "pending") {
-      return { status: suggestion.status };
+    const result = await rejectCatalogSuggestionIfClaimable({
+      db,
+      id,
+      reviewer: context.user.email,
+      now,
+    });
+    if (result.status === "skipped") {
+      return { status: result.suggestion.status };
     }
-
-    await db
-      .update(catalogSuggestions)
-      .set({
-        status: "rejected",
-        reviewedAt: now,
-        reviewedBy: context.user.email,
-        updatedAt: now,
-      })
-      .where(eq(catalogSuggestions.id, id));
 
     await db.insert(auditLog).values({
       id: generateId(idPrefixes.auditLog),
@@ -235,19 +488,15 @@ export const rejectCatalogSuggestion = createServerFn({ method: "POST" })
       actorId: context.user.email,
       targetType: "catalog_suggestion",
       targetId: id,
-      payloadJson: JSON.stringify({
-        queueType: suggestion.queueType,
-        appId: suggestion.appId,
-        sourceId: suggestion.sourceId,
-      }),
+      payloadJson: buildSuggestionAuditPayload(result.suggestion),
       createdAt: now,
     });
-    await captureAdminEvent(context.user, "review_rejected", {
+    await captureAdminEventSafely(context.user, "review_rejected", {
       target_type: "catalog_suggestion",
       target_id: id,
-      queue_type: suggestion.queueType,
-      app_id: suggestion.appId ?? null,
-      source_id: suggestion.sourceId ?? null,
+      queue_type: result.suggestion.queueType,
+      app_id: result.suggestion.appId ?? null,
+      source_id: result.suggestion.sourceId ?? null,
       status: "rejected",
     });
 

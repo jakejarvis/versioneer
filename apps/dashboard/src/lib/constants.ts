@@ -64,6 +64,7 @@ export const statusColors: Record<string, string> = {
 
   merged: INFO,
   in_progress: INFO,
+  processing: INFO,
   running: INFO,
   beta: INFO,
   update_available: INFO,
@@ -105,6 +106,7 @@ export const statusLabels: Record<string, string> = {
   error: "Error",
   success: "Success",
   pending: "Pending",
+  processing: "Processing",
   in_progress: "In Progress",
   running: "Running",
   resolved: "Resolved",

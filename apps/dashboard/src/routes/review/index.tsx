@@ -1,6 +1,6 @@
 import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -42,7 +42,14 @@ import {
   paginationFromSearch,
   sortingFromSearch,
 } from "@/lib/data-table-search";
+import {
+  getCatalogSuggestionApprovalLabel,
+  getCatalogSuggestionApprovalResultMessage,
+  getCatalogSuggestionRejectResultMessage,
+  isActionableCatalogSuggestionStatus,
+} from "@/lib/review-lifecycle";
 import type { CatalogSuggestion } from "@/lib/types";
+import { suggestionStatusSchema } from "@versioneer/schemas/review";
 
 const reviewSearchDefaults = {
   ...paginatedSearchDefaults,
@@ -52,8 +59,7 @@ const reviewSearchDefaults = {
 
 const reviewSearchSchema = z.object({
   ...paginatedSearchShape,
-  status: z
-    .enum(["pending", "approved", "rejected", "superseded"])
+  status: suggestionStatusSchema
     .default(reviewSearchDefaults.status)
     .catch(reviewSearchDefaults.status),
   queueType: z
@@ -61,6 +67,24 @@ const reviewSearchSchema = z.object({
     .default(reviewSearchDefaults.queueType)
     .catch(reviewSearchDefaults.queueType),
 });
+
+function showApproveResultToast(status: CatalogSuggestion["status"]) {
+  const message = getCatalogSuggestionApprovalResultMessage(status);
+  if (status === "approved") {
+    toast.success(message);
+    return;
+  }
+  toast.info(message);
+}
+
+function showRejectResultToast(status: CatalogSuggestion["status"]) {
+  const message = getCatalogSuggestionRejectResultMessage(status);
+  if (status === "rejected") {
+    toast.success(message);
+    return;
+  }
+  toast.info(message);
+}
 
 export const Route = createFileRoute("/review/")({
   validateSearch: reviewSearchSchema,
@@ -92,126 +116,158 @@ function ReviewPage() {
   });
 
   const closeDialog = () => setSelectedSuggestionId(null);
+  const selectedSuggestionActionable = selectedSuggestion.data
+    ? isActionableCatalogSuggestionStatus(selectedSuggestion.data.status)
+    : false;
 
-  const columns = useMemo<ColumnDef<CatalogSuggestion>[]>(
-    () => [
-      {
-        accessorKey: "queueType",
-        meta: { label: "Type" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
-        enableSorting: false,
-        cell: ({ row }) => <StatusBadge status={row.original.queueType} className="capitalize" />,
+  const handleApprove = (id: string) => {
+    approveMutation.mutate(id, {
+      onSuccess: (result) => {
+        showApproveResultToast(result.status);
+        if (result.status === "approved" && selectedSuggestionId === id) {
+          closeDialog();
+        }
       },
-      {
-        accessorKey: "title",
-        meta: { label: "Title" },
-        enableSorting: false,
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Title" />,
-        cell: ({ row }) => (
-          <button
-            type="button"
-            onClick={() => setSelectedSuggestionId(row.original.id)}
-            className="max-w-72 truncate text-left font-medium hover:text-foreground hover:underline"
+      onError: (error) => toast.error(error.message),
+    });
+  };
+
+  const handleReject = (id: string) => {
+    rejectMutation.mutate(id, {
+      onSuccess: (result) => {
+        showRejectResultToast(result.status);
+        if (result.status === "rejected" && selectedSuggestionId === id) {
+          closeDialog();
+        }
+      },
+      onError: (error) => toast.error(error.message),
+    });
+  };
+
+  const columns: ColumnDef<CatalogSuggestion>[] = [
+    {
+      accessorKey: "queueType",
+      meta: { label: "Type" },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+      enableSorting: false,
+      cell: ({ row }) => <StatusBadge status={row.original.queueType} className="capitalize" />,
+    },
+    {
+      accessorKey: "title",
+      meta: { label: "Title" },
+      enableSorting: false,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Title" />,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => setSelectedSuggestionId(row.original.id)}
+          className="max-w-72 truncate text-left font-medium hover:text-foreground hover:underline"
+        >
+          {row.original.title}
+        </button>
+      ),
+    },
+    {
+      id: "app",
+      meta: { label: "App" },
+      enableSorting: false,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="App" />,
+      cell: ({ row }) => {
+        const app = row.original.app ?? row.original.source?.app;
+        if (!app) return <span className="text-muted-foreground">--</span>;
+        return (
+          <Link
+            to="/apps/$appId"
+            params={{ appId: app.id }}
+            className="flex min-w-0 items-center gap-2 hover:text-foreground"
           >
-            {row.original.title}
-          </button>
-        ),
+            <AppIcon iconR2Key={app.iconR2Key} appName={app.canonicalName} size={24} />
+            <span className="truncate text-sm">{app.canonicalName}</span>
+          </Link>
+        );
       },
-      {
-        id: "app",
-        meta: { label: "App" },
-        enableSorting: false,
-        header: ({ column }) => <DataTableColumnHeader column={column} title="App" />,
-        cell: ({ row }) => {
-          const app = row.original.app ?? row.original.source?.app;
-          if (!app) return <span className="text-muted-foreground">--</span>;
-          return (
-            <Link
-              to="/apps/$appId"
-              params={{ appId: app.id }}
-              className="flex min-w-0 items-center gap-2 hover:text-foreground"
+    },
+    {
+      accessorKey: "evidenceCount",
+      meta: { label: "Evidence" },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Evidence" />,
+      cell: ({ row }) => <Badge variant="outline">{row.original.evidenceCount}</Badge>,
+    },
+    {
+      accessorKey: "firstSeenAt",
+      meta: { label: "First Seen" },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="First Seen" />,
+      cell: ({ row }) => <TimeAgo date={row.original.firstSeenAt} />,
+    },
+    {
+      accessorKey: "lastSeenAt",
+      meta: { label: "Last Seen" },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Last Seen" />,
+      cell: ({ row }) => <TimeAgo date={row.original.lastSeenAt} />,
+    },
+    {
+      accessorKey: "status",
+      meta: { label: "Status" },
+      enableSorting: false,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+    },
+    {
+      id: "actions",
+      meta: { label: "Actions" },
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) =>
+        isActionableCatalogSuggestionStatus(row.original.status) ? (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={approveMutation.isPending || rejectMutation.isPending}
+              onClick={() => handleApprove(row.original.id)}
             >
-              <AppIcon iconR2Key={app.iconR2Key} appName={app.canonicalName} size={24} />
-              <span className="truncate text-sm">{app.canonicalName}</span>
-            </Link>
-          );
-        },
-      },
-      {
-        accessorKey: "evidenceCount",
-        meta: { label: "Evidence" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Evidence" />,
-        cell: ({ row }) => <Badge variant="outline">{row.original.evidenceCount}</Badge>,
-      },
-      {
-        accessorKey: "firstSeenAt",
-        meta: { label: "First Seen" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="First Seen" />,
-        cell: ({ row }) => <TimeAgo date={row.original.firstSeenAt} />,
-      },
-      {
-        accessorKey: "lastSeenAt",
-        meta: { label: "Last Seen" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Last Seen" />,
-        cell: ({ row }) => <TimeAgo date={row.original.lastSeenAt} />,
-      },
-      {
-        accessorKey: "status",
-        meta: { label: "Status" },
-        enableSorting: false,
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-        cell: ({ row }) => <StatusBadge status={row.original.status} />,
-      },
-      {
-        id: "actions",
-        meta: { label: "Actions" },
-        enableSorting: false,
-        enableHiding: false,
-        cell: ({ row }) =>
-          row.original.status === "pending" ? (
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={approveMutation.isPending || rejectMutation.isPending}
-                onClick={() => {
-                  approveMutation.mutate(row.original.id, {
-                    onSuccess: () => toast.success("Approved"),
-                    onError: (error) => toast.error(error.message),
-                  });
-                }}
-              >
-                Approve
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={approveMutation.isPending || rejectMutation.isPending}
-                onClick={() => {
-                  rejectMutation.mutate(row.original.id, {
-                    onSuccess: () => toast.success("Rejected"),
-                    onError: (error) => toast.error(error.message),
-                  });
-                }}
-              >
-                Reject
-              </Button>
-            </div>
-          ) : null,
-      },
-    ],
-    [approveMutation, rejectMutation],
-  );
+              {getCatalogSuggestionApprovalLabel(row.original.status)}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={approveMutation.isPending || rejectMutation.isPending}
+              onClick={() => handleReject(row.original.id)}
+            >
+              Reject
+            </Button>
+          </div>
+        ) : null,
+    },
+  ];
 
   const bulkActions: BulkAction<CatalogSuggestion>[] = [
     {
-      label: "Approve Selected",
+      label: searchState.status === "failed" ? "Retry Approval Selected" : "Approve Selected",
       disabled: approveMutation.isPending || rejectMutation.isPending,
       onClick: async (rows) => {
+        let approvedCount = 0;
+        let inFlightCount = 0;
         for (const row of rows) {
-          approveMutation.mutate(row.id, { onError: (err) => toast.error(err.message) });
+          try {
+            const result = await approveMutation.mutateAsync(row.id);
+            if (result.status === "approved") {
+              approvedCount += 1;
+            } else if (result.status === "processing") {
+              inFlightCount += 1;
+            }
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : String(error));
+          }
         }
-        toast.success(`Approved ${rows.length} suggestion${rows.length === 1 ? "" : "s"}`);
+        if (approvedCount > 0) {
+          toast.success(`${approvedCount} suggestion${approvedCount === 1 ? "" : "s"} approved`);
+        }
+        if (inFlightCount > 0) {
+          toast.info(
+            `${inFlightCount} suggestion${inFlightCount === 1 ? "" : "s"} already processing`,
+          );
+        }
       },
     },
     {
@@ -219,10 +275,28 @@ function ReviewPage() {
       variant: "destructive",
       disabled: approveMutation.isPending || rejectMutation.isPending,
       onClick: async (rows) => {
+        let rejectedCount = 0;
+        let skippedCount = 0;
         for (const row of rows) {
-          rejectMutation.mutate(row.id, { onError: (err) => toast.error(err.message) });
+          try {
+            const result = await rejectMutation.mutateAsync(row.id);
+            if (result.status === "rejected") {
+              rejectedCount += 1;
+            } else {
+              skippedCount += 1;
+            }
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : String(error));
+          }
         }
-        toast.success(`Rejected ${rows.length} suggestion${rows.length === 1 ? "" : "s"}`);
+        if (rejectedCount > 0) {
+          toast.success(`${rejectedCount} suggestion${rejectedCount === 1 ? "" : "s"} rejected`);
+        }
+        if (skippedCount > 0) {
+          toast.info(
+            `${skippedCount} suggestion${skippedCount === 1 ? "" : "s"} could not be rejected`,
+          );
+        }
       },
     },
   ];
@@ -233,7 +307,7 @@ function ReviewPage() {
     <div>
       <h2 className="text-xl font-semibold tracking-tight">Catalog Review</h2>
       <p className="mt-1 text-muted-foreground">
-        Review and action catalog suggestions. FIFO queue backed by deduped evidence.
+        Review and action catalog suggestions, including failed approvals that need a retry.
       </p>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -251,6 +325,8 @@ function ReviewPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="failed">Failed</SelectItem>
+            <SelectItem value="processing">Processing</SelectItem>
             <SelectItem value="approved">Approved</SelectItem>
             <SelectItem value="rejected">Rejected</SelectItem>
             <SelectItem value="superseded">Superseded</SelectItem>
@@ -295,7 +371,7 @@ function ReviewPage() {
           }
           manualSorting
           enableColumnVisibility
-          enableRowSelection
+          enableRowSelection={(row) => isActionableCatalogSuggestionStatus(row.original.status)}
           bulkActions={bulkActions}
           pagination={
             data
@@ -337,6 +413,19 @@ function ReviewPage() {
                 <StatusBadge status={selectedSuggestion.data.queueType} className="capitalize" />
                 <StatusBadge status={selectedSuggestion.data.status} />
                 <Badge variant="outline">{selectedSuggestion.data.evidenceCount} evidence</Badge>
+                <Badge variant="outline">
+                  attempts: {selectedSuggestion.data.approvalAttemptCount}
+                </Badge>
+                {selectedSuggestion.data.processingStartedAt ? (
+                  <Badge variant="outline">
+                    processing since <TimeAgo date={selectedSuggestion.data.processingStartedAt} />
+                  </Badge>
+                ) : null}
+                {selectedSuggestion.data.processingBy ? (
+                  <Badge variant="outline">
+                    processing by: {selectedSuggestion.data.processingBy}
+                  </Badge>
+                ) : null}
                 {selectedSuggestion.data.app ? (
                   <Link
                     to="/apps/$appId"
@@ -362,6 +451,17 @@ function ReviewPage() {
                   </Link>
                 ) : null}
               </div>
+
+              {selectedSuggestion.data.lastError ? (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/8 p-3 text-sm">
+                  <div className="font-medium text-red-700 dark:text-red-400">
+                    Last approval error
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {selectedSuggestion.data.lastError}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="grid gap-4 lg:grid-cols-3">
                 <section className="space-y-2">
@@ -422,19 +522,13 @@ function ReviewPage() {
               variant="destructive"
               disabled={
                 !selectedSuggestionId ||
-                selectedSuggestion.data?.status !== "pending" ||
+                !selectedSuggestionActionable ||
                 rejectMutation.isPending ||
                 approveMutation.isPending
               }
               onClick={() => {
                 if (!selectedSuggestionId) return;
-                rejectMutation.mutate(selectedSuggestionId, {
-                  onSuccess: () => {
-                    toast.success("Suggestion rejected");
-                    closeDialog();
-                  },
-                  onError: (error) => toast.error(error.message),
-                });
+                handleReject(selectedSuggestionId);
               }}
             >
               Reject
@@ -442,22 +536,16 @@ function ReviewPage() {
             <Button
               disabled={
                 !selectedSuggestionId ||
-                selectedSuggestion.data?.status !== "pending" ||
+                !selectedSuggestionActionable ||
                 rejectMutation.isPending ||
                 approveMutation.isPending
               }
               onClick={() => {
                 if (!selectedSuggestionId) return;
-                approveMutation.mutate(selectedSuggestionId, {
-                  onSuccess: () => {
-                    toast.success("Suggestion approved");
-                    closeDialog();
-                  },
-                  onError: (error) => toast.error(error.message),
-                });
+                handleApprove(selectedSuggestionId);
               }}
             >
-              Approve
+              {getCatalogSuggestionApprovalLabel(selectedSuggestion.data?.status ?? "pending")}
             </Button>
           </DialogFooter>
         </DialogContent>

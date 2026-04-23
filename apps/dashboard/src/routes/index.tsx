@@ -260,7 +260,7 @@ function DashboardPage() {
         <div className="space-y-4">
           <SectionCard
             title="Catalog Review"
-            description="Oldest pending catalog suggestions first."
+            description="Failed suggestions first, then the oldest pending review items."
             icon={Workflow}
             action={
               <Link to="/review" search={reviewSearch} className={viewAllClassName}>
@@ -271,7 +271,7 @@ function DashboardPage() {
             {isLoading ? (
               <ListSkeleton rows={3} />
             ) : homepage.pendingSuggestions.length === 0 ? (
-              <CompactEmptyState message="No pending suggestions." />
+              <CompactEmptyState message="No review suggestions need attention." />
             ) : (
               <div className="space-y-2 p-2">
                 {homepage.pendingSuggestions.map((item) => (
@@ -546,12 +546,13 @@ function CatalogSuggestionRow({ item }: { item: CatalogSuggestion }) {
   return (
     <Link
       to="/review"
-      search={reviewSearch}
+      search={{ ...reviewSearch, status: item.status }}
       className="group flex items-start justify-between gap-4 rounded-xl border border-transparent bg-background/20 px-4 py-4 transition-all hover:border-border/70 hover:bg-background/60"
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={item.queueType} className="capitalize" />
+          <StatusBadge status={item.status} />
           <Badge variant="outline">{item.evidenceCount} evidence</Badge>
         </div>
         <div className="mt-2 truncate font-medium">{item.title}</div>

@@ -132,6 +132,10 @@ export interface CatalogSuggestion {
   evidenceCount: number;
   firstSeenAt: string;
   lastSeenAt: string;
+  processingStartedAt: string | null;
+  processingBy: string | null;
+  lastError: string | null;
+  approvalAttemptCount: number;
   reviewedAt: string | null;
   reviewedBy: string | null;
   createdAt: string;

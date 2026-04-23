@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { defaultLabelForSourceType } from "@/lib/source-types";
 import { normalizeAliasValue } from "@versioneer/core/identity";
@@ -24,13 +24,43 @@ import {
 } from "@versioneer/schemas/sources";
 
 import { assertNoConflictingExactAlias } from "./alias-conflicts";
-import { scheduleRecomputeLatest, scheduleSourceFetch } from "./pipeline-jobs";
 import { buildApprovedSuggestionSourceInsert } from "./review-approval-source";
 import { syncSourceDerivedAliases } from "./source-derived-aliases";
 
 type Db = ReturnType<typeof createDb>;
 type SuggestionRow = typeof catalogSuggestions.$inferSelect;
 type SourceRow = typeof sources.$inferSelect;
+type AuditLogInsert = typeof auditLog.$inferInsert;
+
+export type ReviewPostCommitJob =
+  | {
+      type: "source-fetch";
+      sourceId: string;
+      reason: string;
+      force: boolean;
+    }
+  | {
+      type: "recompute-latest";
+      appId: string;
+      channel: string | null;
+    };
+
+export type ReviewAuditEntry = Pick<
+  AuditLogInsert,
+  "eventType" | "actorType" | "actorId" | "targetType" | "targetId" | "payloadJson"
+>;
+
+export interface ReviewApprovalResult {
+  auditEntries: ReviewAuditEntry[];
+  postCommitJobs: ReviewPostCommitJob[];
+  invalidateInventorySnapshot: boolean;
+}
+
+const EMPTY_REVIEW_APPROVAL_RESULT: ReviewApprovalResult = {
+  auditEntries: [],
+  postCommitJobs: [],
+  invalidateInventorySnapshot: true,
+};
 
 function parseJson<T>(value: string | null | undefined): T | null {
   if (!value) return null;
@@ -111,29 +141,41 @@ async function ensureTrustAssertion(params: {
 }): Promise<void> {
   const { db, appId, sourceId, assertionType, value, reviewer, now } = params;
 
-  const clauses = [
-    eq(trustAssertions.assertionType, assertionType),
-    eq(trustAssertions.value, value),
-    appId ? eq(trustAssertions.appId, appId) : sql`${trustAssertions.appId} is null`,
-    sourceId ? eq(trustAssertions.sourceId, sourceId) : sql`${trustAssertions.sourceId} is null`,
-  ];
-  const existing = await db
-    .select({ id: trustAssertions.id })
-    .from(trustAssertions)
-    .where(and(...clauses))
-    .get();
-  if (existing) return;
+  await db
+    .insert(trustAssertions)
+    .values({
+      id: generateId(idPrefixes.trustAssertion),
+      appId,
+      sourceId,
+      assertionType,
+      value,
+      dedupeKey: buildTrustAssertionDedupeKey({
+        appId,
+        sourceId,
+        assertionType,
+        value,
+      }),
+      reviewedAt: now,
+      reviewedBy: reviewer,
+      createdAt: now,
+    })
+    .onConflictDoNothing({
+      target: trustAssertions.dedupeKey,
+    });
+}
 
-  await db.insert(trustAssertions).values({
-    id: generateId(idPrefixes.trustAssertion),
-    appId,
-    sourceId,
-    assertionType,
-    value,
-    reviewedAt: now,
-    reviewedBy: reviewer,
-    createdAt: now,
-  });
+export function buildTrustAssertionDedupeKey(params: {
+  appId: string | null;
+  sourceId: string | null;
+  assertionType:
+    | "sparkle_public_key"
+    | "bundle_id"
+    | "team_id"
+    | "notarization_expectation"
+    | "signature_requirement";
+  value: string;
+}) {
+  return `trust:${params.appId ?? "none"}:${params.sourceId ?? "none"}:${params.assertionType}:${params.value}`;
 }
 
 async function createFollowupSuggestion(params: {
@@ -147,38 +189,40 @@ async function createFollowupSuggestion(params: {
   evidenceSummaryJson?: string | null;
   now: string;
 }): Promise<void> {
-  const existing = await params.db
-    .select({ id: catalogSuggestions.id })
-    .from(catalogSuggestions)
-    .where(eq(catalogSuggestions.dedupeKey, params.dedupeKey))
-    .get();
-  if (existing) return;
-
-  await params.db.insert(catalogSuggestions).values({
-    id: generateId(idPrefixes.catalogSuggestion),
-    queueType: params.queueType,
-    status: "pending",
-    appId: params.appId ?? null,
-    sourceId: params.sourceId ?? null,
-    bundleKey: null,
-    dedupeKey: params.dedupeKey,
-    title: params.title,
-    canonicalSnapshotJson: null,
-    proposedChangeJson: params.proposedChangeJson,
-    evidenceSummaryJson: params.evidenceSummaryJson ?? null,
-    evidenceCount: 0,
-    firstSeenAt: params.now,
-    lastSeenAt: params.now,
-    createdAt: params.now,
-    updatedAt: params.now,
-  });
+  await params.db
+    .insert(catalogSuggestions)
+    .values({
+      id: generateId(idPrefixes.catalogSuggestion),
+      queueType: params.queueType,
+      status: "pending",
+      appId: params.appId ?? null,
+      sourceId: params.sourceId ?? null,
+      bundleKey: null,
+      dedupeKey: params.dedupeKey,
+      title: params.title,
+      canonicalSnapshotJson: null,
+      proposedChangeJson: params.proposedChangeJson,
+      evidenceSummaryJson: params.evidenceSummaryJson ?? null,
+      evidenceCount: 0,
+      firstSeenAt: params.now,
+      lastSeenAt: params.now,
+      processingStartedAt: null,
+      processingBy: null,
+      lastError: null,
+      approvalAttemptCount: 0,
+      createdAt: params.now,
+      updatedAt: params.now,
+    })
+    .onConflictDoNothing({
+      target: catalogSuggestions.dedupeKey,
+    });
 }
 
 async function approveNewAppSuggestion(params: {
   db: Db;
   suggestion: SuggestionRow;
   now: string;
-}): Promise<void> {
+}): Promise<ReviewApprovalResult> {
   const { db, suggestion, now } = params;
   if (!suggestion.appId) {
     throw new Error("New app suggestion is missing appId");
@@ -237,6 +281,8 @@ async function approveNewAppSuggestion(params: {
       now,
     });
   }
+
+  return EMPTY_REVIEW_APPROVAL_RESULT;
 }
 
 async function approveNewSourceSuggestion(params: {
@@ -244,7 +290,7 @@ async function approveNewSourceSuggestion(params: {
   suggestion: SuggestionRow;
   reviewer: string;
   now: string;
-}): Promise<string | null> {
+}): Promise<ReviewApprovalResult> {
   const { db, suggestion, reviewer, now } = params;
   const payload = parseJson<{
     appId?: string;
@@ -390,16 +436,21 @@ async function approveNewSourceSuggestion(params: {
     });
   }
 
-  if (sourceId && runtimeStatus === "active") {
-    await scheduleSourceFetch({
-      db,
-      sourceId,
-      reason: "catalog-review",
-      force: true,
-    });
-  }
-
-  return sourceId;
+  return {
+    auditEntries: [],
+    postCommitJobs:
+      sourceId && runtimeStatus === "active"
+        ? [
+            {
+              type: "source-fetch",
+              sourceId,
+              reason: "catalog-review",
+              force: true,
+            },
+          ]
+        : [],
+    invalidateInventorySnapshot: true,
+  };
 }
 
 async function approveMetadataSuggestion(params: {
@@ -407,7 +458,7 @@ async function approveMetadataSuggestion(params: {
   suggestion: SuggestionRow;
   reviewer: string;
   now: string;
-}): Promise<void> {
+}): Promise<ReviewApprovalResult> {
   const { db, suggestion, reviewer, now } = params;
   const payload = parseJson<
     | {
@@ -432,7 +483,7 @@ async function approveMetadataSuggestion(params: {
       }
   >(suggestion.proposedChangeJson);
 
-  if (!payload) return;
+  if (!payload) return EMPTY_REVIEW_APPROVAL_RESULT;
 
   if (payload.changeType === "alias") {
     const appId = payload.appId ?? suggestion.appId;
@@ -445,7 +496,7 @@ async function approveMetadataSuggestion(params: {
       source: "catalog-review",
       now,
     });
-    return;
+    return EMPTY_REVIEW_APPROVAL_RESULT;
   }
 
   if (payload.changeType === "app_fields") {
@@ -460,7 +511,7 @@ async function approveMetadataSuggestion(params: {
         updatedAt: now,
       })
       .where(eq(apps.id, appId));
-    return;
+    return EMPTY_REVIEW_APPROVAL_RESULT;
   }
 
   if (payload.changeType === "trust_assertion") {
@@ -474,6 +525,8 @@ async function approveMetadataSuggestion(params: {
       now,
     });
   }
+
+  return EMPTY_REVIEW_APPROVAL_RESULT;
 }
 
 async function approveAuthorityHandoffSuggestion(params: {
@@ -481,7 +534,7 @@ async function approveAuthorityHandoffSuggestion(params: {
   suggestion: SuggestionRow;
   reviewer: string;
   now: string;
-}): Promise<void> {
+}): Promise<ReviewApprovalResult> {
   const { db, suggestion, reviewer, now } = params;
   const payload = parseJson<{
     fromSourceId?: string;
@@ -515,19 +568,25 @@ async function approveAuthorityHandoffSuggestion(params: {
     })
     .where(eq(sources.id, payload.toSourceId));
 
-  await scheduleSourceFetch({
-    db,
-    sourceId: payload.toSourceId,
-    reason: "authority-handoff",
-    force: true,
-  });
+  return {
+    auditEntries: [],
+    postCommitJobs: [
+      {
+        type: "source-fetch",
+        sourceId: payload.toSourceId,
+        reason: "authority-handoff",
+        force: true,
+      },
+    ],
+    invalidateInventorySnapshot: true,
+  };
 }
 
 async function approveMergeSuggestion(params: {
   db: Db;
   suggestion: SuggestionRow;
   now: string;
-}): Promise<void> {
+}): Promise<ReviewApprovalResult> {
   const payload = parseJson<{ fromAppId?: string; toAppId?: string }>(
     params.suggestion.proposedChangeJson,
   );
@@ -541,6 +600,8 @@ async function approveMergeSuggestion(params: {
     .update(apps)
     .set({ status: "merged", mergedIntoAppId: toAppId, updatedAt: params.now })
     .where(eq(apps.id, fromAppId));
+
+  return EMPTY_REVIEW_APPROVAL_RESULT;
 }
 
 async function approveReleaseDiscrepancySuggestion(params: {
@@ -548,7 +609,7 @@ async function approveReleaseDiscrepancySuggestion(params: {
   suggestion: SuggestionRow;
   reviewer: string;
   now: string;
-}): Promise<void> {
+}): Promise<ReviewApprovalResult> {
   const payload = parseJson<{
     appId?: string;
     releaseId?: string;
@@ -582,37 +643,43 @@ async function approveReleaseDiscrepancySuggestion(params: {
       .where(eq(releases.id, release.id));
   }
 
-  await params.db.insert(auditLog).values({
-    id: generateId(idPrefixes.auditLog),
-    eventType: "release_discrepancy_approved",
-    actorType: "admin",
-    actorId: params.reviewer,
-    targetType: "release",
-    targetId: release.id,
-    payloadJson: JSON.stringify({
-      appId: release.appId,
-      sourceId: payload?.sourceId ?? release.publishedBySourceId ?? null,
-      issue: payload?.issue ?? null,
-      action: "quarantine_release",
-    }),
-    createdAt: params.now,
-  });
-
-  await scheduleRecomputeLatest({
-    db: params.db,
-    appId: release.appId,
-    channel: release.channel,
-  });
-
   const sourceId = payload?.sourceId ?? release.publishedBySourceId ?? null;
-  if (sourceId) {
-    await scheduleSourceFetch({
-      db: params.db,
-      sourceId,
-      reason: "release-discrepancy",
-      force: true,
-    });
-  }
+
+  return {
+    auditEntries: [
+      {
+        eventType: "release_discrepancy_approved",
+        actorType: "admin",
+        actorId: params.reviewer,
+        targetType: "release",
+        targetId: release.id,
+        payloadJson: JSON.stringify({
+          appId: release.appId,
+          sourceId,
+          issue: payload?.issue ?? null,
+          action: "quarantine_release",
+        }),
+      },
+    ],
+    postCommitJobs: [
+      {
+        type: "recompute-latest",
+        appId: release.appId,
+        channel: release.channel,
+      },
+      ...(sourceId
+        ? [
+            {
+              type: "source-fetch" as const,
+              sourceId,
+              reason: "release-discrepancy",
+              force: true,
+            },
+          ]
+        : []),
+    ],
+    invalidateInventorySnapshot: true,
+  };
 }
 
 export async function applySuggestionApproval(params: {
@@ -620,25 +687,21 @@ export async function applySuggestionApproval(params: {
   suggestion: SuggestionRow;
   reviewer: string;
   now: string;
-}): Promise<void> {
+}): Promise<ReviewApprovalResult> {
   switch (params.suggestion.queueType) {
     case "new_app":
-      await approveNewAppSuggestion(params);
-      return;
+      return approveNewAppSuggestion(params);
     case "new_source":
-      await approveNewSourceSuggestion(params);
-      return;
+      return approveNewSourceSuggestion(params);
     case "metadata_change":
-      await approveMetadataSuggestion(params);
-      return;
+      return approveMetadataSuggestion(params);
     case "authority_handoff":
-      await approveAuthorityHandoffSuggestion(params);
-      return;
+      return approveAuthorityHandoffSuggestion(params);
     case "merge_proposal":
-      await approveMergeSuggestion(params);
-      return;
+      return approveMergeSuggestion(params);
     case "release_discrepancy":
-      await approveReleaseDiscrepancySuggestion(params);
-      return;
+      return approveReleaseDiscrepancySuggestion(params);
   }
+
+  throw new Error("Unsupported suggestion queue type");
 }

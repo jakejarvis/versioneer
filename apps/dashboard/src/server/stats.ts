@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { gt, sql } from "drizzle-orm";
+import { gt, inArray, sql } from "drizzle-orm";
 
+import { attentionCatalogSuggestionStatuses } from "@/lib/review-lifecycle";
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -57,7 +58,7 @@ export const getStats = createServerFn({ method: "GET" })
     const [pendingSuggestionCount] = await db
       .select({ count: sql<number>`count(*)` })
       .from(catalogSuggestions)
-      .where(sql`${catalogSuggestions.status} = 'pending'`);
+      .where(inArray(catalogSuggestions.status, attentionCatalogSuggestionStatuses));
 
     return {
       totalApps: appCount?.count ?? 0,
