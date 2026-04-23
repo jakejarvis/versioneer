@@ -1,17 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ArrowUpRightIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import posthogClient from "posthog-js";
+import { useEffect, useRef } from "react";
 
-import { captureMarketingEvent, captureMarketingException } from "@/lib/posthog";
-
-interface Release {
-  tag_name: string;
-  name: string | null;
-  body_html: string | null;
-  published_at: string | null;
-  html_url: string;
-  prerelease: boolean;
-}
+import { fetchChangelogReleases, type ChangelogRelease } from "@/lib/releases";
+import { getPageSeoHead } from "@/lib/seo";
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
@@ -20,36 +13,36 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 export const Route = createFileRoute("/changelog")({
+  head: () =>
+    getPageSeoHead({
+      title: "Changelog | Versioneer",
+      description:
+        "Follow Versioneer releases, changelog entries, and shipping progress for the macOS app updater.",
+      path: "/changelog",
+    }),
+  loader: ({ abortController }) =>
+    fetchChangelogReleases({
+      signal: abortController.signal,
+    }),
+  onError: ({ error }) => {
+    if (error instanceof DOMException && error.name === "AbortError") return;
+    posthogClient.captureException(error, {
+      flow: "changelog_releases",
+    });
+  },
+  pendingComponent: ChangelogPendingPage,
+  pendingMs: 200,
+  pendingMinMs: 300,
+  staleTime: 300_000,
   component: ChangelogPage,
 });
 
 function ChangelogPage() {
-  const [releases, setReleases] = useState<Release[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const releases = Route.useLoaderData();
   const scrolledRef = useRef(false);
 
   useEffect(() => {
-    fetch("/api/releases")
-      .then((res) => {
-        if (!res.ok) throw new Error("fetch failed");
-        return res.json() as Promise<Release[]>;
-      })
-      .then((data) => {
-        setReleases(data);
-        setLoading(false);
-      })
-      .catch((catchError) => {
-        captureMarketingException(catchError, {
-          flow: "changelog_releases",
-        });
-        setError(true);
-        setLoading(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    if (loading || scrolledRef.current) return;
+    if (scrolledRef.current) return;
     scrolledRef.current = true;
 
     const hash = window.location.hash.slice(1);
@@ -59,34 +52,35 @@ function ChangelogPage() {
     if (target) {
       target.scrollIntoView({ behavior: "smooth" });
     }
-  }, [loading]);
+  }, []);
 
   return (
     <main className="space-y-4">
       <h2 className="text-lg font-medium">Changelog</h2>
 
-      {loading && <ChangelogSkeleton />}
-
-      {error && (
-        <p className="text-sm text-muted-foreground">Failed to load releases. Try again later.</p>
-      )}
-
-      {!loading && !error && releases.length === 0 && (
-        <p className="text-sm text-muted-foreground">No releases found.</p>
-      )}
-
-      {!loading && !error && (
+      {releases.length > 0 ? (
         <div className="space-y-10">
           {releases.map((release) => (
             <ReleaseEntry key={release.tag_name} release={release} />
           ))}
         </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">No releases found.</p>
       )}
     </main>
   );
 }
 
-function ReleaseEntry({ release }: { release: Release }) {
+function ChangelogPendingPage() {
+  return (
+    <main className="space-y-4">
+      <h2 className="text-lg font-medium">Changelog</h2>
+      <ChangelogSkeleton />
+    </main>
+  );
+}
+
+function ReleaseEntry({ release }: { release: ChangelogRelease }) {
   const date = release.published_at ? new Date(release.published_at) : null;
 
   return (
@@ -111,7 +105,7 @@ function ReleaseEntry({ release }: { release: Release }) {
           target="_blank"
           rel="noopener noreferrer"
           onClick={() =>
-            captureMarketingEvent("marketing_release_link_clicked", {
+            posthogClient.capture("marketing_release_link_clicked", {
               target_id: release.tag_name,
               target_url: release.html_url,
             })

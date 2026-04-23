@@ -62,7 +62,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply antialiased font-sans text-foreground bg-background tabular-nums;
   }
   ::selection {
     @apply bg-primary/20;

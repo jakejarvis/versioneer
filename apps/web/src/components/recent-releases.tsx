@@ -1,6 +1,5 @@
+import posthogClient from "posthog-js";
 import { useEffect, useState } from "react";
-
-import { captureMarketingException } from "@/lib/posthog";
 
 const API_BASE_URL = "https://api.versioneer.app";
 
@@ -93,7 +92,7 @@ export function RecentReleases() {
         setLoading(false);
       })
       .catch((catchError) => {
-        captureMarketingException(catchError, {
+        posthogClient.captureException(catchError, {
           flow: "recent_releases",
         });
         setError(true);
@@ -108,21 +107,16 @@ export function RecentReleases() {
   return (
     <section className="space-y-5 mt-8">
       <h2 className="text-sm font-medium text-muted-foreground">Latest Updates</h2>
-      <div className="relative">
+      <div className="relative pointer-events-none">
         {loading ? (
           <SkeletonRows />
         ) : (
           <ul className="space-y-3">
             {items.map((item) => (
-              <li
-                key={item.releaseId}
-                className="flex items-center gap-2.5 text-[13px] leading-none select-none"
-              >
+              <li key={item.releaseId} className="flex items-center gap-2.5 text-[13px]">
                 <AppIcon name={item.appName} iconUrl={item.iconUrl} />
                 <span className="text-foreground truncate">{item.appName}</span>
-                <span className="text-muted-foreground font-mono text-[11px] leading-none">
-                  {item.version}
-                </span>
+                <span className="text-muted-foreground font-mono text-[11px]">{item.version}</span>
                 <span className="ml-auto text-muted-foreground/60 text-xs whitespace-nowrap">
                   {formatRelativeTime(item.releasedAt)}
                 </span>
