@@ -35,7 +35,7 @@ nonisolated struct InstallPresentation: Equatable, Sendable {
 
   @MainActor
   static func make(
-    result: AppDecision,
+    result: InventoryResult,
     state: InstallCoordinator.OperationState
   ) -> InstallPresentation {
     let progress = progressPresentation(for: state)
@@ -106,7 +106,7 @@ nonisolated struct InstallPresentation: Equatable, Sendable {
   }
 
   private static func primaryActionTitle(
-    result: AppDecision,
+    result: InventoryResult,
     state: InstallCoordinator.OperationState
   ) -> String {
     switch state.phase {
@@ -126,7 +126,7 @@ nonisolated struct InstallPresentation: Equatable, Sendable {
   }
 
   private static func banners(
-    result: AppDecision,
+    result: InventoryResult,
     state: InstallCoordinator.OperationState
   ) -> [Banner] {
     var banners: [Banner] = []
@@ -185,7 +185,7 @@ nonisolated struct InstallPresentation: Equatable, Sendable {
     return banners
   }
 
-  private static func trustSummary(result: AppDecision) -> [String] {
+  private static func trustSummary(result: InventoryResult) -> [String] {
     var parts: [String] = []
     if let strategy = result.installStrategy {
       parts.append("Strategy: \(strategy.rawValue)")

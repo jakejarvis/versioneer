@@ -5,7 +5,7 @@ struct DetailSummaryPanel: View {
   @Environment(InstallCoordinator.self) private var installCoordinator
   @Environment(\.undoManager) private var undoManager
 
-  let result: AppDecision
+  let result: InventoryResult
 
   @Binding var showFeedbackSheet: Bool
   @Binding var showInstallWarning: Bool

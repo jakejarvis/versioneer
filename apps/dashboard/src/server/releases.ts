@@ -31,10 +31,10 @@ import { artifactTypeSchema } from "@versioneer/schemas/releases";
 
 import { captureAdminEvent } from "./analytics";
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
-import { scheduleRecomputeLatest } from "./followup-jobs";
 import { latestReleaseTrustWarnings } from "./install-trust";
 import { authMiddleware } from "./middleware";
 import { releaseOrderBy } from "./order-by";
+import { scheduleRecomputeLatest } from "./pipeline-jobs";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
 type ArtifactRow = typeof artifacts.$inferSelect;

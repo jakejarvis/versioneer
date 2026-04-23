@@ -116,7 +116,7 @@ function DashboardPage() {
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h2>
         <div className="mt-4 flex flex-wrap gap-2">
           <HeroPill label="Attention items" value={attentionTotal} tone="amber" />
-          <HeroPill label="Source follow-up" value={sourceAttentionTotal} tone="red" />
+          <HeroPill label="Source Attention" value={sourceAttentionTotal} tone="red" />
           <HeroPill
             label="Releases this week"
             value={homepage.overview.catalogContext.recentReleases}
@@ -190,7 +190,7 @@ function DashboardPage() {
           description="Source coverage is only useful when feeds are current and error-free."
           icon={Radio}
           value={sourceAttentionTotal}
-          valueLabel="sources need follow-up"
+          valueLabel="sources need attention"
           tone={sourceAttentionTotal > 0 ? "red" : "emerald"}
           isLoading={isLoading}
         >

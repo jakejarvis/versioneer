@@ -40,7 +40,7 @@ struct InstallPresentationTests {
       bundleId: "com.macromates.TextMate",
       decision: .updateAvailable,
       installStrategy: .pkgInstall,
-      artifact: AppDecision.Artifact(
+      artifact: InventoryResult.Artifact(
         id: "pkg",
         downloadUrl: "https://example.com/textmate.pkg",
         architecture: "universal",

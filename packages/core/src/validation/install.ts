@@ -79,7 +79,7 @@ export const installExecutionTargetSchema = z.object({
 
 export const installExecutionPlanSchema = z.object({
   strategy: installStrategySchema,
-  executionRoute: installExecutionRouteSchema.optional(),
+  executionRoute: installExecutionRouteSchema,
 });
 
 export const installExecutionExpectedSchema = z.object({
@@ -103,10 +103,6 @@ export const installExecutionCreateResponseSchema = z.object({
 });
 
 export const installExecutionEventRequestSchema = z.object({
-  client: installExecutionClientSchema,
-  target: installExecutionTargetSchema,
-  install: installExecutionPlanSchema,
-  expected: installExecutionExpectedSchema,
   event: z.object({
     status: z.enum(["started", "succeeded", "failed", "cancelled"]),
     installedVersion: z.string().max(200).nullable().optional(),

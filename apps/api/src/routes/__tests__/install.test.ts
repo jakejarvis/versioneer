@@ -109,6 +109,30 @@ describe("POST /v1/install/executions", () => {
     expect(res.status).toBe(400);
   });
 
+  it("requires executionRoute when creating an install execution", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db);
+    const source = await seedSource(db, testApp.id);
+    const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
+
+    const res = await app.request(
+      "/v1/install/executions",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...createExecutionBody(testApp.id, release.id),
+          install: {
+            strategy: "dmg_copy_replace",
+          },
+        }),
+      },
+      env,
+    );
+
+    expect(res.status).toBe(400);
+  });
+
   it("rejects artifacts incompatible with the target architecture", async () => {
     const db = getDb(env.DB);
     const testApp = await seedApp(db);
@@ -194,7 +218,6 @@ describe("POST /v1/install/executions/:id/events", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...createExecutionBody(testApp.id, release.id, artifact.id),
           event: {
             status: "succeeded",
             installedVersion: "1.0.0",
@@ -227,13 +250,25 @@ describe("POST /v1/install/executions/:id/events", () => {
     const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
     const artifact = await seedArtifact(db, release.id, { architecture: "universal" });
 
+    const prepRes = await app.request(
+      "/v1/install/executions",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createExecutionBody(testApp.id, release.id, artifact.id)),
+      },
+      env,
+    );
+    const {
+      execution: { id: executionId },
+    } = (await prepRes.json()) as { execution: { id: string } };
+
     const res = await app.request(
-      `/v1/install/executions/exec_new123/events`,
+      `/v1/install/executions/${executionId}/events`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...createExecutionBody(testApp.id, release.id, artifact.id),
           event: {
             status: "failed",
             errorMessage: "Signature verification failed",
@@ -254,13 +289,25 @@ describe("POST /v1/install/executions/:id/events", () => {
     const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
     const artifact = await seedArtifact(db, release.id, { architecture: "unknown" });
 
+    const prepRes = await app.request(
+      "/v1/install/executions",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createExecutionBody(testApp.id, release.id, artifact.id)),
+      },
+      env,
+    );
+    const {
+      execution: { id: executionId },
+    } = (await prepRes.json()) as { execution: { id: string } };
+
     const res = await app.request(
-      `/v1/install/executions/exec_unknownarch/events`,
+      `/v1/install/executions/${executionId}/events`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...createExecutionBody(testApp.id, release.id, artifact.id),
           event: {
             status: "started",
           },
@@ -272,5 +319,24 @@ describe("POST /v1/install/executions/:id/events", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { execution: { status: string } };
     expect(body.execution.status).toBe("recorded");
+  });
+
+  it("returns 404 when the execution does not exist", async () => {
+    const res = await app.request(
+      "/v1/install/executions/exec_missing/events",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: {
+            status: "failed",
+            errorMessage: "missing execution",
+          },
+        }),
+      },
+      env,
+    );
+
+    expect(res.status).toBe(404);
   });
 });

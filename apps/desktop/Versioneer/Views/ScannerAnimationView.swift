@@ -74,8 +74,8 @@ struct ScannerAnimationView: View {
       )
   }
 
-  private func appDecisionStub(_ app: InstalledApp) -> AppDecision {
-    AppDecision(
+  private func appDecisionStub(_ app: InstalledApp) -> InventoryResult {
+    InventoryResult(
       appName: app.name,
       bundleId: app.bundleId,
       installedVersion: app.version,

@@ -207,7 +207,7 @@ struct VersionDiffLabel: View {
 // MARK: - Metadata Popover Button
 
 struct MetadataPopoverButton: View {
-  let result: AppDecision
+  let result: InventoryResult
 
   @State private var showPopover = false
   @State private var isHovered = false
@@ -338,7 +338,7 @@ extension ResultsBrowserRowPresentation.Tone {
 struct AppContextMenuItems: View {
   @Environment(AppState.self) private var appState
 
-  let result: AppDecision
+  let result: InventoryResult
 
   var body: some View {
     let hasPath = appState.appPathText(for: result) != nil

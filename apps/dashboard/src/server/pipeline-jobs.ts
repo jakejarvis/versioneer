@@ -7,11 +7,11 @@ import { createDb, sources } from "@versioneer/db";
 
 type Db = ReturnType<typeof createDb>;
 
-type FollowupJobType = "source-fetch" | "source-parse" | "recompute-latest";
+type PipelineJobType = "source-fetch" | "source-parse" | "recompute-latest";
 
-type FollowupResult = TrackedJobResult;
+type PipelineJobResult = TrackedJobResult;
 
-const log = createLogger({ component: "dashboard", module: "followup-jobs" });
+const log = createLogger({ component: "dashboard", module: "pipeline-jobs" });
 
 export async function scheduleSourceFetch(params: {
   db: Db;
@@ -19,15 +19,15 @@ export async function scheduleSourceFetch(params: {
   reason: string;
   force: boolean;
   resolveFailureOnSuccess?: boolean;
-}): Promise<FollowupResult> {
+}): Promise<PipelineJobResult> {
   return runTrackedJob({
     db: params.db,
     jobType: "source-fetch",
     relatedId: params.sourceId,
     resolveFailureOnSuccess: params.resolveFailureOnSuccess,
     onError: (error) =>
-      log.error("follow-up job failed", {
-        jobType: "source-fetch" satisfies FollowupJobType,
+      log.error("pipeline job failed", {
+        jobType: "source-fetch" satisfies PipelineJobType,
         relatedId: params.sourceId,
         error,
       }),
@@ -61,15 +61,15 @@ export async function scheduleSourceReparse(params: {
   db: Db;
   sourceFetchId: string;
   resolveFailureOnSuccess?: boolean;
-}): Promise<FollowupResult> {
+}): Promise<PipelineJobResult> {
   return runTrackedJob({
     db: params.db,
     jobType: "source-parse",
     relatedId: params.sourceFetchId,
     resolveFailureOnSuccess: params.resolveFailureOnSuccess,
     onError: (error) =>
-      log.error("follow-up job failed", {
-        jobType: "source-parse" satisfies FollowupJobType,
+      log.error("pipeline job failed", {
+        jobType: "source-parse" satisfies PipelineJobType,
         relatedId: params.sourceFetchId,
         error,
       }),
@@ -84,7 +84,7 @@ export async function scheduleRecomputeLatest(params: {
   appId: string;
   channel?: string | null;
   resolveFailureOnSuccess?: boolean;
-}): Promise<FollowupResult> {
+}): Promise<PipelineJobResult> {
   return runTrackedJob({
     db: params.db,
     jobType: "recompute-latest",
@@ -92,8 +92,8 @@ export async function scheduleRecomputeLatest(params: {
     jobKey: params.channel ?? null,
     resolveFailureOnSuccess: params.resolveFailureOnSuccess,
     onError: (error) =>
-      log.error("follow-up job failed", {
-        jobType: "recompute-latest" satisfies FollowupJobType,
+      log.error("pipeline job failed", {
+        jobType: "recompute-latest" satisfies PipelineJobType,
         relatedId: params.appId,
         jobKey: params.channel ?? null,
         error,

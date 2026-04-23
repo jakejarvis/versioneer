@@ -8,7 +8,7 @@ nonisolated struct ScanCacheStore: Sendable {
   /// The data that gets serialized to/from the cache file.
   struct CachedScanData: Codable, Sendable {
     let installedApps: [InstalledApp]
-    let inventoryResults: [AppDecision]
+    let inventoryResults: [InventoryResult]
   }
 
   private static let fileName = "ScanCache.json"

@@ -26,8 +26,8 @@ import {
 import { AliasConflictError, assertNoConflictingExactAlias } from "./alias-conflicts";
 import { captureAdminEvent } from "./analytics";
 import { invalidateInventoryMatchSnapshot } from "./cache";
-import { scheduleSourceFetch } from "./followup-jobs";
 import { authMiddleware } from "./middleware";
+import { scheduleSourceFetch } from "./pipeline-jobs";
 import { buildSourceDerivedAliasInserts } from "./source-derived-aliases";
 
 // ──────────────────────────────────────────────────────────

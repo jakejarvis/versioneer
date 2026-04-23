@@ -11,7 +11,7 @@ struct AppListRowView: View {
 
   @State private var isHovered = false
 
-  private var result: AppDecision? {
+  private var result: InventoryResult? {
     appState.inventoryResultsByID[row.id]
   }
 
@@ -110,7 +110,7 @@ struct AppListRowView: View {
   // MARK: - Context Menu
 
   @ViewBuilder
-  private func rowContextMenu(for result: AppDecision) -> some View {
+  private func rowContextMenu(for result: InventoryResult) -> some View {
     AppContextMenuItems(result: result)
 
     Button("Open Details") {
@@ -138,7 +138,7 @@ struct AppListRowView: View {
   }
 
   @ViewBuilder
-  private func contextMenuUpdateAction(for result: AppDecision) -> some View {
+  private func contextMenuUpdateAction(for result: InventoryResult) -> some View {
     let actionPresentation = appState.primaryActionPresentation(
       for: result, installState: installState)
 
@@ -205,7 +205,7 @@ private struct AppListRowTrailingContent: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   let row: ResultsBrowserRowPresentation
-  let result: AppDecision?
+  let result: InventoryResult?
   let installState: InstallCoordinator.OperationState
   let isSelected: Bool
   let isRowHovered: Bool

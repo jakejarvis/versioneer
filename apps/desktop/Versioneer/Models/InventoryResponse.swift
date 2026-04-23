@@ -2,7 +2,7 @@ import Foundation
 
 /// Response from `POST /v1/inventory/check`.
 nonisolated struct InventoryCheckResponse: Codable, Sendable {
-  let results: [AppDecision]
+  let results: [InventoryResult]
   let issues: Issues
   let processedAt: String
 

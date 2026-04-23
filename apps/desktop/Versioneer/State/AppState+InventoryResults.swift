@@ -15,7 +15,7 @@ extension AppState {
     let sourceKind: LocalUpdateSourceKind
     let latestVersion: String?
     let publishedAt: String?
-    let artifact: AppDecision.Artifact?
+    let artifact: InventoryResult.Artifact?
     let installStrategy: InstallStrategy?
     let updateDetected: Bool
   }
@@ -50,10 +50,10 @@ extension AppState {
   /// Backend takes precedence for matched apps; local results fill in unknown/unmatched apps.
   /// MAS apps with unknown decisions are marked as ignored.
   func mergeResults(
-    backend: [AppDecision],
+    backend: [InventoryResult],
     local: [String: LocalUpdateCandidate],
     apps: [InstalledApp]
-  ) -> [AppDecision] {
+  ) -> [InventoryResult] {
     var results = bindInstalledApps(to: backend, apps: apps)
 
     for (index, decision) in results.enumerated() {
@@ -62,7 +62,7 @@ extension AppState {
       guard decision.isLocalOnly else { continue }
       guard let matchingApp, let localInfo = local[matchingApp.localID] else { continue }
 
-      results[index] = AppDecision(
+      results[index] = InventoryResult(
         appName: decision.appName,
         bundleId: decision.bundleId,
         installedVersion: decision.installedVersion,
@@ -91,16 +91,16 @@ extension AppState {
     return results
   }
 
-  /// Builds AppDecision entries from local results when the backend is unavailable.
+  /// Builds InventoryResult entries from local results when the backend is unavailable.
   func buildLocalOnlyResults(
     local: [String: LocalUpdateCandidate],
     apps: [InstalledApp]
-  ) -> [AppDecision] {
+  ) -> [InventoryResult] {
     apps.map { app in
-      let decision: AppDecision.Decision
+      let decision: InventoryResult.Decision
       let latestVersion: String?
       let releasedAt: String?
-      let artifact: AppDecision.Artifact?
+      let artifact: InventoryResult.Artifact?
       let installStrategy: InstallStrategy?
 
       if let info = local[app.localID] {
@@ -117,7 +117,7 @@ extension AppState {
         installStrategy = nil
       }
 
-      return AppDecision(
+      return InventoryResult(
         appName: app.name,
         bundleId: app.bundleId,
         installedVersion: app.version,
@@ -245,7 +245,7 @@ extension AppState {
   private func localDecision(
     for candidate: LocalUpdateCandidate,
     installedVersion: String?
-  ) -> AppDecision.Decision {
+  ) -> InventoryResult.Decision {
     if candidate.updateDetected {
       return .updateAvailable
     }
@@ -256,7 +256,7 @@ extension AppState {
     downloadUrl: String?,
     minOsVersion: String?,
     installedApp: InstalledApp
-  ) -> (strategy: InstallStrategy, artifact: AppDecision.Artifact)? {
+  ) -> (strategy: InstallStrategy, artifact: InventoryResult.Artifact)? {
     guard let strategy = supportedDirectInstallStrategy(for: downloadUrl) else { return nil }
     guard installedApp.bundleId != nil || installedApp.teamId != nil else { return nil }
     guard let artifact = artifactFromDownloadURL(downloadUrl, minOsVersion: minOsVersion) else {
@@ -268,12 +268,12 @@ extension AppState {
   private func artifactFromDownloadURL(
     _ downloadUrl: String?,
     minOsVersion: String?
-  ) -> AppDecision.Artifact? {
+  ) -> InventoryResult.Artifact? {
     guard let downloadUrl,
       let artifactType = artifactType(for: downloadUrl)
     else { return nil }
 
-    return AppDecision.Artifact(
+    return InventoryResult.Artifact(
       id: nil,
       downloadUrl: downloadUrl,
       architecture: nil,
@@ -307,9 +307,9 @@ extension AppState {
   }
 
   func bindInstalledApps(
-    to decisions: [AppDecision],
+    to decisions: [InventoryResult],
     apps: [InstalledApp]
-  ) -> [AppDecision] {
+  ) -> [InventoryResult] {
     var remainingAppIDs = Set(apps.map(\.id))
     let appsByID = Dictionary(uniqueKeysWithValues: apps.map { ($0.id, $0) })
     let appsByBundleId = Dictionary(
@@ -360,7 +360,7 @@ extension AppState {
     }
   }
 
-  private func findInstalledApp(for decision: AppDecision, in apps: [InstalledApp]) -> InstalledApp?
+  private func findInstalledApp(for decision: InventoryResult, in apps: [InstalledApp]) -> InstalledApp?
   {
     if let localAppID = decision.localAppID {
       return apps.first { $0.id == localAppID }
@@ -381,7 +381,7 @@ extension AppState {
     return nameMatches[0]
   }
 
-  private func decisionFromVersion(latest: String?, installed: String?) -> AppDecision.Decision {
+  private func decisionFromVersion(latest: String?, installed: String?) -> InventoryResult.Decision {
     guard let latest, let installed else { return .localOnly }
     if latest == installed { return .upToDate }
     if compareVersionStrings(latest, isNewerThan: installed) {

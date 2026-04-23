@@ -3,7 +3,7 @@ import SwiftUI
 struct DetailReleaseNotesSection: View {
   @Environment(AppState.self) private var appState
 
-  let result: AppDecision
+  let result: InventoryResult
 
   @State private var releaseNotes: ReleaseNotesContent?
   @State private var releaseNotesLoading = false

@@ -24,7 +24,7 @@ import {
 } from "@versioneer/schemas/sources";
 
 import { assertNoConflictingExactAlias } from "./alias-conflicts";
-import { scheduleRecomputeLatest, scheduleSourceFetch } from "./followup-jobs";
+import { scheduleRecomputeLatest, scheduleSourceFetch } from "./pipeline-jobs";
 import { syncSourceDerivedAliases } from "./source-derived-aliases";
 
 type Db = ReturnType<typeof createDb>;

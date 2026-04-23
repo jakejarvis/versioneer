@@ -28,10 +28,10 @@ import { captureAdminEvent } from "./analytics";
 import { invalidateInventoryMatchSnapshot } from "./cache";
 import type { Db } from "./db-types";
 import { loadAppsByIds, toAppSummary } from "./entity-summaries";
-import { scheduleSourceFetch, scheduleSourceReparse } from "./followup-jobs";
 import { atRiskSourceCondition } from "./homepage-helpers";
 import { authMiddleware } from "./middleware";
 import { sourceFetchOrderBy, sourceOrderBy } from "./order-by";
+import { scheduleSourceFetch, scheduleSourceReparse } from "./pipeline-jobs";
 import { prepareSyncSourceDerivedAliasWrites } from "./source-derived-aliases";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();

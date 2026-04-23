@@ -3,7 +3,7 @@ import SwiftUI
 struct DetailPaneView: View {
   @Environment(AppState.self) private var appState
 
-  let result: AppDecision
+  let result: InventoryResult
 
   @State private var showFeedbackSheet = false
   @State private var showInstallWarning = false

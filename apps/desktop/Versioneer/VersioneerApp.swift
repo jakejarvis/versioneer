@@ -15,7 +15,7 @@ struct VersioneerApp: App {
     )
   }
 
-  private var selectedMenuResult: AppDecision? {
+  private var selectedMenuResult: InventoryResult? {
     guard let id = appState.selectedAppID else { return nil }
     return appState.inventoryResultsByID[id]
   }

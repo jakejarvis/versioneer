@@ -10,7 +10,7 @@ import {
 import { createDb } from "@versioneer/db";
 import { cronJobRuns, generateId, idPrefixes, sources } from "@versioneer/db";
 
-import { scheduleSourceFetch } from "./followup-jobs";
+import { scheduleSourceFetch } from "./pipeline-jobs";
 
 type Db = ReturnType<typeof createDb>;
 type CronJobType = "poll_sources" | "cask_index_sync" | "enrich_discovered_apps";

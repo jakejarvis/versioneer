@@ -6,14 +6,14 @@ enum DesktopUITestFixtures {
   static func makeDecision(
     appName: String,
     bundleId: String,
-    decision: AppDecision.Decision,
+    decision: InventoryResult.Decision,
     installedVersion: String = "1.0",
     latestVersion: String = "2.0",
     releasedAt: String? = isoString(daysAgo: 2),
-    trackingState: AppDecision.TrackingState = .catalog,
-    localReasonCode: AppDecision.LocalReasonCode? = nil,
+    trackingState: InventoryResult.TrackingState = .catalog,
+    localReasonCode: InventoryResult.LocalReasonCode? = nil,
     installStrategy: InstallStrategy? = .zipReplace,
-    artifact: AppDecision.Artifact? = AppDecision.Artifact(
+    artifact: InventoryResult.Artifact? = InventoryResult.Artifact(
       id: "artifact",
       downloadUrl: "https://example.com/app.zip",
       architecture: "universal",
@@ -22,8 +22,8 @@ enum DesktopUITestFixtures {
       sizeBytes: 50_000_000,
       sha256: "hash"
     )
-  ) -> AppDecision {
-    AppDecision(
+  ) -> InventoryResult {
+    InventoryResult(
       appName: appName,
       bundleId: bundleId,
       installedVersion: installedVersion,
@@ -48,7 +48,7 @@ enum DesktopUITestFixtures {
     )
   }
 
-  static func makeInstalledApp(from result: AppDecision) -> InstalledApp {
+  static func makeInstalledApp(from result: InventoryResult) -> InstalledApp {
     InstalledApp(
       name: result.appName,
       bundleId: result.bundleId,

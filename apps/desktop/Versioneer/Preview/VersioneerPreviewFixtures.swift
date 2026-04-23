@@ -97,10 +97,10 @@
     static let allResults = [firefox, obs, textMate, arc]
 
     static func rootState(
-      results: [AppDecision] = allResults,
+      results: [InventoryResult] = allResults,
       selectedAppID: String? = nil,
       loadState: AppState.LoadState = .done,
-      installStates: [(AppDecision, InstallCoordinator.OperationState)] = [],
+      installStates: [(InventoryResult, InstallCoordinator.OperationState)] = [],
       ignoredRules: [IgnoredAppRule] = []
     ) -> AppState {
       let suiteName = "com.jakejarvis.versioneer.preview.\(UUID().uuidString)"
@@ -166,16 +166,16 @@
       matchedAppId: String,
       matchedAppName: String,
       matchConfidence: Double,
-      decision: AppDecision.Decision,
-      trackingState: AppDecision.TrackingState,
-      localReasonCode: AppDecision.LocalReasonCode?,
+      decision: InventoryResult.Decision,
+      trackingState: InventoryResult.TrackingState,
+      localReasonCode: InventoryResult.LocalReasonCode?,
       latestVersion: String,
       latestVersionRaw: String,
       releasedAt: String,
-      artifact: AppDecision.Artifact?,
+      artifact: InventoryResult.Artifact?,
       installStrategy: InstallStrategy?
-    ) -> AppDecision {
-      AppDecision(
+    ) -> InventoryResult {
+      InventoryResult(
         appName: appName,
         bundleId: bundleId,
         installedVersion: installedVersion,
@@ -199,7 +199,7 @@
       )
     }
 
-    static func makeInstalledApp(from result: AppDecision) -> InstalledApp {
+    static func makeInstalledApp(from result: InventoryResult) -> InstalledApp {
       InstalledApp(
         name: result.matchedAppName ?? result.appName,
         bundleId: result.bundleId,

@@ -4,7 +4,7 @@ import Testing
 @testable import Versioneer
 
 struct InstallPlanTests {
-  @Test func createsInstallPlanFromAppDecision() throws {
+  @Test func createsInstallPlanFromInventoryResult() throws {
     let json = """
       {
         "app": {
@@ -53,7 +53,7 @@ struct InstallPlanTests {
       }
       """
 
-    let decision = try JSONDecoder().decode(AppDecision.self, from: Data(json.utf8))
+    let decision = try JSONDecoder().decode(InventoryResult.self, from: Data(json.utf8))
     let plan = try #require(InstallPlan(result: decision, installedApp: nil))
 
     #expect(plan.strategy == .zipReplace)
@@ -115,7 +115,7 @@ struct InstallPlanTests {
       }
       """
 
-    let decision = try JSONDecoder().decode(AppDecision.self, from: Data(json.utf8))
+    let decision = try JSONDecoder().decode(InventoryResult.self, from: Data(json.utf8))
     let plan = InstallPlan(result: decision, installedApp: nil)
 
     #expect(decision.installTrust.status == .manualOnly)
@@ -171,7 +171,7 @@ struct InstallPlanTests {
       }
       """
 
-    let decision = try JSONDecoder().decode(AppDecision.self, from: Data(json.utf8))
+    let decision = try JSONDecoder().decode(InventoryResult.self, from: Data(json.utf8))
     let plan = try #require(InstallPlan(result: decision, installedApp: nil))
 
     #expect(decision.installTrust.status == .oneClick)
@@ -220,14 +220,14 @@ struct InstallPlanTests {
       }
       """
 
-    let decision = try JSONDecoder().decode(AppDecision.self, from: Data(json.utf8))
+    let decision = try JSONDecoder().decode(InventoryResult.self, from: Data(json.utf8))
     let plan = InstallPlan(result: decision, installedApp: nil)
 
     #expect(plan == nil)
   }
 
   @Test func createsLocalSparklePlanWithoutCatalogIdentifiers() throws {
-    let decision = AppDecision(
+    let decision = InventoryResult(
       appName: "Mystery",
       bundleId: "com.example.mystery",
       installedVersion: "1.0",
@@ -282,7 +282,7 @@ struct InstallPlanTests {
   }
 
   @Test func localDirectInstallRequiresIdentityAnchor() {
-    let decision = AppDecision(
+    let decision = InventoryResult(
       appName: "Mystery",
       bundleId: nil,
       installedVersion: "1.0",

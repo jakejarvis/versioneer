@@ -211,20 +211,11 @@ nonisolated struct InventoryAPIClient: Sendable {
 
   func reportInstallExecutionStatus(
     executionId: String,
-    plan: InstallPlan,
-    installedApp: InstalledApp,
-    executionRoute: InstallCoordinator.ExecutionRoute,
     status: String,
     installedVersion: String?,
     errorMessage: String?,
     verification: InstallVerificationSummary?
   ) async throws -> InstallExecutionEventResponse {
-    guard let appId = plan.appId,
-      let releaseId = plan.releaseId
-    else {
-      throw APIError.invalidRequest("Catalog-backed install plan required")
-    }
-
     let endpoint = baseURL.appendingPathComponent("v1/install/executions/\(executionId)/events")
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
@@ -232,26 +223,9 @@ nonisolated struct InventoryAPIClient: Sendable {
     await authorize(&request)
 
     let payload = InstallExecutionEventRequest(
-      client: buildClientInfo(channels: nil),
-      target: .init(
-        appId: appId,
-        releaseId: releaseId,
-        artifactId: plan.artifact?.id,
-        targetArchitecture: plan.targetArchitecture,
-        channel: plan.channel
-      ),
-      install: .init(
-        strategy: plan.strategy.rawValue,
-        executionRoute: executionRoute.rawValue
-      ),
-      expected: .init(
-        previousVersion: installedApp.version,
-        bundleId: installedApp.bundleId,
-        teamId: installedApp.teamId
-      ),
       event: .init(
         status: status,
-        installedVersion: installedVersion ?? installedApp.version,
+        installedVersion: installedVersion,
         errorMessage: errorMessage
       ),
       verification: verification

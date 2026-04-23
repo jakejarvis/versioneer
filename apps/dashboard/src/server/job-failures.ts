@@ -10,13 +10,13 @@ import { jobFailures } from "@versioneer/db";
 
 import { captureAdminEvent } from "./analytics";
 import { loadEntityRefsByIds } from "./entity-summaries";
+import { runCaskIndexSyncJob, runPollSourcesJob, startEnrichmentDrainJob } from "./job-runners";
+import { authMiddleware } from "./middleware";
 import {
   scheduleRecomputeLatest,
   scheduleSourceFetch,
   scheduleSourceReparse,
-} from "./followup-jobs";
-import { runCaskIndexSyncJob, runPollSourcesJob, startEnrichmentDrainJob } from "./job-runners";
-import { authMiddleware } from "./middleware";
+} from "./pipeline-jobs";
 
 const sortDirectionSchema = z.enum(["asc", "desc"]).optional();
 

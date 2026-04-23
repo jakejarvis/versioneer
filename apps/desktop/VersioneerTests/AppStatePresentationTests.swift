@@ -169,7 +169,7 @@ struct AppStatePresentationTests {
   @Test func bundlelessDuplicateNamesRetainDistinctInstalledAppTargets() {
     let state = AppState()
 
-    let firstDecision = AppDecision(
+    let firstDecision = InventoryResult(
       appName: "Helper",
       bundleId: nil,
       installedVersion: "1.0",
@@ -191,7 +191,7 @@ struct AppStatePresentationTests {
       artifact: nil,
       installStrategy: nil
     )
-    let secondDecision = AppDecision(
+    let secondDecision = InventoryResult(
       appName: "Helper",
       bundleId: nil,
       installedVersion: "1.0",
@@ -274,7 +274,7 @@ struct AppStatePresentationTests {
   @Test func localHomebrewUpdatesExposePrimaryActionWithoutGenericInstallRoute() throws {
     let state = AppState()
 
-    let decision = AppDecision(
+    let decision = InventoryResult(
       appName: "Firefox",
       bundleId: "org.mozilla.firefox",
       installedVersion: "126.0",
@@ -333,7 +333,7 @@ struct AppStatePresentationTests {
   @Test func localMasUpdatesExposePrimaryActionWithoutGenericInstallRoute() throws {
     let state = AppState()
 
-    let decision = AppDecision(
+    let decision = InventoryResult(
       appName: "Pages",
       bundleId: "com.apple.iWork.Pages",
       installedVersion: "13.0",
@@ -392,7 +392,7 @@ struct AppStatePresentationTests {
   @Test func localElectronDownloadsExposeManualFallbackAction() throws {
     let state = AppState()
 
-    let decision = AppDecision(
+    let decision = InventoryResult(
       appName: "Mystery Electron",
       bundleId: nil,
       installedVersion: "1.0",
@@ -457,7 +457,7 @@ struct AppStatePresentationTests {
     #expect(state.primaryActionTitle(for: decision) == "Open Download")
   }
 
-  private func seed(_ state: AppState, with results: [AppDecision]) {
+  private func seed(_ state: AppState, with results: [InventoryResult]) {
     state.installedApps = results.map(DesktopUITestFixtures.makeInstalledApp)
     state.rawInventoryResults = results
     state.inventoryResults = results

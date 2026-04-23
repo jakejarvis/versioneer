@@ -82,7 +82,7 @@ final class InstallCoordinator {
     self.privilegedHelperClient = privilegedHelperClient
   }
 
-  func state(for result: AppDecision) -> OperationState {
+  func state(for result: InventoryResult) -> OperationState {
     operations[result.id] ?? .idle
   }
 
@@ -110,7 +110,7 @@ final class InstallCoordinator {
 
   @discardableResult
   func startInstall(
-    result: AppDecision,
+    result: InventoryResult,
     installedApp: InstalledApp,
     apiClient: InventoryAPIClient
   ) async -> Bool {
@@ -480,9 +480,6 @@ final class InstallCoordinator {
     do {
       _ = try await apiClient.reportInstallExecutionStatus(
         executionId: executionId,
-        plan: plan,
-        installedApp: installedApp,
-        executionRoute: executionRoute,
         status: status,
         installedVersion: installedVersion,
         errorMessage: errorMessage,
@@ -504,7 +501,7 @@ final class InstallCoordinator {
   }
 
   private func telemetryProperties(
-    for result: AppDecision,
+    for result: InventoryResult,
     route: String?,
     operation: String,
     status: String? = nil,
@@ -594,7 +591,7 @@ final class InstallCoordinator {
   /// Returns true if the upgrade completed successfully.
   @discardableResult
   func startBrewUpgrade(
-    result: AppDecision,
+    result: InventoryResult,
     caskToken: String
   ) async -> Bool {
     let operationKey = result.id
@@ -694,7 +691,7 @@ final class InstallCoordinator {
   /// Returns true if the upgrade completed successfully.
   @discardableResult
   func startMasUpgrade(
-    result: AppDecision,
+    result: InventoryResult,
     masAppId: String,
     masCliPath: String,
     installedApp: InstalledApp
@@ -949,7 +946,7 @@ enum InstallError: LocalizedError {
 
 #if DEBUG
   extension InstallCoordinator {
-    func previewSetState(_ state: OperationState, for result: AppDecision) {
+    func previewSetState(_ state: OperationState, for result: InventoryResult) {
       operations[result.id] = state
       onStateChange?()
     }

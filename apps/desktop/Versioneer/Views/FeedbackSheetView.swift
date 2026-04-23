@@ -12,7 +12,7 @@ struct FeedbackSheetView: View {
   @Environment(AppState.self) private var appState
   @Environment(\.dismiss) private var dismiss
 
-  let result: AppDecision
+  let result: InventoryResult
 
   @State private var feedbackType: FeedbackType = .wrongMatch
   @State private var comment = ""

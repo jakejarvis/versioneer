@@ -166,7 +166,7 @@ struct AppActionPresentationTests {
   }
 
   private func makePresentation(
-    result: AppDecision,
+    result: InventoryResult,
     installState: InstallCoordinator.OperationState = .idle,
     isUserIgnored: Bool = false,
     isHomebrewInstalled: Bool = false,

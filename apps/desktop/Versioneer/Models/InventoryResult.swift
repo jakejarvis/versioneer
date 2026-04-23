@@ -1,7 +1,7 @@
 import Foundation
 
-/// A single backend decision about an installed app.
-nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
+/// A single inventory result for an installed app.
+nonisolated struct InventoryResult: Identifiable, Codable, Hashable, Sendable {
   let app: AppInfo
   let decision: Decision
   let catalog: CatalogInfo
@@ -10,33 +10,11 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
   let channels: ChannelInfo
   let localAppID: String?
 
-  var appName: String { app.name }
-  var bundleId: String? { app.bundleId }
-  var installedVersion: String? { app.installedVersion }
-  var matchedAppId: String? { catalog.match.appID }
-  var matchedAppName: String? { catalog.match.appName }
-  var matchConfidence: Double? { catalog.match.confidence }
-  var trackingState: TrackingState { catalog.trackingState }
-  var localReasonCode: LocalReasonCode? { catalog.localReasonCode }
-  var latestVersion: String? { release.version }
-  var latestVersionRaw: String? { release.versionRaw }
-  var latestReleaseId: String? { release.releaseID }
-  var targetArchitecture: String? { release.targetArchitecture }
-  var channel: String? { channels.selected }
-  var availableChannels: [String]? { channels.available.isEmpty ? nil : channels.available }
-  var homebrewCaskToken: String? { install.homebrewCaskToken }
-  var releasedAt: String? { release.releasedAt }
-  var staleSince: String? { catalog.staleSince }
-  var iconUrl: String? { catalog.iconURL }
-  var artifact: Artifact? { release.artifact }
-  var installStrategy: InstallStrategy? { install.strategy }
-  var installTrust: InstallTrust { install.trust }
-
   var id: String {
     Self.makeID(
-      appName: appName,
-      bundleId: bundleId,
-      matchedAppId: matchedAppId,
+      appName: app.name,
+      bundleId: app.bundleId,
+      matchedAppId: catalog.match.appID,
       localAppID: localAppID
     )
   }
@@ -93,6 +71,90 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     let available: [String]
   }
 
+  enum Decision: String, Codable, Sendable, CaseIterable {
+    case upToDate = "up_to_date"
+    case updateAvailable = "update_available"
+    case ambiguous
+    case localOnly = "local_only"
+    case incompatible
+  }
+
+  enum TrackingState: String, Codable, Sendable, CaseIterable {
+    case catalog = "public"
+    case localOnly = "local_only"
+  }
+
+  enum LocalReasonCode: String, Codable, Sendable, CaseIterable {
+    case noPublicIdentity = "no_public_identity"
+    case noApprovedSource = "no_approved_source"
+    case matchedDraft = "matched_draft"
+    case ambiguousMatch = "ambiguous_match"
+    case notFound = "not_found"
+    case noCompatibleRelease = "no_compatible_release"
+  }
+
+  struct Artifact: Codable, Hashable, Sendable {
+    let id: String?
+    let downloadUrl: String?
+    let architecture: String?
+    let minOsVersion: String?
+    let artifactType: String?
+    let sizeBytes: Int?
+    let sha256: String?
+  }
+
+  struct InstallTrust: Codable, Hashable, Sendable {
+    let status: Status
+    let resolvedStrategy: InstallStrategy?
+    let reasons: [Reason]
+
+    enum Status: String, Codable, Sendable, CaseIterable {
+      case oneClick = "one_click"
+      case manualOnly = "manual_only"
+      case external
+      case none
+    }
+
+    enum Reason: String, Codable, Sendable, CaseIterable {
+      case missingArtifact = "missing_artifact"
+      case missingSHA256 = "missing_sha256"
+      case missingBundleID = "missing_bundle_id"
+      case missingTeamID = "missing_team_id"
+      case missingSparklePublicKey = "missing_sparkle_public_key"
+      case macAppStoreExternal = "mac_app_store_external"
+      case homebrewExternal = "homebrew_external"
+      case manualOnly = "manual_only"
+      case unsupportedStrategy = "unsupported_strategy"
+      case unknownArchitecture = "unknown_architecture"
+    }
+
+    static func `default`(for installStrategy: InstallStrategy?) -> InstallTrust {
+      if let installStrategy {
+        return InstallTrust(status: .oneClick, resolvedStrategy: installStrategy, reasons: [])
+      }
+      return InstallTrust(status: .none, resolvedStrategy: nil, reasons: [])
+    }
+  }
+
+  init(
+    app: AppInfo,
+    decision: Decision,
+    catalog: CatalogInfo,
+    release: ReleaseInfo,
+    install: InstallInfo,
+    channels: ChannelInfo,
+    localAppID: String? = nil
+  ) {
+    self.app = app
+    self.decision = decision
+    self.catalog = catalog
+    self.release = release
+    self.install = install
+    self.channels = channels
+    self.localAppID = localAppID
+  }
+
+  /// Convenience initializer for local synthesis and tests.
   init(
     appName: String,
     bundleId: String?,
@@ -169,116 +231,6 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
     try container.encode(channels, forKey: .channels)
   }
 
-  enum Decision: String, Codable, Sendable, CaseIterable {
-    case upToDate = "up_to_date"
-    case updateAvailable = "update_available"
-    case ambiguous
-    case localOnly = "local_only"
-    case incompatible
-  }
-
-  enum TrackingState: String, Codable, Sendable, CaseIterable {
-    case catalog = "public"
-    case localOnly = "local_only"
-  }
-
-  enum LocalReasonCode: String, Codable, Sendable, CaseIterable {
-    case noPublicIdentity = "no_public_identity"
-    case noApprovedSource = "no_approved_source"
-    case matchedDraft = "matched_draft"
-    case ambiguousMatch = "ambiguous_match"
-    case notFound = "not_found"
-    case noCompatibleRelease = "no_compatible_release"
-  }
-
-  struct Artifact: Codable, Hashable, Sendable {
-    let id: String?
-    let downloadUrl: String?
-    let architecture: String?
-    let minOsVersion: String?
-    let artifactType: String?
-    let sizeBytes: Int?
-    let sha256: String?
-  }
-
-  struct InstallTrust: Codable, Hashable, Sendable {
-    let status: Status
-    let resolvedStrategy: InstallStrategy?
-    let reasons: [Reason]
-
-    enum Status: String, Codable, Sendable, CaseIterable {
-      case oneClick = "one_click"
-      case manualOnly = "manual_only"
-      case external
-      case none
-    }
-
-    enum Reason: String, Codable, Sendable, CaseIterable {
-      case missingArtifact = "missing_artifact"
-      case missingSHA256 = "missing_sha256"
-      case missingBundleID = "missing_bundle_id"
-      case missingTeamID = "missing_team_id"
-      case missingSparklePublicKey = "missing_sparkle_public_key"
-      case macAppStoreExternal = "mac_app_store_external"
-      case homebrewExternal = "homebrew_external"
-      case manualOnly = "manual_only"
-      case unsupportedStrategy = "unsupported_strategy"
-      case unknownArchitecture = "unknown_architecture"
-    }
-
-    static func `default`(for installStrategy: InstallStrategy?) -> InstallTrust {
-      if let installStrategy {
-        return InstallTrust(status: .oneClick, resolvedStrategy: installStrategy, reasons: [])
-      }
-      return InstallTrust(status: .none, resolvedStrategy: nil, reasons: [])
-    }
-  }
-
-  /// Whether this app has an installable update.
-  var canInstall: Bool {
-    decision == .updateAvailable && installStrategy != nil
-  }
-
-  var isVerified: Bool {
-    trackingState == .catalog
-  }
-
-  var isLocalOnly: Bool {
-    trackingState == .localOnly
-  }
-
-  var localOnlyStatusTitle: String {
-    switch decision {
-    case .updateAvailable:
-      "Local Update Available"
-    case .ambiguous:
-      "Needs Review"
-    case .upToDate, .localOnly:
-      "Local Only"
-    case .incompatible:
-      "Not Compatible"
-    }
-  }
-
-  var localOnlyDescription: String {
-    switch localReasonCode {
-    case .noPublicIdentity:
-      "Versioneer does not have a public catalog identity for this app yet."
-    case .noApprovedSource:
-      "Versioneer found this app, but it does not have an approved public update source yet."
-    case .matchedDraft:
-      "Versioneer matched this app to an internal draft entry that is still under review."
-    case .ambiguousMatch:
-      "Versioneer found multiple possible catalog matches and needs a reviewer to resolve them."
-    case .notFound:
-      "Versioneer is using local metadata because this app is not in the public catalog yet."
-    case .noCompatibleRelease:
-      "Versioneer found this app, but no compatible release is available for this Mac."
-    case nil:
-      "Versioneer is using local metadata because this app is not backed by a public catalog entry."
-    }
-  }
-
   private static func makeID(
     appName: String,
     bundleId: String?,
@@ -303,9 +255,78 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
 
     return "name:\(appName)"
   }
+}
 
-  func binding(to installedApp: InstalledApp?) -> AppDecision {
-    AppDecision(
+extension InventoryResult {
+  nonisolated var appName: String { app.name }
+  nonisolated var bundleId: String? { app.bundleId }
+  nonisolated var installedVersion: String? { app.installedVersion }
+  nonisolated var matchedAppId: String? { catalog.match.appID }
+  nonisolated var matchedAppName: String? { catalog.match.appName }
+  nonisolated var matchConfidence: Double? { catalog.match.confidence }
+  nonisolated var trackingState: TrackingState { catalog.trackingState }
+  nonisolated var localReasonCode: LocalReasonCode? { catalog.localReasonCode }
+  nonisolated var latestVersion: String? { release.version }
+  nonisolated var latestVersionRaw: String? { release.versionRaw }
+  nonisolated var latestReleaseId: String? { release.releaseID }
+  nonisolated var targetArchitecture: String? { release.targetArchitecture }
+  nonisolated var channel: String? { channels.selected }
+  nonisolated var availableChannels: [String]? { channels.available.isEmpty ? nil : channels.available }
+  nonisolated var homebrewCaskToken: String? { install.homebrewCaskToken }
+  nonisolated var releasedAt: String? { release.releasedAt }
+  nonisolated var staleSince: String? { catalog.staleSince }
+  nonisolated var iconUrl: String? { catalog.iconURL }
+  nonisolated var artifact: Artifact? { release.artifact }
+  nonisolated var installStrategy: InstallStrategy? { install.strategy }
+  nonisolated var installTrust: InstallTrust { install.trust }
+
+  /// Whether this app has an installable update.
+  nonisolated var canInstall: Bool {
+    decision == .updateAvailable && installStrategy != nil
+  }
+
+  nonisolated var isVerified: Bool {
+    trackingState == .catalog
+  }
+
+  nonisolated var isLocalOnly: Bool {
+    trackingState == .localOnly
+  }
+
+  nonisolated var localOnlyStatusTitle: String {
+    switch decision {
+    case .updateAvailable:
+      "Local Update Available"
+    case .ambiguous:
+      "Needs Review"
+    case .upToDate, .localOnly:
+      "Local Only"
+    case .incompatible:
+      "Not Compatible"
+    }
+  }
+
+  nonisolated var localOnlyDescription: String {
+    switch localReasonCode {
+    case .noPublicIdentity:
+      "Versioneer does not have a public catalog identity for this app yet."
+    case .noApprovedSource:
+      "Versioneer found this app, but it does not have an approved public update source yet."
+    case .matchedDraft:
+      "Versioneer matched this app to an internal draft entry that is still under review."
+    case .ambiguousMatch:
+      "Versioneer found multiple possible catalog matches and needs a reviewer to resolve them."
+    case .notFound:
+      "Versioneer is using local metadata because this app is not in the public catalog yet."
+    case .noCompatibleRelease:
+      "Versioneer found this app, but no compatible release is available for this Mac."
+    case nil:
+      "Versioneer is using local metadata because this app is not backed by a public catalog entry."
+    }
+  }
+
+  nonisolated func binding(to installedApp: InstalledApp?) -> InventoryResult {
+    InventoryResult(
       appName: appName,
       bundleId: bundleId,
       installedVersion: installedVersion,
@@ -333,8 +354,8 @@ nonisolated struct AppDecision: Identifiable, Codable, Hashable, Sendable {
   }
 
   /// Returns a copy with only the decision field changed.
-  func replacing(decision newDecision: Decision) -> AppDecision {
-    AppDecision(
+  nonisolated func replacing(decision newDecision: Decision) -> InventoryResult {
+    InventoryResult(
       appName: appName,
       bundleId: bundleId,
       installedVersion: installedVersion,

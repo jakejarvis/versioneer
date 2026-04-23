@@ -3,7 +3,7 @@ import SwiftUI
 struct DetailFactsSection: View {
   @Environment(AppState.self) private var appState
 
-  let result: AppDecision
+  let result: InventoryResult
 
   private var installedApp: InstalledApp? {
     appState.installedApp(for: result)

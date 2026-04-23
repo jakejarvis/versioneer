@@ -49,7 +49,7 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
   let releasedAtSortDate: Date?
 
   static func make(
-    result: AppDecision,
+    result: InventoryResult,
     installState: InstallCoordinator.OperationState,
     hasUpdateAction: Bool
   ) -> ResultsBrowserRowPresentation {
@@ -85,7 +85,7 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
   }
 
   private static func statusPresentation(
-    result: AppDecision,
+    result: InventoryResult,
     installState: InstallCoordinator.OperationState
   ) -> (text: String, tone: Tone, systemImage: String) {
     switch installState.phase {
@@ -136,7 +136,7 @@ nonisolated struct ResultsBrowserRowPresentation: Identifiable, Equatable, Senda
   }
 
   private static func defaultSortRank(
-    result: AppDecision,
+    result: InventoryResult,
     installState: InstallCoordinator.OperationState
   ) -> Int {
     switch installState.phase {

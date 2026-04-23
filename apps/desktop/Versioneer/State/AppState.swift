@@ -108,8 +108,8 @@ final class AppState {
   // MARK: - Data
 
   var installedApps: [InstalledApp] = []
-  var rawInventoryResults: [AppDecision] = []
-  var inventoryResults: [AppDecision] = []
+  var rawInventoryResults: [InventoryResult] = []
+  var inventoryResults: [InventoryResult] = []
   var userIgnoredResultIDs: Set<String> = []
   var searchText: String = ""
   var lastScanCompletedAt: Date?
@@ -120,7 +120,7 @@ final class AppState {
   private var installedAppsByName: [String: [InstalledApp]] = [:]
 
   /// Inventory results indexed by ID for O(1) lookups.
-  private(set) var inventoryResultsByID: [String: AppDecision] = [:]
+  private(set) var inventoryResultsByID: [String: InventoryResult] = [:]
 
   /// Icon cache to avoid re-loading from disk on every view redraw.
   private var iconCache: [String: NSImage] = [:]
@@ -258,7 +258,7 @@ final class AppState {
     resultsBrowserRows = sort(rows: rows, by: resultsSort)
   }
 
-  var updatableResults: [AppDecision] {
+  var updatableResults: [InventoryResult] {
     inventoryResults.filter { $0.decision == .updateAvailable && !isUserIgnored($0) }
   }
 
@@ -266,7 +266,7 @@ final class AppState {
     updatableResults.count
   }
 
-  var selectedResult: AppDecision? {
+  var selectedResult: InventoryResult? {
     guard let selectedAppID else { return nil }
     return inventoryResultsByID[selectedAppID]
   }
@@ -285,8 +285,8 @@ final class AppState {
 
   // MARK: - Computed filtered results
 
-  var filteredResults: [AppDecision] {
-    let sectionFiltered: [AppDecision]
+  var filteredResults: [InventoryResult] {
+    let sectionFiltered: [InventoryResult]
     switch selectedSection {
     case .all:
       sectionFiltered = inventoryResults.filter { !isUserIgnored($0) }
@@ -343,7 +343,7 @@ final class AppState {
 
   // MARK: - Actions
 
-  private func telemetryProperties(for result: AppDecision) -> [String: Any] {
+  private func telemetryProperties(for result: InventoryResult) -> [String: Any] {
     [
       "decision": result.decision.rawValue,
       "tracking_state": result.trackingState.rawValue,
@@ -411,7 +411,7 @@ final class AppState {
     }
   }
 
-  func requestPrimaryUpdate(for result: AppDecision) {
+  func requestPrimaryUpdate(for result: InventoryResult) {
     guard canPerformPrimaryUpdate(for: result) else { return }
 
     var properties = telemetryProperties(for: result)
@@ -540,8 +540,8 @@ final class AppState {
     }
   }
 
-  /// Returns the locally extracted icon for an app decision, or a generic app icon.
-  func appIcon(for result: AppDecision) -> NSImage {
+  /// Returns the locally extracted icon for an inventory result, or a generic app icon.
+  func appIcon(for result: InventoryResult) -> NSImage {
     if let cached = iconCache[result.id] { return cached }
 
     let icon: NSImage =
@@ -555,7 +555,7 @@ final class AppState {
     return icon
   }
 
-  func installedApp(for result: AppDecision) -> InstalledApp? {
+  func installedApp(for result: InventoryResult) -> InstalledApp? {
     if let localAppID = result.localAppID,
       let installedApp = installedAppsByID[localAppID]
     {
@@ -571,11 +571,11 @@ final class AppState {
     return candidates[0]
   }
 
-  func bundleIdText(for result: AppDecision) -> String? {
+  func bundleIdText(for result: InventoryResult) -> String? {
     installedApp(for: result)?.bundleId ?? result.bundleId
   }
 
-  func appPathText(for result: AppDecision) -> String? {
+  func appPathText(for result: InventoryResult) -> String? {
     installedApp(for: result)?.path
   }
 
@@ -583,16 +583,16 @@ final class AppState {
     installedApps.first(where: rule.matches)
   }
 
-  func ignoredAppRules(matching result: AppDecision) -> [IgnoredAppRule] {
+  func ignoredAppRules(matching result: InventoryResult) -> [IgnoredAppRule] {
     guard let installedApp = installedApp(for: result) else { return [] }
     return settings.ignoredAppRules.filter { $0.matches(installedApp) }
   }
 
-  func isUserIgnored(_ result: AppDecision) -> Bool {
+  func isUserIgnored(_ result: InventoryResult) -> Bool {
     userIgnoredResultIDs.contains(result.id)
   }
 
-  func ignore(_ result: AppDecision, undoManager: UndoManager? = nil) {
+  func ignore(_ result: InventoryResult, undoManager: UndoManager? = nil) {
     guard let installedApp = installedApp(for: result) else { return }
     let rule = IgnoredAppRule.make(from: installedApp)
     PostHogTelemetry.capture("desktop_result_ignored", properties: telemetryProperties(for: result))
@@ -606,7 +606,7 @@ final class AppState {
     }
   }
 
-  func unignore(_ result: AppDecision, undoManager: UndoManager? = nil) {
+  func unignore(_ result: InventoryResult, undoManager: UndoManager? = nil) {
     let rules = ignoredAppRules(matching: result)
     let ruleIDs = Set(rules.map(\.id))
     guard !ruleIDs.isEmpty else { return }
@@ -653,7 +653,7 @@ final class AppState {
     refreshDisplayedResults()
   }
 
-  func openApp(_ result: AppDecision) {
+  func openApp(_ result: InventoryResult) {
     guard let installedApp = installedApp(for: result) else { return }
 
     let configuration = NSWorkspace.OpenConfiguration()
@@ -675,17 +675,17 @@ final class AppState {
     }
   }
 
-  func revealAppInFinder(_ result: AppDecision) {
+  func revealAppInFinder(_ result: InventoryResult) {
     guard let path = appPathText(for: result) else { return }
     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
   }
 
-  func copyBundleId(_ result: AppDecision) {
+  func copyBundleId(_ result: InventoryResult) {
     guard let bundleId = bundleIdText(for: result) else { return }
     copyToPasteboard(bundleId)
   }
 
-  func copyAppPath(_ result: AppDecision) {
+  func copyAppPath(_ result: InventoryResult) {
     guard let path = appPathText(for: result) else { return }
     copyToPasteboard(path)
   }
@@ -873,7 +873,7 @@ final class AppState {
     }
   }
 
-  func submitWrongMatch(for result: AppDecision, comment: String?) async throws {
+  func submitWrongMatch(for result: InventoryResult, comment: String?) async throws {
     guard let matchedAppId = result.matchedAppId else { return }
     let feedback = FeedbackRequest.WrongMatch(
       appName: result.appName,
@@ -891,7 +891,7 @@ final class AppState {
     )
   }
 
-  func submitWrongVersion(for result: AppDecision, reportedVersion: String?, comment: String?)
+  func submitWrongVersion(for result: InventoryResult, reportedVersion: String?, comment: String?)
     async throws
   {
     guard let matchedAppId = result.matchedAppId else { return }
@@ -913,7 +913,7 @@ final class AppState {
     )
   }
 
-  func submitMissingApp(for result: AppDecision, homepageUrl: String?, comment: String?)
+  func submitMissingApp(for result: InventoryResult, homepageUrl: String?, comment: String?)
     async throws
   {
     let feedback = FeedbackRequest.MissingApp(
@@ -948,7 +948,7 @@ final class AppState {
   }
 
   func canPerformPrimaryUpdate(
-    for result: AppDecision,
+    for result: InventoryResult,
     installState: InstallCoordinator.OperationState? = nil
   ) -> Bool {
     let currentState = installState ?? installCoordinator.state(for: result)
@@ -958,7 +958,7 @@ final class AppState {
   }
 
   func primaryActionPresentation(
-    for result: AppDecision,
+    for result: InventoryResult,
     installState: InstallCoordinator.OperationState? = nil
   ) -> PrimaryAppActionPresentation {
     let currentState = installState ?? installCoordinator.state(for: result)
@@ -973,7 +973,7 @@ final class AppState {
     )
   }
 
-  func performPrimaryUpdate(for result: AppDecision) async {
+  func performPrimaryUpdate(for result: InventoryResult) async {
     let presentation = primaryActionPresentation(for: result)
     guard presentation.kind.performsUpdate, !presentation.isDisabled else { return }
     var properties = telemetryProperties(for: result)
@@ -993,7 +993,7 @@ final class AppState {
     }
   }
 
-  func install(_ result: AppDecision) async {
+  func install(_ result: InventoryResult) async {
     guard let installedApp = installedApp(for: result) else { return }
 
     let didInstall = await installCoordinator.startInstall(
@@ -1007,9 +1007,9 @@ final class AppState {
     }
   }
 
-  /// Triggers a Homebrew Cask upgrade for the given app decision.
+  /// Triggers a Homebrew Cask upgrade for the given inventory result.
   /// Uses the cask token from the local InstalledApp (primary) or the server response (fallback).
-  func brewUpgrade(_ result: AppDecision) async {
+  func brewUpgrade(_ result: InventoryResult) async {
     guard let installedApp = installedApp(for: result) else { return }
     let caskToken = installedApp.homebrewCaskToken ?? result.homebrewCaskToken
     guard let caskToken, !caskToken.isEmpty else { return }
@@ -1025,17 +1025,17 @@ final class AppState {
   }
 
   /// Returns true if the given result represents a Homebrew-installed app.
-  func isHomebrewInstalled(for result: AppDecision) -> Bool {
+  func isHomebrewInstalled(for result: InventoryResult) -> Bool {
     installedApp(for: result)?.isHomebrewInstalled ?? false
   }
 
   /// Returns the Homebrew cask token for the given result, from local detection or server.
-  func homebrewCaskToken(for result: AppDecision) -> String? {
+  func homebrewCaskToken(for result: InventoryResult) -> String? {
     installedApp(for: result)?.homebrewCaskToken ?? result.homebrewCaskToken
   }
 
-  /// Triggers a mas-cli upgrade for the given app decision.
-  func masUpgrade(_ result: AppDecision) async {
+  /// Triggers a mas-cli upgrade for the given inventory result.
+  func masUpgrade(_ result: InventoryResult) async {
     guard let installedApp = installedApp(for: result) else { return }
     guard let masAppId = installedApp.masAppId, !masAppId.isEmpty else { return }
     guard let masCliPath = settings.resolvedMasCliPath else { return }
@@ -1053,20 +1053,20 @@ final class AppState {
   }
 
   /// Returns true if the given result can be upgraded via mas-cli.
-  func isMasUpgradeable(for result: AppDecision) -> Bool {
+  func isMasUpgradeable(for result: InventoryResult) -> Bool {
     guard let app = installedApp(for: result) else { return false }
     return app.isMasApp && app.masAppId != nil && settings.isMasCliAvailable
   }
 
-  func primaryActionTitle(for result: AppDecision) -> String {
+  func primaryActionTitle(for result: InventoryResult) -> String {
     primaryActionPresentation(for: result).title
   }
 
-  func primaryActionCompactTitle(for result: AppDecision) -> String {
+  func primaryActionCompactTitle(for result: InventoryResult) -> String {
     primaryActionPresentation(for: result).compactTitle
   }
 
-  func manualUpdateAction(for result: AppDecision) -> ManualUpdateAction? {
+  func manualUpdateAction(for result: InventoryResult) -> ManualUpdateAction? {
     guard result.decision == .updateAvailable else { return nil }
     guard let installedApp = installedApp(for: result) else { return nil }
 
@@ -1118,7 +1118,7 @@ final class AppState {
     return nil
   }
 
-  func openManualUpdate(_ result: AppDecision) {
+  func openManualUpdate(_ result: InventoryResult) {
     guard let action = manualUpdateAction(for: result) else { return }
     NSWorkspace.shared.open(action.url)
   }

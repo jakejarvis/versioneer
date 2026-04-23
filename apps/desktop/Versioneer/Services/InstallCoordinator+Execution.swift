@@ -10,7 +10,7 @@ extension InstallCoordinator {
   }
 
   func downloadArtifact(
-    artifact: AppDecision.Artifact?,
+    artifact: InventoryResult.Artifact?,
     strategy: InstallStrategy,
     to stagingDirectory: URL
   ) async throws -> URL {

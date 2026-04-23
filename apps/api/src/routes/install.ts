@@ -363,102 +363,81 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
       const data = c.req.valid("json");
       const db = createDb(c.env.DB);
       const now = new Date().toISOString();
-      const target = await validateInstallTarget(db, {
-        appId: data.target.appId,
-        releaseId: data.target.releaseId,
-        artifactId: data.target.artifactId ?? null,
-        installStrategy: data.install.strategy,
-        targetArchitecture: data.target.targetArchitecture,
-        client: data.client,
-      });
       const existing = await db
-        .select()
+        .select({
+          id: installExecutions.id,
+          appId: installExecutions.appId,
+          releaseId: installExecutions.releaseId,
+          artifactId: installExecutions.artifactId,
+          targetArchitecture: installExecutions.targetArchitecture,
+          channel: installExecutions.channel,
+          installStrategy: installExecutions.installStrategy,
+          executionRoute: installExecutions.executionRoute,
+          expectedBundleId: installExecutions.expectedBundleId,
+          expectedTeamId: installExecutions.expectedTeamId,
+          previousVersion: installExecutions.previousVersion,
+          installedVersion: installExecutions.installedVersion,
+        })
         .from(installExecutions)
         .where(eq(installExecutions.id, executionId))
         .get();
+      if (!existing) {
+        throw new HTTPException(404, { message: "Execution not found" });
+      }
 
-      if (
-        existing &&
-        (existing.appId !== data.target.appId || existing.releaseId !== data.target.releaseId)
-      ) {
-        throw new HTTPException(409, { message: "Execution does not match install target" });
+      const targetApp = await db
+        .select({
+          id: apps.id,
+          canonicalName: apps.canonicalName,
+        })
+        .from(apps)
+        .where(eq(apps.id, existing.appId))
+        .get();
+      const targetRelease = await db
+        .select({
+          id: releases.id,
+          versionRaw: releases.versionRaw,
+          publishedBySourceId: releases.publishedBySourceId,
+        })
+        .from(releases)
+        .where(eq(releases.id, existing.releaseId))
+        .get();
+      if (!targetApp || !targetRelease) {
+        throw new HTTPException(404, { message: "Execution target not found" });
       }
 
       const verificationJson = data.verification ? JSON.stringify(data.verification) : null;
       const completedAt = data.event.status === "started" ? null : now;
 
-      if (existing) {
-        await db
-          .update(installExecutions)
-          .set({
-            artifactId: data.target.artifactId ?? existing.artifactId,
-            clientPlatform: data.client.platform,
-            clientAppVersion: data.client.appVersion ?? null,
-            clientOsVersion: data.client.osVersion ?? null,
-            clientSystemArchitecture: data.client.systemArchitecture ?? null,
-            targetArchitecture: target.targetArchitecture ?? existing.targetArchitecture,
-            channel: data.target.channel ?? existing.channel,
-            installStrategy: data.install.strategy,
-            executionRoute:
-              data.install.executionRoute ??
-              data.verification?.executionRoute ??
-              existing.executionRoute,
-            status: data.event.status,
-            expectedBundleId: data.expected.bundleId ?? existing.expectedBundleId,
-            expectedTeamId: data.expected.teamId ?? existing.expectedTeamId,
-            previousVersion: data.expected.previousVersion ?? existing.previousVersion,
-            installedVersion: data.event.installedVersion ?? existing.installedVersion,
-            errorMessage: data.event.errorMessage ?? null,
-            verificationJson,
-            completedAt,
-            updatedAt: now,
-          })
-          .where(eq(installExecutions.id, executionId));
-      } else {
-        await db.insert(installExecutions).values({
-          id: executionId,
-          appId: target.app.id,
-          releaseId: target.release.id,
-          artifactId: data.target.artifactId ?? null,
-          clientPlatform: data.client.platform,
-          clientAppVersion: data.client.appVersion ?? null,
-          clientOsVersion: data.client.osVersion ?? null,
-          clientSystemArchitecture: data.client.systemArchitecture ?? null,
-          targetArchitecture: target.targetArchitecture ?? null,
-          channel: data.target.channel ?? null,
-          installStrategy: data.install.strategy,
-          executionRoute: data.install.executionRoute ?? data.verification?.executionRoute ?? null,
+      await db
+        .update(installExecutions)
+        .set({
           status: data.event.status,
-          expectedBundleId: data.expected.bundleId ?? null,
-          expectedTeamId: data.expected.teamId ?? null,
-          previousVersion: data.expected.previousVersion ?? null,
-          installedVersion: data.event.installedVersion ?? null,
+          installedVersion: data.event.installedVersion ?? existing.installedVersion,
           errorMessage: data.event.errorMessage ?? null,
           verificationJson,
-          preparedAt: now,
           completedAt,
-          createdAt: now,
           updatedAt: now,
-        });
-      }
+        })
+        .where(eq(installExecutions.id, executionId));
 
       const canonicalSnapshotJson = JSON.stringify({
-        appId: target.app.id,
-        appName: target.app.canonicalName,
-        releaseId: target.release.id,
-        releaseVersion: target.release.versionRaw,
-        sourceId: target.release.publishedBySourceId ?? null,
+        appId: existing.appId,
+        appName: targetApp.canonicalName,
+        releaseId: existing.releaseId,
+        releaseVersion: targetRelease.versionRaw,
+        sourceId: targetRelease.publishedBySourceId ?? null,
       });
       const evidencePayloadJson = JSON.stringify({
         status: data.event.status,
         errorMessage: data.event.errorMessage ?? null,
-        installStrategy: data.install.strategy,
-        targetArchitecture: target.targetArchitecture ?? null,
-        executionRoute: data.install.executionRoute ?? data.verification?.executionRoute ?? null,
-        previousVersion: data.expected.previousVersion ?? null,
+        installStrategy: existing.installStrategy,
+        targetArchitecture: existing.targetArchitecture ?? null,
+        executionRoute: existing.executionRoute,
+        previousVersion: existing.previousVersion ?? null,
         installedVersion: data.event.installedVersion ?? null,
-        bundleId: data.expected.bundleId ?? null,
-        teamId: data.expected.teamId ?? null,
+        bundleId: existing.expectedBundleId ?? null,
+        teamId: existing.expectedTeamId ?? null,
         verification: data.verification ?? null,
       });
 
@@ -466,9 +445,9 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         if (data.verification.bundleIdMatch && data.verification.observedBundleId) {
           await createTrustSuggestion({
             db,
-            appId: target.app.id,
-            appName: target.app.canonicalName,
-            sourceId: target.release.publishedBySourceId ?? null,
+            appId: existing.appId,
+            appName: targetApp.canonicalName,
+            sourceId: targetRelease.publishedBySourceId ?? null,
             assertionType: "bundle_id",
             value: data.verification.observedBundleId,
             canonicalSnapshotJson,
@@ -480,9 +459,9 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         if (data.verification.teamIdMatch && data.verification.observedTeamId) {
           await createTrustSuggestion({
             db,
-            appId: target.app.id,
-            appName: target.app.canonicalName,
-            sourceId: target.release.publishedBySourceId ?? null,
+            appId: existing.appId,
+            appName: targetApp.canonicalName,
+            sourceId: targetRelease.publishedBySourceId ?? null,
             assertionType: "team_id",
             value: data.verification.observedTeamId,
             canonicalSnapshotJson,
@@ -494,9 +473,9 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         if (data.verification.signatureVerified) {
           await createTrustSuggestion({
             db,
-            appId: target.app.id,
-            appName: target.app.canonicalName,
-            sourceId: target.release.publishedBySourceId ?? null,
+            appId: existing.appId,
+            appName: targetApp.canonicalName,
+            sourceId: targetRelease.publishedBySourceId ?? null,
             assertionType: "signature_requirement",
             value: "required",
             canonicalSnapshotJson,
@@ -508,9 +487,9 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         if (data.verification.notarizationVerified) {
           await createTrustSuggestion({
             db,
-            appId: target.app.id,
-            appName: target.app.canonicalName,
-            sourceId: target.release.publishedBySourceId ?? null,
+            appId: existing.appId,
+            appName: targetApp.canonicalName,
+            sourceId: targetRelease.publishedBySourceId ?? null,
             assertionType: "notarization_expectation",
             value: "required",
             canonicalSnapshotJson,
@@ -537,10 +516,10 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         for (const issue of issues) {
           await createReleaseDiscrepancySuggestion({
             db,
-            appId: target.app.id,
-            appName: target.app.canonicalName,
-            releaseId: target.release.id,
-            sourceId: target.release.publishedBySourceId ?? null,
+            appId: existing.appId,
+            appName: targetApp.canonicalName,
+            releaseId: existing.releaseId,
+            sourceId: targetRelease.publishedBySourceId ?? null,
             issue,
             evidenceFingerprint: `install-discrepancy:${executionId}:${issue}`,
             evidencePayloadJson,
@@ -558,8 +537,8 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         targetType: "install_execution",
         targetId: executionId,
         payloadJson: JSON.stringify({
-          appId: data.target.appId,
-          releaseId: data.target.releaseId,
+          appId: existing.appId,
+          releaseId: existing.releaseId,
           status: data.event.status,
           errorMessage: data.event.errorMessage ?? null,
         }),
@@ -568,11 +547,11 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
       captureApiEvent(c, "client_install_execution_event_recorded", {
         target_type: "install_execution",
         target_id: executionId,
-        app_id: data.target.appId,
-        release_id: data.target.releaseId,
-        artifact_id: data.target.artifactId ?? null,
-        install_strategy: data.install.strategy,
-        target_architecture: target.targetArchitecture ?? null,
+        app_id: existing.appId,
+        release_id: existing.releaseId,
+        artifact_id: existing.artifactId ?? null,
+        install_strategy: existing.installStrategy,
+        target_architecture: existing.targetArchitecture ?? null,
         status: data.event.status,
         has_verification: Boolean(data.verification),
       });

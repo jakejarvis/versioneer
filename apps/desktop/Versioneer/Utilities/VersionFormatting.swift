@@ -3,7 +3,7 @@ import Foundation
 /// Helpers for presenting version strings and decision statuses.
 nonisolated enum VersionFormatting {
   /// Returns a human-readable label for a decision status.
-  static func statusLabel(for decision: AppDecision.Decision) -> String {
+  static func statusLabel(for decision: InventoryResult.Decision) -> String {
     switch decision {
     case .upToDate: "Up to Date"
     case .updateAvailable: "Update Available"

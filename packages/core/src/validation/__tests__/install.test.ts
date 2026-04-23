@@ -60,7 +60,7 @@ describe("inventoryResultSchema install payload", () => {
     expect(parsed.install.strategy).toBe("zip_replace");
   });
 
-  it("parses install execution prepare and terminal status payloads", () => {
+  it("parses install execution create and event payloads", () => {
     const prepare = installExecutionCreateRequestSchema.parse({
       client: {
         platform: "macos",
@@ -86,7 +86,6 @@ describe("inventoryResultSchema install payload", () => {
     });
 
     const status = installExecutionEventRequestSchema.parse({
-      ...prepare,
       event: {
         status: "succeeded",
         installedVersion: "2.0.0",
@@ -106,7 +105,25 @@ describe("inventoryResultSchema install payload", () => {
     });
 
     expect(status.verification?.signatureVerified).toBe(true);
-    expect(status.target.targetArchitecture).toBe("arm64");
-    expect(status.install.executionRoute).toBe("local_replace");
+    expect(prepare.target.targetArchitecture).toBe("arm64");
+    expect(prepare.install.executionRoute).toBe("local_replace");
+  });
+
+  it("requires executionRoute when preparing an install execution", () => {
+    const parsed = installExecutionCreateRequestSchema.safeParse({
+      client: {
+        platform: "macos",
+      },
+      target: {
+        appId: "app_123",
+        releaseId: "rel_123",
+      },
+      install: {
+        strategy: "zip_replace",
+      },
+      expected: {},
+    });
+
+    expect(parsed.success).toBe(false);
   });
 });

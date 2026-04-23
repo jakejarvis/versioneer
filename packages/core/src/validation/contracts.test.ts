@@ -158,7 +158,7 @@ describe("public contract schemas", () => {
     expect(parsed.dismissedBundleIds).toEqual([]);
   });
 
-  it("accepts install prepare and status response payloads", () => {
+  it("accepts install execution response payloads", () => {
     const prepare = installExecutionCreateResponseSchema.parse({
       execution: {
         id: "exec_123",

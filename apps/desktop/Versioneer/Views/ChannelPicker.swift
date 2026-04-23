@@ -3,7 +3,7 @@ import SwiftUI
 struct ChannelPicker: View {
   @Environment(AppState.self) private var appState
 
-  let result: AppDecision
+  let result: InventoryResult
 
   private var channels: [String] {
     result.availableChannels ?? ["stable"]

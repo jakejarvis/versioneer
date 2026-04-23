@@ -4,7 +4,7 @@ import Testing
 @testable import Versioneer
 
 struct InstallExecutionContractTests {
-  @Test func decodesPrepareResponseAndEncodesStatusPayload() throws {
+  @Test func decodesPrepareResponseAndEncodesEventPayload() throws {
     let prepareJson = """
       {
         "execution": {
@@ -20,29 +20,6 @@ struct InstallExecutionContractTests {
     #expect(prepare.execution.status == "prepared")
 
     let payload = InstallExecutionEventRequest(
-      client: .init(
-        platform: "macos",
-        appVersion: "1.0.0",
-        osVersion: "15.4",
-        systemArchitecture: "arm64",
-        channels: nil
-      ),
-      target: .init(
-        appId: "app_firefox",
-        releaseId: "rel_firefox",
-        artifactId: "art_firefox",
-        targetArchitecture: "arm64",
-        channel: "stable"
-      ),
-      install: .init(
-        strategy: "zip_replace",
-        executionRoute: "local_replace"
-      ),
-      expected: .init(
-        previousVersion: "126.0",
-        bundleId: "org.mozilla.firefox",
-        teamId: "43AQ936H96"
-      ),
       event: .init(
         status: "succeeded",
         installedVersion: "127.0",
@@ -69,10 +46,10 @@ struct InstallExecutionContractTests {
     )
 
     #expect((json["event"] as? [String: Any])?["status"] as? String == "succeeded")
-    #expect((json["install"] as? [String: Any])?["executionRoute"] as? String == "local_replace")
-    #expect((json["install"] as? [String: Any])?["strategy"] as? String == "zip_replace")
-    #expect((json["target"] as? [String: Any])?["targetArchitecture"] as? String == "arm64")
-    #expect((json["expected"] as? [String: Any])?["previousVersion"] as? String == "126.0")
+    #expect(json["install"] == nil)
+    #expect(json["target"] == nil)
+    #expect(json["expected"] == nil)
+    #expect(json["client"] == nil)
     #expect((json["verification"] as? [String: Any])?["signatureVerified"] as? Bool == true)
   }
 

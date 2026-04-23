@@ -37,7 +37,7 @@ nonisolated struct PrimaryAppActionPresentation: Equatable, Sendable {
 
   @MainActor
   static func make(
-    result: AppDecision,
+    result: InventoryResult,
     installState: InstallCoordinator.OperationState,
     isUserIgnored: Bool,
     isHomebrewInstalled: Bool,
@@ -162,7 +162,7 @@ nonisolated struct PrimaryAppActionPresentation: Equatable, Sendable {
   }
 
   private static func updateRouteKind(
-    result: AppDecision,
+    result: InventoryResult,
     isHomebrewInstalled: Bool,
     isMasUpgradeable: Bool,
     manualUpdateAction: ManualUpdateAction?

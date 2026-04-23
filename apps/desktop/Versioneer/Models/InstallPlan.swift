@@ -1,7 +1,7 @@
 import Foundation
 
-/// Resolved install plan derived from an AppDecision.
-/// Replaces the old server-issued InstallPrepareResponse.
+/// Resolved install plan derived from an InventoryResult.
+/// Catalog-backed installs map onto persisted install executions.
 nonisolated struct InstallPlan: Sendable, Equatable {
   nonisolated enum Origin: Sendable, Equatable {
     case catalog(appId: String, releaseId: String, channel: String?, targetArchitecture: String?)
@@ -11,13 +11,13 @@ nonisolated struct InstallPlan: Sendable, Equatable {
   let localId: String
   let strategy: InstallStrategy
   let origin: Origin
-  let artifact: AppDecision.Artifact?
+  let artifact: InventoryResult.Artifact?
 
   init(
     localId: String = UUID().uuidString,
     strategy: InstallStrategy,
     origin: Origin,
-    artifact: AppDecision.Artifact? = nil
+    artifact: InventoryResult.Artifact? = nil
   ) {
     self.localId = localId
     self.strategy = strategy
@@ -32,7 +32,7 @@ nonisolated struct InstallPlan: Sendable, Equatable {
     releaseId: String,
     channel: String? = nil,
     targetArchitecture: String? = nil,
-    artifact: AppDecision.Artifact? = nil
+    artifact: InventoryResult.Artifact? = nil
   ) {
     self.init(
       localId: localId,
@@ -74,7 +74,7 @@ nonisolated struct InstallPlan: Sendable, Equatable {
     return false
   }
 
-  init?(result: AppDecision, installedApp: InstalledApp?) {
+  init?(result: InventoryResult, installedApp: InstalledApp?) {
     guard result.decision == .updateAvailable,
       let strategy = result.installStrategy
     else { return nil }

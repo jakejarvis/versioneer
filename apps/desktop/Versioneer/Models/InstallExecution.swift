@@ -30,7 +30,7 @@ nonisolated struct InstallExecutionCreateRequest: Codable, Sendable {
 
   struct Install: Codable, Sendable {
     let strategy: String
-    let executionRoute: String?
+    let executionRoute: String
   }
 
   struct Expected: Codable, Sendable {
@@ -50,10 +50,6 @@ nonisolated struct InstallExecutionCreateResponse: Codable, Sendable {
 }
 
 nonisolated struct InstallExecutionEventRequest: Codable, Sendable {
-  let client: InventoryCheckRequest.ClientInfo
-  let target: InstallExecutionCreateRequest.Target
-  let install: InstallExecutionCreateRequest.Install
-  let expected: InstallExecutionCreateRequest.Expected
   let event: Event
   let verification: InstallVerificationSummary?
 
