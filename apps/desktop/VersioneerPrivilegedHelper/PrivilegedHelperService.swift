@@ -65,28 +65,12 @@ final class PrivilegedHelperService: NSObject, PrivilegedInstallerXPCProtocol {
       )
 
     case .brewUpgrade:
-      guard let caskToken = validatedOperation.manifest.caskToken, !caskToken.isEmpty else {
-        throw PrivilegedOperationValidationError.backupPathInvalid(
-          "Brew upgrade requires a cask token."
-        )
-      }
-      return try PrivilegedOperationPerformer.brewUpgrade(caskToken: caskToken)
+      throw PrivilegedOperationValidationError.unsupportedOperation(
+        "Homebrew upgrades must run without the privileged helper.")
 
     case .masUpgrade:
-      guard let masAppId = validatedOperation.manifest.masAppId, !masAppId.isEmpty else {
-        throw PrivilegedOperationValidationError.sourcePathInvalid(
-          "MAS upgrade requires an app ID."
-        )
-      }
-      guard let masCliPath = validatedOperation.manifest.masCliPath, !masCliPath.isEmpty else {
-        throw PrivilegedOperationValidationError.sourcePathInvalid(
-          "MAS upgrade requires a path to the mas binary."
-        )
-      }
-      return try PrivilegedOperationPerformer.masUpgrade(
-        masAppId: masAppId,
-        masCliPath: masCliPath
-      )
+      throw PrivilegedOperationValidationError.unsupportedOperation(
+        "Mac App Store upgrades must run without the privileged helper.")
     }
   }
 }

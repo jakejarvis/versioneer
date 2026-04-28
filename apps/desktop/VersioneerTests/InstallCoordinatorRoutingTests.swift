@@ -93,6 +93,63 @@ struct InstallCoordinatorRoutingTests {
     )
   }
 
+  @MainActor
+  @Test func stagingDirectoryRejectsTraversalExecutionID() throws {
+    let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
+
+    do {
+      _ = try coordinator.makeStagingDirectory(executionId: "../escape")
+      Issue.record("Expected invalid execution ID to fail")
+    } catch let error as InstallError {
+      guard case .installerPayloadInvalid(let message) = error else {
+        Issue.record("Unexpected install error: \(error.localizedDescription)")
+        return
+      }
+      #expect(message.contains("execution ID"))
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
+    }
+  }
+
+  @MainActor
+  @Test func downloaderRejectsNonHTTPSCatalogArtifacts() async throws {
+    let coordinator = InstallCoordinator(privilegedHelperClient: NoopPrivilegedHelperClient())
+    let stagingDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "versioneer-insecure-download-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(
+      at: stagingDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: stagingDirectory) }
+
+    let artifact = InventoryResult.Artifact(
+      id: "artifact_http",
+      downloadUrl: "http://example.com/app.dmg",
+      architecture: nil,
+      minOsVersion: nil,
+      artifactType: "dmg",
+      sizeBytes: nil,
+      sha256: nil
+    )
+
+    do {
+      _ = try await coordinator.downloadArtifact(
+        artifact: artifact,
+        strategy: .dmgCopyReplace,
+        to: stagingDirectory
+      )
+      Issue.record("Expected non-HTTPS artifact download to fail")
+    } catch let error as InstallError {
+      guard case .downloadFailed(let message) = error else {
+        Issue.record("Unexpected install error: \(error.localizedDescription)")
+        return
+      }
+      #expect(message.contains("HTTPS"))
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
+    }
+  }
+
   private func makePlan(
     strategy: InstallStrategy
   ) -> InstallPlan {

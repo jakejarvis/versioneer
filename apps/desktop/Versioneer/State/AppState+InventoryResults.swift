@@ -270,6 +270,7 @@ extension AppState {
     minOsVersion: String?
   ) -> InventoryResult.Artifact? {
     guard let downloadUrl,
+      isHTTPSDownloadURL(downloadUrl),
       let artifactType = artifactType(for: downloadUrl)
     else { return nil }
 
@@ -304,6 +305,10 @@ extension AppState {
       .lowercased()
     guard ["zip", "dmg", "pkg"].contains(pathExtension) else { return nil }
     return pathExtension
+  }
+
+  private func isHTTPSDownloadURL(_ downloadUrl: String) -> Bool {
+    URL(string: downloadUrl)?.scheme?.lowercased() == "https"
   }
 
   func bindInstalledApps(

@@ -20,6 +20,9 @@ extension InstallCoordinator {
     else {
       throw InstallError.missingArtifact
     }
+    guard downloadURL.scheme?.lowercased() == "https" else {
+      throw InstallError.downloadFailed("Catalog artifact downloads must use HTTPS")
+    }
 
     let fileExtension =
       if !downloadURL.pathExtension.isEmpty {
@@ -354,6 +357,10 @@ extension InstallCoordinator {
   }
 
   func makeStagingDirectory(executionId: String) throws -> URL {
+    guard Self.isSafeExecutionId(executionId) else {
+      throw InstallError.installerPayloadInvalid("Install execution ID was invalid.")
+    }
+
     let root = PrivilegedInstallPaths.stagingRoot(
       in: FileManager.default.homeDirectoryForCurrentUser)
     let ownerOnlyAttributes: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
@@ -419,6 +426,14 @@ extension InstallCoordinator {
     }
 
     return normalizedArchitecture(reported)
+  }
+
+  nonisolated private static func isSafeExecutionId(_ executionId: String) -> Bool {
+    guard !executionId.isEmpty else { return false }
+    return executionId.range(
+      of: #"^[A-Za-z0-9._-]+$"#,
+      options: .regularExpression
+    ) != nil
   }
 
   func readInstalledVersion(at appURL: URL) -> String? {

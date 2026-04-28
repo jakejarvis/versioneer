@@ -457,6 +457,51 @@ struct AppStatePresentationTests {
     #expect(state.primaryActionTitle(for: decision) == "Open Download")
   }
 
+  @Test func localElectronHTTPDownloadDoesNotCreateDirectInstallCandidate() throws {
+    let state = AppState()
+    let installedApp = InstalledApp(
+      name: "Mystery Electron",
+      bundleId: "com.example.mystery",
+      version: "1.0",
+      buildNumber: nil,
+      teamId: "TEAM123456",
+      path: "/Applications/Mystery Electron.app",
+      architecture: nil,
+      sparkleFeedUrl: nil,
+      sparklePublicKey: nil,
+      isSparkleApp: false,
+      isMasApp: false,
+      masAppId: nil,
+      isElectronApp: true,
+      electronUpdateProvider: "generic",
+      electronUpdateUrl: "https://updates.example.com/feed",
+      codeSigningAuthority: nil,
+      appCategory: nil,
+      minMacOSVersion: nil,
+      isHomebrewInstalled: false,
+      homebrewCaskToken: nil
+    )
+
+    let local = state.buildLocalUpdateMap(
+      sparkle: [:],
+      electron: [
+        installedApp.localID: ElectronChecker.ElectronResult(
+          latestVersion: "1.1",
+          downloadUrl: "http://updates.example.com/mystery-1.1.zip",
+          publishedAt: nil
+        )
+      ],
+      appStore: [:],
+      homebrew: [:],
+      apps: [installedApp]
+    )
+
+    let candidate = try #require(local[installedApp.localID])
+    #expect(candidate.latestVersion == "1.1")
+    #expect(candidate.artifact == nil)
+    #expect(candidate.installStrategy == nil)
+  }
+
   private func seed(_ state: AppState, with results: [InventoryResult]) {
     state.installedApps = results.map(DesktopUITestFixtures.makeInstalledApp)
     state.rawInventoryResults = results

@@ -285,36 +285,45 @@ struct PrivilegedOperationValidationTests {
     }
   }
 
-  @Test func masUpgradeManifestPassesValidation() throws {
+  @Test func packageManagerUpgradeManifestsAreRejectedByPrivilegedHelper() throws {
     let sandbox = try TestSandbox()
-    let stagingDirectory = sandbox.allowedStagingRoot.appendingPathComponent(
-      "exec_mas", isDirectory: true)
-    try sandbox.createDirectory(at: stagingDirectory)
 
-    let manifest = PreparedPrivilegedOperation(
-      executionId: "exec_mas",
-      operationType: .masUpgrade,
-      sourceRelativePath: ".",
-      destinationPath: "",
-      backupRelativePath: nil,
-      installTarget: nil,
-      caskToken: nil,
-      masAppId: "497799835",
-      masCliPath: "/opt/homebrew/bin/mas"
-    )
-    try sandbox.writeManifest(manifest, to: stagingDirectory)
+    for operationType in [PrivilegedOperationType.brewUpgrade, .masUpgrade] {
+      let executionId = "exec_\(operationType.rawValue)"
+      let stagingDirectory = sandbox.allowedStagingRoot.appendingPathComponent(
+        executionId, isDirectory: true)
+      try sandbox.createDirectory(at: stagingDirectory)
 
-    let request = PrivilegedOperationRequest(
-      executionId: "exec_mas",
-      stagingDirectoryPath: stagingDirectory.path
-    )
+      let manifest = PreparedPrivilegedOperation(
+        executionId: executionId,
+        operationType: operationType,
+        sourceRelativePath: ".",
+        destinationPath: "",
+        backupRelativePath: nil,
+        installTarget: nil,
+        caskToken: "firefox",
+        masAppId: "497799835",
+        masCliPath: "/opt/homebrew/bin/mas"
+      )
+      try sandbox.writeManifest(manifest, to: stagingDirectory)
 
-    let validated = try sandbox.validator.validate(request: request)
-    #expect(validated.manifest.operationType == .masUpgrade)
-    #expect(validated.manifest.masAppId == "497799835")
-    #expect(validated.manifest.masCliPath == "/opt/homebrew/bin/mas")
-    #expect(validated.destinationURL == nil)
-    #expect(validated.backupURL == nil)
+      let request = PrivilegedOperationRequest(
+        executionId: executionId,
+        stagingDirectoryPath: stagingDirectory.path
+      )
+
+      do {
+        _ = try sandbox.validator.validate(request: request)
+        Issue.record("Expected package-manager operation to be rejected")
+      } catch let error as PrivilegedOperationValidationError {
+        guard case .unsupportedOperation = error else {
+          Issue.record("Unexpected validation error: \(error.localizedDescription)")
+          return
+        }
+      } catch {
+        Issue.record("Unexpected error: \(error.localizedDescription)")
+      }
+    }
   }
 }
 

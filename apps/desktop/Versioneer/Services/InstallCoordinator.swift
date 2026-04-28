@@ -603,7 +603,7 @@ final class InstallCoordinator {
     }
   }
 
-  /// Runs `brew upgrade --cask {token}` through the privileged helper.
+  /// Runs `brew upgrade --cask {token}` as the current user.
   /// Returns true if the upgrade completed successfully.
   @discardableResult
   func startBrewUpgrade(
@@ -617,7 +617,8 @@ final class InstallCoordinator {
 
     do {
       let executionId = UUID().uuidString
-      let stagingDirectory = try makeStagingDirectory(executionId: executionId)
+      try validateHomebrewCaskToken(caskToken)
+      let brewPath = try brewExecutablePath()
 
       updateState(
         for: operationKey,
@@ -628,28 +629,13 @@ final class InstallCoordinator {
         errorMessage: nil,
         installedVersion: nil,
         recoveryAction: nil,
-        helperStatus: .preparing
+        helperStatus: .notNeeded
       )
 
-      let manifest = PreparedPrivilegedOperation(
-        executionId: executionId,
-        operationType: .brewUpgrade,
-        sourceRelativePath: ".",
-        destinationPath: "",
-        backupRelativePath: nil,
-        installTarget: nil,
-        caskToken: caskToken,
-        masAppId: nil,
-        masCliPath: nil
+      _ = try await ProcessRunner.runSuccessful(
+        brewPath,
+        arguments: ["upgrade", "--cask", caskToken]
       )
-      try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
-
-      _ = try await privilegedHelperClient.performOperation(
-        executionId: executionId,
-        stagingDirectory: stagingDirectory
-      )
-
-      cleanupStagingDirectory(stagingDirectory)
 
       updateState(
         for: operationKey,
@@ -667,7 +653,7 @@ final class InstallCoordinator {
           route: ExecutionRoute.brewUpgrade.rawValue,
           operation: "brew_upgrade",
           status: "succeeded",
-          used_privileged_helper: true
+          used_privileged_helper: false
         )
       )
       return true
@@ -696,14 +682,14 @@ final class InstallCoordinator {
           route: ExecutionRoute.brewUpgrade.rawValue,
           operation: "brew_upgrade",
           status: installStatusString(for: error),
-          used_privileged_helper: true
+          used_privileged_helper: false
         )
       )
       return false
     }
   }
 
-  /// Runs `mas upgrade {appId}` through the privileged helper.
+  /// Runs `mas upgrade {appId}` as the current user.
   /// Returns true if the upgrade completed successfully.
   @discardableResult
   func startMasUpgrade(
@@ -718,6 +704,9 @@ final class InstallCoordinator {
     if state(for: result).isRunning { return false }
 
     do {
+      let executionId = UUID().uuidString
+      try validateMasUpgradeInputs(masAppId: masAppId, masCliPath: masCliPath)
+
       updateState(
         for: operationKey,
         appDisplayName: appDisplayName,
@@ -732,9 +721,6 @@ final class InstallCoordinator {
 
       try await ensureTargetAppIsClosed(installedApp: installedApp)
 
-      let executionId = UUID().uuidString
-      let stagingDirectory = try makeStagingDirectory(executionId: executionId)
-
       updateState(
         for: operationKey,
         phase: .installing,
@@ -743,28 +729,13 @@ final class InstallCoordinator {
         errorMessage: nil,
         installedVersion: nil,
         recoveryAction: nil,
-        helperStatus: .preparing
+        helperStatus: .notNeeded
       )
 
-      let manifest = PreparedPrivilegedOperation(
-        executionId: executionId,
-        operationType: .masUpgrade,
-        sourceRelativePath: ".",
-        destinationPath: "",
-        backupRelativePath: nil,
-        installTarget: nil,
-        caskToken: nil,
-        masAppId: masAppId,
-        masCliPath: masCliPath
+      _ = try await ProcessRunner.runSuccessful(
+        masCliPath,
+        arguments: ["upgrade", masAppId]
       )
-      try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
-
-      _ = try await privilegedHelperClient.performOperation(
-        executionId: executionId,
-        stagingDirectory: stagingDirectory
-      )
-
-      cleanupStagingDirectory(stagingDirectory)
 
       updateState(
         for: operationKey,
@@ -774,7 +745,7 @@ final class InstallCoordinator {
         errorMessage: nil,
         installedVersion: nil,
         recoveryAction: nil,
-        helperStatus: .ready
+        helperStatus: .notNeeded
       )
       PostHogTelemetry.capture(
         "desktop_install_completed",
@@ -783,7 +754,7 @@ final class InstallCoordinator {
           route: ExecutionRoute.masUpgrade.rawValue,
           operation: "mas_upgrade",
           status: "succeeded",
-          used_privileged_helper: true
+          used_privileged_helper: false
         )
       )
       return true
@@ -820,7 +791,7 @@ final class InstallCoordinator {
           route: ExecutionRoute.masUpgrade.rawValue,
           operation: "mas_upgrade",
           status: installStatusString(for: error),
-          used_privileged_helper: true
+          used_privileged_helper: false
         )
       )
       return false
@@ -831,6 +802,40 @@ final class InstallCoordinator {
     switch action {
     case .openSystemSettings:
       return "Open System Settings"
+    }
+  }
+
+  private func brewExecutablePath() throws -> String {
+    let candidates = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+    if let brewPath = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) })
+    {
+      return brewPath
+    }
+    throw InstallError.toolUnavailable(
+      "Homebrew is not installed. Could not find brew at /opt/homebrew/bin/brew or /usr/local/bin/brew."
+    )
+  }
+
+  private func validateHomebrewCaskToken(_ caskToken: String) throws {
+    guard
+      caskToken.range(
+        of: #"^[A-Za-z0-9][A-Za-z0-9._+-]*$"#,
+        options: .regularExpression
+      ) != nil
+    else {
+      throw InstallError.toolUnavailable("Invalid Homebrew cask token.")
+    }
+  }
+
+  private func validateMasUpgradeInputs(masAppId: String, masCliPath: String) throws {
+    guard
+      masAppId.range(of: #"^\d+$"#, options: .regularExpression) != nil
+    else {
+      throw InstallError.toolUnavailable("Invalid Mac App Store app ID.")
+    }
+
+    guard FileManager.default.isExecutableFile(atPath: masCliPath) else {
+      throw InstallError.toolUnavailable("mas-cli is not installed at \(masCliPath).")
     }
   }
 
@@ -922,6 +927,7 @@ enum InstallError: LocalizedError {
   case downloadFailed(String)
   case installerPayloadInvalid(String)
   case verificationFailed(String)
+  case toolUnavailable(String)
   case unsupportedStrategy
   case missingInstallTrustMaterial(String)
   case cancelled
@@ -941,6 +947,8 @@ enum InstallError: LocalizedError {
     case .installerPayloadInvalid(let message):
       message
     case .verificationFailed(let message):
+      message
+    case .toolUnavailable(let message):
       message
     case .unsupportedStrategy:
       "This install strategy is not supported by the current desktop app build."

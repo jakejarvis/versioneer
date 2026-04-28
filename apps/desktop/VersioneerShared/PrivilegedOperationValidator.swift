@@ -21,6 +21,7 @@ nonisolated enum PrivilegedOperationValidationError: LocalizedError {
   case backupPathInvalid(String)
   case symlinkRejected(String)
   case unsupportedInstallTarget(String)
+  case unsupportedOperation(String)
   case stagingDirectoryPermissionsInvalid(String)
 
   var errorDescription: String? {
@@ -42,6 +43,8 @@ nonisolated enum PrivilegedOperationValidationError: LocalizedError {
       message
     case .unsupportedInstallTarget(let target):
       "Privileged package installs must target /. Received \(target)."
+    case .unsupportedOperation(let message):
+      message
     case .stagingDirectoryPermissionsInvalid(let message):
       message
     }
@@ -114,6 +117,13 @@ nonisolated struct PrivilegedOperationValidator {
 
     guard manifest.executionId == request.executionId else {
       throw PrivilegedOperationValidationError.manifestInvalid
+    }
+    switch manifest.operationType {
+    case .brewUpgrade, .masUpgrade:
+      throw PrivilegedOperationValidationError.unsupportedOperation(
+        "Package-manager upgrades must run without the privileged helper.")
+    case .replaceApp, .installPackage:
+      break
     }
 
     let sourceURL: URL
