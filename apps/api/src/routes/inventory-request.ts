@@ -36,14 +36,15 @@ function assertContentLengthWithinLimit(value: string | undefined, maxBytes: num
   }
 }
 
-async function readStreamBytesLimited(
+async function readStreamTextLimited(
   stream: ReadableStream<Uint8Array> | null,
   maxBytes: number,
-): Promise<Uint8Array> {
-  if (!stream) return new Uint8Array();
+): Promise<{ text: string; byteLength: number }> {
+  if (!stream) return { text: "", byteLength: 0 };
 
   const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
   let bytesRead = 0;
 
   try {
@@ -56,40 +57,48 @@ async function readStreamBytesLimited(
         await reader.cancel();
         throw new RequestBodyTooLargeError(maxBytes, bytesRead);
       }
-      chunks.push(value);
+      chunks.push(decoder.decode(value, { stream: true }));
     }
+    chunks.push(decoder.decode());
   } finally {
     reader.releaseLock();
   }
 
-  const bytes = new Uint8Array(bytesRead);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
+  return { text: chunks.join(""), byteLength: bytesRead };
 }
 
-function isGzipBody(bytes: Uint8Array): boolean {
-  return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
-}
+function limitStreamBytes(
+  stream: ReadableStream<Uint8Array> | null,
+  maxBytes: number,
+): { stream: ReadableStream<ArrayBuffer | ArrayBufferView> | null; getBytesRead: () => number } {
+  let bytesRead = 0;
+  if (!stream) return { stream: null, getBytesRead: () => bytesRead };
 
-function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy.buffer;
+  return {
+    stream: stream.pipeThrough(
+      new TransformStream<Uint8Array, ArrayBuffer | ArrayBufferView>({
+        transform(chunk, controller) {
+          bytesRead += chunk.byteLength;
+          if (bytesRead > maxBytes) {
+            controller.error(new RequestBodyTooLargeError(maxBytes, bytesRead));
+            return;
+          }
+          controller.enqueue(chunk);
+        },
+      }),
+    ),
+    getBytesRead: () => bytesRead,
+  };
 }
 
 async function readInventoryJson(request: Request): Promise<unknown> {
   const contentEncoding = request.headers.get("content-encoding")?.trim().toLowerCase();
   const contentLength = request.headers.get("content-length") ?? undefined;
-  const decoder = new TextDecoder();
 
   if (!contentEncoding || contentEncoding === "identity") {
     assertContentLengthWithinLimit(contentLength, MAX_INVENTORY_JSON_BYTES);
-    const bytes = await readStreamBytesLimited(request.body, MAX_INVENTORY_JSON_BYTES);
-    return JSON.parse(decoder.decode(bytes)) as unknown;
+    const { text } = await readStreamTextLimited(request.body, MAX_INVENTORY_JSON_BYTES);
+    return JSON.parse(text) as unknown;
   }
 
   if (contentEncoding !== "gzip") {
@@ -97,19 +106,15 @@ async function readInventoryJson(request: Request): Promise<unknown> {
   }
 
   assertContentLengthWithinLimit(contentLength, MAX_INVENTORY_GZIP_BYTES);
-  const compressed = await readStreamBytesLimited(request.body, MAX_INVENTORY_GZIP_BYTES);
-  if (!isGzipBody(compressed)) {
-    throw new Error("Invalid gzip body");
-  }
-  const decompressedStream = new Blob([copyToArrayBuffer(compressed)])
-    .stream()
-    .pipeThrough(new DecompressionStream("gzip"));
-  const decoded = await readStreamBytesLimited(decompressedStream, MAX_INVENTORY_JSON_BYTES);
-  const expansionRatio = decoded.byteLength / Math.max(compressed.byteLength, 1);
+  const compressed = limitStreamBytes(request.body, MAX_INVENTORY_GZIP_BYTES);
+  const decompressedStream =
+    compressed.stream?.pipeThrough(new DecompressionStream("gzip")) ?? null;
+  const decoded = await readStreamTextLimited(decompressedStream, MAX_INVENTORY_JSON_BYTES);
+  const expansionRatio = decoded.byteLength / Math.max(compressed.getBytesRead(), 1);
   if (expansionRatio > MAX_INVENTORY_GZIP_EXPANSION_RATIO) {
     throw new HTTPException(413, { message: "Compressed inventory body expands too much" });
   }
-  return JSON.parse(decoder.decode(decoded)) as unknown;
+  return JSON.parse(decoded.text) as unknown;
 }
 
 export type InventoryEnv = {

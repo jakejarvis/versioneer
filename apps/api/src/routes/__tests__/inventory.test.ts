@@ -185,7 +185,8 @@ describe("POST /v1/inventory/check", () => {
 
   it("rejects raw inventory bodies over the decoded JSON limit", async () => {
     const res = await postInventoryRequest({
-      body: new Uint8Array(MAX_INVENTORY_JSON_BYTES + 1),
+      headers: { "Content-Length": String(MAX_INVENTORY_JSON_BYTES + 1) },
+      body: "{}",
     });
 
     expect(res.status).toBe(413);
@@ -193,8 +194,11 @@ describe("POST /v1/inventory/check", () => {
 
   it("rejects gzip inventory bodies over the compressed limit", async () => {
     const res = await postInventoryRequest({
-      headers: { "Content-Encoding": "gzip" },
-      body: new Uint8Array(MAX_INVENTORY_GZIP_BYTES + 1),
+      headers: {
+        "Content-Encoding": "gzip",
+        "Content-Length": String(MAX_INVENTORY_GZIP_BYTES + 1),
+      },
+      body: await gzipText(JSON.stringify({ client: {}, apps: [] })),
     });
 
     expect(res.status).toBe(413);
