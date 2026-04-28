@@ -109,13 +109,13 @@ nonisolated enum BundleMetadataReader {
     return SparkleInfo(feedUrl: feedUrl, publicKey: publicKey, hasSparkle: hasSparkle)
   }
 
-  /// Returns the URL string only if it parses as a valid absolute URL.
-  /// Filters out relative paths, placeholder tokens, and garbage strings.
+  /// Returns the URL string only if it parses as a web URL.
+  /// Filters out relative paths, placeholder tokens, local file URLs, and garbage strings.
   nonisolated private static func validatedUrl(_ raw: String?) -> String? {
     guard let raw, !raw.isEmpty else { return nil }
     guard let url = URL(string: raw),
-      let scheme = url.scheme,
-      !scheme.isEmpty,
+      let scheme = url.scheme?.lowercased(),
+      scheme == "http" || scheme == "https",
       url.host != nil
     else { return nil }
     return raw

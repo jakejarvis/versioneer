@@ -244,17 +244,32 @@ nonisolated struct PrivilegedOperationValidator {
     }
 
     let destinationURL = URL(fileURLWithPath: destinationPath)
-    let canonicalURL = try canonicalizeURL(
-      destinationURL,
-      expectedDirectory: operationType == .replaceApp,
-      allowsMissingLeaf: true
-    )
-
-    guard operationType != .replaceApp || canonicalURL.pathExtension == "app" else {
+    guard operationType != .replaceApp || destinationURL.standardizedFileURL.pathExtension == "app"
+    else {
       throw PrivilegedOperationValidationError.destinationPathInvalid(
         "Privileged app replacement destinations must end in .app."
       )
     }
+    if operationType == .replaceApp {
+      try rejectSymlinkedPathComponents(
+        in: destinationURL.standardizedFileURL,
+        allowsMissingLeaf: true
+      )
+      var isDirectory: ObjCBool = false
+      guard FileManager.default.fileExists(atPath: destinationURL.path, isDirectory: &isDirectory),
+        isDirectory.boolValue
+      else {
+        throw PrivilegedOperationValidationError.destinationPathInvalid(
+          "Privileged app replacement destinations must be existing .app bundles."
+        )
+      }
+    }
+
+    let canonicalURL = try canonicalizeURL(
+      destinationURL,
+      expectedDirectory: operationType == .replaceApp,
+      allowsMissingLeaf: operationType != .replaceApp
+    )
 
     return canonicalURL
   }

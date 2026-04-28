@@ -699,6 +699,8 @@ final class AppState {
   }
 
   func scanAndSubmit() async {
+    guard loadState != .scanning && loadState != .submitting else { return }
+
     PostHogTelemetry.capture(
       "desktop_scan_started",
       properties: [

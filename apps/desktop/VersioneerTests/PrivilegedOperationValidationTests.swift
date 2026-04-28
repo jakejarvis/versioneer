@@ -192,6 +192,38 @@ struct PrivilegedOperationValidationTests {
     }
   }
 
+  @Test func rejectsReplaceDestinationsThatDoNotExist() throws {
+    let sandbox = try TestSandbox()
+    let context = try sandbox.makeReplaceContext(executionId: "exec_missing_destination")
+    let destinationParent = sandbox.root.appendingPathComponent("Applications", isDirectory: true)
+    try sandbox.createDirectory(at: destinationParent)
+
+    let manifest = PreparedPrivilegedOperation(
+      executionId: "exec_missing_destination",
+      operationType: .replaceApp,
+      sourceRelativePath: "payload/Test.app",
+      destinationPath: destinationParent.appendingPathComponent("Missing.app").path,
+      backupRelativePath: "backup/Missing.app",
+      installTarget: nil,
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
+    )
+    try sandbox.writeManifest(manifest, to: context.stagingDirectory)
+
+    do {
+      _ = try sandbox.validator.validate(request: context.request)
+      Issue.record("Expected missing replace destination failure")
+    } catch let error as PrivilegedOperationValidationError {
+      guard case .destinationPathInvalid = error else {
+        Issue.record("Unexpected validation error: \(error.localizedDescription)")
+        return
+      }
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
+    }
+  }
+
   @Test func rejectsPackageSourcesThatAreNotPackages() throws {
     let sandbox = try TestSandbox()
     let context = try sandbox.makePackageContext(
