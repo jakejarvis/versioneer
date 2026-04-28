@@ -26,7 +26,7 @@ const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
 const TEST_NOW_ISO = TEST_NOW.toISOString();
 const TEST_ICON_BASE64 = btoa("workflow-icon");
 
-type MockWorkflowStep = WorkflowStep & { calls: string[] };
+type MockWorkflowStep = WorkflowStep & { calls: string[]; outputs: Map<string, unknown> };
 
 function createWorkflowInstance() {
   const instance = Object.create(InventoryIngestionWorkflow.prototype);
@@ -40,14 +40,18 @@ function createWorkflowInstance() {
 
 function createStep(): MockWorkflowStep {
   const calls: string[] = [];
+  const outputs = new Map<string, unknown>();
   const step = Object.create(null);
   step.calls = calls;
+  step.outputs = outputs;
   step.do = vi.fn<
     (name: string, optionsOrCallback: unknown, maybeCallback?: unknown) => Promise<unknown>
   >(async (name: string, optionsOrCallback: unknown, maybeCallback?: unknown) => {
     calls.push(name);
     const callback = typeof optionsOrCallback === "function" ? optionsOrCallback : maybeCallback;
-    return (callback as () => Promise<unknown>)();
+    const output = await (callback as () => Promise<unknown>)();
+    outputs.set(name, output);
+    return output;
   });
   step.sleep = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   step.sleepUntil = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
@@ -198,6 +202,14 @@ describe("InventoryIngestionWorkflow", () => {
       "create-suggestions",
       "mark-completed",
     ]);
+    const loadOutput = step.outputs.get("load-ingestion-payload");
+    expect(loadOutput).toMatchObject({
+      alreadyCompleted: false,
+      itemsTotal: 2,
+    });
+    expect(loadOutput).not.toHaveProperty("payload");
+    expect(JSON.stringify(loadOutput)).not.toContain("discoveredIconCandidates");
+    expect(JSON.stringify(loadOutput).length).toBeLessThan(1024);
 
     const job = await db
       .select()

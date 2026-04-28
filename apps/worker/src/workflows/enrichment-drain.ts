@@ -20,7 +20,6 @@ const MAX_DRAIN_BATCHES = 500;
 
 interface EnrichmentDrainTotals {
   batches: number;
-  attemptedIds: string[];
   attempted: number;
   succeeded: number;
   failed: number;
@@ -30,7 +29,6 @@ interface EnrichmentDrainTotals {
 
 function mergeBatch(totals: EnrichmentDrainTotals, batch: EnrichmentBatchResult) {
   totals.batches++;
-  totals.attemptedIds.push(...batch.attemptedIds);
   totals.attempted += batch.attempted;
   totals.succeeded += batch.succeeded;
   totals.failed += batch.failed;
@@ -56,7 +54,6 @@ export class EnrichmentDrainWorkflow extends WorkflowEntrypoint<Env, EnrichmentD
     const jobKey = failureJobKey ?? trigger;
     const totals: EnrichmentDrainTotals = {
       batches: 0,
-      attemptedIds: [],
       attempted: 0,
       succeeded: 0,
       failed: 0,

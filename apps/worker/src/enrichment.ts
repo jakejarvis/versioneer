@@ -5,6 +5,7 @@ import { enrichDiscoveredApp } from "@versioneer/core/pipeline";
 import { createDb, discoveredApps } from "@versioneer/db";
 
 export const ENRICHMENT_BATCH_SIZE = 25;
+const MAX_ENRICHMENT_WORKFLOW_ERROR_CHARS = 500;
 const ENRICHMENT_RETRY_DELAY_MS = 15 * 60 * 1000;
 const ENRICHMENT_REFRESH_DELAY_MS = 24 * 60 * 60 * 1000;
 const ENRICHMENT_CANDIDATE_STATUSES = ["pending", "linked"] as const;
@@ -29,7 +30,6 @@ const enrichmentCandidateSelection = {
 
 export interface EnrichmentBatchResult {
   candidateCount: number;
-  attemptedIds: string[];
   attempted: number;
   succeeded: number;
   failed: number;
@@ -69,6 +69,14 @@ function compareStaleSuccessCandidates(
     return aTime.localeCompare(bTime);
   }
   return compareLastSeenDesc(a, b);
+}
+
+export function summarizeEnrichmentWorkflowError(errorMessage: string): string {
+  if (errorMessage.length <= MAX_ENRICHMENT_WORKFLOW_ERROR_CHARS) {
+    return errorMessage;
+  }
+
+  return `${errorMessage.slice(0, MAX_ENRICHMENT_WORKFLOW_ERROR_CHARS)}...`;
 }
 
 async function selectPendingCandidatesByStatus(
@@ -248,7 +256,6 @@ export async function runEnrichmentBatch(params: {
   });
   const result: EnrichmentBatchResult = {
     candidateCount: candidates.length,
-    attemptedIds: [],
     attempted: 0,
     succeeded: 0,
     failed: 0,
@@ -258,7 +265,6 @@ export async function runEnrichmentBatch(params: {
   for (const candidate of candidates) {
     const startedAtMs = Date.now();
     result.attempted++;
-    result.attemptedIds.push(candidate.id);
     log.info("enrichment candidate started", { discoveredAppId: candidate.id });
     let enrichment;
     try {
@@ -282,7 +288,9 @@ export async function runEnrichmentBatch(params: {
       result.failed++;
       const errorEntry = {
         discoveredAppId: candidate.id,
-        errorMessage: enrichment.enrichmentError ?? "Enrichment failed",
+        errorMessage: summarizeEnrichmentWorkflowError(
+          enrichment.enrichmentError ?? "Enrichment failed",
+        ),
       };
       result.errors.push(errorEntry);
       log.warn("enrichment candidate failed", {

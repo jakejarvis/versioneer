@@ -34,7 +34,6 @@ type InventoryIngestionJobRow = Pick<
 interface LoadedInventoryIngestion {
   alreadyCompleted: boolean;
   job: InventoryIngestionJobRow;
-  payload: InventoryIngestionPayload | null;
   itemsTotal: number;
 }
 
@@ -59,6 +58,25 @@ function payloadItemCount(payload: InventoryIngestionPayload): number {
 
 function countFailedItems(totals: InventoryIngestionTotals): number {
   return totals.discoveredIcons.failed + totals.catalogIcons.failed + totals.suggestions.failed;
+}
+
+async function loadInventoryIngestionPayload(
+  bucket: R2Bucket,
+  payloadR2Key: string,
+): Promise<InventoryIngestionPayload> {
+  const object = await bucket.get(payloadR2Key);
+  if (!object) {
+    throw new Error(`Inventory ingestion payload ${payloadR2Key} does not exist`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await object.text());
+  } catch {
+    throw new Error(`Inventory ingestion payload ${payloadR2Key} is invalid JSON`);
+  }
+
+  return parseInventoryIngestionPayload(parsed);
 }
 
 async function resolveInventoryIngestionFailures(
@@ -91,6 +109,12 @@ export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
       suggestions: emptyStepResult(),
     };
     let payloadR2Key: string | null = null;
+    let payloadCache: InventoryIngestionPayload | null = null;
+
+    const loadPayload = async (key: string): Promise<InventoryIngestionPayload> => {
+      payloadCache ??= await loadInventoryIngestionPayload(this.env.RAW_BUCKET, key);
+      return payloadCache;
+    };
 
     try {
       const loaded = await step.do<LoadedInventoryIngestion>("load-ingestion-payload", async () => {
@@ -113,23 +137,11 @@ export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
           return {
             alreadyCompleted: true,
             job,
-            payload: null,
             itemsTotal: job.itemsTotal ?? 0,
           };
         }
 
-        const object = await this.env.RAW_BUCKET.get(job.payloadR2Key);
-        if (!object) {
-          throw new Error(`Inventory ingestion payload ${job.payloadR2Key} does not exist`);
-        }
-
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(await object.text());
-        } catch {
-          throw new Error(`Inventory ingestion payload ${job.payloadR2Key} is invalid JSON`);
-        }
-        const payload = parseInventoryIngestionPayload(parsed);
+        const payload = await loadPayload(job.payloadR2Key);
 
         await db
           .update(inventoryIngestionJobs)
@@ -144,7 +156,6 @@ export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
         return {
           alreadyCompleted: false,
           job,
-          payload,
           itemsTotal: payloadItemCount(payload),
         };
       });
@@ -152,7 +163,7 @@ export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
       payloadR2Key = loaded.job.payloadR2Key;
       totals.itemsTotal = loaded.itemsTotal;
 
-      if (loaded.alreadyCompleted || !loaded.payload) {
+      if (loaded.alreadyCompleted) {
         log.info("workflow skipped completed job");
         return { status: "completed", skipped: true };
       }
@@ -160,38 +171,44 @@ export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
       totals.discoveredIcons = await step.do<InventoryIngestionStepResult>(
         "store-discovered-icons",
         { retries: { limit: 2, delay: "10 seconds", backoff: "exponential" } },
-        async () =>
-          storeDiscoveredInventoryIcons({
+        async () => {
+          const payload = await loadPayload(loaded.job.payloadR2Key);
+          return storeDiscoveredInventoryIcons({
             db,
             assetsBucket: this.env.ASSETS_BUCKET,
-            candidates: loaded.payload!.discoveredIconCandidates,
-          }),
+            candidates: payload.discoveredIconCandidates,
+          });
+        },
       );
       log.info("stored discovered inventory icons", { ...totals.discoveredIcons });
 
       totals.catalogIcons = await step.do<InventoryCatalogIconResult>(
         "store-catalog-icons",
         { retries: { limit: 2, delay: "10 seconds", backoff: "exponential" } },
-        async () =>
-          storeCatalogInventoryIcons({
+        async () => {
+          const payload = await loadPayload(loaded.job.payloadR2Key);
+          return storeCatalogInventoryIcons({
             db,
             assetsBucket: this.env.ASSETS_BUCKET,
             cacheKv: this.env.CACHE_KV,
-            candidates: loaded.payload!.matchedAppCandidates,
-            now: loaded.payload!.processedAt,
-          }),
+            candidates: payload.matchedAppCandidates,
+            now: payload.processedAt,
+          });
+        },
       );
       log.info("stored catalog inventory icons", { ...totals.catalogIcons });
 
       totals.suggestions = await step.do<InventoryIngestionStepResult>(
         "create-suggestions",
         { retries: { limit: 2, delay: "10 seconds", backoff: "exponential" } },
-        async () =>
-          createInventoryIngestionSuggestions({
+        async () => {
+          const payload = await loadPayload(loaded.job.payloadR2Key);
+          return createInventoryIngestionSuggestions({
             db,
-            candidates: loaded.payload!.matchedAppCandidates,
-            now: loaded.payload!.processedAt,
-          }),
+            candidates: payload.matchedAppCandidates,
+            now: payload.processedAt,
+          });
+        },
       );
       log.info("created inventory ingestion suggestions", { ...totals.suggestions });
 

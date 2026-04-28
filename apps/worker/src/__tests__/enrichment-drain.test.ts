@@ -12,7 +12,7 @@ import {
   jobFailures,
 } from "@versioneer/db";
 
-import { listEnrichmentCandidates } from "../enrichment";
+import { listEnrichmentCandidates, summarizeEnrichmentWorkflowError } from "../enrichment";
 import { EnrichmentDrainWorkflow } from "../workflows/enrichment-drain";
 
 const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
@@ -28,15 +28,22 @@ function createWorkflowInstance() {
   return instance as EnrichmentDrainWorkflow;
 }
 
-function createStep() {
-  return {
+type MockWorkflowStep = WorkflowStep & { outputs: Map<string, unknown> };
+
+function createStep(): MockWorkflowStep {
+  const outputs = new Map<string, unknown>();
+  const step = {
+    outputs,
     do: vi.fn<
       (_name: string, optionsOrCallback: unknown, maybeCallback?: unknown) => Promise<unknown>
-    >(async (_name: string, optionsOrCallback: unknown, maybeCallback?: unknown) => {
+    >(async (name: string, optionsOrCallback: unknown, maybeCallback?: unknown) => {
       const callback = typeof optionsOrCallback === "function" ? optionsOrCallback : maybeCallback;
-      return (callback as () => Promise<unknown>)();
+      const output = await (callback as () => Promise<unknown>)();
+      outputs.set(name, output);
+      return output;
     }),
-  } as unknown as WorkflowStep;
+  };
+  return step as unknown as MockWorkflowStep;
 }
 
 async function insertRun(db: ReturnType<typeof createDb>, runId: string) {
@@ -118,7 +125,18 @@ describe("EnrichmentDrainWorkflow", () => {
 
     const workflow = createWorkflowInstance();
     const event = { payload: { runId, trigger: "manual" } } as WorkflowEvent<EnrichmentDrainJob>;
-    await workflow.run(event, createStep());
+    const step = createStep();
+    await workflow.run(event, step);
+
+    const firstBatchOutput = step.outputs.get("enrich-discoveries-1");
+    expect(firstBatchOutput).toMatchObject({
+      candidateCount: 25,
+      attempted: 25,
+      succeeded: 25,
+      failed: 0,
+    });
+    expect(firstBatchOutput).not.toHaveProperty("attemptedIds");
+    expect(JSON.stringify(firstBatchOutput).length).toBeLessThan(1024);
 
     const run = await db.select().from(cronJobRuns).where(eq(cronJobRuns.id, runId)).get();
     expect(run?.status).toBe("completed");
@@ -164,5 +182,14 @@ describe("EnrichmentDrainWorkflow", () => {
       .get();
     expect(failure?.status).toBe("open");
     expect(failure?.errorMessage).toBe("workflow unavailable");
+  });
+
+  it("keeps workflow-facing enrichment errors bounded", () => {
+    const longError = "x".repeat(10_000);
+
+    const summary = summarizeEnrichmentWorkflowError(longError);
+
+    expect(summary.length).toBeLessThan(600);
+    expect(summary.endsWith("...")).toBe(true);
   });
 });
