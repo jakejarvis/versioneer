@@ -83,6 +83,15 @@ function installTrustBlocksOneClick(reasons: InstallTrustReason[]): boolean {
   );
 }
 
+function isHttpsDownloadUrl(value: string | null | undefined): boolean {
+  if (!value) return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function deriveInstallTrust(params: {
   decision: InventoryResult["decision"];
   resolvedStrategy: InstallStrategy | null;
@@ -144,7 +153,7 @@ function deriveInstallTrust(params: {
     params.resolvedStrategy === "pkg_install"
   ) {
     const reasons: InstallTrustReason[] = [];
-    if (!params.artifact?.downloadUrl) reasons.push("missing_artifact");
+    if (!isHttpsDownloadUrl(params.artifact?.downloadUrl)) reasons.push("missing_artifact");
     if (!params.artifact?.sha256) reasons.push("missing_sha256");
     if (!params.installedApp.bundleId) reasons.push("missing_bundle_id");
     if (!params.installedApp.teamId) reasons.push("missing_team_id");

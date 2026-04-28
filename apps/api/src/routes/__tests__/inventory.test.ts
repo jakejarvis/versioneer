@@ -369,6 +369,75 @@ describe("POST /v1/inventory/check", () => {
     });
   });
 
+  it("suppresses one-click install for non-HTTPS catalog artifacts", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db, {
+      canonicalName: "Insecure Artifact App",
+      status: "public",
+    });
+    await seedAlias(db, testApp.id, {
+      aliasType: "bundle_id",
+      value: "com.example.insecureartifact",
+      normalizedValue: "com.example.insecureartifact",
+    });
+    const source = await seedSource(db, testApp.id, {
+      sourceType: "github_releases",
+      parserKey: "github_releases",
+      reviewStatus: "approved",
+      role: "authority",
+      status: "active",
+      lastSuccessAt: TEST_NOW.toISOString(),
+    });
+    const release = await seedRelease(db, testApp.id, {
+      versionRaw: "2.0.0",
+      versionNormalized: normalizeVersion("2.0.0"),
+      channel: "stable",
+      status: "active",
+      publishedBySourceId: source.id,
+      releasedAt: "2026-03-12T00:00:00Z",
+    });
+    const artifact = await seedArtifact(db, release.id, {
+      artifactType: "dmg",
+      url: "http://example.com/insecure-2.0.0.dmg",
+      architecture: "universal",
+      sha256: "securehash",
+      isPrimary: true,
+    });
+    await seedLatestRelease(db, {
+      appId: testApp.id,
+      releaseId: release.id,
+      authoritySourceId: source.id,
+      artifactId: artifact.id,
+      targetArchitecture: "arm64",
+      versionNormalized: release.versionNormalized,
+      versionRaw: release.versionRaw,
+      releasedAt: release.releasedAt!,
+      installStrategy: "dmg_copy_replace",
+    });
+
+    const res = await postInventory({
+      client: { osVersion: "15.0", systemArchitecture: "arm64" },
+      apps: [
+        {
+          appName: "Insecure Artifact App",
+          bundleId: "com.example.insecureartifact",
+          teamId: "TEAM123456",
+          version: "1.0.0",
+        },
+      ],
+    });
+    const body = await readInventoryResponse(res);
+    const result = body.results[0]!;
+    expect(result.decision).toBe("update_available");
+    expect(result.release.artifact?.downloadUrl).toBe("http://example.com/insecure-2.0.0.dmg");
+    expect(result.install.strategy).toBeNull();
+    expect(result.install.trust).toEqual({
+      status: "manual_only",
+      resolvedStrategy: "dmg_copy_replace",
+      reasons: ["missing_artifact"],
+    });
+  });
+
   it("keeps Sparkle installs enabled when the public key is not pre-approved", async () => {
     const db = getDb(env.DB);
     const testApp = await seedApp(db, {

@@ -8,12 +8,30 @@ import { captureServerEvent } from "@versioneer/core/observability";
 import { createDb } from "@versioneer/db";
 import { adminUsers, adminSessions, adminAccounts, adminVerifications } from "@versioneer/db";
 
-export function createAuth(d1: D1Database) {
-  const db = createDb(d1);
-  const allowedEmails = (env.ALLOWED_ADMIN_EMAILS ?? "")
+export function getAllowedAdminEmails(): string[] {
+  return (env.ALLOWED_ADMIN_EMAILS ?? "")
     .split(",")
     .map((e: string) => e.trim().toLowerCase())
     .filter(Boolean);
+}
+
+export function assertAdminAllowListConfigured(allowedEmails: string[]): void {
+  if (env.ENVIRONMENT === "production" && allowedEmails.length === 0) {
+    throw new Error("ALLOWED_ADMIN_EMAILS must be configured in production");
+  }
+}
+
+export function adminEmailIsAllowed(
+  email: string | null | undefined,
+  allowedEmails: string[],
+): boolean {
+  return allowedEmails.length === 0 || (!!email && allowedEmails.includes(email.toLowerCase()));
+}
+
+export function createAuth(d1: D1Database) {
+  const db = createDb(d1);
+  const allowedEmails = getAllowedAdminEmails();
+  assertAdminAllowListConfigured(allowedEmails);
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -36,8 +54,7 @@ export function createAuth(d1: D1Database) {
     hooks: {
       after: createAuthMiddleware(async (ctx) => {
         if (allowedEmails.length > 0 && ctx.context?.newSession) {
-          const email = ctx.context.newSession.user.email?.toLowerCase();
-          if (!email || !allowedEmails.includes(email)) {
+          if (!adminEmailIsAllowed(ctx.context.newSession.user.email, allowedEmails)) {
             throw new APIError("FORBIDDEN", {
               message: "Access restricted to authorized users",
             });

@@ -59,7 +59,7 @@ export const macAppStoreParser: SourceParser = {
               {
                 url: entry.trackViewUrl,
                 type: "mac_app_store",
-                sizeBytes: entry.fileSizeBytes ? Number(entry.fileSizeBytes) : undefined,
+                sizeBytes: parsePositiveInt(entry.fileSizeBytes),
                 minOsVersion: entry.minimumOsVersion,
               },
             ]
@@ -90,3 +90,11 @@ export const macAppStoreParser: SourceParser = {
     }
   },
 };
+
+function parsePositiveInt(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}

@@ -1,7 +1,7 @@
 interface GitHubRelease {
   tag_name: string;
   name: string | null;
-  body: string | null;
+  body_html?: string | null;
   published_at: string | null;
   html_url: string;
   prerelease: boolean;
@@ -18,10 +18,11 @@ interface Release {
 }
 
 const GITHUB_API_URL = "https://api.github.com/repos/jakejarvis/versioneer/releases?per_page=50";
+const CACHE_NAME = "gh-releases-html-v2";
 const CACHE_TTL_SECONDS = 300;
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const cache = await caches.open("gh-releases");
+  const cache = await caches.open(CACHE_NAME);
   const cacheKey = new Request(context.request.url, { method: "GET" });
 
   const cached = await cache.match(cacheKey);
@@ -31,7 +32,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
     upstream = await fetch(GITHUB_API_URL, {
       headers: {
-        Accept: "application/vnd.github.html+json",
+        Accept: "application/vnd.github.full+json",
         "User-Agent": "versioneer-web",
         ...("GITHUB_TOKEN" in context.env && context.env.GITHUB_TOKEN
           ? { Authorization: `token ${context.env.GITHUB_TOKEN as string}` }
@@ -71,7 +72,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     .map((r) => ({
       tag_name: r.tag_name,
       name: r.name,
-      body_html: r.body ?? null,
+      body_html: typeof r.body_html === "string" ? r.body_html : null,
       published_at: r.published_at,
       html_url: r.html_url,
       prerelease: r.prerelease,

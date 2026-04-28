@@ -117,6 +117,26 @@ describe("macAppStoreParser", () => {
     expect(artifacts[0]!.minOsVersion).toBe("12.0");
   });
 
+  it("omits invalid App Store artifact sizes", () => {
+    const response = JSON.stringify({
+      resultCount: 1,
+      results: [
+        {
+          trackId: 803453959,
+          bundleId: "com.example.badsize",
+          trackName: "Bad Size",
+          version: "1.0.0",
+          fileSizeBytes: "not-a-number",
+          trackViewUrl: "https://apps.apple.com/us/app/bad-size/id803453959",
+          kind: "mac-software",
+        },
+      ],
+    });
+
+    const result = macAppStoreParser.parse(response);
+    expect(result.releases[0]!.artifacts[0]!.sizeBytes).toBeUndefined();
+  });
+
   it("stores metadata including trackId and artist", () => {
     const result = macAppStoreParser.parse(SAMPLE_RESPONSE);
     const meta = result.releases[0]!.metadata!;

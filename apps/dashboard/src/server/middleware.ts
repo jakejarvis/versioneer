@@ -1,7 +1,7 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
 
-import { createAuth } from "@/lib/auth";
+import { adminEmailIsAllowed, createAuth, getAllowedAdminEmails } from "@/lib/auth";
 
 export const authMiddleware = createMiddleware().server(async ({ next, request }) => {
   const auth = createAuth(env.DB);
@@ -9,6 +9,10 @@ export const authMiddleware = createMiddleware().server(async ({ next, request }
 
   if (!session) {
     throw new Response(null, { status: 302, headers: { Location: "/login" } });
+  }
+
+  if (!adminEmailIsAllowed(session.user.email, getAllowedAdminEmails())) {
+    throw new Response("Forbidden", { status: 403 });
   }
 
   return next({

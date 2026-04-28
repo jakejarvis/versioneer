@@ -1,7 +1,7 @@
 import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
 
-import { createAuth } from "@/lib/auth";
+import { adminEmailIsAllowed, createAuth, getAllowedAdminEmails } from "@/lib/auth";
 
 import { authMiddleware } from "./middleware";
 
@@ -26,6 +26,9 @@ export const getSession = createServerFn({ method: "GET" })
     const auth = createAuth(env.DB);
     const session = await auth.api.getSession({ headers: context.request.headers });
     if (!session) {
+      return null;
+    }
+    if (!adminEmailIsAllowed(session.user.email, getAllowedAdminEmails())) {
       return null;
     }
     return {

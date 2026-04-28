@@ -70,6 +70,14 @@ function shouldPreferArtifact(current: ArtifactRow, candidate: ArtifactRow): boo
   return candidate.id > current.id;
 }
 
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function collapseReleaseObservations(rows: ReleaseObservationRow[]): ReleaseObservationRow[] {
   const deduped = new Map<string, ReleaseObservationRow>();
 
@@ -411,7 +419,7 @@ export const createReleaseArtifact = createServerFn({ method: "POST" })
     z.object({
       releaseId: z.string().min(1),
       artifactType: artifactTypeSchema,
-      url: z.string().url(),
+      url: z.string().url().refine(isHttpsUrl, "Artifact URL must use HTTPS"),
       architecture: artifactArchitectureSchema,
       sha256: z.string().max(256).nullable().optional(),
       sizeBytes: z.number().int().positive().nullable().optional(),
