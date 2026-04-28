@@ -5,8 +5,9 @@ export function isOsVersionCompatible(
 ): boolean {
   if (!minimum) return true; // No minimum means compatible with any OS
   if (!current) return true; // Unknown client OS, assume compatible
-  const curParts = current.split(".").map(Number);
-  const minParts = minimum.split(".").map(Number);
+  const curParts = parseVersionParts(current);
+  const minParts = parseVersionParts(minimum);
+  if (!curParts || !minParts) return false;
   for (let i = 0; i < Math.max(curParts.length, minParts.length); i++) {
     const c = curParts[i] ?? 0;
     const m = minParts[i] ?? 0;
@@ -14,6 +15,18 @@ export function isOsVersionCompatible(
     if (c < m) return false;
   }
   return true; // equal
+}
+
+function parseVersionParts(value: string): number[] | null {
+  const parts = value.split(".");
+  if (parts.length === 0) return null;
+
+  const parsed = parts.map((part) => {
+    if (!/^\d+$/.test(part)) return null;
+    return Number(part);
+  });
+
+  return parsed.every((part): part is number => part !== null) ? parsed : null;
 }
 
 /** Returns true if an artifact's architecture is compatible with the client's. */

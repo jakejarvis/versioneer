@@ -22,6 +22,8 @@ import type { CacheKV } from "../cache";
 import { toEpochMs, toISODate } from "../dates";
 import type { RecomputeLatestEnv, RecomputeLatestJob } from "./types";
 
+const D1_PARAM_LIMIT = 100;
+
 /**
  * Infer install strategy from source type and artifact type.
  * Admin override on the app record takes precedence.
@@ -79,6 +81,32 @@ function candidateForTarget(
   if (releaseArtifacts.length === 0) return { release, artifact: null };
   const artifact = selectBestArtifactForTarget(releaseArtifacts, targetArchitecture);
   return artifact ? { release, artifact } : null;
+}
+
+function chunkStrings(values: string[], chunkSize: number): string[][] {
+  const chunks: string[][] = [];
+  for (let index = 0; index < values.length; index += chunkSize) {
+    chunks.push(values.slice(index, index + chunkSize));
+  }
+  return chunks;
+}
+
+async function selectArtifactsForReleases(
+  db: ReturnType<typeof createDb>,
+  releaseIds: string[],
+): Promise<ArtifactRow[]> {
+  const rows: ArtifactRow[] = [];
+  for (const releaseIdChunk of chunkStrings(releaseIds, D1_PARAM_LIMIT)) {
+    if (releaseIdChunk.length === 0) continue;
+    rows.push(
+      ...(await db
+        .select()
+        .from(artifacts)
+        .where(inArray(artifacts.releaseId, releaseIdChunk))
+        .all()),
+    );
+  }
+  return rows;
 }
 
 export async function handleRecomputeLatest(
@@ -159,19 +187,10 @@ export async function handleRecomputeLatest(
         await db.update(releases).set({ releasedAt }).where(eq(releases.id, release.id));
       }
     }
-    const releaseArtifacts =
-      candidateReleases.length > 0
-        ? await db
-            .select()
-            .from(artifacts)
-            .where(
-              inArray(
-                artifacts.releaseId,
-                candidateReleases.map((release) => release.id),
-              ),
-            )
-            .all()
-        : [];
+    const releaseArtifacts = await selectArtifactsForReleases(
+      db,
+      candidateReleases.map((release) => release.id),
+    );
     const artifactsByRelease = new Map<string, ArtifactRow[]>();
     for (const artifact of releaseArtifacts) {
       const rows = artifactsByRelease.get(artifact.releaseId) ?? [];

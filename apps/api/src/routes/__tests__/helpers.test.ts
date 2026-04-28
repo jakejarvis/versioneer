@@ -38,6 +38,11 @@ describe("isOsVersionCompatible", () => {
     expect(isOsVersionCompatible("15.0.0", "15")).toBe(true);
     expect(isOsVersionCompatible("14.7", "15.0.0")).toBe(false);
   });
+
+  it("fails closed when a version string is malformed", () => {
+    expect(isOsVersionCompatible("14.0", "macOS 15")).toBe(false);
+    expect(isOsVersionCompatible("15.x", "15.0")).toBe(false);
+  });
 });
 
 describe("isArchCompatible", () => {

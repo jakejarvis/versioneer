@@ -23,7 +23,9 @@ const CACHE_TTL_SECONDS = 300;
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const cache = await caches.open(CACHE_NAME);
-  const cacheKey = new Request(context.request.url, { method: "GET" });
+  const cacheUrl = new URL(context.request.url);
+  cacheUrl.search = "";
+  const cacheKey = new Request(cacheUrl.toString(), { method: "GET" });
 
   const cached = await cache.match(cacheKey);
   if (cached) return cached;

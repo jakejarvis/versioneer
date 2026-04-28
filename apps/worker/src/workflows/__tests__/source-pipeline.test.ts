@@ -658,4 +658,60 @@ describe("SourcePipelineWorkflow", () => {
     const cached = await getCachedLatest(env.CACHE_KV, appId, "stable", "arm64");
     expect(cached?.releasedAt).toBe("2026-02-11T06:36:00.000Z");
   });
+
+  it("recomputes latest releases when an app has more than one D1 parameter page of artifacts", async () => {
+    const db = createDb(env.DB);
+
+    const appId = generateId(idPrefixes.app);
+    await db.insert(apps).values({
+      id: appId,
+      slug: `wf-many-artifacts-${appId.slice(-8)}`,
+      canonicalName: "Many Artifacts App",
+      status: "public",
+      createdAt: TEST_NOW_ISO,
+      updatedAt: TEST_NOW_ISO,
+    });
+
+    let expectedReleaseId = "";
+    for (let index = 0; index < 105; index++) {
+      const version = `1.0.${index}`;
+      const releaseId = generateId(idPrefixes.release);
+      expectedReleaseId = releaseId;
+      await db.insert(releases).values({
+        id: releaseId,
+        appId,
+        versionRaw: version,
+        versionNormalized: normalizeVersion(version),
+        channel: "stable",
+        status: "active",
+        isPrerelease: false,
+        createdAt: TEST_NOW_ISO,
+        updatedAt: TEST_NOW_ISO,
+      });
+
+      const artifactUrl = `https://example.com/many-artifacts-${index}.dmg`;
+      const artifactIdentity = buildArtifactIdentity({ url: artifactUrl });
+      await db.insert(artifacts).values({
+        id: generateId(idPrefixes.artifact),
+        releaseId,
+        artifactType: "dmg",
+        url: artifactUrl,
+        canonicalUrl: artifactIdentity.canonicalUrl,
+        identityKey: artifactIdentity.identityKey,
+        architecture: "universal",
+        isPrimary: true,
+        createdAt: TEST_NOW_ISO,
+      });
+    }
+
+    await handleRecomputeLatest({ appId, channel: "stable" }, env);
+
+    const latestRows = await db
+      .select()
+      .from(appLatestReleases)
+      .where(eq(appLatestReleases.appId, appId))
+      .all();
+    expect(latestRows).toHaveLength(2);
+    expect(latestRows.every((row) => row.releaseId === expectedReleaseId)).toBe(true);
+  });
 });

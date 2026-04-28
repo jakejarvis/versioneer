@@ -25,7 +25,9 @@ import {
 } from "@versioneer/db";
 import {
   artifactArchitectureSchema,
+  rankArtifactForTarget,
   targetArchitectureSchema,
+  type TargetArchitecture,
 } from "@versioneer/schemas/architecture";
 import { artifactTypeSchema } from "@versioneer/schemas/releases";
 
@@ -76,6 +78,16 @@ function isHttpsUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function releaseSupportsTargetArchitecture(
+  releaseArtifacts: ArtifactRow[],
+  targetArchitecture: TargetArchitecture,
+): boolean {
+  if (releaseArtifacts.length === 0) return true;
+  return releaseArtifacts.some(
+    (artifact) => rankArtifactForTarget(artifact.architecture, targetArchitecture) >= 0,
+  );
 }
 
 function collapseReleaseObservations(rows: ReleaseObservationRow[]): ReleaseObservationRow[] {
@@ -530,6 +542,29 @@ export const pinRelease = createServerFn({ method: "POST" })
     if (!release) throw new Error("Not found");
 
     const now = new Date().toISOString();
+    const latestRow = await db
+      .select()
+      .from(appLatestReleases)
+      .where(
+        and(
+          eq(appLatestReleases.appId, release.appId),
+          eq(appLatestReleases.channel, release.channel),
+          eq(appLatestReleases.targetArchitecture, targetArchitecture),
+        ),
+      )
+      .get();
+    if (!latestRow) {
+      throw new Error("No latest release row exists for target architecture");
+    }
+
+    const releaseArtifacts = await db
+      .select()
+      .from(artifacts)
+      .where(eq(artifacts.releaseId, release.id))
+      .all();
+    if (!releaseSupportsTargetArchitecture(releaseArtifacts, targetArchitecture)) {
+      throw new Error("Release artifacts do not support target architecture");
+    }
 
     // Update the latest release row to pin this release
     await db
@@ -568,6 +603,23 @@ export const unpinRelease = createServerFn({ method: "POST" })
     const db = createDb(env.DB);
     const release = await db.select().from(releases).where(eq(releases.id, id)).get();
     if (!release) throw new Error("Not found");
+    const latestRow = await db
+      .select()
+      .from(appLatestReleases)
+      .where(
+        and(
+          eq(appLatestReleases.appId, release.appId),
+          eq(appLatestReleases.channel, release.channel),
+          eq(appLatestReleases.targetArchitecture, targetArchitecture),
+        ),
+      )
+      .get();
+    if (!latestRow) {
+      throw new Error("No latest release row exists for target architecture");
+    }
+    if (latestRow.pinnedReleaseId !== id) {
+      throw new Error("Release is not pinned for target architecture");
+    }
 
     await db
       .update(appLatestReleases)

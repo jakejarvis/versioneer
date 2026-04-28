@@ -640,28 +640,36 @@ export const reorderSources = createServerFn({ method: "POST" })
       requestedSourceIds: data.sourceIds,
     });
 
-    // Update ordinals and roles based on position
+    // Keep ordinal/role reassignment atomic so a failed write cannot leave two authorities.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- collected for db.batch()
+    const writes: any[] = [];
     for (let i = 0; i < data.sourceIds.length; i++) {
       const sourceId = data.sourceIds[i]!;
       const role = reorderedRoles.get(sourceId);
       if (!role) continue;
 
-      await db
-        .update(sources)
-        .set({ ordinal: i, role, updatedAt: now })
-        .where(eq(sources.id, sourceId));
+      writes.push(
+        db
+          .update(sources)
+          .set({ ordinal: i, role, updatedAt: now })
+          .where(eq(sources.id, sourceId)),
+      );
     }
 
-    await db.insert(auditLog).values({
-      id: generateId(idPrefixes.auditLog),
-      eventType: "sources_reordered",
-      actorType: "admin",
-      actorId: context.user.email,
-      targetType: "app",
-      targetId: data.appId,
-      payloadJson: JSON.stringify({ sourceIds: data.sourceIds }),
-      createdAt: now,
-    });
+    writes.push(
+      db.insert(auditLog).values({
+        id: generateId(idPrefixes.auditLog),
+        eventType: "sources_reordered",
+        actorType: "admin",
+        actorId: context.user.email,
+        targetType: "app",
+        targetId: data.appId,
+        payloadJson: JSON.stringify({ sourceIds: data.sourceIds }),
+        createdAt: now,
+      }),
+    );
+
+    await db.batch(writes as [(typeof writes)[0], ...typeof writes]);
 
     await captureAdminEvent(context.user, "sources_reordered", {
       target_type: "app",
