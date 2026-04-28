@@ -20,11 +20,13 @@ struct PrivilegedHelperClientTests {
 
     _ = try await client.performOperation(
       executionId: "exec_test",
-      stagingDirectory: FileManager.default.temporaryDirectory
+      stagingDirectory: FileManager.default.temporaryDirectory,
+      manifestSHA256: testManifestSHA256
     )
 
     #expect(registration.registerCalls == 1)
     #expect(connection.requests.count == 1)
+    #expect(connection.requests.first?.manifestSHA256 == testManifestSHA256)
   }
 
   @Test func failsWhenHelperApprovalIsRequired() async {
@@ -41,7 +43,8 @@ struct PrivilegedHelperClientTests {
     do {
       _ = try await client.performOperation(
         executionId: "exec_test",
-        stagingDirectory: FileManager.default.temporaryDirectory
+        stagingDirectory: FileManager.default.temporaryDirectory,
+        manifestSHA256: testManifestSHA256
       )
       Issue.record("Expected approval-required failure")
     } catch let error as InstallError {
@@ -73,7 +76,8 @@ struct PrivilegedHelperClientTests {
     do {
       _ = try await client.performOperation(
         executionId: "exec_test",
-        stagingDirectory: FileManager.default.temporaryDirectory
+        stagingDirectory: FileManager.default.temporaryDirectory,
+        manifestSHA256: testManifestSHA256
       )
       Issue.record("Expected registration failure")
     } catch let error as InstallError {
@@ -98,7 +102,8 @@ struct PrivilegedHelperClientTests {
     do {
       _ = try await client.performOperation(
         executionId: "exec_test",
-        stagingDirectory: FileManager.default.temporaryDirectory
+        stagingDirectory: FileManager.default.temporaryDirectory,
+        manifestSHA256: testManifestSHA256
       )
       Issue.record("Expected connection failure")
     } catch let error as InstallError {
@@ -128,7 +133,8 @@ struct PrivilegedHelperClientTests {
 
     let result = try await client.performOperation(
       executionId: "exec_test",
-      stagingDirectory: FileManager.default.temporaryDirectory
+      stagingDirectory: FileManager.default.temporaryDirectory,
+      manifestSHA256: testManifestSHA256
     )
     #expect(result.succeeded)
   }
@@ -151,7 +157,8 @@ struct PrivilegedHelperClientTests {
 
     let result = try await client.performOperation(
       executionId: "exec_test",
-      stagingDirectory: FileManager.default.temporaryDirectory
+      stagingDirectory: FileManager.default.temporaryDirectory,
+      manifestSHA256: testManifestSHA256
     )
     #expect(result.succeeded)
     #expect(registration.unregisterCalls == 1)
@@ -177,7 +184,8 @@ struct PrivilegedHelperClientTests {
     do {
       _ = try await client.performOperation(
         executionId: "exec_test",
-        stagingDirectory: FileManager.default.temporaryDirectory
+        stagingDirectory: FileManager.default.temporaryDirectory,
+        manifestSHA256: testManifestSHA256
       )
       Issue.record("Expected connection failure")
     } catch let error as InstallError {
@@ -191,6 +199,8 @@ struct PrivilegedHelperClientTests {
     }
   }
 }
+
+private let testManifestSHA256 = String(repeating: "a", count: 64)
 
 private final class MockRegistrationController: PrivilegedHelperRegistrationControlling,
   @unchecked Sendable

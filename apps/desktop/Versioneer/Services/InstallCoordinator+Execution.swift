@@ -309,21 +309,29 @@ extension InstallCoordinator {
       sourceAppURL: sourceAppURL,
       stagingDirectory: stagingDirectory
     )
+    let sourceSHA256 = try await preparedSourceSHA256(at: helperSourceURL)
+    let backupRelativePath = "helper-backups/\(destinationAppURL.lastPathComponent)"
+    try FileManager.default.createDirectory(
+      at: stagingDirectory.appendingPathComponent("helper-backups", isDirectory: true),
+      withIntermediateDirectories: true
+    )
     let manifest = PreparedPrivilegedOperation(
       executionId: executionId,
       operationType: .replaceApp,
       sourceRelativePath: relativePath(from: stagingDirectory, to: helperSourceURL),
+      sourceSHA256: sourceSHA256,
       destinationPath: destinationAppURL.path,
-      backupRelativePath: "helper-backups/\(destinationAppURL.lastPathComponent)",
+      backupRelativePath: backupRelativePath,
       installTarget: nil,
       caskToken: nil,
       masAppId: nil,
       masCliPath: nil
     )
-    try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
+    let manifestSHA256 = try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
     _ = try await privilegedHelperClient.performOperation(
       executionId: executionId,
-      stagingDirectory: stagingDirectory
+      stagingDirectory: stagingDirectory,
+      manifestSHA256: manifestSHA256
     )
   }
 
@@ -332,10 +340,12 @@ extension InstallCoordinator {
     packageURL: URL,
     stagingDirectory: URL
   ) async throws {
+    let sourceSHA256 = try await preparedSourceSHA256(at: packageURL)
     let manifest = PreparedPrivilegedOperation(
       executionId: executionId,
       operationType: .installPackage,
       sourceRelativePath: relativePath(from: stagingDirectory, to: packageURL),
+      sourceSHA256: sourceSHA256,
       destinationPath: "/",
       backupRelativePath: nil,
       installTarget: "/",
@@ -343,10 +353,11 @@ extension InstallCoordinator {
       masAppId: nil,
       masCliPath: nil
     )
-    try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
+    let manifestSHA256 = try writePreparedPrivilegedOperation(manifest, to: stagingDirectory)
     _ = try await privilegedHelperClient.performOperation(
       executionId: executionId,
-      stagingDirectory: stagingDirectory
+      stagingDirectory: stagingDirectory,
+      manifestSHA256: manifestSHA256
     )
   }
 
@@ -629,12 +640,19 @@ extension InstallCoordinator {
   func writePreparedPrivilegedOperation(
     _ manifest: PreparedPrivilegedOperation,
     to stagingDirectory: URL
-  ) throws {
+  ) throws -> String {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     let data = try encoder.encode(manifest)
     try data.write(
       to: PreparedPrivilegedOperation.manifestURL(in: stagingDirectory), options: [.atomic])
+    return PrivilegedOperationDigest.sha256Hex(for: data)
+  }
+
+  private func preparedSourceSHA256(at sourceURL: URL) async throws -> String {
+    try await Task.detached(priority: .userInitiated) {
+      try PrivilegedOperationDigest.sourceSHA256(at: sourceURL)
+    }.value
   }
 
   private func relativePath(from root: URL, to child: URL) -> String {

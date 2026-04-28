@@ -20,6 +20,9 @@ nonisolated enum PrivilegedOperationValidationError: LocalizedError {
   case destinationPathInvalid(String)
   case backupPathInvalid(String)
   case symlinkRejected(String)
+  case manifestHashMismatch
+  case sourceDigestMissing
+  case sourceDigestMismatch
   case unsupportedInstallTarget(String)
   case unsupportedOperation(String)
   case stagingDirectoryPermissionsInvalid(String)
@@ -41,6 +44,12 @@ nonisolated enum PrivilegedOperationValidationError: LocalizedError {
       message
     case .symlinkRejected(let message):
       message
+    case .manifestHashMismatch:
+      "The privileged install manifest did not match the trusted request digest."
+    case .sourceDigestMissing:
+      "The privileged install manifest did not include a trusted source digest."
+    case .sourceDigestMismatch:
+      "The privileged install source changed after Versioneer prepared it."
     case .unsupportedInstallTarget(let target):
       "Privileged package installs must target /. Received \(target)."
     case .unsupportedOperation(let message):
@@ -189,6 +198,9 @@ nonisolated struct PrivilegedOperationValidator {
       backupURL = nil
     }
 
+    try validateManifestDigest(manifestData, expectedSHA256: request.manifestSHA256)
+    try validateSourceDigest(manifest.sourceSHA256, sourceURL: sourceURL)
+
     return ValidatedPrivilegedOperation(
       executionId: request.executionId,
       stagingDirectory: stagingDirectory,
@@ -231,6 +243,28 @@ nonisolated struct PrivilegedOperationValidator {
     }
 
     return canonicalURL
+  }
+
+  private func validateManifestDigest(_ manifestData: Data, expectedSHA256: String) throws {
+    guard let expectedSHA256 = normalizedSHA256(expectedSHA256) else {
+      throw PrivilegedOperationValidationError.manifestHashMismatch
+    }
+
+    let actualSHA256 = PrivilegedOperationDigest.sha256Hex(for: manifestData)
+    guard actualSHA256 == expectedSHA256 else {
+      throw PrivilegedOperationValidationError.manifestHashMismatch
+    }
+  }
+
+  private func validateSourceDigest(_ expectedSHA256: String?, sourceURL: URL) throws {
+    guard let expectedSHA256 = normalizedSHA256(expectedSHA256) else {
+      throw PrivilegedOperationValidationError.sourceDigestMissing
+    }
+
+    let actualSHA256 = try PrivilegedOperationDigest.sourceSHA256(at: sourceURL)
+    guard actualSHA256 == expectedSHA256 else {
+      throw PrivilegedOperationValidationError.sourceDigestMismatch
+    }
   }
 
   private func validateDestinationPath(
@@ -403,5 +437,18 @@ nonisolated struct PrivilegedOperationValidator {
     let rootPath = root.standardizedFileURL.path
     let candidatePath = candidate.standardizedFileURL.path
     return candidatePath == rootPath || candidatePath.hasPrefix(rootPath + "/")
+  }
+
+  private func normalizedSHA256(_ value: String?) -> String? {
+    guard let value else { return nil }
+    let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    guard normalized.count == 64,
+      normalized.unicodeScalars.allSatisfy({
+        (48...57).contains($0.value) || (97...102).contains($0.value)
+      })
+    else {
+      return nil
+    }
+    return normalized
   }
 }

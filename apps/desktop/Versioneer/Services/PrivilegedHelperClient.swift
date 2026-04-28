@@ -21,8 +21,11 @@ nonisolated protocol PrivilegedHelperConnectionProviding: Sendable {
 }
 
 nonisolated protocol PrivilegedHelperClientProtocol: Sendable {
-  nonisolated func performOperation(executionId: String, stagingDirectory: URL) async throws
-    -> PrivilegedOperationResult
+  nonisolated func performOperation(
+    executionId: String,
+    stagingDirectory: URL,
+    manifestSHA256: String
+  ) async throws -> PrivilegedOperationResult
   nonisolated func registrationStatus() -> PrivilegedHelperRegistrationStatus
 }
 
@@ -215,14 +218,17 @@ nonisolated struct PrivilegedHelperClient: PrivilegedHelperClientProtocol {
     self.connectionProvider = connectionProvider
   }
 
-  func performOperation(executionId: String, stagingDirectory: URL) async throws
-    -> PrivilegedOperationResult
-  {
+  func performOperation(
+    executionId: String,
+    stagingDirectory: URL,
+    manifestSHA256: String
+  ) async throws -> PrivilegedOperationResult {
     try await ensureHelperIsReady()
     return try await connectionProvider.perform(
       request: PrivilegedOperationRequest(
         executionId: executionId,
-        stagingDirectoryPath: stagingDirectory.path
+        stagingDirectoryPath: stagingDirectory.path,
+        manifestSHA256: manifestSHA256
       ))
   }
 

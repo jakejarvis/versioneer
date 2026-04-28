@@ -26,12 +26,37 @@ nonisolated struct PreparedPrivilegedOperation: Codable, Sendable {
   let executionId: String
   let operationType: PrivilegedOperationType
   let sourceRelativePath: String
+  let sourceSHA256: String?
   let destinationPath: String
   let backupRelativePath: String?
   let installTarget: String?
   let caskToken: String?
   let masAppId: String?
   let masCliPath: String?
+
+  init(
+    executionId: String,
+    operationType: PrivilegedOperationType,
+    sourceRelativePath: String,
+    sourceSHA256: String? = nil,
+    destinationPath: String,
+    backupRelativePath: String?,
+    installTarget: String?,
+    caskToken: String?,
+    masAppId: String?,
+    masCliPath: String?
+  ) {
+    self.executionId = executionId
+    self.operationType = operationType
+    self.sourceRelativePath = sourceRelativePath
+    self.sourceSHA256 = sourceSHA256
+    self.destinationPath = destinationPath
+    self.backupRelativePath = backupRelativePath
+    self.installTarget = installTarget
+    self.caskToken = caskToken
+    self.masAppId = masAppId
+    self.masCliPath = masCliPath
+  }
 
   static func manifestURL(in stagingDirectory: URL) -> URL {
     stagingDirectory.appendingPathComponent(manifestFilename)
@@ -53,27 +78,33 @@ nonisolated final class PrivilegedOperationRequest: NSObject, NSSecureCoding, @u
 
   let executionId: String
   let stagingDirectoryPath: String
+  let manifestSHA256: String
 
-  init(executionId: String, stagingDirectoryPath: String) {
+  init(executionId: String, stagingDirectoryPath: String, manifestSHA256: String) {
     self.executionId = executionId
     self.stagingDirectoryPath = stagingDirectoryPath
+    self.manifestSHA256 = manifestSHA256
   }
 
   required init?(coder: NSCoder) {
     guard let executionId = coder.decodeObject(of: NSString.self, forKey: "executionId") as String?,
       let stagingDirectoryPath = coder.decodeObject(
-        of: NSString.self, forKey: "stagingDirectoryPath") as String?
+        of: NSString.self, forKey: "stagingDirectoryPath") as String?,
+      let manifestSHA256 = coder.decodeObject(
+        of: NSString.self, forKey: "manifestSHA256") as String?
     else {
       return nil
     }
 
     self.executionId = executionId
     self.stagingDirectoryPath = stagingDirectoryPath
+    self.manifestSHA256 = manifestSHA256
   }
 
   func encode(with coder: NSCoder) {
     coder.encode(executionId as NSString, forKey: "executionId")
     coder.encode(stagingDirectoryPath as NSString, forKey: "stagingDirectoryPath")
+    coder.encode(manifestSHA256 as NSString, forKey: "manifestSHA256")
   }
 }
 

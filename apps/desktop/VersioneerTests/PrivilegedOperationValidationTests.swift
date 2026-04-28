@@ -11,7 +11,8 @@ struct PrivilegedOperationValidationTests {
 
     let request = PrivilegedOperationRequest(
       executionId: "../bad",
-      stagingDirectoryPath: sandbox.allowedStagingRoot.appendingPathComponent("exec_bad").path
+      stagingDirectoryPath: sandbox.allowedStagingRoot.appendingPathComponent("exec_bad").path,
+      manifestSHA256: placeholderManifestSHA256
     )
 
     do {
@@ -36,7 +37,8 @@ struct PrivilegedOperationValidationTests {
 
     let request = PrivilegedOperationRequest(
       executionId: "exec_test",
-      stagingDirectoryPath: externalStaging.path
+      stagingDirectoryPath: externalStaging.path,
+      manifestSHA256: placeholderManifestSHA256
     )
 
     do {
@@ -113,7 +115,8 @@ struct PrivilegedOperationValidationTests {
       executionId: "exec_staging_symlink",
       stagingDirectoryPath: symlinkedStagingRoot.appendingPathComponent(
         "exec_staging_symlink", isDirectory: true
-      ).path
+      ).path,
+      manifestSHA256: placeholderManifestSHA256
     )
 
     do {
@@ -317,6 +320,134 @@ struct PrivilegedOperationValidationTests {
     }
   }
 
+  @Test func acceptsPreparedPackageWhenManifestAndSourceDigestsMatch() throws {
+    let sandbox = try TestSandbox()
+    let context = try sandbox.makePackageContext(executionId: "exec_valid_pkg")
+    let packageURL = context.stagingDirectory.appendingPathComponent("payload/payload.pkg")
+    let sourceSHA256 = try PrivilegedOperationDigest.sourceSHA256(at: packageURL)
+
+    let manifest = PreparedPrivilegedOperation(
+      executionId: "exec_valid_pkg",
+      operationType: .installPackage,
+      sourceRelativePath: "payload/payload.pkg",
+      sourceSHA256: sourceSHA256,
+      destinationPath: "/",
+      backupRelativePath: nil,
+      installTarget: "/",
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
+    )
+    try sandbox.writeManifest(manifest, to: context.stagingDirectory)
+
+    let request = try sandbox.request(
+      executionId: "exec_valid_pkg",
+      stagingDirectory: context.stagingDirectory
+    )
+    let validatedOperation = try sandbox.validator.validate(request: request)
+
+    #expect(validatedOperation.sourceURL.path == packageURL.path)
+    #expect(validatedOperation.manifest.sourceSHA256 == sourceSHA256)
+  }
+
+  @Test func rejectsManifestMutationAfterRequestIsTrusted() throws {
+    let sandbox = try TestSandbox()
+    let context = try sandbox.makePackageContext(executionId: "exec_manifest_mutation")
+    let packageURL = context.stagingDirectory.appendingPathComponent("payload/payload.pkg")
+    let sourceSHA256 = try PrivilegedOperationDigest.sourceSHA256(at: packageURL)
+
+    let trustedManifest = PreparedPrivilegedOperation(
+      executionId: "exec_manifest_mutation",
+      operationType: .installPackage,
+      sourceRelativePath: "payload/payload.pkg",
+      sourceSHA256: sourceSHA256,
+      destinationPath: "/",
+      backupRelativePath: nil,
+      installTarget: "/",
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
+    )
+    try sandbox.writeManifest(trustedManifest, to: context.stagingDirectory)
+    let request = try sandbox.request(
+      executionId: "exec_manifest_mutation",
+      stagingDirectory: context.stagingDirectory
+    )
+
+    let mutatedManifest = PreparedPrivilegedOperation(
+      executionId: "exec_manifest_mutation",
+      operationType: .installPackage,
+      sourceRelativePath: "payload/payload.pkg",
+      sourceSHA256: sourceSHA256,
+      destinationPath: "/",
+      backupRelativePath: nil,
+      installTarget: "/",
+      caskToken: "mutated-after-request",
+      masAppId: nil,
+      masCliPath: nil
+    )
+    try sandbox.writeManifest(mutatedManifest, to: context.stagingDirectory)
+
+    do {
+      _ = try sandbox.validator.validate(request: request)
+      Issue.record("Expected manifest digest mismatch")
+    } catch let error as PrivilegedOperationValidationError {
+      guard case .manifestHashMismatch = error else {
+        Issue.record("Unexpected validation error: \(error.localizedDescription)")
+        return
+      }
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
+    }
+  }
+
+  @Test func rejectsSourceMutationAfterManifestIsTrusted() throws {
+    let sandbox = try TestSandbox()
+    let context = try sandbox.makeReplaceContext(executionId: "exec_source_mutation")
+    let sourceURL = context.stagingDirectory.appendingPathComponent(
+      "payload/Test.app", isDirectory: true)
+    let destinationURL = sandbox.root
+      .appendingPathComponent("Applications", isDirectory: true)
+      .appendingPathComponent("Test.app", isDirectory: true)
+    try sandbox.createDirectory(at: destinationURL)
+    try sandbox.createDirectory(
+      at: context.stagingDirectory.appendingPathComponent("backup", isDirectory: true))
+
+    let manifest = PreparedPrivilegedOperation(
+      executionId: "exec_source_mutation",
+      operationType: .replaceApp,
+      sourceRelativePath: "payload/Test.app",
+      sourceSHA256: try PrivilegedOperationDigest.sourceSHA256(at: sourceURL),
+      destinationPath: destinationURL.path,
+      backupRelativePath: "backup/Test.app",
+      installTarget: nil,
+      caskToken: nil,
+      masAppId: nil,
+      masCliPath: nil
+    )
+    try sandbox.writeManifest(manifest, to: context.stagingDirectory)
+    let request = try sandbox.request(
+      executionId: "exec_source_mutation",
+      stagingDirectory: context.stagingDirectory
+    )
+
+    let contentsURL = sourceURL.appendingPathComponent("Contents", isDirectory: true)
+    try sandbox.createDirectory(at: contentsURL)
+    try Data("mutated".utf8).write(to: contentsURL.appendingPathComponent("Info.plist"))
+
+    do {
+      _ = try sandbox.validator.validate(request: request)
+      Issue.record("Expected source digest mismatch")
+    } catch let error as PrivilegedOperationValidationError {
+      guard case .sourceDigestMismatch = error else {
+        Issue.record("Unexpected validation error: \(error.localizedDescription)")
+        return
+      }
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
+    }
+  }
+
   @Test func packageManagerUpgradeManifestsAreRejectedByPrivilegedHelper() throws {
     let sandbox = try TestSandbox()
 
@@ -341,7 +472,8 @@ struct PrivilegedOperationValidationTests {
 
       let request = PrivilegedOperationRequest(
         executionId: executionId,
-        stagingDirectoryPath: stagingDirectory.path
+        stagingDirectoryPath: stagingDirectory.path,
+        manifestSHA256: placeholderManifestSHA256
       )
 
       do {
@@ -399,7 +531,8 @@ private struct TestSandbox {
 
     let request = PrivilegedOperationRequest(
       executionId: executionId,
-      stagingDirectoryPath: stagingDirectory.path
+      stagingDirectoryPath: stagingDirectory.path,
+      manifestSHA256: placeholderManifestSHA256
     )
     return (stagingDirectory, request)
   }
@@ -417,7 +550,8 @@ private struct TestSandbox {
 
     let request = PrivilegedOperationRequest(
       executionId: executionId,
-      stagingDirectoryPath: stagingDirectory.path
+      stagingDirectoryPath: stagingDirectory.path,
+      manifestSHA256: placeholderManifestSHA256
     )
     return (stagingDirectory, request)
   }
@@ -427,4 +561,15 @@ private struct TestSandbox {
     try data.write(
       to: PreparedPrivilegedOperation.manifestURL(in: stagingDirectory), options: [.atomic])
   }
+
+  func request(executionId: String, stagingDirectory: URL) throws -> PrivilegedOperationRequest {
+    PrivilegedOperationRequest(
+      executionId: executionId,
+      stagingDirectoryPath: stagingDirectory.path,
+      manifestSHA256: try PrivilegedOperationDigest.sha256Hex(
+        forFileAt: PreparedPrivilegedOperation.manifestURL(in: stagingDirectory))
+    )
+  }
 }
+
+private let placeholderManifestSHA256 = String(repeating: "0", count: 64)
