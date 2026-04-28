@@ -1,0 +1,30 @@
+name: Desktop Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Marketing version to ship (for example 1.2.3)
+        required: true
+        type: string
+      build:
+        description: Internal build number (for example 45)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish desktop release
+    uses: ./.github/workflows/desktop-publish.yml
+    with:
+      channel: stable
+      version: ${{ inputs.version }}
+      build_number: ${{ inputs.build }}
+      tag_name: v${{ inputs.version }}
+      release_title: Versioneer ${{ inputs.version }}
+      archive_stem: Versioneer-${{ inputs.version }}-${{ inputs.build }}
+      mark_latest: true
+    secrets: inherit

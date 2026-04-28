@@ -21,14 +21,10 @@ jobs:
       previous_tag: ${{ steps.meta.outputs.previous_tag }}
       compare_range: ${{ steps.meta.outputs.compare_range }}
       marketing_version: ${{ steps.meta.outputs.marketing_version }}
-      build_number: ${{ steps.meta.outputs.build_number }}
       tag_name: ${{ steps.meta.outputs.tag_name }}
       release_title: ${{ steps.meta.outputs.release_title }}
       archive_stem: ${{ steps.meta.outputs.archive_stem }}
       short_sha: ${{ steps.meta.outputs.short_sha }}
-      download_url: ${{ steps.meta.outputs.download_url }}
-      appcast_url: ${{ steps.meta.outputs.appcast_url }}
-      latest_url: ${{ steps.meta.outputs.latest_url }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -36,290 +32,66 @@ jobs:
 
       - name: Compute nightly metadata
         id: meta
-        env:
-          DOWNLOADS_HOST: https://dl.versioneer.app
-        run: .github/scripts/desktop-nightly-metadata.sh
+        run: |
+          set -euo pipefail
+
+          previous_tag="$(git tag -l "desktop-nightly-*" --sort=-creatordate | head -n 1)"
+          compare_range=""
+          should_publish="true"
+
+          if [ -n "$previous_tag" ]; then
+            compare_range="${previous_tag}..HEAD"
+            if git diff --quiet "$compare_range" -- apps/desktop; then
+              should_publish="false"
+            fi
+          fi
+
+          marketing_version="$(
+            sed -nE 's/.*MARKETING_VERSION = ([^;]+);.*/\1/p' apps/desktop/Versioneer.xcodeproj/project.pbxproj | head -n 1
+          )"
+
+          if [ -z "$marketing_version" ]; then
+            echo "Could not determine MARKETING_VERSION from apps/desktop/Versioneer.xcodeproj/project.pbxproj" >&2
+            exit 1
+          fi
+
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          date_stamp="$(date -u +%Y%m%d)"
+          tag_name="desktop-nightly-${date_stamp}-${short_sha}"
+          release_title="Versioneer Desktop Nightly ${date_stamp}"
+          archive_stem="Versioneer-nightly-${date_stamp}-${short_sha}"
+
+          {
+            echo "should_publish=$should_publish"
+            echo "previous_tag=$previous_tag"
+            echo "compare_range=$compare_range"
+            echo "marketing_version=$marketing_version"
+            echo "tag_name=$tag_name"
+            echo "release_title=$release_title"
+            echo "archive_stem=$archive_stem"
+            echo "short_sha=$short_sha"
+          } >> "$GITHUB_OUTPUT"
 
   publish:
     name: Publish desktop nightly
     needs: prepare
     if: needs.prepare.outputs.should_publish == 'true'
-    runs-on: macos-latest
-    env:
-      DOWNLOADS_BUCKET: versioneer-releases
-      DOWNLOADS_HOST: https://dl.versioneer.app
-      ARCHIVE_STEM: ${{ needs.prepare.outputs.archive_stem }}
-      TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
-      RELEASE_TITLE: ${{ needs.prepare.outputs.release_title }}
-      VERSION: ${{ needs.prepare.outputs.marketing_version }}
-      BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
-      SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
-      PREVIOUS_TAG: ${{ needs.prepare.outputs.previous_tag }}
-      COMPARE_RANGE: ${{ needs.prepare.outputs.compare_range }}
-      NIGHTLY_DOWNLOAD_URL: ${{ needs.prepare.outputs.download_url }}
-      NIGHTLY_APPCAST_URL: ${{ needs.prepare.outputs.appcast_url }}
-      NIGHTLY_LATEST_URL: ${{ needs.prepare.outputs.latest_url }}
-      GH_TOKEN: ${{ github.token }}
-      APPLE_DEVELOPER_IDENTITY: ${{ vars.APPLE_DEVELOPER_IDENTITY }}
-      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
-      APPLE_SIGNING_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_SIGNING_CERTIFICATE_P12_BASE64 }}
-      APPLE_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_SIGNING_CERTIFICATE_PASSWORD }}
-      APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
-      APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
-      APPLE_NOTARY_PRIVATE_KEY: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY }}
-      SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
-      SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
-      POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
-      POSTHOG_PROJECT_TOKEN: ${{ vars.POSTHOG_PROJECT_TOKEN }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version: 24
-          cache: true
-          run-install: true
-
-      - name: Render nightly release notes
-        run: |
-          set -euo pipefail
-
-          {
-            echo "## Nightly build"
-            echo
-            echo "- Base version: ${VERSION}"
-            echo "- Build number: ${BUILD_NUMBER}"
-            echo "- Commit: \`${SHORT_SHA}\`"
-            echo "- Published: $(date -u '+%Y-%m-%d %H:%M UTC')"
-            if [ -n "$PREVIOUS_TAG" ]; then
-              echo "- Previous nightly: \`${PREVIOUS_TAG}\`"
-              echo "- Compare: [${PREVIOUS_TAG}...${SHORT_SHA}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${PREVIOUS_TAG}...${GITHUB_SHA})"
-            fi
-            echo
-            echo "## Downloads"
-            echo
-            echo "- Direct download: ${NIGHTLY_DOWNLOAD_URL}"
-            echo "- Sparkle appcast: ${NIGHTLY_APPCAST_URL}"
-            echo "- Latest nightly alias: ${NIGHTLY_LATEST_URL}"
-            echo
-            if [ -n "$PREVIOUS_TAG" ]; then
-              echo "## Desktop changes since ${PREVIOUS_TAG}"
-              echo
-              git log --reverse --pretty='- %s (%h)' "$COMPARE_RANGE" -- apps/desktop
-            else
-              echo "## Desktop changes"
-              echo
-              echo "- First nightly release from the current history."
-            fi
-          } > "$RUNNER_TEMP/release-notes.md"
-
-      - name: Import Developer ID certificate
-        run: |
-          set -euo pipefail
-          KEYCHAIN_PATH="$RUNNER_TEMP/versioneer-signing.keychain-db"
-          KEYCHAIN_PASSWORD="$(uuidgen)"
-          CERT_PATH="$RUNNER_TEMP/versioneer-signing.p12"
-
-          printf '%s' "$APPLE_SIGNING_CERTIFICATE_P12_BASE64" | base64 -D > "$CERT_PATH"
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_SIGNING_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/xcodebuild
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychains -d user -s "$KEYCHAIN_PATH"
-          security default-keychain -d user -s "$KEYCHAIN_PATH"
-
-          {
-            echo "KEYCHAIN_PATH=$KEYCHAIN_PATH"
-            echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD"
-          } >> "$GITHUB_ENV"
-
-      - name: Resolve package dependencies
-        run: |
-          set -euo pipefail
-          mkdir -p "$PWD/.build/DerivedData" "$PWD/.build/DerivedData/SourcePackages"
-          xcodebuild \
-            -resolvePackageDependencies \
-            -project apps/desktop/Versioneer.xcodeproj \
-            -scheme Versioneer \
-            -derivedDataPath "$PWD/.build/DerivedData" \
-            -clonedSourcePackagesDirPath "$PWD/.build/DerivedData/SourcePackages"
-
-      - name: Run unit tests
-        run: |
-          set -euo pipefail
-          xcodebuild \
-            -project apps/desktop/Versioneer.xcodeproj \
-            -scheme Versioneer \
-            -destination 'platform=macOS' \
-            -derivedDataPath "$PWD/.build/DerivedData" \
-            -clonedSourcePackagesDirPath "$PWD/.build/DerivedData/SourcePackages" \
-            ENABLE_USER_SCRIPT_SANDBOXING=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            test
-
-      - name: Locate Sparkle tools
-        run: |
-          set -euo pipefail
-          SPARKLE_BIN_DIR="$(dirname "$(find "$PWD/.build/DerivedData" "$HOME/Library/Caches/org.swift.swiftpm" -path '*Sparkle/bin/generate_appcast' -print -quit)")"
-          if [ -z "$SPARKLE_BIN_DIR" ]; then
-            echo "Could not locate Sparkle release tools." >&2
-            exit 1
-          fi
-          echo "SPARKLE_BIN_DIR=$SPARKLE_BIN_DIR" >> "$GITHUB_ENV"
-
-      - name: Install PostHog CLI
-        run: npm install -g @posthog/cli@latest
-
-      - name: Archive release build
-        run: |
-          set -euo pipefail
-          xcodebuild \
-            -project apps/desktop/Versioneer.xcodeproj \
-            -scheme Versioneer \
-            -configuration Release \
-            -archivePath "$RUNNER_TEMP/Versioneer.xcarchive" \
-            -derivedDataPath "$PWD/.build/DerivedData" \
-            -clonedSourcePackagesDirPath "$PWD/.build/DerivedData/SourcePackages" \
-            archive \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="$APPLE_DEVELOPER_IDENTITY" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
-            ENABLE_USER_SCRIPT_SANDBOXING=NO \
-            MARKETING_VERSION="$VERSION" \
-            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-            SPARKLE_PUBLIC_ED_KEY="$SPARKLE_PUBLIC_ED_KEY" \
-            POSTHOG_HOST="$POSTHOG_HOST" \
-            POSTHOG_PROJECT_TOKEN="$POSTHOG_PROJECT_TOKEN"
-
-      - name: Notarize and package app
-        run: |
-          set -euo pipefail
-          APP_PATH="$RUNNER_TEMP/Versioneer.xcarchive/Products/Applications/Versioneer.app"
-          NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
-          ARCHIVES_DIR="$RUNNER_TEMP/sparkle-archives"
-          ARCHIVE_ZIP_PATH="$ARCHIVES_DIR/${ARCHIVE_STEM}.zip"
-
-          mkdir -p "$ARCHIVES_DIR"
-          printf '%s' "$APPLE_NOTARY_PRIVATE_KEY" > "$NOTARY_KEY_PATH"
-
-          xcrun notarytool submit "$APP_PATH" \
-            --key "$NOTARY_KEY_PATH" \
-            --key-id "$APPLE_NOTARY_KEY_ID" \
-            --issuer "$APPLE_NOTARY_ISSUER_ID" \
-            --wait
-
-          xcrun stapler staple "$APP_PATH"
-          /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ARCHIVE_ZIP_PATH"
-
-          {
-            echo "ARCHIVES_DIR=$ARCHIVES_DIR"
-            echo "ARCHIVE_ZIP_PATH=$ARCHIVE_ZIP_PATH"
-          } >> "$GITHUB_ENV"
-
-      - name: Render release notes HTML
-        run: |
-          set -euo pipefail
-          BODY_HTML=$(npx marked < "$RUNNER_TEMP/release-notes.md")
-
-          cat > "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" <<HTMLEOF
-          <!doctype html>
-          <html lang="en">
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>${RELEASE_TITLE}</title>
-            <style>
-              :root { color-scheme: light dark; }
-              body { margin: 0; background: #0f172a; color: #e2e8f0;
-                     font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-              main { max-width: 760px; margin: 0 auto; padding: 48px 24px 64px; }
-              h1, h2, h3, h4, h5, h6 { color: #f8fafc; line-height: 1.2; }
-              a { color: #7dd3fc; }
-              code, pre { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-                          background: rgba(15, 23, 42, 0.45); border-radius: 10px; }
-              code { padding: 0.15em 0.35em; }
-              pre { overflow-x: auto; padding: 14px 16px; }
-              blockquote { margin: 0; padding-left: 16px;
-                           border-left: 3px solid rgba(125, 211, 252, 0.45); color: #cbd5e1; }
-              img { max-width: 100%; height: auto; }
-              table { width: 100%; border-collapse: collapse; }
-              th, td { padding: 8px 10px; border: 1px solid rgba(148, 163, 184, 0.25); }
-              hr { border: 0; border-top: 1px solid rgba(148, 163, 184, 0.2); }
-            </style>
-          </head>
-          <body>
-            <main>
-              <h1>${RELEASE_TITLE}</h1>
-              ${BODY_HTML}
-            </main>
-          </body>
-          </html>
-          HTMLEOF
-
-      - name: Generate Sparkle appcast
-        run: |
-          set -euo pipefail
-          printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$SPARKLE_BIN_DIR/generate_appcast" \
-            --ed-key-file - \
-            --download-url-prefix "$DOWNLOADS_HOST/nightly/downloads/" \
-            --release-notes-url-prefix "$DOWNLOADS_HOST/nightly/release-notes/" \
-            --link "https://versioneer.app" \
-            "$ARCHIVES_DIR"
-
-      - name: Upload release artifacts to R2
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          WRANGLER="vp pm --filter @versioneer/web exec wrangler"
-
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/nightly/downloads/${ARCHIVE_STEM}.zip" \
-            --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.zip" \
-            --remote \
-            --content-type application/zip
-
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/nightly/release-notes/${ARCHIVE_STEM}.html" \
-            --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" \
-            --remote \
-            --content-type "text/html; charset=utf-8"
-
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/nightly/appcast.xml" \
-            --file "$ARCHIVES_DIR/appcast.xml" \
-            --remote \
-            --content-type "application/xml; charset=utf-8"
-
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/nightly/latest/Versioneer.zip" \
-            --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.zip" \
-            --remote \
-            --content-type application/zip
-
-      - name: Publish GitHub prerelease
-        run: |
-          set -euo pipefail
-          ASSET_LABEL="${ARCHIVE_STEM}.zip"
-
-          if gh release view "$TAG_NAME" --json id >/dev/null 2>&1; then
-            gh release edit "$TAG_NAME" \
-              --title "$RELEASE_TITLE" \
-              --notes-file "$RUNNER_TEMP/release-notes.md" \
-              --prerelease
-            gh release upload "$TAG_NAME" "$ARCHIVE_ZIP_PATH#${ASSET_LABEL}" --clobber
-          else
-            gh release create "$TAG_NAME" \
-              "$ARCHIVE_ZIP_PATH#${ASSET_LABEL}" \
-              --title "$RELEASE_TITLE" \
-              --notes-file "$RUNNER_TEMP/release-notes.md" \
-              --prerelease \
-              --target "${GITHUB_SHA}"
-          fi
+    uses: ./.github/workflows/desktop-publish.yml
+    with:
+      channel: nightly
+      version: ${{ needs.prepare.outputs.marketing_version }}
+      build_number: ${{ github.run_number }}
+      tag_name: ${{ needs.prepare.outputs.tag_name }}
+      release_title: ${{ needs.prepare.outputs.release_title }}
+      archive_stem: ${{ needs.prepare.outputs.archive_stem }}
+      r2_prefix: nightly
+      previous_tag: ${{ needs.prepare.outputs.previous_tag }}
+      compare_range: ${{ needs.prepare.outputs.compare_range }}
+      commit_label: ${{ needs.prepare.outputs.short_sha }}
+      prerelease: true
+      mark_latest: false
+      upload_github_asset: true
+    secrets: inherit
 
   skipped:
     name: Skip nightly publish

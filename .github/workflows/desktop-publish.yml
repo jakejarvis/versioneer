@@ -1,31 +1,110 @@
-name: Publish
+name: Desktop Publish
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
+      channel:
+        description: Release channel, either stable or nightly.
+        required: true
+        type: string
       version:
-        description: Marketing version to ship (for example 1.2.3)
+        description: Marketing version to embed in the app.
         required: true
         type: string
-      build:
-        description: Internal build number (for example 45)
+      build_number:
+        description: Build number to embed in the app.
         required: true
         type: string
+      tag_name:
+        description: GitHub release tag.
+        required: true
+        type: string
+      release_title:
+        description: GitHub release title and release notes page title.
+        required: true
+        type: string
+      archive_stem:
+        description: Filename stem for the zip and release notes artifact.
+        required: true
+        type: string
+      r2_prefix:
+        description: Optional R2 prefix for channel-specific artifacts.
+        required: false
+        type: string
+        default: ""
+      previous_tag:
+        description: Previous release tag for generated nightly notes.
+        required: false
+        type: string
+        default: ""
+      compare_range:
+        description: Git revision range for generated nightly notes.
+        required: false
+        type: string
+        default: ""
+      commit_label:
+        description: Human-readable commit label for generated nightly notes.
+        required: false
+        type: string
+        default: ""
+      prerelease:
+        description: Whether the GitHub release should be marked as a prerelease.
+        required: false
+        type: boolean
+        default: false
+      mark_latest:
+        description: Whether the GitHub release should be marked as latest.
+        required: false
+        type: boolean
+        default: false
+      upload_github_asset:
+        description: Whether to attach the zip to the GitHub release.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      APPLE_SIGNING_CERTIFICATE_P12_BASE64:
+        required: true
+      APPLE_SIGNING_CERTIFICATE_PASSWORD:
+        required: true
+      APPLE_NOTARY_KEY_ID:
+        required: true
+      APPLE_NOTARY_ISSUER_ID:
+        required: true
+      APPLE_NOTARY_PRIVATE_KEY:
+        required: true
+      SPARKLE_PRIVATE_ED_KEY:
+        required: true
+      SPARKLE_PUBLIC_ED_KEY:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+      CLOUDFLARE_API_TOKEN:
+        required: true
 
 permissions:
   contents: write
 
 jobs:
   publish:
-    name: Publish desktop release
+    name: Publish desktop ${{ inputs.channel }}
     runs-on: macos-latest
     env:
+      CHANNEL: ${{ inputs.channel }}
       DOWNLOADS_BUCKET: versioneer-releases
       DOWNLOADS_HOST: https://dl.versioneer.app
-      ARCHIVE_STEM: Versioneer-${{ inputs.version }}-${{ inputs.build }}
-      GH_TOKEN: ${{ github.token }}
+      R2_PREFIX: ${{ inputs.r2_prefix }}
+      ARCHIVE_STEM: ${{ inputs.archive_stem }}
+      TAG_NAME: ${{ inputs.tag_name }}
+      RELEASE_TITLE: ${{ inputs.release_title }}
       VERSION: ${{ inputs.version }}
-      BUILD_NUMBER: ${{ inputs.build }}
+      BUILD_NUMBER: ${{ inputs.build_number }}
+      PREVIOUS_TAG: ${{ inputs.previous_tag }}
+      COMPARE_RANGE: ${{ inputs.compare_range }}
+      COMMIT_LABEL: ${{ inputs.commit_label }}
+      PRERELEASE: ${{ inputs.prerelease }}
+      MARK_LATEST: ${{ inputs.mark_latest }}
+      GH_TOKEN: ${{ github.token }}
       APPLE_DEVELOPER_IDENTITY: ${{ vars.APPLE_DEVELOPER_IDENTITY }}
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
       APPLE_SIGNING_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_SIGNING_CERTIFICATE_P12_BASE64 }}
@@ -39,6 +118,8 @@ jobs:
       POSTHOG_PROJECT_TOKEN: ${{ vars.POSTHOG_PROJECT_TOKEN }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: voidzero-dev/setup-vp@v1
         with:
@@ -46,25 +127,77 @@ jobs:
           cache: true
           run-install: true
 
-      - name: Ensure GitHub release exists
+      - name: Ensure stable GitHub release exists
+        if: ${{ inputs.channel == 'stable' }}
         run: |
           set -euo pipefail
-          TAG="v${VERSION}"
-          if gh release view "$TAG" --json id >/dev/null 2>&1; then
-            gh release edit "$TAG" --title "Versioneer ${VERSION}" --latest
+
+          release_flags=(--title "$RELEASE_TITLE")
+          if [ "$MARK_LATEST" = "true" ]; then
+            release_flags+=(--latest)
           else
-            gh release create "$TAG" \
-              --title "Versioneer ${VERSION}" \
+            release_flags+=(--latest=false)
+          fi
+
+          if gh release view "$TAG_NAME" --json id >/dev/null 2>&1; then
+            gh release edit "$TAG_NAME" "${release_flags[@]}"
+          else
+            gh release create "$TAG_NAME" \
+              "${release_flags[@]}" \
               --generate-notes \
-              --latest \
               --target "${GITHUB_SHA}"
           fi
 
-      - name: Capture GitHub release body
+      - name: Capture stable release body
+        if: ${{ inputs.channel == 'stable' }}
+        run: gh release view "$TAG_NAME" --json body --jq .body >
+          "$RUNNER_TEMP/release-notes.md"
+
+      - name: Render nightly release notes
+        if: ${{ inputs.channel == 'nightly' }}
         run: |
           set -euo pipefail
-          TAG="v${VERSION}"
-          gh release view "$TAG" --json body --jq .body > "$RUNNER_TEMP/release-notes.md"
+
+          url_for() {
+            local path="$1"
+
+            if [ -n "$R2_PREFIX" ]; then
+              printf '%s/%s/%s' "$DOWNLOADS_HOST" "$R2_PREFIX" "$path"
+            else
+              printf '%s/%s' "$DOWNLOADS_HOST" "$path"
+            fi
+          }
+
+          display_commit="${COMMIT_LABEL:-$GITHUB_SHA}"
+
+          {
+            echo "## Nightly build"
+            echo
+            echo "- Base version: ${VERSION}"
+            echo "- Build number: ${BUILD_NUMBER}"
+            echo "- Commit: \`${display_commit}\`"
+            echo "- Published: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "- Previous nightly: \`${PREVIOUS_TAG}\`"
+              echo "- Compare: [${PREVIOUS_TAG}...${display_commit}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${PREVIOUS_TAG}...${GITHUB_SHA})"
+            fi
+            echo
+            echo "## Downloads"
+            echo
+            echo "- Direct download: $(url_for "downloads/${ARCHIVE_STEM}.zip")"
+            echo "- Sparkle appcast: $(url_for "appcast.xml")"
+            echo "- Latest nightly alias: $(url_for "latest/Versioneer.zip")"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "## Desktop changes since ${PREVIOUS_TAG}"
+              echo
+              git log --reverse --pretty='- %s (%h)' "$COMPARE_RANGE" -- apps/desktop
+            else
+              echo "## Desktop changes"
+              echo
+              echo "- First nightly release from the current history."
+            fi
+          } > "$RUNNER_TEMP/release-notes.md"
 
       - name: Import Developer ID certificate
         run: |
@@ -177,15 +310,15 @@ jobs:
       - name: Render release notes HTML
         run: |
           set -euo pipefail
-          BODY_HTML=$(npx marked < "$RUNNER_TEMP/release-notes.md")
+          BODY_HTML=$(npx --yes marked < "$RUNNER_TEMP/release-notes.md")
 
-          cat > "$ARCHIVES_DIR/${VERSION}.html" <<HTMLEOF
+          cat > "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" <<HTMLEOF
           <!doctype html>
           <html lang="en">
           <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>Versioneer ${VERSION}</title>
+            <title>${RELEASE_TITLE}</title>
             <style>
               :root { color-scheme: light dark; }
               body { margin: 0; background: #0f172a; color: #e2e8f0;
@@ -207,28 +340,44 @@ jobs:
           </head>
           <body>
             <main>
-              <h1>Versioneer ${VERSION}</h1>
+              <h1>${RELEASE_TITLE}</h1>
               ${BODY_HTML}
             </main>
           </body>
           </html>
           HTMLEOF
 
-          cp "$ARCHIVES_DIR/${VERSION}.html" "$ARCHIVES_DIR/${ARCHIVE_STEM}.html"
+          if [ "$CHANNEL" = "stable" ] && [ "$ARCHIVE_STEM" != "$VERSION" ]; then
+            cp "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" "$ARCHIVES_DIR/${VERSION}.html"
+          fi
 
       - name: Generate Sparkle appcast
         run: |
           set -euo pipefail
+
+          url_for() {
+            local path="$1"
+
+            if [ -n "$R2_PREFIX" ]; then
+              printf '%s/%s/%s' "$DOWNLOADS_HOST" "$R2_PREFIX" "$path"
+            else
+              printf '%s/%s' "$DOWNLOADS_HOST" "$path"
+            fi
+          }
+
+          download_url_prefix="$(url_for "downloads")"
+          release_notes_url_prefix="$(url_for "release-notes")"
+
           printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$SPARKLE_BIN_DIR/generate_appcast" \
             --ed-key-file - \
-            --download-url-prefix "$DOWNLOADS_HOST/downloads/" \
-            --release-notes-url-prefix "$DOWNLOADS_HOST/release-notes/" \
+            --download-url-prefix "${download_url_prefix}/" \
+            --release-notes-url-prefix "${release_notes_url_prefix}/" \
             --link "https://versioneer.app" \
             "$ARCHIVES_DIR"
 
-          if [ "$ARCHIVE_STEM" != "$VERSION" ]; then
+          if [ "$CHANNEL" = "stable" ] && [ "$ARCHIVE_STEM" != "$VERSION" ]; then
             cp "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" "$ARCHIVES_DIR/${VERSION}.html"
-            perl -0pi -e 's/\Q'"$DOWNLOADS_HOST/release-notes/$ARCHIVE_STEM.html"'\E/'"$DOWNLOADS_HOST/release-notes/$VERSION.html"'/g' "$ARCHIVES_DIR/appcast.xml"
+            perl -0pi -e 's/\Q'"$release_notes_url_prefix/$ARCHIVE_STEM.html"'\E/'"$release_notes_url_prefix/$VERSION.html"'/g' "$ARCHIVES_DIR/appcast.xml"
             printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$SPARKLE_BIN_DIR/sign_update" --ed-key-file - "$ARCHIVES_DIR/appcast.xml"
           fi
 
@@ -240,27 +389,70 @@ jobs:
           set -euo pipefail
           WRANGLER="vp pm --filter @versioneer/web exec wrangler"
 
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/downloads/${ARCHIVE_STEM}.zip" \
+          object_key() {
+            local path="$1"
+
+            if [ -n "$R2_PREFIX" ]; then
+              printf '%s/%s' "$R2_PREFIX" "$path"
+            else
+              printf '%s' "$path"
+            fi
+          }
+
+          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/$(object_key "downloads/${ARCHIVE_STEM}.zip")" \
             --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.zip" \
             --remote \
             --content-type application/zip
 
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/release-notes/${ARCHIVE_STEM}.html" \
+          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/$(object_key "release-notes/${ARCHIVE_STEM}.html")" \
             --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" \
             --remote \
             --content-type "text/html; charset=utf-8"
 
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/release-notes/${VERSION}.html" \
-            --file "$ARCHIVES_DIR/${VERSION}.html" \
-            --remote \
-            --content-type "text/html; charset=utf-8"
+          if [ "$CHANNEL" = "stable" ] && [ "$ARCHIVE_STEM" != "$VERSION" ]; then
+            $WRANGLER r2 object put "$DOWNLOADS_BUCKET/$(object_key "release-notes/${VERSION}.html")" \
+              --file "$ARCHIVES_DIR/${VERSION}.html" \
+              --remote \
+              --content-type "text/html; charset=utf-8"
+          fi
 
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/appcast.xml" \
+          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/$(object_key "appcast.xml")" \
             --file "$ARCHIVES_DIR/appcast.xml" \
             --remote \
             --content-type "application/xml; charset=utf-8"
 
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/latest/Versioneer.zip" \
+          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/$(object_key "latest/Versioneer.zip")" \
             --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.zip" \
             --remote \
             --content-type application/zip
+
+      - name: Publish GitHub release asset
+        if: ${{ inputs.upload_github_asset }}
+        run: |
+          set -euo pipefail
+          ASSET_LABEL="${ARCHIVE_STEM}.zip"
+
+          release_flags=(
+            --title "$RELEASE_TITLE"
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+          )
+
+          if [ "$PRERELEASE" = "true" ]; then
+            release_flags+=(--prerelease)
+          fi
+
+          if [ "$MARK_LATEST" = "true" ]; then
+            release_flags+=(--latest)
+          else
+            release_flags+=(--latest=false)
+          fi
+
+          if gh release view "$TAG_NAME" --json id >/dev/null 2>&1; then
+            gh release edit "$TAG_NAME" "${release_flags[@]}"
+            gh release upload "$TAG_NAME" "$ARCHIVE_ZIP_PATH#${ASSET_LABEL}" --clobber
+          else
+            gh release create "$TAG_NAME" \
+              "$ARCHIVE_ZIP_PATH#${ASSET_LABEL}" \
+              "${release_flags[@]}" \
+              --target "${GITHUB_SHA}"
+          fi
