@@ -328,4 +328,21 @@ struct APIContractAlignmentTests {
     #expect(legacyResponse.releaseNotesMarkdown == nil)
     #expect(legacyResponse.releaseNotesHtml == "<p>Legacy notes</p>")
   }
+
+  @Test func iconResourceURLsResolveIcnsFallbacks() {
+    let resourceURL = URL(fileURLWithPath: "/Applications/Test.app/Contents/Resources")
+
+    let extensionless = InventoryAPIClient.iconResourceURLs(
+      named: "AppIcon",
+      resourceURL: resourceURL
+    )
+    #expect(extensionless.map(\.lastPathComponent) == ["AppIcon.icns", "AppIcon"])
+
+    let explicit = InventoryAPIClient.iconResourceURLs(
+      named: "Nested/AppIcon.icns",
+      resourceURL: resourceURL
+    )
+    #expect(
+      explicit.map(\.path) == ["/Applications/Test.app/Contents/Resources/Nested/AppIcon.icns"])
+  }
 }

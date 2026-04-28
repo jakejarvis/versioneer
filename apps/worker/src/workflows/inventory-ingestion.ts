@@ -83,6 +83,7 @@ export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
     const { ingestionId } = inventoryIngestionWorkflowPayloadSchema.parse(event.payload);
     const db = createDb(this.env.DB);
     const log = createLogger({ workflow: "inventory_ingestion", ingestionId });
+    log.info("workflow started");
     const totals: InventoryIngestionTotals = {
       itemsTotal: 0,
       discoveredIcons: emptyStepResult(),
@@ -166,6 +167,7 @@ export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
             candidates: loaded.payload!.discoveredIconCandidates,
           }),
       );
+      log.info("stored discovered inventory icons", { ...totals.discoveredIcons });
 
       totals.catalogIcons = await step.do<InventoryCatalogIconResult>(
         "store-catalog-icons",
@@ -179,6 +181,7 @@ export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
             now: loaded.payload!.processedAt,
           }),
       );
+      log.info("stored catalog inventory icons", { ...totals.catalogIcons });
 
       totals.suggestions = await step.do<InventoryIngestionStepResult>(
         "create-suggestions",
@@ -190,6 +193,7 @@ export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
             now: loaded.payload!.processedAt,
           }),
       );
+      log.info("created inventory ingestion suggestions", { ...totals.suggestions });
 
       await step.do("mark-completed", async () => {
         const now = new Date().toISOString();

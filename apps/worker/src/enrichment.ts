@@ -1,5 +1,6 @@
 import { and, desc, eq, isNull, lte } from "drizzle-orm";
 
+import { createLogger } from "@versioneer/core/logger";
 import { enrichDiscoveredApp } from "@versioneer/core/pipeline";
 import { createDb, discoveredApps } from "@versioneer/db";
 
@@ -9,6 +10,7 @@ const ENRICHMENT_REFRESH_DELAY_MS = 24 * 60 * 60 * 1000;
 const ENRICHMENT_CANDIDATE_STATUSES = ["pending", "linked"] as const;
 
 type Db = ReturnType<typeof createDb>;
+type Logger = ReturnType<typeof createLogger>;
 type EnrichmentCandidateRow = {
   id: string;
   updatedAt: string;
@@ -236,8 +238,14 @@ export async function runEnrichmentBatch(params: {
   db: Db;
   env: Pick<Env, "GITHUB_TOKEN" | "ASSETS_BUCKET" | "CONFIG_KV">;
   limit?: number;
+  log?: Logger;
 }): Promise<EnrichmentBatchResult> {
   const candidates = await listEnrichmentCandidates(params.db, params.limit);
+  const log = params.log ?? createLogger({ component: "enrichment_batch" });
+  log.info("enrichment candidates selected", {
+    candidateCount: candidates.length,
+    limit: params.limit ?? ENRICHMENT_BATCH_SIZE,
+  });
   const result: EnrichmentBatchResult = {
     candidateCount: candidates.length,
     attemptedIds: [],
@@ -248,26 +256,53 @@ export async function runEnrichmentBatch(params: {
   };
 
   for (const candidate of candidates) {
+    const startedAtMs = Date.now();
     result.attempted++;
     result.attemptedIds.push(candidate.id);
-    const enrichment = await enrichDiscoveredApp({
-      discoveredAppId: candidate.id,
-      db: params.db,
-      githubToken: params.env.GITHUB_TOKEN,
-      assetsBucket: params.env.ASSETS_BUCKET,
-      configKv: params.env.CONFIG_KV,
-    });
+    log.info("enrichment candidate started", { discoveredAppId: candidate.id });
+    let enrichment;
+    try {
+      enrichment = await enrichDiscoveredApp({
+        discoveredAppId: candidate.id,
+        db: params.db,
+        githubToken: params.env.GITHUB_TOKEN,
+        assetsBucket: params.env.ASSETS_BUCKET,
+        configKv: params.env.CONFIG_KV,
+      });
+    } catch (error) {
+      log.error("enrichment candidate threw", {
+        discoveredAppId: candidate.id,
+        durationMs: Date.now() - startedAtMs,
+        error,
+      });
+      throw error;
+    }
 
     if (enrichment.enrichmentStatus === "failed") {
       result.failed++;
-      result.errors.push({
+      const errorEntry = {
         discoveredAppId: candidate.id,
         errorMessage: enrichment.enrichmentError ?? "Enrichment failed",
+      };
+      result.errors.push(errorEntry);
+      log.warn("enrichment candidate failed", {
+        ...errorEntry,
+        durationMs: Date.now() - startedAtMs,
       });
     } else {
       result.succeeded++;
+      log.info("enrichment candidate succeeded", {
+        discoveredAppId: candidate.id,
+        durationMs: Date.now() - startedAtMs,
+      });
     }
   }
 
+  log.info("enrichment batch result", {
+    candidates: result.candidateCount,
+    attempted: result.attempted,
+    succeeded: result.succeeded,
+    failed: result.failed,
+  });
   return result;
 }

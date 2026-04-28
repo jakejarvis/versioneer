@@ -320,28 +320,90 @@ nonisolated struct InventoryAPIClient: Sendable {
 
   /// Extracts the app's icon as a 128x128 PNG encoded in base64.
   /// Returns nil if the app path doesn't exist or icon extraction fails.
-  private static func extractIconBase64(for app: InstalledApp) -> String? {
-    guard FileManager.default.fileExists(atPath: app.path) else { return nil }
+  static func extractIconBase64(for app: InstalledApp) -> String? {
+    let appURL = URL(fileURLWithPath: app.path)
+    guard FileManager.default.fileExists(atPath: appURL.path) else { return nil }
 
-    let icon = NSWorkspace.shared.icon(forFile: app.path)
-    let targetSize = NSSize(width: 128, height: 128)
+    let icon =
+      bundleIconImage(forAppAt: appURL)
+      ?? NSWorkspace.shared.icon(forFile: appURL.path)
 
-    let resized = NSImage(size: targetSize)
-    resized.lockFocus()
+    guard let png = pngData(from: icon, targetSize: NSSize(width: 128, height: 128)) else {
+      return nil
+    }
+
+    return png.base64EncodedString()
+  }
+
+  private static func bundleIconImage(forAppAt appURL: URL) -> NSImage? {
+    guard let bundle = Bundle(url: appURL),
+      let resourceURL = bundle.resourceURL
+    else { return nil }
+
+    let info = bundle.infoDictionary ?? [:]
+    let iconNames = [
+      info["CFBundleIconFile"] as? String,
+      info["CFBundleIconName"] as? String,
+    ].compactMap { $0 }
+
+    for iconName in iconNames {
+      for iconURL in iconResourceURLs(named: iconName, resourceURL: resourceURL) {
+        if let image = NSImage(contentsOf: iconURL) {
+          return image
+        }
+      }
+    }
+
+    return nil
+  }
+
+  static func iconResourceURLs(named iconName: String, resourceURL: URL) -> [URL] {
+    let trimmed = iconName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return [] }
+
+    let iconURL = resourceURL.appendingPathComponent(trimmed)
+    if iconURL.pathExtension.isEmpty {
+      return [
+        iconURL.appendingPathExtension("icns"),
+        iconURL,
+      ]
+    }
+
+    return [iconURL]
+  }
+
+  private static func pngData(from icon: NSImage, targetSize: NSSize) -> Data? {
+    guard targetSize.width > 0, targetSize.height > 0,
+      icon.size.width > 0,
+      icon.size.height > 0
+    else { return nil }
+
+    let bitmap = NSBitmapImageRep(
+      bitmapDataPlanes: nil,
+      pixelsWide: Int(targetSize.width),
+      pixelsHigh: Int(targetSize.height),
+      bitsPerSample: 8,
+      samplesPerPixel: 4,
+      hasAlpha: true,
+      isPlanar: false,
+      colorSpaceName: .deviceRGB,
+      bytesPerRow: 0,
+      bitsPerPixel: 0
+    )
+    guard let bitmap else { return nil }
+    bitmap.size = targetSize
+
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
     icon.draw(
       in: NSRect(origin: .zero, size: targetSize),
       from: NSRect(origin: .zero, size: icon.size),
       operation: .copy,
       fraction: 1.0
     )
-    resized.unlockFocus()
+    NSGraphicsContext.restoreGraphicsState()
 
-    guard let tiff = resized.tiffRepresentation,
-      let bitmap = NSBitmapImageRep(data: tiff),
-      let png = bitmap.representation(using: .png, properties: [:])
-    else { return nil }
-
-    return png.base64EncodedString()
+    return bitmap.representation(using: .png, properties: [:])
   }
 }
 

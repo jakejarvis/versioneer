@@ -270,6 +270,37 @@ describe("InventoryIngestionWorkflow", () => {
     ).toBe(evidenceCount);
   });
 
+  it("marks the job failed and preserves the payload when icon storage fails", async () => {
+    const db = createDb(env.DB);
+    const appId = await insertCatalogApp(db);
+    const discoveredAppId = await insertDiscoveredApp(db);
+    const payload = createPayload({ appId, discoveredAppId });
+    payload.discoveredIconCandidates[0]!.iconBase64 = "not base64!";
+    const { ingestionId, payloadR2Key } = await insertIngestionJob(db, payload);
+
+    await expect(runWorkflow(ingestionId)).rejects.toThrow("Invalid client icon payload");
+
+    const job = await db
+      .select()
+      .from(inventoryIngestionJobs)
+      .where(eq(inventoryIngestionJobs.id, ingestionId))
+      .get();
+    expect(job?.status).toBe("failed");
+    expect(job?.itemsTotal).toBe(2);
+    expect(job?.itemsFailed).toBe(1);
+    expect(job?.errorMessage).toContain("Invalid client icon payload");
+    expect(await env.RAW_BUCKET.get(payloadR2Key)).not.toBeNull();
+
+    const failure = await db
+      .select()
+      .from(jobFailures)
+      .where(eq(jobFailures.relatedId, ingestionId))
+      .get();
+    expect(failure?.jobType).toBe("inventory_ingestion");
+    expect(failure?.jobKey).toBe("workflow");
+    expect(failure?.errorMessage).toContain("Invalid client icon payload");
+  });
+
   it("marks the job failed and preserves the payload when durable state is invalid", async () => {
     const db = createDb(env.DB);
     const ingestionId = generateId(idPrefixes.inventoryIngestionJob);

@@ -42,6 +42,10 @@ type SourcePipelineBinding = Env["SOURCE_PIPELINE"];
 type SourcePipelineCreateOptions = NonNullable<Parameters<SourcePipelineBinding["create"]>[0]>;
 export { repairInventoryIngestionQueue } from "./inventory-ingestion-queue";
 
+function elapsedMs(startedAtMs: number): number {
+  return Date.now() - startedAtMs;
+}
+
 export default class PipelineWorker extends WorkerEntrypoint {
   private captureWorkerEvent(event: string, properties: Record<string, unknown> = {}) {
     this.ctx.waitUntil(
@@ -72,8 +76,15 @@ export default class PipelineWorker extends WorkerEntrypoint {
    * Called via service binding from the dashboard.
    */
   async recomputeLatest(params: RecomputeLatestJob): Promise<void> {
+    const startedAtMs = Date.now();
+    const log = createLogger({ handler: "recomputeLatest", appId: params.appId });
+    log.info("recompute latest started", { channel: params.channel ?? null });
     try {
       await handleRecomputeLatest(params, this.env);
+      log.info("recompute latest completed", {
+        channel: params.channel ?? null,
+        durationMs: elapsedMs(startedAtMs),
+      });
       this.captureWorkerEvent("worker_recompute_latest_completed", {
         target_type: "app",
         target_id: params.appId,
@@ -81,6 +92,11 @@ export default class PipelineWorker extends WorkerEntrypoint {
         status: "completed",
       });
     } catch (error) {
+      log.error("recompute latest failed", {
+        channel: params.channel ?? null,
+        durationMs: elapsedMs(startedAtMs),
+        error,
+      });
       this.captureWorkerException(error, {
         handler: "recomputeLatest",
         target_type: "app",
@@ -97,6 +113,9 @@ export default class PipelineWorker extends WorkerEntrypoint {
    * Called via service binding from the dashboard.
    */
   async reparse(params: SourceParseJob): Promise<void> {
+    const startedAtMs = Date.now();
+    const log = createLogger({ handler: "reparse", sourceFetchId: params.sourceFetchId });
+    log.info("source reparse started");
     try {
       await handleSourceParse(params, this.env);
       // Also recompute after reparse, since that's the pipeline contract
@@ -114,15 +133,31 @@ export default class PipelineWorker extends WorkerEntrypoint {
           .where(eq(sources.id, fetch.sourceId))
           .get();
         if (source) {
+          log.info("source reparse recompute started", {
+            sourceId: fetch.sourceId,
+            appId: source.appId,
+          });
           await handleRecomputeLatest({ appId: source.appId }, this.env);
+          log.info("source reparse recompute completed", {
+            sourceId: fetch.sourceId,
+            appId: source.appId,
+          });
+        } else {
+          log.warn("source reparse skipped recompute because source was missing", {
+            sourceId: fetch.sourceId,
+          });
         }
+      } else {
+        log.warn("source reparse skipped recompute because source fetch was missing");
       }
+      log.info("source reparse completed", { durationMs: elapsedMs(startedAtMs) });
       this.captureWorkerEvent("worker_source_reparse_completed", {
         target_type: "source_fetch",
         target_id: params.sourceFetchId,
         status: "completed",
       });
     } catch (error) {
+      log.error("source reparse failed", { durationMs: elapsedMs(startedAtMs), error });
       this.captureWorkerException(error, {
         handler: "reparse",
         target_type: "source_fetch",
@@ -139,14 +174,27 @@ export default class PipelineWorker extends WorkerEntrypoint {
    */
   async retryInventoryIngestion(params: InventoryIngestionQueueMessage): Promise<void> {
     const message = inventoryIngestionQueueMessageSchema.parse(params);
+    const startedAtMs = Date.now();
+    const log = createLogger({
+      handler: "retryInventoryIngestion",
+      ingestionId: message.ingestionId,
+    });
+    log.info("inventory ingestion retry enqueue started");
     try {
       await this.env.INVENTORY_INGESTION_QUEUE.send(message);
+      log.info("inventory ingestion retry enqueue completed", {
+        durationMs: elapsedMs(startedAtMs),
+      });
       this.captureWorkerEvent("worker_inventory_ingestion_retry_queued", {
         target_type: "inventory_ingestion_job",
         target_id: message.ingestionId,
         status: "queued",
       });
     } catch (error) {
+      log.error("inventory ingestion retry enqueue failed", {
+        durationMs: elapsedMs(startedAtMs),
+        error,
+      });
       this.captureWorkerException(error, {
         handler: "retryInventoryIngestion",
         target_type: "inventory_ingestion_job",
@@ -160,8 +208,10 @@ export default class PipelineWorker extends WorkerEntrypoint {
   async queue(batch: MessageBatch<InventoryIngestionQueueMessage>): Promise<void> {
     const db = createDb(this.env.DB);
     const log = createLogger({ handler: "inventory_ingestion_queue", queue: batch.queue });
+    log.info("inventory ingestion queue batch received", { messageCount: batch.messages.length });
 
     for (const message of batch.messages) {
+      const startedAtMs = Date.now();
       const parsed = inventoryIngestionQueueMessageSchema.safeParse(message.body);
       if (!parsed.success) {
         log.error("invalid inventory ingestion queue message", {
@@ -173,6 +223,10 @@ export default class PipelineWorker extends WorkerEntrypoint {
       }
 
       const { ingestionId } = parsed.data;
+      log.info("inventory ingestion queue message received", {
+        messageId: message.id,
+        ingestionId,
+      });
       try {
         const now = new Date().toISOString();
         const claim = await claimInventoryIngestionJob({ db, ingestionId, now });
@@ -187,8 +241,10 @@ export default class PipelineWorker extends WorkerEntrypoint {
             });
           }
           log.info("inventory ingestion queue message skipped", {
+            messageId: message.id,
             ingestionId,
             reason: claim.reason,
+            durationMs: elapsedMs(startedAtMs),
           });
           message.ack();
           continue;
@@ -202,9 +258,11 @@ export default class PipelineWorker extends WorkerEntrypoint {
           jobKey: "queue",
         });
         log.info("inventory ingestion workflow queued", {
+          messageId: message.id,
           ingestionId,
           attemptCount: claim.attemptCount,
           workflowInstanceId: claim.workflowInstanceId,
+          durationMs: elapsedMs(startedAtMs),
         });
         this.captureWorkerEvent("worker_inventory_ingestion_queued", {
           target_type: "inventory_ingestion_job",
@@ -216,7 +274,12 @@ export default class PipelineWorker extends WorkerEntrypoint {
         message.ack();
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        log.error("failed to start inventory ingestion workflow", { ingestionId, error });
+        log.error("failed to start inventory ingestion workflow", {
+          messageId: message.id,
+          ingestionId,
+          durationMs: elapsedMs(startedAtMs),
+          error,
+        });
         try {
           await markInventoryIngestionQueueFailure({
             db,
@@ -244,15 +307,21 @@ export default class PipelineWorker extends WorkerEntrypoint {
   /**
    * Cron-triggered handler: polls sources and runs cask index sync.
    */
-  async scheduled(_event: ScheduledEvent): Promise<void> {
+  async scheduled(event: ScheduledEvent): Promise<void> {
+    const scheduledStartedAtMs = Date.now();
     const db = createDb(this.env.DB);
     const { sources } = await import("@versioneer/db");
-    const log = createLogger({ handler: "scheduled" });
+    const log = createLogger({ handler: "scheduled", cron: event.cron });
 
     const now = new Date();
+    log.info("scheduled handler started", {
+      scheduledTime: new Date(event.scheduledTime).toISOString(),
+    });
 
     // --- Inventory Ingestion Queue Repair ---
     {
+      const startedAtMs = Date.now();
+      log.info("inventory ingestion repair started");
       try {
         const repaired = await repairInventoryIngestionQueue({
           db,
@@ -260,11 +329,15 @@ export default class PipelineWorker extends WorkerEntrypoint {
           log,
           now,
         });
-        if (repaired > 0) {
-          log.info("inventory ingestion repair enqueued jobs", { repaired });
-        }
+        log.info("inventory ingestion repair completed", {
+          repaired,
+          durationMs: elapsedMs(startedAtMs),
+        });
       } catch (error) {
-        log.error("inventory ingestion repair failed", { error });
+        log.error("inventory ingestion repair failed", {
+          durationMs: elapsedMs(startedAtMs),
+          error,
+        });
         this.captureWorkerException(error, {
           handler: "inventory_ingestion_repair",
           status: "failed",
@@ -276,6 +349,8 @@ export default class PipelineWorker extends WorkerEntrypoint {
     {
       const runId = generateId(idPrefixes.cronJobRun);
       const startedAt = new Date().toISOString();
+      const startedAtMs = Date.now();
+      log.info("poll sources job started", { runId });
       try {
         const nowIso = now.toISOString();
         const dueSources = await db
@@ -288,6 +363,10 @@ export default class PipelineWorker extends WorkerEntrypoint {
             ),
           )
           .all();
+        log.info("poll sources due sources loaded", {
+          runId,
+          dueSourceCount: dueSources.length,
+        });
         const jobs: SourcePipelineCreateOptions[] = dueSources.map((source) => ({
           params: {
             sourceId: source.id,
@@ -304,7 +383,13 @@ export default class PipelineWorker extends WorkerEntrypoint {
           status === "failed"
             ? `${jobs.length - queued} source workflow${jobs.length - queued === 1 ? "" : "s"} failed to queue`
             : null;
-        log.info("poll sources completed", { queued, total: dueSources.length, status });
+        log.info("poll sources completed", {
+          runId,
+          queued,
+          total: dueSources.length,
+          status,
+          durationMs: elapsedMs(startedAtMs),
+        });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "poll_sources",
@@ -342,7 +427,11 @@ export default class PipelineWorker extends WorkerEntrypoint {
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        log.error("poll sources job failed", { error });
+        log.error("poll sources job failed", {
+          runId,
+          durationMs: elapsedMs(startedAtMs),
+          error,
+        });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "poll_sources",
@@ -373,8 +462,11 @@ export default class PipelineWorker extends WorkerEntrypoint {
     {
       const runId = generateId(idPrefixes.cronJobRun);
       const startedAt = new Date().toISOString();
+      const startedAtMs = Date.now();
+      log.info("cask index sync job started", { runId });
       try {
-        if (await isCaskSyncDue(this.env)) {
+        const due = await isCaskSyncDue(this.env);
+        if (due) {
           await handleCaskIndexSync({ reason: "scheduled", force: false }, this.env);
           await db.insert(cronJobRuns).values({
             id: runId,
@@ -399,10 +491,25 @@ export default class PipelineWorker extends WorkerEntrypoint {
             items_queued: 1,
             items_total: 1,
           });
+          log.info("cask index sync completed", {
+            runId,
+            status: "completed",
+            durationMs: elapsedMs(startedAtMs),
+          });
+        } else {
+          log.info("cask index sync skipped", {
+            runId,
+            reason: "not_due",
+            durationMs: elapsedMs(startedAtMs),
+          });
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        log.error("cask index sync failed", { error });
+        log.error("cask index sync failed", {
+          runId,
+          durationMs: elapsedMs(startedAtMs),
+          error,
+        });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "cask_index_sync",
@@ -433,15 +540,24 @@ export default class PipelineWorker extends WorkerEntrypoint {
     {
       const runId = generateId(idPrefixes.cronJobRun);
       const startedAt = new Date().toISOString();
+      const startedAtMs = Date.now();
+      log.info("enrichment batch started", { runId });
       try {
-        const batch = await runEnrichmentBatch({ db, env: this.env });
+        const batch = await runEnrichmentBatch({
+          db,
+          env: this.env,
+          log: log.child({ job: "enrichment_batch", runId }),
+        });
 
+        log.info("enrichment batch completed", {
+          runId,
+          attempted: batch.attempted,
+          enriched: batch.succeeded,
+          failed: batch.failed,
+          candidates: batch.candidateCount,
+          durationMs: elapsedMs(startedAtMs),
+        });
         if (batch.candidateCount > 0) {
-          log.info("enrichment batch completed", {
-            enriched: batch.succeeded,
-            failed: batch.failed,
-            candidates: batch.candidateCount,
-          });
           await db.insert(cronJobRuns).values({
             id: runId,
             jobType: "enrich_discovered_apps",
@@ -471,7 +587,11 @@ export default class PipelineWorker extends WorkerEntrypoint {
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        log.error("enrichment batch failed", { error });
+        log.error("enrichment batch failed", {
+          runId,
+          durationMs: elapsedMs(startedAtMs),
+          error,
+        });
         await db.insert(cronJobRuns).values({
           id: runId,
           jobType: "enrich_discovered_apps",
@@ -497,5 +617,7 @@ export default class PipelineWorker extends WorkerEntrypoint {
         });
       }
     }
+
+    log.info("scheduled handler completed", { durationMs: elapsedMs(scheduledStartedAtMs) });
   }
 }

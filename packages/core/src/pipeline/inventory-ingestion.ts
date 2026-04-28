@@ -28,6 +28,13 @@ const INVENTORY_INGESTION_PAYLOAD_VERSION = 1;
 const D1_PARAM_LIMIT = 100;
 const MAX_ICON_BYTES = 512 * 1024;
 
+class ClientIconStorageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ClientIconStorageError";
+  }
+}
+
 type Db = ReturnType<typeof createDb>;
 
 const nullableStringSchema = z.string().nullable().optional();
@@ -117,39 +124,40 @@ export function inventoryIngestionPayloadR2Key(ingestionId: string, date = new D
   return `inventory-ingestions/${yyyy}/${mm}/${dd}/${ingestionId}.json`;
 }
 
-export async function storeClientIcon(
-  bucket: R2Bucket,
-  iconBase64: string,
-): Promise<string | null> {
+export async function storeClientIcon(bucket: R2Bucket, iconBase64: string): Promise<string> {
+  let binaryString: string;
   try {
-    const binaryString = atob(iconBase64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i)!;
-    }
-    const body = bytes.buffer;
-
-    if (body.byteLength > MAX_ICON_BYTES) return null;
-
-    const contentDigest = await crypto.subtle.digest("SHA-256", body);
-    const contentHash = Array.from(new Uint8Array(contentDigest))
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("")
-      .slice(0, 12);
-
-    const r2Key = `icons/${contentHash}.png`;
-
-    await bucket.put(r2Key, body, {
-      httpMetadata: {
-        contentType: "image/png",
-        cacheControl: "public, max-age=31536000, immutable",
-      },
-    });
-
-    return r2Key;
+    binaryString = atob(iconBase64);
   } catch {
-    return null;
+    throw new ClientIconStorageError("Invalid client icon payload");
   }
+
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i)!;
+  }
+  const body = bytes.buffer;
+
+  if (body.byteLength > MAX_ICON_BYTES) {
+    throw new ClientIconStorageError(`Client icon exceeds ${MAX_ICON_BYTES} bytes`);
+  }
+
+  const contentDigest = await crypto.subtle.digest("SHA-256", body);
+  const contentHash = Array.from(new Uint8Array(contentDigest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 12);
+
+  const r2Key = `icons/${contentHash}.png`;
+
+  await bucket.put(r2Key, body, {
+    httpMetadata: {
+      contentType: "image/png",
+      cacheControl: "public, max-age=31536000, immutable",
+    },
+  });
+
+  return r2Key;
 }
 
 function uniqueStrings(values: Iterable<string | null | undefined>): string[] {
@@ -198,14 +206,12 @@ export async function storeDiscoveredInventoryIcons(params: {
 
   for (const candidate of params.candidates) {
     const iconKey = await storeClientIcon(params.assetsBucket, candidate.iconBase64);
-    if (iconKey) {
-      await params.db
-        .update(discoveredApps)
-        .set({ iconR2Key: iconKey })
-        .where(
-          and(eq(discoveredApps.id, candidate.discoveredAppId), isNull(discoveredApps.iconR2Key)),
-        );
-    }
+    await params.db
+      .update(discoveredApps)
+      .set({ iconR2Key: iconKey })
+      .where(
+        and(eq(discoveredApps.id, candidate.discoveredAppId), isNull(discoveredApps.iconR2Key)),
+      );
     succeeded++;
   }
 
@@ -235,14 +241,12 @@ export async function storeCatalogInventoryIcons(params: {
     }
 
     const iconKey = await storeClientIcon(params.assetsBucket, candidate.iconBase64);
-    if (iconKey) {
-      await params.db
-        .update(apps)
-        .set({ iconR2Key: iconKey, updatedAt: params.now })
-        .where(and(eq(apps.id, appRow.id), isNull(apps.iconR2Key)));
-      appById.set(appRow.id, { ...appRow, iconR2Key: iconKey });
-      changed++;
-    }
+    await params.db
+      .update(apps)
+      .set({ iconR2Key: iconKey, updatedAt: params.now })
+      .where(and(eq(apps.id, appRow.id), isNull(apps.iconR2Key)));
+    appById.set(appRow.id, { ...appRow, iconR2Key: iconKey });
+    changed++;
     succeeded++;
   }
 

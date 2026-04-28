@@ -64,15 +64,36 @@ export class EnrichmentDrainWorkflow extends WorkflowEntrypoint<Env, EnrichmentD
       hasMore: false,
     };
 
+    log.info("enrichment drain started", { jobKey, maxBatches: MAX_DRAIN_BATCHES });
+
     try {
       for (let batchIndex = 0; batchIndex < MAX_DRAIN_BATCHES; batchIndex++) {
         const batch = await step.do<EnrichmentBatchResult>(
           `enrich-discoveries-${batchIndex + 1}`,
           { retries: { limit: 2, delay: "10 seconds", backoff: "exponential" } },
-          async () => runEnrichmentBatch({ db, env: this.env }),
+          async () =>
+            runEnrichmentBatch({
+              db,
+              env: this.env,
+              log: log.child({ batchIndex: batchIndex + 1 }),
+            }),
         );
 
-        if (batch.candidateCount === 0) break;
+        log.info("enrichment drain batch completed", {
+          batchIndex: batchIndex + 1,
+          candidates: batch.candidateCount,
+          attempted: batch.attempted,
+          succeeded: batch.succeeded,
+          failed: batch.failed,
+        });
+
+        if (batch.candidateCount === 0) {
+          log.info("enrichment drain found no remaining candidates", {
+            batchIndex: batchIndex + 1,
+            attemptedTotal: totals.attempted,
+          });
+          break;
+        }
         mergeBatch(totals, batch);
       }
 
@@ -80,6 +101,13 @@ export class EnrichmentDrainWorkflow extends WorkflowEntrypoint<Env, EnrichmentD
         listEnrichmentCandidates(db, 1),
       );
       totals.hasMore = remaining.length > 0;
+      log.info("enrichment drain remaining check completed", {
+        hasMore: totals.hasMore,
+        batches: totals.batches,
+        attempted: totals.attempted,
+        succeeded: totals.succeeded,
+        failed: totals.failed,
+      });
       if (totals.hasMore) {
         throw new Error(
           `Enrichment drain stopped after ${MAX_DRAIN_BATCHES} batches with work remaining`,
@@ -124,7 +152,7 @@ export class EnrichmentDrainWorkflow extends WorkflowEntrypoint<Env, EnrichmentD
       return { status: "completed", ...summary };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.error("enrichment drain failed", { error });
+      log.error("enrichment drain failed", { ...persistableTotals(totals), error });
 
       await db
         .update(cronJobRuns)
