@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { computeStaleSince, isArchCompatible, isOsVersionCompatible } from "../helpers";
+import { computeStaleSince, isArchCompatible, isOsVersionCompatible } from "../inventory-helpers";
 
 const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
 

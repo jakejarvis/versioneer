@@ -30,6 +30,19 @@ export const inventoryIngestionJobStatusValues = [
 export const inventoryIngestionJobStatusSchema = z.enum(inventoryIngestionJobStatusValues);
 export type InventoryIngestionJobStatus = z.infer<typeof inventoryIngestionJobStatusSchema>;
 
+export const inventoryIconUploadKindValues = ["discovered", "catalog"] as const;
+export const inventoryIconUploadKindSchema = z.enum(inventoryIconUploadKindValues);
+export type InventoryIconUploadKind = z.infer<typeof inventoryIconUploadKindSchema>;
+
+export const inventoryIconUploadStatusValues = [
+  "pending",
+  "received",
+  "skipped",
+  "failed",
+] as const;
+export const inventoryIconUploadStatusSchema = z.enum(inventoryIconUploadStatusValues);
+export type InventoryIconUploadStatus = z.infer<typeof inventoryIconUploadStatusSchema>;
+
 export const executionRouteValues = [
   "sparkle",
   "local_replace",

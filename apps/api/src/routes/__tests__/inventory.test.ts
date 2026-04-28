@@ -9,7 +9,13 @@ import {
   type InventoryIngestionQueueMessage,
 } from "@versioneer/core/pipeline";
 import { normalizeVersion } from "@versioneer/core/versioning";
-import { discoveredApps, inventoryIngestionJobs, jobFailures } from "@versioneer/db";
+import {
+  apps,
+  discoveredApps,
+  inventoryIconUploadRequests,
+  inventoryIngestionJobs,
+  jobFailures,
+} from "@versioneer/db";
 
 import {
   getDb,
@@ -17,6 +23,7 @@ import {
   seedApp,
   seedArtifact,
   seedLatestRelease,
+  seedDiscoveredApp,
   seedRelease,
   seedSource,
 } from "../../__tests__/seed";
@@ -74,6 +81,19 @@ type InventoryResponse = {
     invalidApps: Array<{ index: number; appName: string | null; reasons: string[] }>;
   };
   processedAt: string;
+  submission?: {
+    id: string;
+  };
+  iconUpload?: {
+    uploadPath: string;
+    items: Array<{
+      uploadId: string;
+      lookupKey: string;
+      appName: string;
+      bundleId: string | null;
+      reason: "discovered_icon" | "catalog_icon";
+    }>;
+  };
 };
 
 async function postInventoryRequest(
@@ -100,6 +120,34 @@ async function postInventory(
   extraEnv?: Partial<Env>,
 ) {
   return postInventoryRequest({ body: JSON.stringify(body) }, extraEnv);
+}
+
+async function postInventoryIconUploadRequest(
+  uploadPath: string,
+  init: { body: BodyInit; headers?: HeadersInit },
+  extraEnv?: Partial<Env>,
+) {
+  const ctx = createExecutionContext();
+  const res = await app.request(
+    uploadPath,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...init.headers },
+      body: init.body,
+    },
+    { ...env, ...extraEnv },
+    ctx,
+  );
+  await waitOnExecutionContext(ctx);
+  return res;
+}
+
+async function postInventoryIconUpload(
+  uploadPath: string,
+  body: { items: Array<{ uploadId: string; iconBase64: string }> },
+  extraEnv?: Partial<Env>,
+) {
+  return postInventoryIconUploadRequest(uploadPath, { body: JSON.stringify(body) }, extraEnv);
 }
 
 async function readInventoryResponse(res: Response): Promise<InventoryResponse> {
@@ -757,6 +805,412 @@ describe("POST /v1/inventory/check", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.appName).toBe("Brand New App");
     expect(rows[0]!.bundleId).toBe(uniqueBundle);
+  });
+
+  it("returns submission-scoped icon upload requests only when icons are needed", async () => {
+    const uniqueBundle = "com.test.icon.requested";
+    const res = await postInventory({
+      client: { osVersion: "15.0", systemArchitecture: "arm64" },
+      apps: [
+        { appName: "Requested Unknown", bundleId: uniqueBundle, version: "1.0.0" },
+        { appName: "Firefox", bundleId: "org.mozilla.firefox", version: "129.0" },
+      ],
+    });
+
+    expect(res.status).toBe(200);
+    const body = await readInventoryResponse(res);
+    expect(body.submission?.id).toMatch(/^invsub_/);
+    expect(body.iconUpload?.uploadPath).toBe(`/v1/inventory/check/${body.submission!.id}/icons`);
+    expect(body.iconUpload?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          lookupKey: `bid:${uniqueBundle}`,
+          reason: "discovered_icon",
+        }),
+        expect.objectContaining({
+          lookupKey: "bid:org.mozilla.firefox",
+          reason: "catalog_icon",
+        }),
+      ]),
+    );
+
+    const rows = await getDb(env.DB)
+      .select()
+      .from(inventoryIconUploadRequests)
+      .where(eq(inventoryIconUploadRequests.submissionId, body.submission!.id))
+      .all();
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((row) => row.status))).toEqual(new Set(["pending"]));
+  });
+
+  it("does not request matched app icon uploads when the catalog already has an icon", async () => {
+    const db = getDb(env.DB);
+    const iconApp = await seedApp(db, {
+      canonicalName: "No Upload Existing Icon",
+      status: "public",
+      iconR2Key: "icons/already-present.png",
+    });
+    await seedAlias(db, iconApp.id, {
+      aliasType: "bundle_id",
+      value: "com.test.no-icon-upload",
+      normalizedValue: "com.test.no-icon-upload",
+    });
+    const source = await seedSource(db, iconApp.id, {
+      sourceType: "github_releases",
+      parserKey: "github_releases",
+      reviewStatus: "approved",
+      role: "authority",
+      status: "active",
+      lastSuccessAt: TEST_NOW.toISOString(),
+    });
+    const release = await seedRelease(db, iconApp.id, {
+      versionRaw: "2.0.0",
+      versionNormalized: normalizeVersion("2.0.0"),
+      channel: "stable",
+      status: "active",
+      publishedBySourceId: source.id,
+    });
+    const artifact = await seedArtifact(db, release.id, {
+      artifactType: "dmg",
+      url: "https://example.com/no-upload.dmg",
+      architecture: "universal",
+      sha256: "noupiconhash",
+    });
+    await seedLatestRelease(db, {
+      appId: iconApp.id,
+      releaseId: release.id,
+      authoritySourceId: source.id,
+      artifactId: artifact.id,
+      targetArchitecture: "arm64",
+      versionNormalized: release.versionNormalized,
+      versionRaw: release.versionRaw,
+      installStrategy: "dmg_copy_replace",
+    });
+
+    const res = await postInventory({
+      client: { osVersion: "15.0", systemArchitecture: "arm64" },
+      apps: [
+        {
+          appName: "No Upload Existing Icon",
+          bundleId: "com.test.no-icon-upload",
+          version: "1.0.0",
+        },
+      ],
+    });
+
+    expect(res.status).toBe(200);
+    const body = await readInventoryResponse(res);
+    expect(body.iconUpload).toBeUndefined();
+  });
+
+  it("does not request discovered app icon uploads when the icon is already stored", async () => {
+    const db = getDb(env.DB);
+    const uniqueBundle = "com.test.discovered.icon-present";
+    await seedDiscoveredApp(db, {
+      lookupKey: `bid:${uniqueBundle}`,
+      appName: "Discovered Existing Icon",
+      bundleId: uniqueBundle,
+      iconR2Key: "icons/discovered-existing.png",
+      sightingCount: 3,
+    });
+
+    const res = await postInventory({
+      client: {},
+      apps: [{ appName: "Discovered Existing Icon", bundleId: uniqueBundle, version: "1.0.0" }],
+    });
+
+    expect(res.status).toBe(200);
+    const body = await readInventoryResponse(res);
+    expect(body.iconUpload).toBeUndefined();
+  });
+
+  it("accepts submission-scoped discovered icon uploads and enqueues ingestion", async () => {
+    const { queue, send } = createInventoryIngestionQueueMock();
+    const uniqueBundle = "com.test.icon.discovered.upload";
+    const inventoryRes = await postInventory({
+      client: {},
+      apps: [{ appName: "Icon Upload Unknown", bundleId: uniqueBundle, version: "1.0.0" }],
+    });
+    const inventoryBody = await readInventoryResponse(inventoryRes);
+    const upload = inventoryBody.iconUpload!.items[0]!;
+
+    const uploadRes = await postInventoryIconUpload(
+      inventoryBody.iconUpload!.uploadPath,
+      { items: [{ uploadId: upload.uploadId, iconBase64: TEST_ICON_BASE64 }] },
+      { INVENTORY_INGESTION_QUEUE: queue } as Partial<Env>,
+    );
+
+    expect(uploadRes.status).toBe(200);
+    const uploadBody = (await uploadRes.json()) as {
+      results: Array<{ uploadId: string; status: string }>;
+    };
+    expect(uploadBody.results).toEqual([
+      { uploadId: upload.uploadId, status: "accepted", retryable: false },
+    ]);
+    expect(send).toHaveBeenCalledTimes(1);
+
+    const job = await getDb(env.DB)
+      .select()
+      .from(inventoryIngestionJobs)
+      .where(eq(inventoryIngestionJobs.id, send.mock.calls[0]![0].ingestionId))
+      .get();
+    const payloadObject = await env.RAW_BUCKET.get(job!.payloadR2Key);
+    const payload = inventoryIngestionPayloadSchema.parse(JSON.parse(await payloadObject!.text()));
+    expect(payload.discoveredIconCandidates).toEqual([
+      expect.objectContaining({
+        lookupKey: `bid:${uniqueBundle}`,
+        iconBase64: TEST_ICON_BASE64,
+      }),
+    ]);
+
+    const row = await getDb(env.DB)
+      .select()
+      .from(inventoryIconUploadRequests)
+      .where(eq(inventoryIconUploadRequests.id, upload.uploadId))
+      .get();
+    expect(row?.status).toBe("received");
+
+    const discovered = await getDb(env.DB)
+      .select({ sightingCount: discoveredApps.sightingCount })
+      .from(discoveredApps)
+      .where(eq(discoveredApps.lookupKey, `bid:${uniqueBundle}`))
+      .get();
+    expect(discovered?.sightingCount).toBe(1);
+  });
+
+  it("returns client errors for malformed icon upload bodies", async () => {
+    const malformedRes = await postInventoryIconUploadRequest(
+      "/v1/inventory/check/invsub_malformed/icons",
+      { body: "{" },
+    );
+    expect(malformedRes.status).toBe(400);
+    expect((await malformedRes.json()) as unknown).toMatchObject({
+      error: "Invalid JSON body",
+    });
+
+    const oversizedRes = await postInventoryIconUploadRequest(
+      "/v1/inventory/check/invsub_oversized/icons",
+      {
+        headers: { "Content-Length": String(MAX_INVENTORY_JSON_BYTES + 1) },
+        body: "{}",
+      },
+    );
+    expect(oversizedRes.status).toBe(413);
+    expect((await oversizedRes.json()) as unknown).toMatchObject({
+      error: "Request body too large",
+    });
+  });
+
+  it("accepts submission-scoped catalog icon uploads without duplicating suggestions", async () => {
+    const { queue, send } = createInventoryIngestionQueueMock();
+    const inventoryRes = await postInventory(
+      {
+        client: { osVersion: "15.0", systemArchitecture: "arm64" },
+        apps: [{ appName: "Firefox", bundleId: "org.mozilla.firefox", version: "129.0" }],
+      },
+      { INVENTORY_INGESTION_QUEUE: queue } as Partial<Env>,
+    );
+    const inventoryBody = await readInventoryResponse(inventoryRes);
+    const upload = inventoryBody.iconUpload!.items.find((item) => item.reason === "catalog_icon")!;
+
+    const uploadRes = await postInventoryIconUpload(
+      inventoryBody.iconUpload!.uploadPath,
+      { items: [{ uploadId: upload.uploadId, iconBase64: TEST_ICON_BASE64 }] },
+      { INVENTORY_INGESTION_QUEUE: queue } as Partial<Env>,
+    );
+
+    expect(uploadRes.status).toBe(200);
+    expect(send).toHaveBeenCalledTimes(2);
+    const iconIngestionId = send.mock.calls[1]![0].ingestionId;
+    const job = await getDb(env.DB)
+      .select()
+      .from(inventoryIngestionJobs)
+      .where(eq(inventoryIngestionJobs.id, iconIngestionId))
+      .get();
+    const payloadObject = await env.RAW_BUCKET.get(job!.payloadR2Key);
+    const payload = inventoryIngestionPayloadSchema.parse(JSON.parse(await payloadObject!.text()));
+    expect(payload.matchedAppCandidates).toEqual([
+      expect.objectContaining({
+        appId: catalog.appA.id,
+        lookupKey: "bid:org.mozilla.firefox",
+        createSuggestions: false,
+        iconBase64: TEST_ICON_BASE64,
+      }),
+    ]);
+  });
+
+  it("skips invalid, duplicate, stale, and already satisfied icon uploads idempotently", async () => {
+    const db = getDb(env.DB);
+    const invalidInventoryRes = await postInventory({
+      client: {},
+      apps: [
+        { appName: "Icon Invalid Unknown", bundleId: "com.test.icon.invalid", version: "1.0.0" },
+        {
+          appName: "Icon Oversized Unknown",
+          bundleId: "com.test.icon.oversized",
+          version: "1.0.0",
+        },
+      ],
+    });
+    const invalidInventoryBody = await readInventoryResponse(invalidInventoryRes);
+    const invalidUpload = invalidInventoryBody.iconUpload!.items.find(
+      (item) => item.lookupKey === "bid:com.test.icon.invalid",
+    )!;
+    const oversizedUpload = invalidInventoryBody.iconUpload!.items.find(
+      (item) => item.lookupKey === "bid:com.test.icon.oversized",
+    )!;
+    const invalidRes = await postInventoryIconUpload(invalidInventoryBody.iconUpload!.uploadPath, {
+      items: [
+        { uploadId: invalidUpload.uploadId, iconBase64: "not base64!" },
+        { uploadId: oversizedUpload.uploadId, iconBase64: "x".repeat(500_001) },
+      ],
+    });
+    expect(invalidRes.status).toBe(200);
+    expect((await invalidRes.json()) as unknown).toMatchObject({
+      results: [
+        { uploadId: invalidUpload.uploadId, status: "invalid", reason: "invalid_icon_base64" },
+        { uploadId: oversizedUpload.uploadId, status: "invalid", reason: "icon_too_large" },
+      ],
+    });
+
+    const uniqueBundle = "com.test.icon.edge";
+    const inventoryRes = await postInventory({
+      client: {},
+      apps: [{ appName: "Icon Edge Unknown", bundleId: uniqueBundle, version: "1.0.0" }],
+    });
+    const inventoryBody = await readInventoryResponse(inventoryRes);
+    const upload = inventoryBody.iconUpload!.items[0]!;
+
+    await db
+      .update(inventoryIconUploadRequests)
+      .set({ expiresAt: "2026-03-30T00:00:00.000Z" })
+      .where(eq(inventoryIconUploadRequests.id, upload.uploadId));
+
+    const staleRes = await postInventoryIconUpload(inventoryBody.iconUpload!.uploadPath, {
+      items: [{ uploadId: upload.uploadId, iconBase64: TEST_ICON_BASE64 }],
+    });
+    expect(staleRes.status).toBe(200);
+    expect((await staleRes.json()) as unknown).toMatchObject({
+      results: [{ uploadId: upload.uploadId, status: "skipped", reason: "expired" }],
+    });
+
+    const duplicateRes = await postInventoryIconUpload(inventoryBody.iconUpload!.uploadPath, {
+      items: [
+        { uploadId: "missing-upload-id", iconBase64: TEST_ICON_BASE64 },
+        { uploadId: upload.uploadId, iconBase64: "not base64!" },
+        { uploadId: upload.uploadId, iconBase64: TEST_ICON_BASE64 },
+      ],
+    });
+    expect(duplicateRes.status).toBe(200);
+    expect((await duplicateRes.json()) as unknown).toMatchObject({
+      results: [
+        { uploadId: "missing-upload-id", status: "invalid", reason: "unknown_upload_id" },
+        { uploadId: upload.uploadId, status: "skipped", reason: "expired" },
+        { uploadId: upload.uploadId, status: "skipped", reason: "duplicate_upload_id" },
+      ],
+    });
+
+    const satisfiedApp = await seedApp(db, {
+      canonicalName: "Already Satisfied Upload",
+      status: "public",
+    });
+    await seedAlias(db, satisfiedApp.id, {
+      aliasType: "bundle_id",
+      value: "com.test.icon.satisfied",
+      normalizedValue: "com.test.icon.satisfied",
+    });
+    const satisfiedSource = await seedSource(db, satisfiedApp.id, {
+      sourceType: "github_releases",
+      parserKey: "github_releases",
+      reviewStatus: "approved",
+      role: "authority",
+      status: "active",
+      lastSuccessAt: TEST_NOW.toISOString(),
+    });
+    const satisfiedRelease = await seedRelease(db, satisfiedApp.id, {
+      versionRaw: "2.0.0",
+      versionNormalized: normalizeVersion("2.0.0"),
+      channel: "stable",
+      status: "active",
+      publishedBySourceId: satisfiedSource.id,
+    });
+    const satisfiedArtifact = await seedArtifact(db, satisfiedRelease.id, {
+      artifactType: "dmg",
+      url: "https://example.com/satisfied.dmg",
+      architecture: "universal",
+      sha256: "satisfiedhash",
+    });
+    await seedLatestRelease(db, {
+      appId: satisfiedApp.id,
+      releaseId: satisfiedRelease.id,
+      authoritySourceId: satisfiedSource.id,
+      artifactId: satisfiedArtifact.id,
+      targetArchitecture: "arm64",
+      versionNormalized: satisfiedRelease.versionNormalized,
+      versionRaw: satisfiedRelease.versionRaw,
+      installStrategy: "dmg_copy_replace",
+    });
+    await env.CACHE_KV.delete(inventoryMatchSnapshotKey());
+
+    const catalogRes = await postInventory({
+      client: { osVersion: "15.0", systemArchitecture: "arm64" },
+      apps: [
+        {
+          appName: "Already Satisfied Upload",
+          bundleId: "com.test.icon.satisfied",
+          version: "1.0.0",
+        },
+      ],
+    });
+    const catalogBody = await readInventoryResponse(catalogRes);
+    const catalogUpload = catalogBody.iconUpload!.items.find(
+      (item) => item.reason === "catalog_icon",
+    )!;
+    await db
+      .update(apps)
+      .set({ iconR2Key: "icons/satisfied.png" })
+      .where(eq(apps.id, satisfiedApp.id));
+
+    const satisfiedRes = await postInventoryIconUpload(catalogBody.iconUpload!.uploadPath, {
+      items: [{ uploadId: catalogUpload.uploadId, iconBase64: TEST_ICON_BASE64 }],
+    });
+    expect(satisfiedRes.status).toBe(200);
+    expect((await satisfiedRes.json()) as unknown).toMatchObject({
+      results: [
+        { uploadId: catalogUpload.uploadId, status: "skipped", reason: "already_satisfied" },
+      ],
+    });
+  });
+
+  it("returns retryable icon upload failures when R2 payload persistence fails", async () => {
+    const failingBucket = {
+      put: vi.fn<() => Promise<void>>(async () => {
+        throw new Error("r2 unavailable for icons");
+      }),
+    } as unknown as R2Bucket;
+    const inventoryRes = await postInventory({
+      client: {},
+      apps: [{ appName: "Icon R2 Failure", bundleId: "com.test.icon.r2fail", version: "1.0.0" }],
+    });
+    const inventoryBody = await readInventoryResponse(inventoryRes);
+    const upload = inventoryBody.iconUpload!.items[0]!;
+
+    const uploadRes = await postInventoryIconUpload(
+      inventoryBody.iconUpload!.uploadPath,
+      { items: [{ uploadId: upload.uploadId, iconBase64: TEST_ICON_BASE64 }] },
+      { RAW_BUCKET: failingBucket } as Partial<Env>,
+    );
+    expect(uploadRes.status).toBe(200);
+    expect((await uploadRes.json()) as unknown).toMatchObject({
+      results: [
+        {
+          uploadId: upload.uploadId,
+          status: "failed",
+          retryable: true,
+          reason: "r2 unavailable for icons",
+        },
+      ],
+    });
   });
 
   it("creates a durable inventory ingestion payload, row, and queue message", async () => {

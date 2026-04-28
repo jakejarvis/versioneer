@@ -7,6 +7,14 @@ import { getInventoryMatchSnapshot } from "@versioneer/core/cache";
 import { toEpochMs } from "@versioneer/core/dates";
 import { createAliasMatchIndex, matchAppWithIndex } from "@versioneer/core/identity";
 import type {
+  InventoryIngestionDiscoveredIconCandidate,
+  InventoryIngestionMatchedAppCandidate,
+  InventoryIngestionPayload,
+} from "@versioneer/core/pipeline";
+import { inventoryIconUploadRequestSchema } from "@versioneer/core/validation";
+import type {
+  InventoryIconUploadDescriptor,
+  InventoryIconUploadResponse,
   InventoryResult,
   InstallTrust,
   InstallTrustReason,
@@ -14,7 +22,16 @@ import type {
 } from "@versioneer/core/validation";
 import { displayVersion, normalizeVersion } from "@versioneer/core/versioning";
 import { createDb } from "@versioneer/db";
-import { appLatestReleases, artifacts, releases, sources } from "@versioneer/db";
+import {
+  appLatestReleases,
+  apps,
+  artifacts,
+  generateId,
+  idPrefixes,
+  inventoryIconUploadRequests,
+  releases,
+  sources,
+} from "@versioneer/db";
 import {
   artifactCompatibilityIsKnown,
   artifactSupportsTarget,
@@ -26,19 +43,31 @@ import {
 import type { InstallStrategy } from "@versioneer/schemas/releases";
 
 import { D1_PARAM_LIMIT } from "../lib/constants";
-import { computeStaleSince, isOsVersionCompatible } from "./helpers";
+import { computeStaleSince, isOsVersionCompatible } from "../lib/inventory-helpers";
 import {
   buildInventoryIngestionPayload,
   collectUnmatchedApps,
   computeLookupKey,
+  type DiscoveryCandidate,
+  ensureDiscoveredAppsWithoutSighting,
   inventoryIngestionItemCount,
+  loadPersistedDiscoveriesByLookupKey,
+  type PersistedDiscovery,
   persistAndEnqueueInventoryIngestion,
   upsertDiscoveredApps,
-} from "./inventory-ingestion-handoff";
-import { type InventoryEnv, gzipJsonMiddleware } from "./inventory-request";
+} from "../lib/inventory-ingestion-handoff";
+import {
+  type InventoryEnv,
+  gzipJsonMiddleware,
+  inventoryJsonReadErrorToHttpException,
+  readInventoryJson,
+} from "../lib/inventory-request";
 
+type Db = ReturnType<typeof createDb>;
 type LatestReleaseRow = typeof appLatestReleases.$inferSelect;
 type ArtifactRow = typeof artifacts.$inferSelect;
+type IconUploadRequestRow = typeof inventoryIconUploadRequests.$inferSelect;
+type IconUploadRequestInsert = typeof inventoryIconUploadRequests.$inferInsert;
 type LatestByAppChannel = Map<string, Map<string, Map<TargetArchitecture, LatestReleaseRow>>>;
 type InventoryAppInfo = NonNullable<
   Awaited<ReturnType<typeof getInventoryMatchSnapshot>>["appsById"][string]
@@ -66,8 +95,18 @@ type CompatibleReleaseRequest = {
   channel: string;
 };
 
+type ManifestResult = {
+  submissionId: string;
+  iconUpload: InventoryIconUploadDescriptor | null;
+  count: number;
+};
+
+type UploadResult = InventoryIconUploadResponse["results"][number];
+
 const MAX_CONCURRENT_D1_READS = 8;
 const MAX_CONCURRENT_FALLBACK_LOOKUPS = 8;
+const ICON_UPLOAD_REQUEST_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_ICON_BASE64_CHARS = 500_000;
 
 function inferInstallStrategy(
   sourceType: string | null,
@@ -192,6 +231,14 @@ function chunkStrings(values: string[], chunkSize: number): string[][] {
   const chunks: string[][] = [];
   for (let i = 0; i < values.length; i += chunkSize) {
     chunks.push(values.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+function chunkItems<T>(items: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
   }
   return chunks;
 }
@@ -627,6 +674,235 @@ function collectCompatibleReleaseFallbackRequests(params: {
   return [...requests.values()];
 }
 
+function expiresAtFor(now: string): string {
+  return new Date(new Date(now).getTime() + ICON_UPLOAD_REQUEST_TTL_MS).toISOString();
+}
+
+function uploadPathFor(submissionId: string): string {
+  return `/v1/inventory/check/${submissionId}/icons`;
+}
+
+function requestMetadata(app: InstalledApp | DiscoveryCandidate) {
+  return {
+    appName: app.appName,
+    bundleId: app.bundleId ?? null,
+    teamId: app.teamId ?? null,
+    version: app.version ?? null,
+    sparkleFeedUrl: app.sparkleFeedUrl ?? null,
+    sparklePublicKey: app.sparklePublicKey ?? null,
+    isSparkleApp: app.isSparkleApp ?? null,
+    isMasApp: app.isMasApp ?? null,
+    masAppId: app.masAppId ?? null,
+    isElectronApp: app.isElectronApp ?? null,
+    electronUpdateProvider: app.electronUpdateProvider ?? null,
+    electronUpdateUrl: app.electronUpdateUrl ?? null,
+    codeSigningAuthority: app.codeSigningAuthority ?? null,
+    appCategory: app.appCategory ?? null,
+    minMacOSVersion: app.minMacOSVersion ?? null,
+    homebrewCaskToken: app.homebrewCaskToken ?? null,
+  };
+}
+
+function responseReasonForKind(kind: IconUploadRequestInsert["kind"]) {
+  return kind === "catalog" ? "catalog_icon" : "discovered_icon";
+}
+
+async function insertIconUploadRequests(db: Db, rows: IconUploadRequestInsert[]) {
+  if (rows.length === 0) return;
+
+  const maxRowsPerInsert = Math.max(1, Math.floor(D1_PARAM_LIMIT / 30));
+  for (const chunk of chunkItems(rows, maxRowsPerInsert)) {
+    await db.insert(inventoryIconUploadRequests).values(chunk).run();
+  }
+}
+
+async function createInventoryIconUploadManifest(params: {
+  db: Db;
+  requestApps: InstalledApp[];
+  resultsByLookupKey: ReadonlyMap<string, InventoryResult>;
+  unmatchedByKey: ReadonlyMap<string, DiscoveryCandidate>;
+  now: string;
+}): Promise<ManifestResult> {
+  const submissionId = generateId(idPrefixes.inventorySubmission);
+  const expiresAt = expiresAtFor(params.now);
+  const rows: IconUploadRequestInsert[] = [];
+  const items: InventoryIconUploadDescriptor["items"] = [];
+  const requestByLookupKey = new Map(
+    params.requestApps.map((app) => [computeLookupKey(app.appName, app.bundleId), app] as const),
+  );
+
+  const pushRequest = (
+    kind: IconUploadRequestInsert["kind"],
+    lookupKey: string,
+    source: InstalledApp | DiscoveryCandidate,
+    appId: string | null,
+  ) => {
+    const id = generateId(idPrefixes.inventoryIconUpload);
+    const metadata = requestMetadata(source);
+    rows.push({
+      id,
+      submissionId,
+      kind,
+      status: "pending",
+      lookupKey,
+      appId,
+      ...metadata,
+      createdAt: params.now,
+      updatedAt: params.now,
+      expiresAt,
+    });
+    items.push({
+      uploadId: id,
+      lookupKey,
+      appName: metadata.appName,
+      bundleId: metadata.bundleId,
+      reason: responseReasonForKind(kind),
+    });
+  };
+
+  const discoveredUploadLookupKeys = [...params.unmatchedByKey]
+    .filter(([, app]) => !app.iconBase64)
+    .map(([lookupKey]) => lookupKey);
+  const persistedDiscoveries = await loadPersistedDiscoveriesByLookupKey(
+    params.db,
+    discoveredUploadLookupKeys,
+  );
+
+  for (const [lookupKey, app] of params.unmatchedByKey) {
+    if (app.iconBase64) continue;
+    if (persistedDiscoveries.get(lookupKey)?.iconR2Key) continue;
+    pushRequest("discovered", lookupKey, app, null);
+  }
+
+  for (const [lookupKey, result] of params.resultsByLookupKey) {
+    if (result.catalog.trackingState !== "public") continue;
+    if (result.catalog.iconUrl) continue;
+    const appId = result.catalog.match.appId;
+    if (!appId) continue;
+
+    const installedApp = requestByLookupKey.get(lookupKey);
+    if (!installedApp || installedApp.iconBase64) continue;
+    pushRequest("catalog", lookupKey, installedApp, appId);
+  }
+
+  await insertIconUploadRequests(params.db, rows);
+  return {
+    submissionId,
+    iconUpload:
+      items.length > 0
+        ? {
+            uploadPath: uploadPathFor(submissionId),
+            items,
+          }
+        : null,
+    count: items.length,
+  };
+}
+
+function isExpired(row: IconUploadRequestRow, now: string): boolean {
+  return row.expiresAt <= now;
+}
+
+function invalidResult(uploadId: string, reason: string): UploadResult {
+  return { uploadId, status: "invalid", reason, retryable: false };
+}
+
+function skippedResult(uploadId: string, reason: string): UploadResult {
+  return { uploadId, status: "skipped", reason, retryable: false };
+}
+
+function acceptedResult(uploadId: string): UploadResult {
+  return { uploadId, status: "accepted", retryable: false };
+}
+
+function failedResult(uploadId: string, reason: string): UploadResult {
+  return { uploadId, status: "failed", reason, retryable: true };
+}
+
+function validateIconBase64(value: string): string | null {
+  if (value.length > MAX_ICON_BASE64_CHARS) return "icon_too_large";
+  try {
+    atob(value);
+    return null;
+  } catch {
+    return "invalid_icon_base64";
+  }
+}
+
+function discoveryCandidateForRow(row: IconUploadRequestRow): DiscoveryCandidate {
+  return {
+    appName: row.appName,
+    bundleId: row.bundleId,
+    teamId: row.teamId,
+    version: row.version,
+    sparkleFeedUrl: row.sparkleFeedUrl,
+    sparklePublicKey: row.sparklePublicKey,
+    isSparkleApp: row.isSparkleApp,
+    isMasApp: row.isMasApp,
+    masAppId: row.masAppId,
+    isElectronApp: row.isElectronApp,
+    electronUpdateProvider: row.electronUpdateProvider,
+    electronUpdateUrl: row.electronUpdateUrl,
+    codeSigningAuthority: row.codeSigningAuthority,
+    appCategory: row.appCategory,
+    minMacOSVersion: row.minMacOSVersion,
+    homebrewCaskToken: row.homebrewCaskToken,
+  };
+}
+
+async function selectUploadRows(db: Db, uploadIds: string[]): Promise<IconUploadRequestRow[]> {
+  const rows: IconUploadRequestRow[] = [];
+  for (const chunk of chunkStrings(uploadIds, D1_PARAM_LIMIT)) {
+    if (chunk.length === 0) continue;
+    rows.push(
+      ...(await db
+        .select()
+        .from(inventoryIconUploadRequests)
+        .where(inArray(inventoryIconUploadRequests.id, chunk))
+        .all()),
+    );
+  }
+  return rows;
+}
+
+async function updateUploadStatus(params: {
+  db: Db;
+  uploadIds: string[];
+  status: IconUploadRequestInsert["status"];
+  now: string;
+  errorMessage?: string | null;
+}) {
+  await Promise.all(
+    params.uploadIds.map((uploadId) =>
+      params.db
+        .update(inventoryIconUploadRequests)
+        .set({
+          status: params.status,
+          updatedAt: params.now,
+          receivedAt: params.status === "received" ? params.now : null,
+          errorMessage: params.errorMessage ?? null,
+        })
+        .where(eq(inventoryIconUploadRequests.id, uploadId)),
+    ),
+  );
+}
+
+async function currentCatalogIconByAppId(
+  db: Db,
+  appIds: string[],
+): Promise<Map<string, string | null>> {
+  const rows = await Promise.all(
+    chunkStrings(appIds, D1_PARAM_LIMIT).map((chunk) =>
+      db
+        .select({ id: apps.id, iconR2Key: apps.iconR2Key })
+        .from(apps)
+        .where(inArray(apps.id, chunk))
+        .all(),
+    ),
+  );
+  return new Map(rows.flat().map((row) => [row.id, row.iconR2Key]));
+}
+
 export const inventoryRoutes = new Hono<InventoryEnv>()
   // POST /v1/inventory/check
   .post("/inventory/check", clientRateLimit, gzipJsonMiddleware, async (c) => {
@@ -943,6 +1219,15 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       ),
     );
     const unmatchedByKey = collectUnmatchedApps(request.apps, resultByLookupKey);
+    const iconManifestStart = performance.now();
+    const iconUploadManifest = await createInventoryIconUploadManifest({
+      db,
+      requestApps: request.apps,
+      resultsByLookupKey: resultByLookupKey,
+      unmatchedByKey,
+      now,
+    });
+    routeTimings.iconManifestMs = elapsedMs(iconManifestStart);
     const handoffPromise = (async () => {
       const backgroundStart = performance.now();
       const backgroundDb = createDb(c.env.DB);
@@ -1011,6 +1296,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       discovered_count: unmatchedByKey.size,
       ingestion_count: null,
       ingestion_scheduled: true,
+      icon_upload_request_count: iconUploadManifest.count,
       scan_duration_ms: request.scanDurationMs ?? null,
       timing_parse_ms: timings.parseMs,
       timing_schema_validation_ms: timings.validationMs,
@@ -1023,6 +1309,7 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
       timing_source_freshness_read_ms: routeTimings.sourceFreshnessReadMs ?? null,
       timing_fallback_read_ms: routeTimings.fallbackReadMs ?? null,
       timing_result_build_ms: routeTimings.resultBuildMs ?? null,
+      timing_icon_manifest_ms: routeTimings.iconManifestMs ?? null,
       timing_handoff_schedule_ms: routeTimings.handoffScheduleMs ?? null,
       timing_response_total_ms: responseTotalMs,
       timing_route_known_total_ms: sumMs([
@@ -1032,14 +1319,233 @@ export const inventoryRoutes = new Hono<InventoryEnv>()
         routeTimings.matchMs,
         routeTimings.d1ReadMs,
         routeTimings.resultBuildMs,
+        routeTimings.iconManifestMs,
         routeTimings.handoffScheduleMs,
       ]),
     });
-    return c.json({
+    const response = {
       results,
       issues: {
         invalidApps: invalidInventoryApps,
       },
       processedAt: now,
-    });
+      submission: {
+        id: iconUploadManifest.submissionId,
+      },
+      ...(iconUploadManifest.iconUpload ? { iconUpload: iconUploadManifest.iconUpload } : {}),
+    };
+    return c.json(response);
+  })
+  .post("/inventory/check/:submissionId/icons", clientRateLimit, async (c) => {
+    const submissionId = c.req.param("submissionId");
+    let body: unknown;
+    try {
+      body = await readInventoryJson(c.req.raw);
+    } catch (error) {
+      throw inventoryJsonReadErrorToHttpException(error);
+    }
+    const parsed = inventoryIconUploadRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "Invalid icon upload request", issues: parsed.error.issues }, 400);
+    }
+
+    const db = createDb(c.env.DB);
+    const now = new Date().toISOString();
+    const seen = new Set<string>();
+    const uploadIds = [...new Set(parsed.data.items.map((item) => item.uploadId))];
+    const rows = await selectUploadRows(db, uploadIds);
+    const rowsById = new Map(rows.map((row) => [row.id, row]));
+    const orderedResults: Array<UploadResult | null> = parsed.data.items.map(() => null);
+    const eligible: Array<{
+      inputIndex: number;
+      row: IconUploadRequestRow;
+      iconBase64: string;
+    }> = [];
+
+    for (const [inputIndex, item] of parsed.data.items.entries()) {
+      if (seen.has(item.uploadId)) {
+        orderedResults[inputIndex] = skippedResult(item.uploadId, "duplicate_upload_id");
+        continue;
+      }
+      seen.add(item.uploadId);
+
+      const row = rowsById.get(item.uploadId);
+      if (!row || row.submissionId !== submissionId) {
+        orderedResults[inputIndex] = invalidResult(item.uploadId, "unknown_upload_id");
+        continue;
+      }
+      if (row.status === "received") {
+        orderedResults[inputIndex] = skippedResult(item.uploadId, "already_received");
+        continue;
+      }
+      if (row.status === "skipped") {
+        orderedResults[inputIndex] = skippedResult(item.uploadId, row.errorMessage ?? "skipped");
+        continue;
+      }
+      if (isExpired(row, now)) {
+        orderedResults[inputIndex] = skippedResult(item.uploadId, "expired");
+        await updateUploadStatus({
+          db,
+          uploadIds: [item.uploadId],
+          status: "skipped",
+          now,
+          errorMessage: "expired",
+        });
+        continue;
+      }
+
+      const invalidReason = validateIconBase64(item.iconBase64);
+      if (invalidReason) {
+        orderedResults[inputIndex] = invalidResult(item.uploadId, invalidReason);
+        continue;
+      }
+
+      eligible.push({ inputIndex, row, iconBase64: item.iconBase64 });
+    }
+
+    const catalogAppIds = [
+      ...new Set(
+        eligible
+          .filter((entry) => entry.row.kind === "catalog" && entry.row.appId)
+          .map((entry) => entry.row.appId!),
+      ),
+    ];
+    const catalogIconByAppId = await currentCatalogIconByAppId(db, catalogAppIds);
+
+    const discoveredCandidatesByLookupKey = new Map<string, DiscoveryCandidate>();
+    for (const entry of eligible) {
+      if (entry.row.kind === "discovered") {
+        discoveredCandidatesByLookupKey.set(
+          entry.row.lookupKey,
+          discoveryCandidateForRow(entry.row),
+        );
+      }
+    }
+    let persistedDiscoveries = new Map<string, PersistedDiscovery>();
+    if (discoveredCandidatesByLookupKey.size > 0) {
+      const discoveryCreatedAt =
+        eligible.find((entry) => entry.row.kind === "discovered")?.row.createdAt ?? now;
+      persistedDiscoveries = await ensureDiscoveredAppsWithoutSighting({
+        db,
+        unmatchedByKey: discoveredCandidatesByLookupKey,
+        now: discoveryCreatedAt,
+      });
+    }
+
+    const acceptedUploadIds: string[] = [];
+    const discoveredIconCandidates: InventoryIngestionDiscoveredIconCandidate[] = [];
+    const matchedAppCandidates: InventoryIngestionMatchedAppCandidate[] = [];
+
+    for (const entry of eligible) {
+      const { row, iconBase64 } = entry;
+      if (row.kind === "catalog") {
+        if (!row.appId) {
+          orderedResults[entry.inputIndex] = invalidResult(row.id, "missing_catalog_app_id");
+          continue;
+        }
+        if (catalogIconByAppId.get(row.appId)) {
+          orderedResults[entry.inputIndex] = skippedResult(row.id, "already_satisfied");
+          await updateUploadStatus({
+            db,
+            uploadIds: [row.id],
+            status: "skipped",
+            now,
+            errorMessage: "already_satisfied",
+          });
+          continue;
+        }
+        matchedAppCandidates.push({
+          appId: row.appId,
+          lookupKey: row.lookupKey,
+          createSuggestions: false,
+          iconBase64,
+          bundleId: row.bundleId,
+          teamId: row.teamId,
+          sparkleFeedUrl: row.sparkleFeedUrl,
+          sparklePublicKey: row.sparklePublicKey,
+          isMasApp: row.isMasApp,
+          masAppId: row.masAppId,
+          electronUpdateProvider: row.electronUpdateProvider,
+          electronUpdateUrl: row.electronUpdateUrl,
+          homebrewCaskToken: row.homebrewCaskToken,
+        });
+        acceptedUploadIds.push(row.id);
+        continue;
+      }
+
+      const persisted = persistedDiscoveries.get(row.lookupKey);
+      if (!persisted) {
+        orderedResults[entry.inputIndex] = failedResult(row.id, "discovered_app_not_persisted");
+        continue;
+      }
+      if (persisted.iconR2Key) {
+        orderedResults[entry.inputIndex] = skippedResult(row.id, "already_satisfied");
+        await updateUploadStatus({
+          db,
+          uploadIds: [row.id],
+          status: "skipped",
+          now,
+          errorMessage: "already_satisfied",
+        });
+        continue;
+      }
+
+      discoveredIconCandidates.push({
+        discoveredAppId: persisted.id,
+        lookupKey: row.lookupKey,
+        iconBase64,
+      });
+      acceptedUploadIds.push(row.id);
+    }
+
+    const payload: InventoryIngestionPayload = {
+      version: 1,
+      processedAt: now,
+      discoveredIconCandidates,
+      matchedAppCandidates,
+    };
+
+    if (inventoryIngestionItemCount(payload) > 0) {
+      try {
+        await persistAndEnqueueInventoryIngestion({
+          db,
+          env: c.env,
+          payload,
+          now,
+          throwOnHandoffFailure: true,
+        });
+        await updateUploadStatus({
+          db,
+          uploadIds: acceptedUploadIds,
+          status: "received",
+          now,
+        });
+        for (const entry of eligible) {
+          if (acceptedUploadIds.includes(entry.row.id)) {
+            orderedResults[entry.inputIndex] = acceptedResult(entry.row.id);
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await updateUploadStatus({
+          db,
+          uploadIds: acceptedUploadIds,
+          status: "failed",
+          now,
+          errorMessage: message,
+        });
+        for (const entry of eligible) {
+          if (acceptedUploadIds.includes(entry.row.id)) {
+            orderedResults[entry.inputIndex] = failedResult(entry.row.id, message);
+          }
+        }
+      }
+    }
+
+    return c.json({
+      submissionId,
+      results: parsed.data.items.map(
+        (item, index) => orderedResults[index] ?? skippedResult(item.uploadId, "no_work"),
+      ),
+    } satisfies InventoryIconUploadResponse);
   });

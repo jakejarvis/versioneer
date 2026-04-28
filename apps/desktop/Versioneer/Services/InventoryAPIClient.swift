@@ -6,9 +6,11 @@ import zlib
 /// Submits app inventory to the backend and decodes update decisions.
 nonisolated struct InventoryAPIClient: Sendable {
   let baseURL: URL
+  let session: URLSession
 
-  init(baseURL: URL) {
+  init(baseURL: URL, session: URLSession = .shared) {
     self.baseURL = baseURL
+    self.session = session
   }
 
   /// Response from the release notes endpoint.
@@ -21,6 +23,61 @@ nonisolated struct InventoryAPIClient: Sendable {
     let releaseNotesUrl: String?
   }
 
+  struct InventoryIconUploadSummary: Sendable, Equatable {
+    var requested: Int
+    var attempted: Int
+    var accepted: Int
+    var skipped: Int
+    var invalid: Int
+    var failed: Int
+
+    static let empty = InventoryIconUploadSummary(
+      requested: 0,
+      attempted: 0,
+      accepted: 0,
+      skipped: 0,
+      invalid: 0,
+      failed: 0
+    )
+
+    mutating func merge(_ other: InventoryIconUploadSummary) {
+      requested += other.requested
+      attempted += other.attempted
+      accepted += other.accepted
+      skipped += other.skipped
+      invalid += other.invalid
+      failed += other.failed
+    }
+  }
+
+  private struct InventoryIconUploadRequestPayload: Codable, Sendable {
+    let items: [Item]
+
+    struct Item: Codable, Sendable, Equatable {
+      let uploadId: String
+      let iconBase64: String
+    }
+  }
+
+  private struct InventoryIconUploadServerResponse: Codable, Sendable {
+    let submissionId: String
+    let results: [Result]
+
+    struct Result: Codable, Sendable {
+      let uploadId: String
+      let status: Status
+      let reason: String?
+      let retryable: Bool?
+
+      enum Status: String, Codable, Sendable {
+        case accepted
+        case skipped
+        case invalid
+        case failed
+      }
+    }
+  }
+
   /// Fetches release notes for a specific release.
   func fetchReleaseNotes(releaseId: String) async throws -> ReleaseNotesResponse {
     let endpoint = baseURL.appendingPathComponent("v1/releases/\(releaseId)/notes")
@@ -28,7 +85,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     request.httpMethod = "GET"
     request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-    let (data, response) = try await URLSession.shared.data(for: request)
+    let (data, response) = try await session.data(for: request)
 
     guard let httpResponse = response as? HTTPURLResponse else {
       throw APIError.invalidResponse
@@ -76,7 +133,7 @@ nonisolated struct InventoryAPIClient: Sendable {
       Logger.api.info("Submitting inventory with \(apps.count) apps (\(jsonData.count) bytes)")
     }
 
-    let (data, response) = try await URLSession.shared.data(for: request)
+    let (data, response) = try await session.data(for: request)
 
     guard let httpResponse = response as? HTTPURLResponse else {
       throw APIError.invalidResponse
@@ -149,6 +206,159 @@ nonisolated struct InventoryAPIClient: Sendable {
     )
   }
 
+  @discardableResult
+  func uploadRequestedIcons(
+    _ iconUpload: InventoryCheckResponse.IconUpload?,
+    from apps: [InstalledApp],
+    iconExtractor: @escaping @Sendable (InstalledApp) -> String? = {
+      Self.extractIconBase64(for: $0)
+    }
+  ) async -> InventoryIconUploadSummary {
+    guard let iconUpload, !iconUpload.items.isEmpty else {
+      return .empty
+    }
+
+    let appsByLookupKey = Self.appsByLookupKey(apps)
+    var uploadItems: [InventoryIconUploadRequestPayload.Item] = []
+    var summary = InventoryIconUploadSummary(
+      requested: iconUpload.items.count,
+      attempted: 0,
+      accepted: 0,
+      skipped: 0,
+      invalid: 0,
+      failed: 0
+    )
+
+    for item in iconUpload.items {
+      guard let app = appsByLookupKey[item.lookupKey] else {
+        summary.skipped += 1
+        continue
+      }
+      guard let iconBase64 = iconExtractor(app) else {
+        summary.skipped += 1
+        continue
+      }
+      uploadItems.append(.init(uploadId: item.uploadID, iconBase64: iconBase64))
+    }
+
+    summary.attempted = uploadItems.count
+    for startIndex in stride(from: 0, to: uploadItems.count, by: Self.iconUploadBatchSize) {
+      let endIndex = Swift.min(startIndex + Self.iconUploadBatchSize, uploadItems.count)
+      let batch = Array(uploadItems[startIndex..<endIndex])
+      let batchSummary = await uploadIconBatchWithRetries(batch, uploadPath: iconUpload.uploadPath)
+      summary.accepted += batchSummary.accepted
+      summary.skipped += batchSummary.skipped
+      summary.invalid += batchSummary.invalid
+      summary.failed += batchSummary.failed
+    }
+
+    Logger.api.info(
+      "Inventory icon upload complete: requested=\(summary.requested) attempted=\(summary.attempted) accepted=\(summary.accepted) skipped=\(summary.skipped) invalid=\(summary.invalid) failed=\(summary.failed)"
+    )
+    return summary
+  }
+
+  private func uploadIconBatchWithRetries(
+    _ batch: [InventoryIconUploadRequestPayload.Item],
+    uploadPath: String
+  ) async -> InventoryIconUploadSummary {
+    var pending = batch
+    var summary = InventoryIconUploadSummary(
+      requested: batch.count,
+      attempted: batch.count,
+      accepted: 0,
+      skipped: 0,
+      invalid: 0,
+      failed: 0
+    )
+
+    for attempt in 1...Self.iconUploadMaxAttempts {
+      do {
+        let response = try await postIconUploadBatch(pending, uploadPath: uploadPath)
+        let itemById = Dictionary(uniqueKeysWithValues: pending.map { ($0.uploadId, $0) })
+        var retryableItems: [InventoryIconUploadRequestPayload.Item] = []
+        let resultById = Dictionary(
+          uniqueKeysWithValues: response.results.map { ($0.uploadId, $0) })
+
+        for item in pending {
+          guard let result = resultById[item.uploadId] else {
+            if attempt < Self.iconUploadMaxAttempts {
+              retryableItems.append(item)
+            } else {
+              summary.failed += 1
+            }
+            continue
+          }
+
+          switch result.status {
+          case .accepted:
+            summary.accepted += 1
+          case .skipped:
+            summary.skipped += 1
+          case .invalid:
+            summary.invalid += 1
+          case .failed:
+            if result.retryable == true,
+              attempt < Self.iconUploadMaxAttempts,
+              let retryItem = itemById[result.uploadId]
+            {
+              retryableItems.append(retryItem)
+            } else {
+              summary.failed += 1
+            }
+          }
+        }
+
+        if retryableItems.isEmpty {
+          return summary
+        }
+        pending = retryableItems
+      } catch {
+        if attempt == Self.iconUploadMaxAttempts {
+          summary.failed += pending.count
+          Logger.api.warning("Inventory icon upload failed: \(error.localizedDescription)")
+          return summary
+        }
+      }
+
+      try? await Task.sleep(for: .milliseconds(250 * attempt))
+    }
+
+    return summary
+  }
+
+  private func postIconUploadBatch(
+    _ batch: [InventoryIconUploadRequestPayload.Item],
+    uploadPath: String
+  ) async throws -> InventoryIconUploadServerResponse {
+    let endpoint = try Self.iconUploadURL(baseURL: baseURL, uploadPath: uploadPath)
+    var request = URLRequest(url: endpoint)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+    let jsonData = try JSONEncoder().encode(InventoryIconUploadRequestPayload(items: batch))
+    if let compressed = Self.gzipCompress(jsonData) {
+      request.httpBody = compressed
+      request.setValue("gzip", forHTTPHeaderField: "Content-Encoding")
+    } else {
+      request.httpBody = jsonData
+    }
+
+    let (data, response) = try await session.data(for: request)
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw APIError.invalidResponse
+    }
+    guard httpResponse.statusCode == 200 else {
+      let body = String(data: data, encoding: .utf8) ?? ""
+      throw APIError.httpError(statusCode: httpResponse.statusCode, body: body)
+    }
+    do {
+      return try JSONDecoder().decode(InventoryIconUploadServerResponse.self, from: data)
+    } catch {
+      throw APIError.decodingFailed(error.localizedDescription)
+    }
+  }
+
   func prepareInstallExecution(
     plan: InstallPlan,
     installedApp: InstalledApp,
@@ -186,7 +396,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     )
     request.httpBody = try JSONEncoder().encode(payload)
 
-    let (data, response) = try await URLSession.shared.data(for: request)
+    let (data, response) = try await session.data(for: request)
 
     guard let httpResponse = response as? HTTPURLResponse else {
       throw APIError.invalidResponse
@@ -226,7 +436,7 @@ nonisolated struct InventoryAPIClient: Sendable {
     )
     request.httpBody = try JSONEncoder().encode(payload)
 
-    let (data, response) = try await URLSession.shared.data(for: request)
+    let (data, response) = try await session.data(for: request)
 
     guard let httpResponse = response as? HTTPURLResponse else {
       throw APIError.invalidResponse
@@ -281,6 +491,51 @@ nonisolated struct InventoryAPIClient: Sendable {
       }
     }
     return reported
+  }
+
+  private static let iconUploadBatchSize = 10
+  private static let iconUploadMaxAttempts = 3
+
+  static func lookupKey(appName: String, bundleId: String?) -> String {
+    if let bundleId, !bundleId.isEmpty {
+      return "bid:\(bundleId.lowercased())"
+    }
+    let normalizedName =
+      appName
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
+    let suffix = ".app"
+    if normalizedName.hasSuffix(suffix) {
+      return "name:\(String(normalizedName.dropLast(suffix.count)))"
+    }
+    return "name:\(normalizedName)"
+  }
+
+  static func appsByLookupKey(_ apps: [InstalledApp]) -> [String: InstalledApp] {
+    var result: [String: InstalledApp] = [:]
+    for app in apps {
+      let key = lookupKey(appName: app.name, bundleId: app.bundleId)
+      if result[key] == nil {
+        result[key] = app
+      }
+    }
+    return result
+  }
+
+  private static func iconUploadURL(baseURL: URL, uploadPath: String) throws -> URL {
+    if let absolute = URL(string: uploadPath), absolute.scheme != nil {
+      guard absolute.scheme == baseURL.scheme,
+        absolute.host == baseURL.host,
+        absolute.port == baseURL.port
+      else {
+        throw APIError.invalidRequest("Icon upload path must stay on the inventory API origin")
+      }
+      return absolute
+    }
+    guard let url = URL(string: uploadPath, relativeTo: baseURL)?.absoluteURL else {
+      throw APIError.invalidRequest("Invalid icon upload path")
+    }
+    return url
   }
 
   /// Compresses data using gzip (RFC 1952) via zlib's deflateInit2.

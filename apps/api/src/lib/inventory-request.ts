@@ -12,7 +12,7 @@ import {
   MAX_INVENTORY_GZIP_BYTES,
   MAX_INVENTORY_GZIP_EXPANSION_RATIO,
   MAX_INVENTORY_JSON_BYTES,
-} from "../lib/constants";
+} from "./constants";
 
 export type InventoryRequestTimings = {
   startedAt: number;
@@ -27,6 +27,25 @@ class RequestBodyTooLargeError extends Error {
   ) {
     super(`Request body exceeds ${maxBytes} bytes`);
   }
+}
+
+export function inventoryJsonReadErrorToHttpException(error: unknown): HTTPException {
+  if (error instanceof HTTPException) {
+    return error;
+  }
+  if (error instanceof RequestBodyTooLargeError) {
+    return new HTTPException(413, {
+      res: Response.json(
+        {
+          error: "Request body too large",
+          maxBytes: error.maxBytes,
+          actualBytes: error.actualBytes,
+        },
+        { status: 413 },
+      ),
+    });
+  }
+  return new HTTPException(400, { message: "Invalid JSON body" });
 }
 
 function parseContentLength(value: string | undefined): number | null {
@@ -101,7 +120,7 @@ function limitStreamBytes(
   };
 }
 
-async function readInventoryJson(request: Request): Promise<unknown> {
+export async function readInventoryJson(request: Request): Promise<unknown> {
   const contentEncoding = request.headers.get("content-encoding")?.trim().toLowerCase();
   const contentLength = request.headers.get("content-length") ?? undefined;
 
@@ -154,22 +173,7 @@ export const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next)
     body = await readInventoryJson(c.req.raw);
   } catch (error) {
     timings.parseMs = elapsedMs(parseStart);
-    if (error instanceof HTTPException) {
-      throw error;
-    }
-    if (error instanceof RequestBodyTooLargeError) {
-      throw new HTTPException(413, {
-        res: Response.json(
-          {
-            error: "Request body too large",
-            maxBytes: error.maxBytes,
-            actualBytes: error.actualBytes,
-          },
-          { status: 413 },
-        ),
-      });
-    }
-    throw new HTTPException(400, { message: "Invalid JSON body" });
+    throw inventoryJsonReadErrorToHttpException(error);
   }
   timings.parseMs = elapsedMs(parseStart);
 

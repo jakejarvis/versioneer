@@ -767,6 +767,9 @@ final class AppState {
         scanDurationMs: scanMs,
         channels: channelPrefs
       )
+      let iconUpload = response.iconUpload
+      let iconUploadApps = installedApps
+      let iconUploadClient = apiClient
       if !response.issues.invalidApps.isEmpty {
         Logger.api.warning(
           "Server rejected \(response.issues.invalidApps.count) app(s) due to validation errors")
@@ -793,6 +796,11 @@ final class AppState {
           installedApps: installedApps,
           inventoryResults: rawInventoryResults
         ))
+      if let iconUpload, !iconUpload.items.isEmpty {
+        Task(priority: .utility) {
+          await iconUploadClient.uploadRequestedIcons(iconUpload, from: iconUploadApps)
+        }
+      }
     } catch {
       // Backend failed — fall back to local results if we have any
       Logger.api.warning(

@@ -117,12 +117,62 @@ export const invalidInventoryAppSchema = z.object({
 
 export type InvalidInventoryApp = z.infer<typeof invalidInventoryAppSchema>;
 
+const inventorySubmissionSchema = z.object({
+  id: z.string(),
+});
+
+export const inventoryIconUploadItemSchema = z.object({
+  uploadId: z.string(),
+  lookupKey: z.string(),
+  appName: z.string(),
+  bundleId: z.string().nullable(),
+  reason: z.enum(["discovered_icon", "catalog_icon"]),
+});
+
+export type InventoryIconUploadItem = z.infer<typeof inventoryIconUploadItemSchema>;
+
+export const inventoryIconUploadDescriptorSchema = z.object({
+  uploadPath: z.string(),
+  items: z.array(inventoryIconUploadItemSchema),
+});
+
+export type InventoryIconUploadDescriptor = z.infer<typeof inventoryIconUploadDescriptorSchema>;
+
 export const inventoryCheckResponseSchema = z.object({
   results: z.array(inventoryResultSchema),
   issues: z.object({
     invalidApps: z.array(invalidInventoryAppSchema).default([]),
   }),
   processedAt: z.string(),
+  submission: inventorySubmissionSchema.optional(),
+  iconUpload: inventoryIconUploadDescriptorSchema.optional(),
 });
 
 export type InventoryCheckResponse = z.infer<typeof inventoryCheckResponseSchema>;
+
+export const inventoryIconUploadRequestSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        uploadId: z.string().min(1),
+        iconBase64: z.string().min(1),
+      }),
+    )
+    .max(20),
+});
+
+export type InventoryIconUploadRequest = z.infer<typeof inventoryIconUploadRequestSchema>;
+
+export const inventoryIconUploadResponseSchema = z.object({
+  submissionId: z.string(),
+  results: z.array(
+    z.object({
+      uploadId: z.string(),
+      status: z.enum(["accepted", "skipped", "invalid", "failed"]),
+      reason: z.string().optional(),
+      retryable: z.boolean().optional(),
+    }),
+  ),
+});
+
+export type InventoryIconUploadResponse = z.infer<typeof inventoryIconUploadResponseSchema>;

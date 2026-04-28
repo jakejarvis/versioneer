@@ -13,7 +13,7 @@ import type { InstalledApp, InventoryResult } from "@versioneer/core/validation"
 import { createDb } from "@versioneer/db";
 import { discoveredApps, generateId, idPrefixes, inventoryIngestionJobs } from "@versioneer/db";
 
-import { D1_PARAM_LIMIT } from "../lib/constants";
+import { D1_PARAM_LIMIT } from "./constants";
 
 type Db = ReturnType<typeof createDb>;
 
@@ -86,6 +86,72 @@ async function selectDiscoveredAppsByLookupKeys(db: Db, lookupKeys: string[]) {
   }
 
   return rows;
+}
+
+export async function loadPersistedDiscoveriesByLookupKey(
+  db: Db,
+  lookupKeys: Iterable<string>,
+): Promise<Map<string, PersistedDiscovery>> {
+  const rows = await selectDiscoveredAppsByLookupKeys(db, [...new Set(lookupKeys)]);
+  return new Map(
+    rows.map((row) => [row.lookupKey, { id: row.id, iconR2Key: row.iconR2Key }] as const),
+  );
+}
+
+export async function ensureDiscoveredAppsWithoutSighting(params: {
+  db: Db;
+  unmatchedByKey: Map<string, DiscoveryCandidate>;
+  now: string;
+}): Promise<Map<string, PersistedDiscovery>> {
+  const { db, unmatchedByKey, now } = params;
+  if (unmatchedByKey.size === 0) return new Map();
+
+  const allKeys = [...unmatchedByKey.keys()];
+  const existing = await loadPersistedDiscoveriesByLookupKey(db, allKeys);
+  const missing = [...unmatchedByKey].filter(([lookupKey]) => !existing.has(lookupKey));
+
+  const writes: BatchItem<"sqlite">[] = missing.map(([lookupKey, app]) =>
+    db
+      .insert(discoveredApps)
+      .values({
+        id: generateId(idPrefixes.discoveredApp),
+        lookupKey,
+        appName: app.appName,
+        bundleId: app.bundleId ?? null,
+        teamId: app.teamId ?? null,
+        sightingCount: 0,
+        firstSeenAt: now,
+        lastSeenAt: now,
+        status: "pending",
+        linkedAppId: null,
+        sampleVersions: JSON.stringify(nextSampleVersions(null, app.version)),
+        sparkleFeedUrl: app.sparkleFeedUrl ?? null,
+        sparklePublicKey: app.sparklePublicKey ?? null,
+        isSparkleApp: app.isSparkleApp ?? null,
+        isMasApp: app.isMasApp ?? null,
+        masAppId: app.masAppId ?? null,
+        isElectronApp: app.isElectronApp ?? null,
+        electronUpdateProvider: app.electronUpdateProvider ?? null,
+        electronUpdateUrl: app.electronUpdateUrl ?? null,
+        codeSigningAuthority: app.codeSigningAuthority ?? null,
+        appCategory: app.appCategory ?? null,
+        minMacOSVersion: app.minMacOSVersion ?? null,
+        homebrewCaskToken: app.homebrewCaskToken ?? null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: discoveredApps.lookupKey }),
+  );
+
+  if (writes.length > 0) {
+    const firstWrite = writes[0];
+    if (!firstWrite) {
+      throw new Error("Expected discovered app writes for inventory icon uploads");
+    }
+    await db.batch([firstWrite, ...writes.slice(1)]);
+  }
+
+  return loadPersistedDiscoveriesByLookupKey(db, allKeys);
 }
 
 function parseSampleVersions(value: string | null): string[] {
@@ -317,6 +383,7 @@ export async function persistAndEnqueueInventoryIngestion(params: {
   env: Env;
   payload: InventoryIngestionPayload;
   now: string;
+  throwOnHandoffFailure?: boolean;
 }): Promise<void> {
   const itemsTotal = inventoryIngestionItemCount(params.payload);
   if (itemsTotal === 0) return;
@@ -365,6 +432,9 @@ export async function persistAndEnqueueInventoryIngestion(params: {
       });
     } catch {
       // Inventory decisions are still useful even if best-effort failure tracking fails.
+    }
+    if (params.throwOnHandoffFailure) {
+      throw error;
     }
   }
 }

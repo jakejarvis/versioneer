@@ -1,3 +1,5 @@
+import { msElapsedSince } from "@versioneer/core/dates";
+
 /** Returns true if `current` >= `minimum` using numeric version comparison. */
 export function isOsVersionCompatible(
   current: string | null | undefined,
@@ -39,8 +41,6 @@ export function isArchCompatible(
   if (artifactArch === "universal") return true;
   return artifactArch === clientArch;
 }
-
-import { msElapsedSince } from "@versioneer/core/dates";
 
 const STALENESS_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
