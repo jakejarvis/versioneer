@@ -14,6 +14,12 @@ import {
   MAX_INVENTORY_JSON_BYTES,
 } from "../lib/constants";
 
+export type InventoryRequestTimings = {
+  startedAt: number;
+  parseMs: number;
+  validationMs: number;
+};
+
 class RequestBodyTooLargeError extends Error {
   constructor(
     readonly maxBytes: number,
@@ -34,6 +40,10 @@ function assertContentLengthWithinLimit(value: string | undefined, maxBytes: num
   if (contentLength !== null && contentLength > maxBytes) {
     throw new RequestBodyTooLargeError(maxBytes, contentLength);
   }
+}
+
+function elapsedMs(start: number): number {
+  return Math.round((performance.now() - start) * 100) / 100;
 }
 
 async function readStreamTextLimited(
@@ -126,14 +136,24 @@ export type InventoryEnv = {
       scanDurationMs?: number;
     };
     invalidInventoryApps: InvalidInventoryApp[];
+    inventoryRequestTimings: InventoryRequestTimings;
   };
 };
 
 export const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next) => {
+  const timings: InventoryRequestTimings = {
+    startedAt: performance.now(),
+    parseMs: 0,
+    validationMs: 0,
+  };
+  c.set("inventoryRequestTimings", timings);
+
   let body: unknown;
+  const parseStart = performance.now();
   try {
     body = await readInventoryJson(c.req.raw);
   } catch (error) {
+    timings.parseMs = elapsedMs(parseStart);
     if (error instanceof HTTPException) {
       throw error;
     }
@@ -151,9 +171,12 @@ export const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next)
     }
     throw new HTTPException(400, { message: "Invalid JSON body" });
   }
+  timings.parseMs = elapsedMs(parseStart);
 
+  const validationStart = performance.now();
   const envelope = inventoryRequestEnvelopeSchema.safeParse(body);
   if (!envelope.success) {
+    timings.validationMs = elapsedMs(validationStart);
     throw new HTTPException(400, {
       res: Response.json(
         { error: "Invalid request", details: envelope.error.issues },
@@ -181,6 +204,7 @@ export const gzipJsonMiddleware = createMiddleware<InventoryEnv>(async (c, next)
       reasons: parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`),
     });
   }
+  timings.validationMs = elapsedMs(validationStart);
 
   c.set("inventoryRequest", {
     client: envelope.data.client,

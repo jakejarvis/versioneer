@@ -820,6 +820,118 @@ describe("POST /v1/inventory/check", () => {
     ]);
   });
 
+  it("skips matched app icon payloads when the catalog already has an icon", async () => {
+    const { queue, send } = createInventoryIngestionQueueMock();
+    const db = getDb(env.DB);
+    const iconApp = await seedApp(db, {
+      canonicalName: "Icon Existing App",
+      status: "public",
+      iconR2Key: "icons/existing.png",
+    });
+    await seedAlias(db, iconApp.id, {
+      aliasType: "bundle_id",
+      value: "com.test.icon-existing",
+      normalizedValue: "com.test.icon-existing",
+    });
+    const source = await seedSource(db, iconApp.id, {
+      sourceType: "github_releases",
+      parserKey: "github_releases",
+      reviewStatus: "approved",
+      role: "authority",
+      status: "active",
+      lastSuccessAt: TEST_NOW.toISOString(),
+    });
+    const release = await seedRelease(db, iconApp.id, {
+      versionRaw: "2.0.0",
+      versionNormalized: normalizeVersion("2.0.0"),
+      channel: "stable",
+      status: "active",
+      publishedBySourceId: source.id,
+    });
+    const artifact = await seedArtifact(db, release.id, {
+      artifactType: "dmg",
+      url: "https://example.com/icon-existing.dmg",
+      architecture: "universal",
+      sha256: "iconhash",
+    });
+    await seedLatestRelease(db, {
+      appId: iconApp.id,
+      releaseId: release.id,
+      authoritySourceId: source.id,
+      artifactId: artifact.id,
+      targetArchitecture: "arm64",
+      versionNormalized: release.versionNormalized,
+      versionRaw: release.versionRaw,
+      installStrategy: "dmg_copy_replace",
+    });
+
+    const res = await postInventory(
+      {
+        client: { osVersion: "15.0", systemArchitecture: "arm64" },
+        apps: [
+          {
+            appName: "Icon Existing App",
+            bundleId: "com.test.icon-existing",
+            version: "1.0.0",
+            iconBase64: TEST_ICON_BASE64,
+          },
+        ],
+      },
+      { INVENTORY_INGESTION_QUEUE: queue } as Partial<Env>,
+    );
+
+    expect(res.status).toBe(200);
+    expect(send).toHaveBeenCalledTimes(1);
+    const message = send.mock.calls[0]![0];
+    const job = await getDb(env.DB)
+      .select()
+      .from(inventoryIngestionJobs)
+      .where(eq(inventoryIngestionJobs.id, message.ingestionId))
+      .get();
+    const payloadObject = await env.RAW_BUCKET.get(job!.payloadR2Key);
+    const payload = inventoryIngestionPayloadSchema.parse(JSON.parse(await payloadObject!.text()));
+    expect(payload.matchedAppCandidates).toEqual([
+      expect.objectContaining({
+        appId: iconApp.id,
+        createSuggestions: true,
+        iconBase64: null,
+      }),
+    ]);
+  });
+
+  it("returns the inventory response when background R2 payload persistence fails", async () => {
+    const failingBucket = {
+      put: vi.fn<() => Promise<void>>(async () => {
+        throw new Error("r2 unavailable");
+      }),
+    } as unknown as R2Bucket;
+
+    const res = await postInventory(
+      {
+        client: { osVersion: "15.0", systemArchitecture: "arm64" },
+        apps: [
+          {
+            appName: "Firefox",
+            bundleId: "org.mozilla.firefox",
+            teamId: "R2FAIL",
+            version: "130.0",
+            iconBase64: TEST_ICON_BASE64,
+          },
+        ],
+      },
+      { RAW_BUCKET: failingBucket } as Partial<Env>,
+    );
+
+    expect(res.status).toBe(200);
+    const body = await readInventoryResponse(res);
+    expect(body.results).toHaveLength(1);
+
+    const failures = await getDb(env.DB).select().from(jobFailures).all();
+    const failure = failures.find((row) => row.errorMessage?.includes("r2 unavailable"));
+    expect(failure?.jobType).toBe("inventory_ingestion");
+    expect(failure?.jobKey).toBe("handoff");
+  });
+
   it("returns the inventory response when ingestion queue send fails", async () => {
     const send = vi.fn<(message: InventoryIngestionQueueMessage) => Promise<QueueSendResponse>>(
       async () => {

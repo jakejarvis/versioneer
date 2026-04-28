@@ -280,13 +280,14 @@ export function buildInventoryIngestionPayload(params: {
 
     const createSuggestions =
       result.catalog.trackingState === "public" && candidateHasSuggestionData(installedApp);
-    if (!installedApp.iconBase64 && !createSuggestions) continue;
+    const iconBase64 = result.catalog.iconUrl ? null : (installedApp.iconBase64 ?? null);
+    if (!iconBase64 && !createSuggestions) continue;
 
     matchedAppCandidates.push({
       appId: result.catalog.match.appId,
       lookupKey,
       createSuggestions,
-      iconBase64: installedApp.iconBase64 ?? null,
+      iconBase64,
       bundleId: installedApp.bundleId ?? null,
       teamId: installedApp.teamId ?? null,
       sparkleFeedUrl: installedApp.sparkleFeedUrl ?? null,

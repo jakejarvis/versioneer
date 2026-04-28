@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vite-plus/test";
 
-import { matchApp } from "../matcher";
+import { createAliasMatchIndex, matchApp, matchAppWithIndex } from "../matcher";
+import type { MatchInput } from "../types";
 import type { AliasRecord, TrustAssertionRecord } from "../types";
 
 const aliases: AliasRecord[] = [
@@ -37,6 +38,24 @@ const aliases: AliasRecord[] = [
     aliasType: "mas_app_id",
     value: "989804926",
     normalizedValue: "989804926",
+    isExact: true,
+    confidenceWeight: 100,
+  },
+  {
+    appId: "app_firefox",
+    appName: "Firefox",
+    aliasType: "homebrew_cask",
+    value: "firefox",
+    normalizedValue: "firefox",
+    isExact: true,
+    confidenceWeight: 100,
+  },
+  {
+    appId: "app_firefox",
+    appName: "Firefox",
+    aliasType: "sparkle_feed",
+    value: "https://example.com/firefox/appcast.xml",
+    normalizedValue: "https://example.com/firefox/appcast.xml",
     isExact: true,
     confidenceWeight: 100,
   },
@@ -91,6 +110,16 @@ const sparkleTrustAssertions: TrustAssertionRecord[] = [
   },
 ];
 
+function expectIndexedMatchToEqualLinear(
+  input: MatchInput,
+  records: AliasRecord[] = aliases,
+  assertions: TrustAssertionRecord[] = sparkleTrustAssertions,
+) {
+  expect(matchAppWithIndex(input, createAliasMatchIndex(records, assertions))).toEqual(
+    matchApp(input, records, assertions),
+  );
+}
+
 describe("matchApp", () => {
   it("matches by exact bundle ID", () => {
     const result = matchApp({ appName: "Firefox", bundleId: "org.mozilla.firefox" }, aliases);
@@ -144,6 +173,13 @@ describe("matchApp", () => {
     expect(result.matched).toBe(true);
     expect(result.appId).toBe("app_vscode");
     expect(result.method).toBe("electron_update_url");
+  });
+
+  it("matches by Homebrew cask token", () => {
+    const result = matchApp({ appName: "Firefox", homebrewCaskToken: "firefox" }, aliases);
+    expect(result.matched).toBe(true);
+    expect(result.appId).toBe("app_firefox");
+    expect(result.method).toBe("homebrew_cask");
   });
 
   it("normalizes Electron update URLs before matching", () => {
@@ -229,5 +265,51 @@ describe("matchApp", () => {
 
     expect(result.matched).toBe(false);
     expect(result.appId).toBeNull();
+  });
+
+  it("keeps indexed matching equivalent to linear matching", () => {
+    const ambiguousAliases: AliasRecord[] = [
+      {
+        appId: "app_firefox",
+        appName: "Firefox",
+        aliasType: "name",
+        value: "Firefox",
+        normalizedValue: "firefox",
+        isExact: false,
+        confidenceWeight: 60,
+      },
+      {
+        appId: "app_other",
+        appName: "Firefox ESR",
+        aliasType: "name",
+        value: "Firefox",
+        normalizedValue: "firefox",
+        isExact: false,
+        confidenceWeight: 55,
+      },
+    ];
+
+    expectIndexedMatchToEqualLinear({
+      appName: "Firefox",
+      bundleId: "org.mozilla.firefox",
+    });
+    expectIndexedMatchToEqualLinear({ appName: "Firefox" });
+    expectIndexedMatchToEqualLinear({ appName: "Firefox", teamId: "43AQ936H96" });
+    expectIndexedMatchToEqualLinear({
+      appName: "Firefox",
+      sparkleFeedUrl: "https://example.com/firefox/appcast.xml",
+    });
+    expectIndexedMatchToEqualLinear({ appName: "Firefox", masAppId: "989804926" });
+    expectIndexedMatchToEqualLinear({
+      appName: "Visual Studio Code",
+      electronUpdateUrl: "https://updates.example.com/vscode",
+    });
+    expectIndexedMatchToEqualLinear({ appName: "Firefox", homebrewCaskToken: "firefox" });
+    expectIndexedMatchToEqualLinear({ appName: "Firefox" }, ambiguousAliases, []);
+    expectIndexedMatchToEqualLinear(
+      { appName: "Firefox", sparklePublicKey: "abc123+/=" },
+      ambiguousAliases,
+      sparkleTrustAssertions,
+    );
   });
 });

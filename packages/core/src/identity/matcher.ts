@@ -20,6 +20,24 @@ const CONFIDENCE_SPARKLE_PUBLIC_KEY_BONUS = 12;
 const MULTI_SIGNAL_BONUS = 8;
 const AMBIGUITY_THRESHOLD = 10;
 
+export type AliasMatchIndex = {
+  readonly aliasesByTypeValue: ReadonlyMap<string, readonly AliasRecord[]>;
+  readonly exactAliasesByTypeValue: ReadonlyMap<string, readonly AliasRecord[]>;
+  readonly inexactAliasesByTypeValue: ReadonlyMap<string, readonly AliasRecord[]>;
+  readonly nameAliasesByAppId: ReadonlyMap<string, readonly AliasRecord[]>;
+  readonly teamAppIdsByValue: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly sparkleAppIdsByKey: ReadonlyMap<string, ReadonlySet<string>>;
+};
+
+type MutableAliasMatchIndex = {
+  aliasesByTypeValue: Map<string, AliasRecord[]>;
+  exactAliasesByTypeValue: Map<string, AliasRecord[]>;
+  inexactAliasesByTypeValue: Map<string, AliasRecord[]>;
+  nameAliasesByAppId: Map<string, AliasRecord[]>;
+  teamAppIdsByValue: Map<string, Set<string>>;
+  sparkleAppIdsByKey: Map<string, Set<string>>;
+};
+
 /**
  * Match an installed app against known aliases.
  * Aliases should be pre-fetched from D1 and passed in.
@@ -29,13 +47,69 @@ export function matchApp(
   aliases: AliasRecord[],
   trustAssertions: TrustAssertionRecord[] = [],
 ): MatchResult {
+  return matchAppWithIndex(input, createAliasMatchIndex(aliases, trustAssertions));
+}
+
+export function createAliasMatchIndex(
+  aliases: AliasRecord[],
+  trustAssertions: TrustAssertionRecord[] = [],
+): AliasMatchIndex {
+  const index: MutableAliasMatchIndex = {
+    aliasesByTypeValue: new Map(),
+    exactAliasesByTypeValue: new Map(),
+    inexactAliasesByTypeValue: new Map(),
+    nameAliasesByAppId: new Map(),
+    teamAppIdsByValue: new Map(),
+    sparkleAppIdsByKey: new Map(),
+  };
+
+  for (const alias of aliases) {
+    pushMapArray(
+      index.aliasesByTypeValue,
+      aliasLookupKey(alias.aliasType, alias.normalizedValue),
+      alias,
+    );
+    if (alias.aliasType === "name") {
+      pushMapArray(index.nameAliasesByAppId, alias.appId, alias);
+    }
+
+    if (alias.isExact) {
+      pushMapArray(
+        index.exactAliasesByTypeValue,
+        aliasLookupKey(alias.aliasType, alias.normalizedValue),
+        alias,
+      );
+    } else {
+      pushMapArray(
+        index.inexactAliasesByTypeValue,
+        aliasLookupKey(alias.aliasType, alias.normalizedValue),
+        alias,
+      );
+    }
+
+    if (alias.aliasType === "team_id") {
+      pushMapSet(index.teamAppIdsByValue, alias.normalizedValue, alias.appId);
+    }
+  }
+
+  for (const assertion of trustAssertions) {
+    if (assertion.assertionType !== "sparkle_public_key") continue;
+    const normalizedKey = normalizeSparklePublicKey(assertion.value);
+    if (!normalizedKey) continue;
+    pushMapSet(index.sparkleAppIdsByKey, normalizedKey, assertion.appId);
+  }
+
+  return index;
+}
+
+export function matchAppWithIndex(input: MatchInput, index: AliasMatchIndex): MatchResult {
   const candidates: MatchCandidate[] = [];
 
   if (input.bundleId) {
     const normalizedBundle = normalizeBundleId(input.bundleId);
     pushAliasMatches(
       candidates,
-      aliases,
+      index,
       "bundle_id",
       normalizedBundle,
       "exact_bundle_id",
@@ -44,7 +118,7 @@ export function matchApp(
     );
     pushAliasMatches(
       candidates,
-      aliases,
+      index,
       "bundle_id",
       normalizedBundle,
       "alias_bundle_id",
@@ -56,7 +130,7 @@ export function matchApp(
   if (input.sparkleFeedUrl) {
     pushAliasMatches(
       candidates,
-      aliases,
+      index,
       "sparkle_feed",
       normalizeAliasValue("sparkle_feed", input.sparkleFeedUrl),
       "sparkle_feed",
@@ -67,7 +141,7 @@ export function matchApp(
   if (input.masAppId) {
     pushAliasMatches(
       candidates,
-      aliases,
+      index,
       "mas_app_id",
       normalizeAliasValue("mas_app_id", input.masAppId),
       "mas_app_id",
@@ -78,7 +152,7 @@ export function matchApp(
   if (input.electronUpdateUrl) {
     pushAliasMatches(
       candidates,
-      aliases,
+      index,
       "electron_update_url",
       normalizeAliasValue("electron_update_url", input.electronUpdateUrl),
       "electron_update_url",
@@ -89,7 +163,7 @@ export function matchApp(
   if (input.homebrewCaskToken) {
     pushAliasMatches(
       candidates,
-      aliases,
+      index,
       "homebrew_cask",
       normalizeAliasValue("homebrew_cask", input.homebrewCaskToken),
       "homebrew_cask",
@@ -99,15 +173,12 @@ export function matchApp(
 
   if (input.teamId && input.appName) {
     const normalizedInputName = normalizeName(input.appName);
-    const teamMatches = aliases.filter(
-      (a) => a.aliasType === "team_id" && a.normalizedValue === input.teamId!.toLowerCase(),
-    );
-    const teamAppIds = new Set(teamMatches.map((a) => a.appId));
+    const teamAppIds = index.teamAppIdsByValue.get(input.teamId.toLowerCase()) ?? new Set();
 
     for (const appId of teamAppIds) {
-      const nameAliases = aliases.filter((a) => a.appId === appId && a.aliasType === "name");
+      const nameAliases = index.nameAliasesByAppId.get(appId) ?? [];
       for (const nameAlias of nameAliases) {
-        if (nameAlias.normalizedValue === normalizedInputName) {
+        if (nameAlias.aliasType === "name" && nameAlias.normalizedValue === normalizedInputName) {
           candidates.push({
             appId: nameAlias.appId,
             appName: nameAlias.appName,
@@ -121,9 +192,8 @@ export function matchApp(
 
   if (input.appName) {
     const normalizedInputName = normalizeName(input.appName);
-    const nameMatches = aliases.filter(
-      (a) => a.aliasType === "name" && a.normalizedValue === normalizedInputName,
-    );
+    const nameMatches =
+      index.aliasesByTypeValue.get(aliasLookupKey("name", normalizedInputName)) ?? [];
     for (const match of nameMatches) {
       candidates.push({
         appId: match.appId,
@@ -134,7 +204,7 @@ export function matchApp(
     }
   }
 
-  applySparklePublicKeyBonuses(candidates, input, trustAssertions);
+  applySparklePublicKeyBonuses(candidates, input, index);
 
   if (candidates.length > 0) {
     return buildResult(candidates);
@@ -154,9 +224,9 @@ export function matchApp(
 function applySparklePublicKeyBonuses(
   candidates: MatchCandidate[],
   input: MatchInput,
-  trustAssertions: TrustAssertionRecord[],
+  index: AliasMatchIndex,
 ): void {
-  if (!input.sparklePublicKey || candidates.length === 0 || trustAssertions.length === 0) {
+  if (!input.sparklePublicKey || candidates.length === 0) {
     return;
   }
 
@@ -165,16 +235,8 @@ function applySparklePublicKeyBonuses(
     return;
   }
 
-  const matchingAppIds = new Set(
-    trustAssertions
-      .filter(
-        (assertion) =>
-          assertion.assertionType === "sparkle_public_key" &&
-          normalizeSparklePublicKey(assertion.value) === normalizedKey,
-      )
-      .map((assertion) => assertion.appId),
-  );
-  if (matchingAppIds.size === 0) {
+  const matchingAppIds = index.sparkleAppIdsByKey.get(normalizedKey);
+  if (!matchingAppIds || matchingAppIds.size === 0) {
     return;
   }
 
@@ -204,19 +266,20 @@ function normalizeSparklePublicKey(value: string): string {
 
 function pushAliasMatches(
   candidates: MatchCandidate[],
-  aliases: AliasRecord[],
+  index: AliasMatchIndex,
   aliasType: string,
   normalizedValue: string,
   method: MatchCandidate["method"],
   defaultConfidence: number,
   isExact?: boolean,
 ): void {
-  const matches = aliases.filter(
-    (a) =>
-      a.aliasType === aliasType &&
-      a.normalizedValue === normalizedValue &&
-      (isExact === undefined || a.isExact === isExact),
-  );
+  const key = aliasLookupKey(aliasType, normalizedValue);
+  const matches =
+    isExact === true
+      ? (index.exactAliasesByTypeValue.get(key) ?? [])
+      : isExact === false
+        ? (index.inexactAliasesByTypeValue.get(key) ?? [])
+        : (index.aliasesByTypeValue.get(key) ?? []);
 
   for (const match of matches) {
     candidates.push({
@@ -226,6 +289,28 @@ function pushAliasMatches(
       confidence: Math.min(defaultConfidence, match.confidenceWeight),
     });
   }
+}
+
+function aliasLookupKey(aliasType: string, normalizedValue: string): string {
+  return `${aliasType}\0${normalizedValue}`;
+}
+
+function pushMapArray<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  const existing = map.get(key);
+  if (existing) {
+    existing.push(value);
+    return;
+  }
+  map.set(key, [value]);
+}
+
+function pushMapSet<K, V>(map: Map<K, Set<V>>, key: K, value: V): void {
+  const existing = map.get(key);
+  if (existing) {
+    existing.add(value);
+    return;
+  }
+  map.set(key, new Set([value]));
 }
 
 function buildResult(candidates: MatchCandidate[]): MatchResult {
