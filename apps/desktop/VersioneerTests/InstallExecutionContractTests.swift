@@ -53,6 +53,21 @@ struct InstallExecutionContractTests {
     #expect((json["verification"] as? [String: Any])?["signatureVerified"] as? Bool == true)
   }
 
+  @Test func installExecutionErrorMessageRedactsLocalPathsUrlsAndSecrets() throws {
+    let raw =
+      "Command failed: /Users/jake/Downloads/Test.app token=ghp_secret12345 https://example.com/app.zip"
+
+    let sanitized = try #require(InstallExecutionEventRequest.sanitizedErrorMessage(raw))
+
+    #expect(sanitized.contains("Command failed"))
+    #expect(sanitized.contains("[path]"))
+    #expect(sanitized.contains("[url]"))
+    #expect(sanitized.contains("token=[redacted]"))
+    #expect(!sanitized.contains("/Users/jake"))
+    #expect(!sanitized.contains("ghp_secret12345"))
+    #expect(!sanitized.contains("https://example.com/app.zip"))
+  }
+
   @Test func processRunnerCapturesLargeStdoutAndStderr() async throws {
     let script = """
       i=0

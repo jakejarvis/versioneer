@@ -845,7 +845,7 @@ final class AppState {
       let content = ReleaseNotesContent(
         markdown: response.releaseNotesMarkdown,
         html: response.releaseNotesHtml,
-        url: response.releaseNotesUrl.flatMap(URL.init(string:))
+        url: Self.safeExternalURL(from: response.releaseNotesUrl)
       )
       releaseNotesCache[releaseId] = content
       return content
@@ -1063,7 +1063,7 @@ final class AppState {
     if installedApp.isMasApp,
       let masAppId = installedApp.masAppId,
       !settings.isMasCliAvailable,
-      let storeURL = URL(string: "https://apps.apple.com/app/id\(masAppId)")
+      let storeURL = Self.safeExternalURL(from: "https://apps.apple.com/app/id\(masAppId)")
     {
       return ManualUpdateAction(
         title: "Open App Store Listing",
@@ -1073,7 +1073,7 @@ final class AppState {
     }
 
     if let downloadURLString = result.artifact?.downloadUrl,
-      let downloadURL = URL(string: downloadURLString)
+      let downloadURL = Self.safeExternalURL(from: downloadURLString)
     {
       return ManualUpdateAction(
         title: "Open Download",
@@ -1084,7 +1084,7 @@ final class AppState {
     }
 
     if let updateURLString = installedApp.electronUpdateUrl,
-      let updateURL = URL(string: updateURLString)
+      let updateURL = Self.safeExternalURL(from: updateURLString)
     {
       return ManualUpdateAction(
         title: "Open Update Feed",
@@ -1095,7 +1095,7 @@ final class AppState {
     }
 
     if let feedURLString = installedApp.sparkleFeedUrl,
-      let feedURL = URL(string: feedURLString)
+      let feedURL = Self.safeExternalURL(from: feedURLString)
     {
       return ManualUpdateAction(
         title: "Open Appcast",
@@ -1106,6 +1106,18 @@ final class AppState {
     }
 
     return nil
+  }
+
+  private static func safeExternalURL(from string: String?) -> URL? {
+    guard let string,
+      let url = URL(string: string),
+      let scheme = url.scheme?.lowercased(),
+      scheme == "http" || scheme == "https",
+      url.host != nil
+    else {
+      return nil
+    }
+    return url
   }
 
   func openManualUpdate(_ result: InventoryResult) {

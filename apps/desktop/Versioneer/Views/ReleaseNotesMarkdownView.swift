@@ -25,6 +25,6 @@ struct ReleaseNotesMarkdownView: View {
 
   private static func isSafeExternalURL(_ url: URL) -> Bool {
     guard let scheme = url.scheme?.lowercased() else { return false }
-    return scheme == "http" || scheme == "https"
+    return (scheme == "http" || scheme == "https") && url.host != nil
   }
 }

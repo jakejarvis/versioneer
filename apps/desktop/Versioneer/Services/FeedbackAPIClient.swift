@@ -10,19 +10,58 @@ nonisolated struct FeedbackAPIClient: Sendable {
   }
 
   func submitWrongMatch(_ feedback: FeedbackRequest.WrongMatch) async throws {
-    try await post(path: "v1/feedback/match", body: feedback)
+    try await post(body: Self.submitRequest(for: feedback))
   }
 
   func submitWrongVersion(_ feedback: FeedbackRequest.WrongVersion) async throws {
-    try await post(path: "v1/feedback/version", body: feedback)
+    try await post(body: Self.submitRequest(for: feedback))
   }
 
   func submitMissingApp(_ feedback: FeedbackRequest.MissingApp) async throws {
-    try await post(path: "v1/feedback/missing-app", body: feedback)
+    try await post(body: Self.submitRequest(for: feedback))
   }
 
-  private func post<T: Encodable>(path: String, body: T) async throws {
-    let endpoint = baseURL.appendingPathComponent(path)
+  static func submitRequest(
+    for feedback: FeedbackRequest.WrongMatch
+  ) -> SubmitRequest<CommentPayload> {
+    SubmitRequest(
+      feedbackType: "wrong_match",
+      bundleId: feedback.bundleId,
+      appName: feedback.appName,
+      matchedAppId: feedback.matchedAppId,
+      payload: CommentPayload(comment: feedback.comment)
+    )
+  }
+
+  static func submitRequest(
+    for feedback: FeedbackRequest.WrongVersion
+  ) -> SubmitRequest<WrongVersionPayload> {
+    SubmitRequest(
+      feedbackType: "wrong_version",
+      bundleId: feedback.bundleId,
+      appName: feedback.appName,
+      matchedAppId: feedback.matchedAppId,
+      payload: WrongVersionPayload(
+        reportedLatestVersion: feedback.reportedLatestVersion,
+        comment: feedback.comment
+      )
+    )
+  }
+
+  static func submitRequest(
+    for feedback: FeedbackRequest.MissingApp
+  ) -> SubmitRequest<MissingAppPayload> {
+    SubmitRequest(
+      feedbackType: "app_request",
+      bundleId: feedback.bundleId,
+      appName: feedback.appName,
+      matchedAppId: nil,
+      payload: MissingAppPayload(homepageUrl: feedback.homepageUrl, comment: feedback.comment)
+    )
+  }
+
+  private func post<T: Encodable>(body: T) async throws {
+    let endpoint = baseURL.appendingPathComponent("v1/feedback")
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -41,5 +80,27 @@ nonisolated struct FeedbackAPIClient: Sendable {
       Logger.feedback.error("Feedback API returned \(httpResponse.statusCode): \(body)")
       throw APIError.httpError(statusCode: httpResponse.statusCode, body: body)
     }
+  }
+
+  struct SubmitRequest<Payload: Codable & Sendable>: Codable, Sendable {
+    let feedbackType: String
+    let bundleId: String?
+    let appName: String?
+    let matchedAppId: String?
+    let payload: Payload
+  }
+
+  struct CommentPayload: Codable, Equatable, Sendable {
+    let comment: String?
+  }
+
+  struct WrongVersionPayload: Codable, Equatable, Sendable {
+    let reportedLatestVersion: String?
+    let comment: String?
+  }
+
+  struct MissingAppPayload: Codable, Equatable, Sendable {
+    let homepageUrl: String?
+    let comment: String?
   }
 }

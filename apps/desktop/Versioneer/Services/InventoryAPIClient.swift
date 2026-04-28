@@ -220,7 +220,7 @@ nonisolated struct InventoryAPIClient: Sendable {
       event: .init(
         status: status,
         installedVersion: installedVersion,
-        errorMessage: errorMessage
+        errorMessage: InstallExecutionEventRequest.sanitizedErrorMessage(errorMessage)
       ),
       verification: verification
     )

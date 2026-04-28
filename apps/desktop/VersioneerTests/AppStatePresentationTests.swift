@@ -502,6 +502,69 @@ struct AppStatePresentationTests {
     #expect(candidate.installStrategy == nil)
   }
 
+  @Test func manualUpdateActionRejectsUnsafeExternalURLSchemes() {
+    let state = AppState()
+    let decision = InventoryResult(
+      appName: "Unsafe App",
+      bundleId: "com.example.unsafe",
+      installedVersion: "1.0",
+      matchedAppId: "app_unsafe",
+      matchedAppName: "Unsafe App",
+      matchConfidence: 1,
+      decision: .updateAvailable,
+      trackingState: .catalog,
+      localReasonCode: nil,
+      latestVersion: "2.0",
+      latestVersionRaw: "2.0",
+      latestReleaseId: "rel_unsafe",
+      channel: nil,
+      availableChannels: nil,
+      homebrewCaskToken: nil,
+      releasedAt: nil,
+      staleSince: nil,
+      iconUrl: nil,
+      artifact: .init(
+        id: "artifact_unsafe",
+        downloadUrl: "file:///Users/test/Downloads/Unsafe.app",
+        architecture: nil,
+        minOsVersion: nil,
+        artifactType: "zip",
+        sizeBytes: nil,
+        sha256: nil
+      ),
+      installStrategy: nil,
+      localAppID: "/Applications/Unsafe App.app"
+    )
+    let installedApp = InstalledApp(
+      name: "Unsafe App",
+      bundleId: "com.example.unsafe",
+      version: "1.0",
+      buildNumber: nil,
+      teamId: "TEAM123456",
+      path: "/Applications/Unsafe App.app",
+      architecture: nil,
+      sparkleFeedUrl: "versioneer://unsafe-feed",
+      sparklePublicKey: nil,
+      isSparkleApp: true,
+      isMasApp: false,
+      masAppId: nil,
+      isElectronApp: false,
+      electronUpdateProvider: nil,
+      electronUpdateUrl: "versioneer://unsafe-update",
+      codeSigningAuthority: nil,
+      appCategory: nil,
+      minMacOSVersion: nil,
+      isHomebrewInstalled: false,
+      homebrewCaskToken: nil
+    )
+
+    state.installedApps = [installedApp]
+    state.rawInventoryResults = [decision]
+    state.refreshDisplayedResults()
+
+    #expect(state.manualUpdateAction(for: decision) == nil)
+  }
+
   private func seed(_ state: AppState, with results: [InventoryResult]) {
     state.installedApps = results.map(DesktopUITestFixtures.makeInstalledApp)
     state.rawInventoryResults = results

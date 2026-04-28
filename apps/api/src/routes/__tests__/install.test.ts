@@ -1,5 +1,8 @@
 import { env } from "cloudflare:workers";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vite-plus/test";
+
+import { installExecutions } from "@versioneer/db";
 
 import { getDb, seedApp, seedArtifact, seedRelease, seedSource } from "../../__tests__/seed";
 import app from "../../index";
@@ -280,6 +283,124 @@ describe("POST /v1/install/executions/:id/events", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { execution: { status: string } };
     expect(body.execution.status).toBe("recorded");
+  });
+
+  it("does not overwrite terminal install executions", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db);
+    const source = await seedSource(db, testApp.id);
+    const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
+    const artifact = await seedArtifact(db, release.id, { architecture: "universal" });
+
+    const prepRes = await app.request(
+      "/v1/install/executions",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createExecutionBody(testApp.id, release.id, artifact.id)),
+      },
+      env,
+    );
+    const {
+      execution: { id: executionId },
+    } = (await prepRes.json()) as { execution: { id: string } };
+
+    const successRes = await app.request(
+      `/v1/install/executions/${executionId}/events`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: {
+            status: "succeeded",
+            installedVersion: "1.0.0",
+          },
+        }),
+      },
+      env,
+    );
+    expect(successRes.status).toBe(200);
+
+    const staleFailureRes = await app.request(
+      `/v1/install/executions/${executionId}/events`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: {
+            status: "failed",
+            errorMessage: "Signature verification failed",
+          },
+        }),
+      },
+      env,
+    );
+    expect(staleFailureRes.status).toBe(200);
+
+    const row = await db
+      .select({
+        status: installExecutions.status,
+        installedVersion: installExecutions.installedVersion,
+        errorMessage: installExecutions.errorMessage,
+      })
+      .from(installExecutions)
+      .where(eq(installExecutions.id, executionId))
+      .get();
+    expect(row?.status).toBe("succeeded");
+    expect(row?.installedVersion).toBe("1.0.0");
+    expect(row?.errorMessage).toBeNull();
+  });
+
+  it("redacts install error messages before persistence", async () => {
+    const db = getDb(env.DB);
+    const testApp = await seedApp(db);
+    const source = await seedSource(db, testApp.id);
+    const release = await seedRelease(db, testApp.id, { publishedBySourceId: source.id });
+    const artifact = await seedArtifact(db, release.id, { architecture: "universal" });
+
+    const prepRes = await app.request(
+      "/v1/install/executions",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createExecutionBody(testApp.id, release.id, artifact.id)),
+      },
+      env,
+    );
+    const {
+      execution: { id: executionId },
+    } = (await prepRes.json()) as { execution: { id: string } };
+
+    const rawError =
+      "Signature failed at /Users/jake/Downloads/Test.app token=ghp_secret12345 https://example.com/app.zip";
+    const res = await app.request(
+      `/v1/install/executions/${executionId}/events`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: {
+            status: "failed",
+            errorMessage: rawError,
+          },
+        }),
+      },
+      env,
+    );
+
+    expect(res.status).toBe(200);
+    const row = await db
+      .select({ errorMessage: installExecutions.errorMessage })
+      .from(installExecutions)
+      .where(eq(installExecutions.id, executionId))
+      .get();
+    expect(row?.errorMessage).toContain("Signature failed");
+    expect(row?.errorMessage).toContain("[path]");
+    expect(row?.errorMessage).toContain("[url]");
+    expect(row?.errorMessage).toContain("token=[redacted]");
+    expect(row?.errorMessage).not.toContain("/Users/jake");
+    expect(row?.errorMessage).not.toContain("ghp_secret12345");
+    expect(row?.errorMessage).not.toContain("https://example.com/app.zip");
   });
 
   it("records status updates for unknown-architecture artifacts", async () => {

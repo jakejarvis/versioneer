@@ -245,6 +245,49 @@ struct APIContractAlignmentTests {
     #expect(response.dismissedBundleIds.isEmpty)
   }
 
+  @Test func feedbackRequestsEncodeBackendEnvelope() throws {
+    let wrongMatch = FeedbackAPIClient.submitRequest(
+      for: FeedbackRequest.WrongMatch(
+        appName: "Test App",
+        bundleId: "com.example.test",
+        matchedAppId: "app_test",
+        comment: "Wrong catalog match"
+      )
+    )
+    #expect(wrongMatch.feedbackType == "wrong_match")
+    #expect(wrongMatch.appName == "Test App")
+    #expect(wrongMatch.bundleId == "com.example.test")
+    #expect(wrongMatch.matchedAppId == "app_test")
+    #expect(wrongMatch.payload.comment == "Wrong catalog match")
+
+    let wrongVersion = FeedbackAPIClient.submitRequest(
+      for: FeedbackRequest.WrongVersion(
+        appName: "Test App",
+        bundleId: "com.example.test",
+        matchedAppId: "app_test",
+        reportedLatestVersion: "2.0",
+        comment: "Expected 2.0"
+      )
+    )
+    #expect(wrongVersion.feedbackType == "wrong_version")
+    #expect(wrongVersion.payload.reportedLatestVersion == "2.0")
+    #expect(wrongVersion.payload.comment == "Expected 2.0")
+
+    let missingApp = FeedbackAPIClient.submitRequest(
+      for: FeedbackRequest.MissingApp(
+        appName: "New App",
+        bundleId: "com.example.new",
+        homepageUrl: "https://example.com",
+        comment: nil
+      )
+    )
+    #expect(missingApp.feedbackType == "app_request")
+    #expect(missingApp.appName == "New App")
+    #expect(missingApp.bundleId == "com.example.new")
+    #expect(missingApp.matchedAppId == nil)
+    #expect(missingApp.payload.homepageUrl == "https://example.com")
+  }
+
   @Test func releaseNotesResponseDecodesMarkdownAndLegacyHtml() throws {
     let json = """
       {

@@ -32,6 +32,34 @@ function validationErrorResponse(result: { error: { issues: unknown[] } }) {
   return Response.json({ error: "Invalid request", details: result.error.issues }, { status: 400 });
 }
 
+const INSTALL_ERROR_TEXT_PATTERNS: Array<[RegExp, string]> = [
+  [
+    /\b(authorization|cookie|password|secret|token|api[_-]?key)=(?:Bearer\s+)?([^&\s]+)/gi,
+    "$1=[redacted]",
+  ],
+  [/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]"],
+  [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted-jwt]"],
+  [/\b(?:phc|ghp|github_pat|sk)-[A-Za-z0-9_=-]{8,}\b/gi, "[redacted-token]"],
+  [/https?:\/\/[^\s"']+/gi, "[url]"],
+  [/file:\/\/[^\s"']+/gi, "[path]"],
+  [/\/Users\/[^\s"']+/g, "[path]"],
+  [/\/private\/var\/folders\/[^\s"']+/g, "[path]"],
+  [/\/var\/folders\/[^\s"']+/g, "[path]"],
+  [/\/tmp\/[^\s"']+/g, "[path]"],
+];
+
+function sanitizeInstallErrorMessage(message: string | null | undefined): string | null {
+  const trimmed = message?.trim();
+  if (!trimmed) return null;
+
+  const sanitized = INSTALL_ERROR_TEXT_PATTERNS.reduce(
+    (value, [pattern, replacement]) => value.replace(pattern, replacement),
+    trimmed,
+  );
+
+  return sanitized.length > 1000 ? `${sanitized.slice(0, 1000)}...` : sanitized;
+}
+
 async function validateInstallTarget(
   db: ReturnType<typeof createDb>,
   params: {
@@ -373,6 +401,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
           channel: installExecutions.channel,
           installStrategy: installExecutions.installStrategy,
           executionRoute: installExecutions.executionRoute,
+          status: installExecutions.status,
           expectedBundleId: installExecutions.expectedBundleId,
           expectedTeamId: installExecutions.expectedTeamId,
           previousVersion: installExecutions.previousVersion,
@@ -383,6 +412,13 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         .get();
       if (!existing) {
         throw new HTTPException(404, { message: "Execution not found" });
+      }
+      if (
+        existing.status === "succeeded" ||
+        existing.status === "failed" ||
+        existing.status === "cancelled"
+      ) {
+        return c.json({ execution: { id: executionId, status: "recorded" as const } });
       }
 
       const targetApp = await db
@@ -406,6 +442,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         throw new HTTPException(404, { message: "Execution target not found" });
       }
 
+      const errorMessage = sanitizeInstallErrorMessage(data.event.errorMessage);
       const verificationJson = data.verification ? JSON.stringify(data.verification) : null;
       const completedAt = data.event.status === "started" ? null : now;
 
@@ -414,7 +451,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         .set({
           status: data.event.status,
           installedVersion: data.event.installedVersion ?? existing.installedVersion,
-          errorMessage: data.event.errorMessage ?? null,
+          errorMessage,
           verificationJson,
           completedAt,
           updatedAt: now,
@@ -430,7 +467,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
       });
       const evidencePayloadJson = JSON.stringify({
         status: data.event.status,
-        errorMessage: data.event.errorMessage ?? null,
+        errorMessage,
         installStrategy: existing.installStrategy,
         targetArchitecture: existing.targetArchitecture ?? null,
         executionRoute: existing.executionRoute,
@@ -505,11 +542,10 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
         if (data.verification?.bundleIdMatch === false) issues.add("bundle_id_mismatch");
         if (data.verification?.teamIdMatch === false) issues.add("team_id_mismatch");
         if (data.verification?.versionMatch === false) issues.add("version_mismatch");
-        if (data.event.errorMessage?.toLowerCase().includes("hash"))
-          issues.add("hash_verification_failed");
-        if (data.event.errorMessage?.toLowerCase().includes("signature"))
+        if (errorMessage?.toLowerCase().includes("hash")) issues.add("hash_verification_failed");
+        if (errorMessage?.toLowerCase().includes("signature"))
           issues.add("signature_verification_failed");
-        if (data.event.errorMessage?.toLowerCase().includes("notar"))
+        if (errorMessage?.toLowerCase().includes("notar"))
           issues.add("notarization_verification_failed");
         if (issues.size === 0) issues.add("install_failed");
 
@@ -540,7 +576,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>()
           appId: existing.appId,
           releaseId: existing.releaseId,
           status: data.event.status,
-          errorMessage: data.event.errorMessage ?? null,
+          errorMessage,
         }),
         createdAt: now,
       });
