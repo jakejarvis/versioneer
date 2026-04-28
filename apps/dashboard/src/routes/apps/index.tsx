@@ -1,8 +1,8 @@
 import { useForm } from "@tanstack/react-form";
-import { createFileRoute, Link, stripSearchParams, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -37,6 +37,7 @@ import {
   paginatedSearchShape,
   paginationFromSearch,
   sortingFromSearch,
+  useDebouncedSearchInput,
 } from "@/lib/data-table-search";
 import type { AppListItem } from "@/lib/types";
 
@@ -62,11 +63,30 @@ export const Route = createFileRoute("/apps/")({
 });
 
 function AppsPage() {
-  const navigate = useNavigate();
+  const navigate = Route.useNavigate();
   const searchState = Route.useSearch();
   const [createOpen, setCreateOpen] = useState(false);
   const pagination = paginationFromSearch(searchState);
   const sorting = sortingFromSearch(searchState);
+  const commitSearch = useCallback(
+    (value: string) => {
+      void navigate({
+        to: "/apps",
+        replace: true,
+        resetScroll: false,
+        search: (previous) => ({
+          ...previous,
+          page: 1,
+          search: value,
+        }),
+      });
+    },
+    [navigate],
+  );
+  const [searchDraft, setSearchDraft] = useDebouncedSearchInput({
+    value: searchState.search,
+    onCommit: commitSearch,
+  });
 
   const { data, isLoading } = useApps({
     search: searchState.search || undefined,
@@ -173,17 +193,8 @@ function AppsPage() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search apps..."
-                  value={searchState.search}
-                  onChange={(event) =>
-                    void navigate({
-                      to: "/apps",
-                      search: {
-                        ...searchState,
-                        page: 1,
-                        search: event.target.value,
-                      },
-                    })
-                  }
+                  value={searchDraft}
+                  onChange={(event) => setSearchDraft(event.target.value)}
                   className="pl-9"
                 />
               </div>

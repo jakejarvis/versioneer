@@ -4,6 +4,7 @@ import {
   type SortingState,
   type Updater,
 } from "@tanstack/react-table";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
 export const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
@@ -81,4 +82,39 @@ export function applySortingToSearch<T extends PaginatedSearchState>(
     sortBy: nextSort?.id,
     sortDir: nextSort ? (nextSort.desc ? "desc" : "asc") : undefined,
   };
+}
+
+export function useDebouncedSearchInput({
+  value,
+  onCommit,
+  delayMs = 300,
+}: {
+  value: string;
+  onCommit: (value: string) => void;
+  delayMs?: number;
+}) {
+  const [draftValue, setDraftValue] = useState(value);
+  const latestOnCommit = useRef(onCommit);
+
+  useEffect(() => {
+    latestOnCommit.current = onCommit;
+  }, [onCommit]);
+
+  useEffect(() => {
+    setDraftValue(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (draftValue === value) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      latestOnCommit.current(draftValue);
+    }, delayMs);
+
+    return () => window.clearTimeout(timeout);
+  }, [delayMs, draftValue, value]);
+
+  return [draftValue, setDraftValue] as const;
 }
