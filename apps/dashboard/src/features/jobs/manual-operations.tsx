@@ -43,7 +43,7 @@ export function ManualOperations() {
   const caskSync = useTriggerCaskSync();
   const enrichDiscoveries = useTriggerEnrichDiscoveries();
   const recentRuns = useCronJobRuns({ limit: 12 });
-  const openFailures = useJobFailures({ status: "open", limit: 5 });
+  const openFailures = useJobFailures({ status: "open", jobType: "operational", limit: 5 });
 
   const latestRuns = recentRuns.data?.items ?? [];
   const latestFor = (jobType: CronJobRun["jobType"]) =>

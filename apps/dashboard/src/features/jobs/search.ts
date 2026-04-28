@@ -20,6 +20,7 @@ export const runTriggerFilterSchema = z.enum(["all", "manual", "scheduled"]);
 export const runStatusFilterSchema = z.enum(["all", "running", "completed", "failed"]);
 export const failureStatusSchema = z.enum(["open", "retrying", "resolved", "abandoned"]);
 export const failureJobTypeSchema = z.enum([
+  "operational",
   "all",
   "source-anomaly",
   "source-fetch",
@@ -72,7 +73,7 @@ export const jobsFailuresSearchDefaults = {
   pageSize: paginatedSearchDefaults.pageSize,
   sortBy: undefined as string | undefined,
   sortDir: undefined as "asc" | "desc" | undefined,
-  jobType: "all" as const,
+  jobType: "operational" as const,
   status: "open" as const,
   failureId: "",
 };

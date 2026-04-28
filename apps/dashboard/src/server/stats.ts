@@ -14,6 +14,7 @@ import {
   catalogSuggestions,
 } from "@versioneer/db";
 
+import { openOperationalJobFailureCondition } from "./job-failure-filters";
 import { authMiddleware } from "./middleware";
 
 export const getStats = createServerFn({ method: "GET" })
@@ -34,7 +35,7 @@ export const getStats = createServerFn({ method: "GET" })
     const [openFailureCount] = await db
       .select({ count: sql<number>`count(*)` })
       .from(jobFailures)
-      .where(sql`${jobFailures.status} = 'open'`);
+      .where(openOperationalJobFailureCondition());
     const [recentReleaseCount] = await db
       .select({ count: sql<number>`count(*)` })
       .from(releases)

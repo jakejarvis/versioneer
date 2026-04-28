@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   canRetryJobFailure,
+  failureJobTypeOptions,
   getInstallTrustReasonCopy,
   getSourceAnomalyCopy,
 } from "./security-signals";
@@ -19,6 +20,14 @@ describe("canRetryJobFailure", () => {
 
   it("keeps informational failures non-retryable", () => {
     expect(canRetryJobFailure("source-anomaly")).toBe(false);
+  });
+
+  it("defaults the failure queue filter to operational failures before source anomalies", () => {
+    expect(failureJobTypeOptions[0]).toEqual({
+      value: "operational",
+      label: "Operational Failures",
+    });
+    expect(failureJobTypeOptions.some((option) => option.value === "source-anomaly")).toBe(true);
   });
 });
 

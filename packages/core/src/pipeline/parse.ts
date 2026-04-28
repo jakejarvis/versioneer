@@ -526,22 +526,6 @@ export async function handleSourceParse(
           }
           knownArtifactHosts.add(hostname);
         }
-        if (
-          INSTALLABLE_ARTIFACT_TYPES.has(parsedArtifact.type) &&
-          !parsedArtifact.sha256 &&
-          !parsedArtifact.signature
-        ) {
-          const missingHashFingerprint = artifactIdentity.canonicalUrl;
-          await recordSourceAnomaly({
-            db,
-            sourceId: source.id,
-            kind: "missing_install_hash",
-            fingerprint: missingHashFingerprint,
-            message: `Installable ${parsedArtifact.type} artifact is missing SHA-256: ${artifactIdentity.canonicalUrl}`,
-            now,
-          });
-        }
-
         const existingArtifact =
           existingByIdentityKey.get(artifactIdentity.identityKey) ??
           existingByCanonicalUrl.get(artifactIdentity.canonicalUrl) ??
@@ -580,6 +564,21 @@ export async function handleSourceParse(
           existingByCanonicalUrl.set(artifactIdentity.canonicalUrl, mergedArtifact);
           existingByIdentityKey.set(artifactIdentity.identityKey, mergedArtifact);
           continue;
+        }
+
+        if (
+          INSTALLABLE_ARTIFACT_TYPES.has(parsedArtifact.type) &&
+          !parsedArtifact.sha256 &&
+          !parsedArtifact.signature
+        ) {
+          await recordSourceAnomaly({
+            db,
+            sourceId: source.id,
+            kind: "missing_install_hash",
+            fingerprint: artifactIdentity.canonicalUrl,
+            message: `Installable ${parsedArtifact.type} artifact is missing SHA-256: ${artifactIdentity.canonicalUrl}`,
+            now,
+          });
         }
 
         const artifactId = generateId(idPrefixes.artifact);

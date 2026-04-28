@@ -35,6 +35,7 @@ import {
   buildAtRiskSources,
   staleSourceCondition,
 } from "./homepage-helpers";
+import { openOperationalJobFailureCondition } from "./job-failure-filters";
 import { authMiddleware } from "./middleware";
 
 export const getHomepage = createServerFn({ method: "GET" })
@@ -42,6 +43,7 @@ export const getHomepage = createServerFn({ method: "GET" })
   .handler(async () => {
     const db = createDb(env.DB);
     const recentReleaseThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const openOperationalFailureCondition = openOperationalJobFailureCondition();
 
     const [
       [appCount],
@@ -99,7 +101,7 @@ export const getHomepage = createServerFn({ method: "GET" })
       db
         .select({ count: sql<number>`count(*)` })
         .from(jobFailures)
-        .where(eq(jobFailures.status, "open")),
+        .where(openOperationalFailureCondition),
       db
         .select({
           status: discoveredApps.enrichmentStatus,
@@ -133,7 +135,7 @@ export const getHomepage = createServerFn({ method: "GET" })
       db
         .select()
         .from(jobFailures)
-        .where(eq(jobFailures.status, "open"))
+        .where(openOperationalFailureCondition)
         .orderBy(desc(jobFailures.createdAt))
         .limit(5),
       db.select().from(sources).where(atRiskSourceCondition),

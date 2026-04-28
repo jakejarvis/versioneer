@@ -26,6 +26,40 @@ export async function recordSourceAnomaly(params: {
   const jobKey = `${params.kind}:${params.fingerprint}`;
   const id = generateId(idPrefixes.jobFailure);
   const dedupeKey = JSON.stringify(["source-anomaly", params.sourceId, jobKey]);
+  let existing = await params.db
+    .select({ id: jobFailures.id })
+    .from(jobFailures)
+    .where(
+      and(eq(jobFailures.dedupeKey, dedupeKey), sql`${jobFailures.status} in ('open', 'retrying')`),
+    )
+    .get();
+  existing ??= await params.db
+    .select({ id: jobFailures.id })
+    .from(jobFailures)
+    .where(
+      and(
+        sql`${jobFailures.dedupeKey} is null`,
+        eq(jobFailures.jobType, "source-anomaly"),
+        eq(jobFailures.relatedId, params.sourceId),
+        eq(jobFailures.jobKey, jobKey),
+        sql`${jobFailures.status} in ('open', 'retrying')`,
+      ),
+    )
+    .get();
+
+  if (existing) {
+    await params.db
+      .update(jobFailures)
+      .set({
+        dedupeKey,
+        status: "open",
+        errorMessage: params.message,
+        retryCount: 0,
+        resolvedAt: null,
+      })
+      .where(eq(jobFailures.id, existing.id));
+    return existing.id;
+  }
 
   await params.db
     .insert(jobFailures)
@@ -47,17 +81,17 @@ export async function recordSourceAnomaly(params: {
       set: {
         status: "open",
         errorMessage: params.message,
-        retryCount: sql`${jobFailures.retryCount} + 1`,
+        retryCount: 0,
         resolvedAt: null,
       },
     });
 
-  const existing = await params.db
+  const inserted = await params.db
     .select({ id: jobFailures.id })
     .from(jobFailures)
     .where(
       and(eq(jobFailures.dedupeKey, dedupeKey), sql`${jobFailures.status} in ('open', 'retrying')`),
     )
     .get();
-  return existing?.id ?? id;
+  return inserted?.id ?? id;
 }

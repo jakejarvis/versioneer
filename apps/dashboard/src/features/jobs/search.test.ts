@@ -55,4 +55,12 @@ describe("jobs search defaults", () => {
       }),
     ).toEqual(jobsFailuresSearch);
   });
+
+  it("keeps operational failures as the default while allowing explicit source anomalies", () => {
+    expect(jobsFailuresSearchDefaults.jobType).toBe("operational");
+    expect(jobsFailuresSearchSchema.parse({ jobType: "source-anomaly" }).jobType).toBe(
+      "source-anomaly",
+    );
+    expect(jobsFailuresSearchSchema.parse({ jobType: "all" }).jobType).toBe("all");
+  });
 });

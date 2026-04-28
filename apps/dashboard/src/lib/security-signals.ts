@@ -171,6 +171,7 @@ export const failureJobTypeLabels: Record<string, string> = {
 };
 
 export const failureJobTypeOptions = [
+  { value: "operational", label: "Operational Failures" },
   { value: "all", label: "All Failure Types" },
   { value: "source-anomaly", label: "Source Anomalies" },
   { value: "source-fetch", label: "Source Fetch" },

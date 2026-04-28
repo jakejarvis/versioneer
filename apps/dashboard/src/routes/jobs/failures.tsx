@@ -92,7 +92,7 @@ function FailureQueue({ search }: { search: JobsFailuresSearch }) {
 
   const { data, isLoading } = useJobFailures({
     status: search.status,
-    jobType: search.jobType === "all" ? undefined : search.jobType,
+    jobType: search.jobType,
     limit: pagination.pageSize,
     offset: pagination.pageIndex * pagination.pageSize,
     sortBy: search.sortBy,

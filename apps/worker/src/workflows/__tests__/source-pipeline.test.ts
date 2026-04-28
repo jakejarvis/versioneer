@@ -7,6 +7,7 @@ import {
   buildArtifactIdentity,
   handleRecomputeLatest,
   handleSourceFetch,
+  recordSourceAnomaly,
   type SourceFetchJob,
 } from "@versioneer/core/pipeline";
 import { normalizeVersion } from "@versioneer/core/versioning";
@@ -17,6 +18,7 @@ import {
   createDb,
   generateId,
   idPrefixes,
+  jobFailures,
   releases,
   releaseObservations,
   sourceFetches,
@@ -225,9 +227,57 @@ describe("SourcePipelineWorkflow", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("backfills legacy source anomaly dedupe keys without counting observations as retries", async () => {
+    const db = createDb(env.DB);
+    const sourceId = generateId(idPrefixes.source);
+    const jobKey = "missing_install_hash:https://example.com/legacy.dmg";
+    const legacyFailureId = generateId(idPrefixes.jobFailure);
+
+    await db.insert(jobFailures).values({
+      id: legacyFailureId,
+      jobType: "source-anomaly",
+      jobKey,
+      relatedId: sourceId,
+      dedupeKey: null,
+      errorMessage: "Installable dmg artifact is missing SHA-256: https://example.com/legacy.dmg",
+      retryCount: 77,
+      status: "open",
+      createdAt: TEST_NOW_ISO,
+      resolvedAt: null,
+    });
+
+    const firstId = await recordSourceAnomaly({
+      db,
+      sourceId,
+      kind: "missing_install_hash",
+      fingerprint: "https://example.com/legacy.dmg",
+      message: "Installable dmg artifact is missing SHA-256: https://example.com/legacy.dmg",
+      now: TEST_NOW_ISO,
+    });
+    const secondId = await recordSourceAnomaly({
+      db,
+      sourceId,
+      kind: "missing_install_hash",
+      fingerprint: "https://example.com/legacy.dmg",
+      message: "Installable dmg artifact is missing SHA-256: https://example.com/legacy.dmg",
+      now: TEST_NOW_ISO,
+    });
+
+    expect(firstId).toBe(legacyFailureId);
+    expect(secondId).toBe(legacyFailureId);
+
+    const rows = await db
+      .select()
+      .from(jobFailures)
+      .where(eq(jobFailures.relatedId, sourceId))
+      .all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.dedupeKey).toBe(JSON.stringify(["source-anomaly", sourceId, jobKey]));
+    expect(rows[0]!.retryCount).toBe(0);
+  });
+
   it("runs all 3 steps when source returns new content", async () => {
     const db = createDb(env.DB);
-    const { jobFailures } = await import("@versioneer/db");
 
     const appId = generateId(idPrefixes.app);
     await db.insert(apps).values({
@@ -300,37 +350,49 @@ describe("SourcePipelineWorkflow", () => {
   </channel>
 </rss>`;
 
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(appcastXml, {
-        status: 200,
-        headers: { "content-type": "application/xml" },
-      }),
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response(appcastXml, {
+          status: 200,
+          headers: { "content-type": "application/xml" },
+        }),
+      ),
     );
 
     const workflow = createWorkflowInstance();
-    const step = createMockStep();
-    const event: WorkflowEvent<SourceFetchJob> = {
+    const firstStep = createMockStep();
+    const firstEvent: WorkflowEvent<SourceFetchJob> = {
       payload: { sourceId, reason: "scheduled" as const, force: false },
       timestamp: TEST_NOW,
       instanceId: `wf_full_${sourceId}`,
     };
 
-    const result = await workflow.run(event, step);
+    const result = await workflow.run(firstEvent, firstStep);
+    const secondStep = createMockStep();
+    const secondResult = await workflow.run(
+      {
+        ...firstEvent,
+        instanceId: `wf_full_${sourceId}_again`,
+      },
+      secondStep,
+    );
 
     // All 3 steps should have run
-    expect(step.calls).toEqual(["fetch-source", "parse-source", "recompute-latest"]);
+    expect(firstStep.calls).toEqual(["fetch-source", "parse-source", "recompute-latest"]);
+    expect(secondStep.calls).toEqual(["fetch-source", "parse-source", "recompute-latest"]);
     expect(result).toHaveProperty("status", "completed");
+    expect(secondResult).toHaveProperty("status", "completed");
     expect(result).toHaveProperty("releaseCount");
     const anomalies = await db
       .select()
       .from(jobFailures)
       .where(eq(jobFailures.jobType, "source-anomaly"))
       .all();
-    expect(
-      anomalies.some(
-        (row) => row.jobKey === "missing_install_hash:https://example.com/app-2.0.0.dmg",
-      ),
-    ).toBe(true);
+    const missingHashAnomalies = anomalies.filter(
+      (row) => row.jobKey === "missing_install_hash:https://example.com/app-2.0.0.dmg",
+    );
+    expect(missingHashAnomalies).toHaveLength(1);
+    expect(missingHashAnomalies[0]!.retryCount).toBe(0);
     expect(anomalies.some((row) => row.jobKey === "new_artifact_hostname:example.com")).toBe(true);
     const parsedRelease = await db
       .select()

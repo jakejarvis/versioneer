@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { pipelineWorker } from "@/lib/pipeline";
@@ -10,6 +11,7 @@ import { jobFailures } from "@versioneer/db";
 
 import { captureAdminEvent } from "./analytics";
 import { loadEntityRefsByIds } from "./entity-summaries";
+import { appendJobFailureTypeFilter } from "./job-failure-filters";
 import { runCaskIndexSyncJob, runPollSourcesJob, startEnrichmentDrainJob } from "./job-runners";
 import { authMiddleware } from "./middleware";
 import {
@@ -121,7 +123,7 @@ export const listJobFailures = createServerFn({ method: "GET" })
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
       status: z.enum(["open", "retrying", "resolved", "abandoned"]).default("open"),
-      jobType: z.string().optional(),
+      jobType: z.string().optional().default("operational"),
       relatedId: z.string().optional(),
       sortBy: z.string().optional(),
       sortDir: sortDirectionSchema,
@@ -130,8 +132,8 @@ export const listJobFailures = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const { limit, offset, status, jobType, relatedId, sortBy, sortDir } = data;
     const db = createDb(env.DB);
-    const filters = [eq(jobFailures.status, status)];
-    if (jobType) filters.push(eq(jobFailures.jobType, jobType));
+    const filters: SQL[] = [eq(jobFailures.status, status)];
+    appendJobFailureTypeFilter(filters, jobType);
     if (relatedId) filters.push(eq(jobFailures.relatedId, relatedId));
     const where = and(...filters);
 
@@ -236,18 +238,19 @@ export const retryAllJobFailures = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { jobType } = data;
     const db = createDb(env.DB);
+    const filters: SQL[] = [eq(jobFailures.status, "open")];
+    appendJobFailureTypeFilter(filters, jobType);
 
     const failures = await db
       .select()
       .from(jobFailures)
-      .where(eq(jobFailures.status, "open"))
+      .where(and(...filters))
       .all();
 
-    const matching = jobType ? failures.filter((f) => f.jobType === jobType) : failures;
     let retried = 0;
     let failed = 0;
 
-    for (const failure of matching) {
+    for (const failure of failures) {
       try {
         if (await retryFailure(db, failure, context.user.email)) {
           retried++;
