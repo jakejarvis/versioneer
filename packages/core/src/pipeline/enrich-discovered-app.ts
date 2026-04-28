@@ -14,6 +14,11 @@ import {
   ResponseBodyTooLargeError,
 } from "./response-body";
 import { fetchAndParse, extractIconUrl } from "./scrape-html";
+import {
+  fetchSourceUrl,
+  resolvePublicDnsAddresses,
+  SourceUrlPolicyError,
+} from "./source-url-policy";
 import { githubApiHeaders } from "./types";
 
 export interface EnrichmentResult {
@@ -225,9 +230,13 @@ export async function enrichDiscoveredApp(params: {
 async function enrichFromSparkleFeed(url: string, result: EnrichmentResult): Promise<void> {
   let response: Response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-  } catch {
-    result.sourceValidationStatus = "timeout";
+    ({ response } = await fetchSourceUrl(
+      url,
+      { signal: AbortSignal.timeout(10_000) },
+      { resolveAddresses: resolvePublicDnsAddresses },
+    ));
+  } catch (error) {
+    result.sourceValidationStatus = error instanceof SourceUrlPolicyError ? "invalid" : "timeout";
     return;
   }
 
@@ -289,12 +298,16 @@ async function enrichFromGitHubReleases(
 ): Promise<void> {
   let response: Response;
   try {
-    response = await fetch(apiUrl, {
-      signal: AbortSignal.timeout(10_000),
-      headers: githubApiHeaders(githubToken),
-    });
-  } catch {
-    result.sourceValidationStatus = "timeout";
+    ({ response } = await fetchSourceUrl(
+      apiUrl,
+      {
+        signal: AbortSignal.timeout(10_000),
+        headers: githubApiHeaders(githubToken),
+      },
+      { resolveAddresses: resolvePublicDnsAddresses },
+    ));
+  } catch (error) {
+    result.sourceValidationStatus = error instanceof SourceUrlPolicyError ? "invalid" : "timeout";
     return;
   }
 
@@ -343,9 +356,13 @@ async function enrichFromMasLookup(bundleId: string, result: EnrichmentResult): 
   const url = resolveSourceUrl("mac_app_store", bundleId)!;
   let response: Response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-  } catch {
-    result.sourceValidationStatus = "timeout";
+    ({ response } = await fetchSourceUrl(
+      url,
+      { signal: AbortSignal.timeout(10_000) },
+      { resolveAddresses: resolvePublicDnsAddresses },
+    ));
+  } catch (error) {
+    result.sourceValidationStatus = error instanceof SourceUrlPolicyError ? "invalid" : "timeout";
     return;
   }
 
@@ -492,7 +509,11 @@ async function scrapeHomepageIcon(homepageUrl: string, bucket: R2Bucket): Promis
     const iconUrl = extractIconUrl(doc, homepageUrl);
     if (!iconUrl) return null;
 
-    const iconResponse = await fetch(iconUrl, { signal: AbortSignal.timeout(10_000) });
+    const { response: iconResponse } = await fetchSourceUrl(
+      iconUrl,
+      { signal: AbortSignal.timeout(10_000) },
+      { resolveAddresses: resolvePublicDnsAddresses },
+    );
     if (!iconResponse.ok) return null;
 
     const contentType = iconResponse.headers.get("content-type") ?? "";

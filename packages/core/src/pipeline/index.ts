@@ -33,6 +33,7 @@ export {
 } from "./response-body";
 export {
   assertValidSourceFetchUrl,
+  fetchSourceUrl,
   getSourceFetchUrlMetadata,
   isGitHubApiUrl,
   resolvePublicDnsAddresses,
@@ -40,6 +41,7 @@ export {
 } from "./source-url-policy";
 export type {
   SourceFetchFailureReason,
+  SourceUrlFetchResult,
   SourceFetchUrlMetadata,
   SourceUrlPolicyOptions,
 } from "./source-url-policy";

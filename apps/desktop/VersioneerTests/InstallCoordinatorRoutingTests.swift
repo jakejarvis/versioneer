@@ -150,6 +150,30 @@ struct InstallCoordinatorRoutingTests {
     }
   }
 
+  @Test func downloaderRejectsNonHTTPSRedirectResponses() throws {
+    let response = try #require(
+      HTTPURLResponse(
+        url: URL(string: "http://downloads.example.com/app.dmg")!,
+        statusCode: 200,
+        httpVersion: "HTTP/1.1",
+        headerFields: nil
+      )
+    )
+
+    do {
+      try InstallCoordinator.validateDownloadedArtifactResponse(response)
+      Issue.record("Expected non-HTTPS final artifact URL to fail")
+    } catch let error as InstallError {
+      guard case .downloadFailed(let message) = error else {
+        Issue.record("Unexpected install error: \(error.localizedDescription)")
+        return
+      }
+      #expect(message.contains("non-HTTPS"))
+    } catch {
+      Issue.record("Unexpected error: \(error.localizedDescription)")
+    }
+  }
+
   private func makePlan(
     strategy: InstallStrategy
   ) -> InstallPlan {

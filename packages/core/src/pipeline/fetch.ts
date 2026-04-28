@@ -11,6 +11,7 @@ import { readResponseTextLimited, ResponseBodyTooLargeError } from "./response-b
 import { computeNextPollAt } from "./source-polling";
 import {
   assertValidSourceFetchUrl,
+  fetchSourceUrl,
   getSourceFetchUrlMetadata,
   isGitHubApiUrl,
   resolvePublicDnsAddresses,
@@ -67,9 +68,8 @@ async function fetchWithCandidates(
   let lastResult: SourceFetchResponse | undefined;
   for (const candidate of candidates) {
     const metadata = getSourceFetchUrlMetadata(candidate);
-    let url: URL;
     try {
-      url = await assertValidSourceFetchUrl(candidate, {
+      await assertValidSourceFetchUrl(candidate, {
         resolveAddresses: env.resolveSourceHostAddresses ?? resolvePublicDnsAddresses,
       });
     } catch (error) {
@@ -89,15 +89,29 @@ async function fetchWithCandidates(
     };
 
     let response: Response;
+    let fetchedUrl: URL;
     try {
-      response = await fetch(candidate, {
-        headers,
-        signal: AbortSignal.timeout(SOURCE_FETCH_TIMEOUT_MS),
-      });
+      const fetchResult = await fetchSourceUrl(
+        candidate,
+        {
+          headers,
+          signal: AbortSignal.timeout(SOURCE_FETCH_TIMEOUT_MS),
+        },
+        {
+          resolveAddresses: env.resolveSourceHostAddresses ?? resolvePublicDnsAddresses,
+        },
+      );
+      response = fetchResult.response;
+      fetchedUrl = fetchResult.url;
     } catch (error) {
+      if (error instanceof SourceUrlPolicyError) {
+        throw new SourceFetchAttemptError(metadata, error.reason, error.message, {
+          cause: error,
+        });
+      }
       const isTimeout = error instanceof DOMException && error.name === "TimeoutError";
       throw new SourceFetchAttemptError(
-        { ...metadata, url },
+        metadata,
         isTimeout ? "timeout" : "network_error",
         isTimeout
           ? `Source fetch timed out after ${SOURCE_FETCH_TIMEOUT_MS / 1000} s`
@@ -108,7 +122,10 @@ async function fetchWithCandidates(
       );
     }
 
-    lastResult = { response, metadata: { ...metadata, url } };
+    lastResult = {
+      response,
+      metadata: getSourceFetchUrlMetadata(fetchedUrl.toString()),
+    };
     if (response.ok || response.status === 304) return lastResult;
   }
 

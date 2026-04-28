@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   assertValidSourceFetchUrl,
+  fetchSourceUrl,
   isGitHubApiUrl,
   resolvePublicDnsAddresses,
   SourceUrlPolicyError,
@@ -104,6 +105,55 @@ describe("resolvePublicDnsAddresses", () => {
       .mockResolvedValueOnce(Response.json({ Answer: [] }));
 
     await expect(resolvePublicDnsAddresses("alias.example.com")).resolves.toEqual([]);
+  });
+});
+
+describe("fetchSourceUrl", () => {
+  it("validates redirect targets before following them", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://127.0.0.1/latest" },
+      }),
+    );
+
+    await expect(
+      fetchSourceUrl("https://updates.example.com/feed.xml", undefined, {
+        resolveAddresses: async () => ["93.184.216.34"],
+      }),
+    ).rejects.toMatchObject({ reason: "blocked_hostname" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("strips sensitive headers on cross-origin redirects", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://cdn.example.com/feed.xml" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response("ok"));
+
+    const result = await fetchSourceUrl(
+      "https://updates.example.com/feed.xml",
+      {
+        headers: {
+          Authorization: "token secret",
+          "X-Versioneer-Test": "1",
+        },
+      },
+      { resolveAddresses: async () => ["93.184.216.34"] },
+    );
+
+    expect(result.url.hostname).toBe("cdn.example.com");
+    expect(result.redirectCount).toBe(1);
+
+    const redirectedInit = fetchMock.mock.calls[1]?.[1] as RequestInit | undefined;
+    const redirectedHeaders = new Headers(redirectedInit?.headers);
+    expect(redirectedHeaders.has("authorization")).toBe(false);
+    expect(redirectedHeaders.get("x-versioneer-test")).toBe("1");
   });
 });
 

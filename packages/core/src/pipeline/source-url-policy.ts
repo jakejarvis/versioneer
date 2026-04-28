@@ -40,6 +40,15 @@ interface DnsJsonResponse {
   Answer?: Array<{ type?: number; data?: string }>;
 }
 
+export interface SourceUrlFetchResult {
+  response: Response;
+  url: URL;
+  redirectCount: number;
+}
+
+const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
+const MAX_VALIDATED_REDIRECTS = 5;
+
 export async function assertValidSourceFetchUrl(
   rawUrl: string,
   options: SourceUrlPolicyOptions = {},
@@ -126,6 +135,61 @@ export function getSourceFetchUrlMetadata(rawUrl: string): SourceFetchUrlMetadat
   } catch {
     return { rawUrl, url: null, hostname: null, scheme: null };
   }
+}
+
+/** Fetches with manual redirects so every hop goes through the same SSRF policy. */
+export async function fetchSourceUrl(
+  rawUrl: string,
+  init: RequestInit = {},
+  options: SourceUrlPolicyOptions = {},
+): Promise<SourceUrlFetchResult> {
+  let currentUrl = await assertValidSourceFetchUrl(rawUrl, options);
+  let currentInit: RequestInit = { ...init, redirect: "manual" };
+
+  for (let redirectCount = 0; redirectCount <= MAX_VALIDATED_REDIRECTS; redirectCount += 1) {
+    const response = await fetch(currentUrl.toString(), currentInit);
+    if (!REDIRECT_STATUS_CODES.has(response.status)) {
+      return { response, url: currentUrl, redirectCount };
+    }
+
+    const location = response.headers.get("location");
+    if (!location) {
+      return { response, url: currentUrl, redirectCount };
+    }
+    if (redirectCount === MAX_VALIDATED_REDIRECTS) {
+      throw new SourceUrlPolicyError("blocked_hostname", "Source fetch redirected too many times");
+    }
+
+    const nextUrl = await assertValidSourceFetchUrl(
+      new URL(location, currentUrl).toString(),
+      options,
+    );
+    currentInit = redirectRequestInit(currentInit, currentUrl, nextUrl, response.status);
+    currentUrl = nextUrl;
+  }
+
+  throw new SourceUrlPolicyError("blocked_hostname", "Source fetch redirected too many times");
+}
+
+function redirectRequestInit(
+  init: RequestInit,
+  previousUrl: URL,
+  nextUrl: URL,
+  status: number,
+): RequestInit {
+  const headers = new Headers(init.headers);
+  if (previousUrl.origin !== nextUrl.origin) {
+    headers.delete("authorization");
+    headers.delete("cookie");
+    headers.delete("proxy-authorization");
+  }
+
+  const redirected: RequestInit = { ...init, headers, redirect: "manual" };
+  if (status === 303) {
+    const { body: _body, ...withoutBody } = redirected;
+    return { ...withoutBody, method: "GET" };
+  }
+  return redirected;
 }
 
 async function resolveDnsType(hostname: string, type: "A" | "AAAA"): Promise<string[]> {

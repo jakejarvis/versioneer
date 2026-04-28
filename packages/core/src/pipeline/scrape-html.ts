@@ -4,6 +4,7 @@ import type { SourceRole, SourceType } from "@versioneer/schemas/sources";
 
 import { parseGitHubRepoUrl } from "../validation/github-url";
 import { readResponseTextLimited } from "./response-body";
+import { fetchSourceUrl, resolvePublicDnsAddresses } from "./source-url-policy";
 import { VERSIONEER_USER_AGENT } from "./types";
 
 export type CheerioDoc = cheerio.CheerioAPI;
@@ -27,14 +28,18 @@ export async function fetchAndParse(
 ): Promise<CheerioDoc | null> {
   const { timeoutMs = 10_000, headers = {} } = options;
   try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(timeoutMs),
-      headers: {
-        "User-Agent": VERSIONEER_USER_AGENT,
-        Accept: "text/html, application/xhtml+xml",
-        ...headers,
+    const { response } = await fetchSourceUrl(
+      url,
+      {
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: {
+          "User-Agent": VERSIONEER_USER_AGENT,
+          Accept: "text/html, application/xhtml+xml",
+          ...headers,
+        },
       },
-    });
+      { resolveAddresses: resolvePublicDnsAddresses },
+    );
     if (!response.ok) return null;
     const { text: html } = await readResponseTextLimited(response, MAX_HTML_BODY_BYTES);
     return cheerio.load(html);

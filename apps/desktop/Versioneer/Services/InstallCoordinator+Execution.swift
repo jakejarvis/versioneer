@@ -40,17 +40,25 @@ extension InstallCoordinator {
     Logger.install.info("Downloading artifact from \(downloadURL.absoluteString)")
 
     let (temporaryURL, response) = try await URLSession.shared.download(from: downloadURL)
-    guard let httpResponse = response as? HTTPURLResponse,
-      (200..<300).contains(httpResponse.statusCode)
-    else {
-      throw InstallError.downloadFailed("Server returned an invalid response")
-    }
+    try Self.validateDownloadedArtifactResponse(response)
 
     if FileManager.default.fileExists(atPath: destinationURL.path) {
       try FileManager.default.removeItem(at: destinationURL)
     }
     try FileManager.default.moveItem(at: temporaryURL, to: destinationURL)
     return destinationURL
+  }
+
+  nonisolated static func validateDownloadedArtifactResponse(_ response: URLResponse) throws {
+    guard let httpResponse = response as? HTTPURLResponse,
+      (200..<300).contains(httpResponse.statusCode)
+    else {
+      throw InstallError.downloadFailed("Server returned an invalid response")
+    }
+
+    guard httpResponse.url?.scheme?.lowercased() == "https" else {
+      throw InstallError.downloadFailed("Artifact download redirected to a non-HTTPS URL")
+    }
   }
 
   func prepareAppBundle(

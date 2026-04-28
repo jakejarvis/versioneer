@@ -15,7 +15,7 @@ import {
   xmlParser,
 } from "@versioneer/core/parsers";
 import {
-  assertValidSourceFetchUrl,
+  fetchSourceUrl,
   isGitHubApiUrl,
   readResponseTextLimited,
   resolvePublicDnsAddresses,
@@ -75,16 +75,18 @@ export const validateSource = createServerFn({ method: "POST" })
     try {
       for (const candidate of fetchUrls) {
         fetchedUrl = candidate;
-        await assertValidSourceFetchUrl(candidate, {
-          resolveAddresses: resolvePublicDnsAddresses,
-        });
         const headers = descriptor.fetchHeaders({
           githubToken: isGitHubApiUrl(candidate) ? env.GITHUB_TOKEN : undefined,
         });
-        const res = await fetch(candidate, {
-          signal: AbortSignal.timeout(10_000),
-          headers,
-        });
+        const { response: res, url: finalUrl } = await fetchSourceUrl(
+          candidate,
+          {
+            signal: AbortSignal.timeout(10_000),
+            headers,
+          },
+          { resolveAddresses: resolvePublicDnsAddresses },
+        );
+        fetchedUrl = finalUrl.toString();
         if (res.ok) {
           response = res;
           break;
