@@ -136,6 +136,7 @@ function AppDetailPage() {
   const deleteIconMutation = useDeleteAppIcon(appId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeTab = activeTabFromPathname(pathname);
+  const pageContext = useMemo(() => (app ? { appId, app } : null), [app, appId]);
 
   if (isLoading) {
     return (
@@ -159,8 +160,6 @@ function AppDetailPage() {
       </Empty>
     );
   }
-
-  const pageContext = useMemo(() => ({ appId, app }), [app, appId]);
 
   return (
     <div>
