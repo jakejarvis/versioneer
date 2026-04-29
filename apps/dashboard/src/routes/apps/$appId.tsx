@@ -18,15 +18,7 @@ import {
   Upload,
   Zap,
 } from "lucide-react";
-import {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppIcon } from "@/components/shared/app-icon";
@@ -110,16 +102,6 @@ export const Route = createFileRoute("/apps/$appId")({
 
 type AppDetailTab = "overview" | "aliases" | "sources" | "releases";
 
-const AppDetailPageContext = createContext<{ appId: string; app: AppDetail } | null>(null);
-
-export function useAppDetailPageContext() {
-  const value = useContext(AppDetailPageContext);
-  if (!value) {
-    throw new Error("App detail context is unavailable");
-  }
-  return value;
-}
-
 function activeTabFromPathname(pathname: string): AppDetailTab {
   if (pathname.endsWith("/aliases")) return "aliases";
   if (pathname.endsWith("/sources")) return "sources";
@@ -136,7 +118,6 @@ function AppDetailPage() {
   const deleteIconMutation = useDeleteAppIcon(appId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeTab = activeTabFromPathname(pathname);
-  const pageContext = useMemo(() => (app ? { appId, app } : null), [app, appId]);
 
   if (isLoading) {
     return (
@@ -252,35 +233,33 @@ function AppDetailPage() {
         </Button>
       </div>
 
-      <AppDetailPageContext.Provider value={pageContext}>
-        <Tabs value={activeTab} className="mt-6">
-          <TabsList>
-            <TabsTrigger value="overview" asChild>
-              <Link to="/apps/$appId" params={{ appId }}>
-                Overview
-              </Link>
-            </TabsTrigger>
-            <TabsTrigger value="aliases" asChild>
-              <Link to="/apps/$appId/aliases" params={{ appId }}>
-                Aliases
-              </Link>
-            </TabsTrigger>
-            <TabsTrigger value="sources" asChild>
-              <Link to="/apps/$appId/sources" params={{ appId }}>
-                Sources
-              </Link>
-            </TabsTrigger>
-            <TabsTrigger value="releases" asChild>
-              <Link to="/apps/$appId/releases" params={{ appId }}>
-                Releases
-              </Link>
-            </TabsTrigger>
-          </TabsList>
-          <div className="mt-4">
-            <Outlet />
-          </div>
-        </Tabs>
-      </AppDetailPageContext.Provider>
+      <Tabs value={activeTab} className="mt-6">
+        <TabsList>
+          <TabsTrigger value="overview" asChild>
+            <Link to="/apps/$appId" params={{ appId }}>
+              Overview
+            </Link>
+          </TabsTrigger>
+          <TabsTrigger value="aliases" asChild>
+            <Link to="/apps/$appId/aliases" params={{ appId }}>
+              Aliases
+            </Link>
+          </TabsTrigger>
+          <TabsTrigger value="sources" asChild>
+            <Link to="/apps/$appId/sources" params={{ appId }}>
+              Sources
+            </Link>
+          </TabsTrigger>
+          <TabsTrigger value="releases" asChild>
+            <Link to="/apps/$appId/releases" params={{ appId }}>
+              Releases
+            </Link>
+          </TabsTrigger>
+        </TabsList>
+        <div className="mt-4">
+          <Outlet />
+        </div>
+      </Tabs>
 
       <EditAppDialog app={app} open={editOpen} onOpenChange={setEditOpen} />
     </div>

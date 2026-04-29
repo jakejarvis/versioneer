@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { SourcesTab, useAppDetailPageContext } from "./$appId";
+import { SourcesTab } from "./$appId";
 
 export const Route = createFileRoute("/apps/$appId/sources")({
   component: AppSourcesRoute,
 });
 
 function AppSourcesRoute() {
-  const { appId } = useAppDetailPageContext();
+  const { appId } = Route.useParams();
   return <SourcesTab appId={appId} />;
 }
