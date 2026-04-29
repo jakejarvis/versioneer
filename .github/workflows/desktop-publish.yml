@@ -88,7 +88,7 @@ permissions:
 jobs:
   publish:
     name: Publish desktop ${{ inputs.channel }}
-    runs-on: macos-latest
+    runs-on: macos-26
     env:
       CHANNEL: ${{ inputs.channel }}
       DOWNLOADS_BUCKET: versioneer-releases
