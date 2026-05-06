@@ -1,16 +1,14 @@
 import AppKit
 import SwiftUI
-import Textual
 
 struct ReleaseNotesMarkdownView: View {
   let markdown: String
 
   var body: some View {
     ScrollView {
-      StructuredText(markdown: markdown)
-        .textual.structuredTextStyle(.gitHub)
-        .textual.textSelection(.enabled)
+      Text(renderedMarkdown)
         .font(.callout)
+        .textSelection(.enabled)
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -21,6 +19,17 @@ struct ReleaseNotesMarkdownView: View {
         NSWorkspace.shared.open(url)
         return .handled
       })
+  }
+
+  private var renderedMarkdown: AttributedString {
+    do {
+      return try AttributedString(
+        markdown: markdown,
+        options: .init(interpretedSyntax: .full)
+      )
+    } catch {
+      return AttributedString(markdown)
+    }
   }
 
   private static func isSafeExternalURL(_ url: URL) -> Bool {

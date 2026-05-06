@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		231159822F9914F3001596CC /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = 231159812F9914F3001596CC /* Textual */; };
 		23472BD82F7DA7E700095A35 /* Versioneer.icon in Resources */ = {isa = PBXBuildFile; fileRef = 23472BD72F7DA7E700095A35 /* Versioneer.icon */; };
 		23EBFEDF2F75F6CF0026DE17 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = 23EBFEDE2F75F6CF0026DE17 /* PostHog */; };
 		23F9791D2F7584620058763E /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 23F9791C2F7584620058763E /* Logging */; };
@@ -71,7 +70,6 @@
 				23F9791D2F7584620058763E /* Logging in Frameworks */,
 				23FCB0012F7600010058763E /* Sparkle in Frameworks */,
 				23EBFEDF2F75F6CF0026DE17 /* PostHog in Frameworks */,
-				231159822F9914F3001596CC /* Textual in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -151,7 +149,6 @@
 				23FCB0022F7600010058763E /* Sparkle */,
 				23F9791C2F7584620058763E /* Logging */,
 				23EBFEDE2F75F6CF0026DE17 /* PostHog */,
-				231159812F9914F3001596CC /* Textual */,
 			);
 			productName = Versioneer;
 			productReference = 23A5A6032F74908500245F54 /* Versioneer.app */;
@@ -238,7 +235,6 @@
 				23F9791A2F7583030058763E /* XCRemoteSwiftPackageReference "Sparkle" */,
 				23F9791B2F7584620058763E /* XCRemoteSwiftPackageReference "swift-log" */,
 				23EBFEDD2F75F6CF0026DE17 /* XCRemoteSwiftPackageReference "posthog-ios" */,
-				231159802F9914F3001596CC /* XCRemoteSwiftPackageReference "textual" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 23A5A6042F74908500245F54 /* Products */;
@@ -638,6 +634,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = B5ZWKBCUTU;
@@ -646,6 +643,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
+				OTHER_CODE_SIGN_FLAGS = "--identifier $(PRODUCT_BUNDLE_IDENTIFIER)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.jakejarvis.versioneer.PrivilegedHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -661,6 +659,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = B5ZWKBCUTU;
@@ -669,6 +668,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
+				OTHER_CODE_SIGN_FLAGS = "--identifier $(PRODUCT_BUNDLE_IDENTIFIER)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.jakejarvis.versioneer.PrivilegedHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -722,14 +722,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		231159802F9914F3001596CC /* XCRemoteSwiftPackageReference "textual" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/gonzalezreal/textual.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.3.1;
-			};
-		};
 		23EBFEDD2F75F6CF0026DE17 /* XCRemoteSwiftPackageReference "posthog-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/PostHog/posthog-ios.git";
@@ -757,11 +749,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		231159812F9914F3001596CC /* Textual */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 231159802F9914F3001596CC /* XCRemoteSwiftPackageReference "textual" */;
-			productName = Textual;
-		};
 		23EBFEDE2F75F6CF0026DE17 /* PostHog */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 23EBFEDD2F75F6CF0026DE17 /* XCRemoteSwiftPackageReference "posthog-ios" */;

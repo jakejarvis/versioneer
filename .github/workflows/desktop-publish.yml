@@ -77,6 +77,10 @@ on:
         required: true
       SPARKLE_PUBLIC_ED_KEY:
         required: true
+      POSTHOG_CLI_API_KEY:
+        required: false
+      POSTHOG_CLI_PROJECT_ID:
+        required: false
       CLOUDFLARE_ACCOUNT_ID:
         required: true
       CLOUDFLARE_API_TOKEN:
@@ -116,6 +120,9 @@ jobs:
       SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
       POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
       POSTHOG_PROJECT_TOKEN: ${{ vars.POSTHOG_PROJECT_TOKEN }}
+      POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
+      POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_CLI_PROJECT_ID || secrets.POSTHOG_CLI_PROJECT_ID }}
+      POSTHOG_CLI_HOST: ${{ vars.POSTHOG_CLI_HOST }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -127,31 +134,20 @@ jobs:
           cache: true
           run-install: true
 
-      - name: Ensure stable GitHub release exists
+      - name: Prepare stable release notes
         if: ${{ inputs.channel == 'stable' }}
         run: |
           set -euo pipefail
 
-          release_flags=(--title "$RELEASE_TITLE")
-          if [ "$MARK_LATEST" = "true" ]; then
-            release_flags+=(--latest)
-          else
-            release_flags+=(--latest=false)
+          if gh release view "$TAG_NAME" --json body --jq .body > "$RUNNER_TEMP/release-notes.md"; then
+            exit 0
           fi
 
-          if gh release view "$TAG_NAME" --json id >/dev/null 2>&1; then
-            gh release edit "$TAG_NAME" "${release_flags[@]}"
-          else
-            gh release create "$TAG_NAME" \
-              "${release_flags[@]}" \
-              --generate-notes \
-              --target "${GITHUB_SHA}"
-          fi
-
-      - name: Capture stable release body
-        if: ${{ inputs.channel == 'stable' }}
-        run: gh release view "$TAG_NAME" --json body --jq .body >
-          "$RUNNER_TEMP/release-notes.md"
+          gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="$TAG_NAME" \
+            -f target_commitish="$GITHUB_SHA" \
+            -f release_name="$RELEASE_TITLE" \
+            --jq .body > "$RUNNER_TEMP/release-notes.md"
 
       - name: Render nightly release notes
         if: ${{ inputs.channel == 'nightly' }}
@@ -221,17 +217,6 @@ jobs:
             echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD"
           } >> "$GITHUB_ENV"
 
-      - name: Resolve package dependencies
-        run: |
-          set -euo pipefail
-          mkdir -p "$PWD/.build/DerivedData" "$PWD/.build/DerivedData/SourcePackages"
-          xcodebuild \
-            -resolvePackageDependencies \
-            -project apps/desktop/Versioneer.xcodeproj \
-            -scheme Versioneer \
-            -derivedDataPath "$PWD/.build/DerivedData" \
-            -clonedSourcePackagesDirPath "$PWD/.build/DerivedData/SourcePackages"
-
       - name: Run unit tests
         run: |
           set -euo pipefail
@@ -247,34 +232,36 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             test
 
-      - name: Locate Sparkle tools
+      - name: Prepare PostHog dSYM upload
         run: |
           set -euo pipefail
-          SPARKLE_BIN_DIR="$(dirname "$(find "$PWD/.build/DerivedData" "$HOME/Library/Caches/org.swift.swiftpm" -path '*Sparkle/bin/generate_appcast' -print -quit)")"
-          if [ -z "$SPARKLE_BIN_DIR" ]; then
-            echo "Could not locate Sparkle release tools." >&2
+
+          if [ -z "${POSTHOG_CLI_API_KEY:-}" ] || [ -z "${POSTHOG_CLI_PROJECT_ID:-}" ]; then
+            echo "POSTHOG_CLI_API_KEY and POSTHOG_CLI_PROJECT_ID are required for release dSYM upload." >&2
             exit 1
           fi
-          echo "SPARKLE_BIN_DIR=$SPARKLE_BIN_DIR" >> "$GITHUB_ENV"
 
-      - name: Install PostHog CLI
-        run: npm install -g @posthog/cli@latest
+          npm install -g @posthog/cli@latest
 
-      - name: Archive release build
+      - name: Build Developer ID app
         run: |
           set -euo pipefail
+          ARCHIVE_PATH="$RUNNER_TEMP/Versioneer.xcarchive"
+          EXPORT_PATH="$RUNNER_TEMP/Versioneer-export"
+          EXPORT_OPTIONS_PATH="$RUNNER_TEMP/ExportOptions.plist"
+
           xcodebuild \
             -project apps/desktop/Versioneer.xcodeproj \
             -scheme Versioneer \
             -configuration Release \
-            -archivePath "$RUNNER_TEMP/Versioneer.xcarchive" \
+            -archivePath "$ARCHIVE_PATH" \
             -derivedDataPath "$PWD/.build/DerivedData" \
             -clonedSourcePackagesDirPath "$PWD/.build/DerivedData/SourcePackages" \
             archive \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="$APPLE_DEVELOPER_IDENTITY" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            OTHER_CODE_SIGN_FLAGS="\$(inherited) --keychain $KEYCHAIN_PATH --timestamp" \
             ENABLE_USER_SCRIPT_SANDBOXING=NO \
             MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
@@ -282,23 +269,82 @@ jobs:
             POSTHOG_HOST="$POSTHOG_HOST" \
             POSTHOG_PROJECT_TOKEN="$POSTHOG_PROJECT_TOKEN"
 
+          cat > "$EXPORT_OPTIONS_PATH" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>destination</key>
+            <string>export</string>
+            <key>method</key>
+            <string>developer-id</string>
+            <key>signingCertificate</key>
+            <string>${APPLE_DEVELOPER_IDENTITY}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist "$EXPORT_OPTIONS_PATH"
+
+          APP_PATH="$EXPORT_PATH/Versioneer.app"
+          test -d "$APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+
       - name: Notarize and package app
         run: |
           set -euo pipefail
-          APP_PATH="$RUNNER_TEMP/Versioneer.xcarchive/Products/Applications/Versioneer.app"
           NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
+          NOTARY_ZIP_PATH="$RUNNER_TEMP/${ARCHIVE_STEM}-notary-upload.zip"
+          NOTARY_RESULT_PATH="$RUNNER_TEMP/notary-result.json"
+          NOTARY_LOG_PATH="$RUNNER_TEMP/notary-log.json"
           ARCHIVES_DIR="$RUNNER_TEMP/sparkle-archives"
           ARCHIVE_ZIP_PATH="$ARCHIVES_DIR/${ARCHIVE_STEM}.zip"
 
           mkdir -p "$ARCHIVES_DIR"
           printf '%s' "$APPLE_NOTARY_PRIVATE_KEY" > "$NOTARY_KEY_PATH"
 
-          xcrun notarytool submit "$APP_PATH" \
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$NOTARY_ZIP_PATH"
+
+          notary_submit_status=0
+          xcrun notarytool submit "$NOTARY_ZIP_PATH" \
             --key "$NOTARY_KEY_PATH" \
             --key-id "$APPLE_NOTARY_KEY_ID" \
             --issuer "$APPLE_NOTARY_ISSUER_ID" \
-            --wait
+            --wait \
+            --output-format json > "$NOTARY_RESULT_PATH" || notary_submit_status=$?
 
+          submission_id="$(plutil -extract id raw -o - "$NOTARY_RESULT_PATH" 2>/dev/null || true)"
+          submission_status="$(plutil -extract status raw -o - "$NOTARY_RESULT_PATH" 2>/dev/null || true)"
+
+          if [ "$notary_submit_status" -ne 0 ] || [ "$submission_status" != "Accepted" ]; then
+            echo "Notarization failed with status: ${submission_status:-Unknown}" >&2
+            if [ -n "$submission_id" ]; then
+              xcrun notarytool log \
+                --key "$NOTARY_KEY_PATH" \
+                --key-id "$APPLE_NOTARY_KEY_ID" \
+                --issuer "$APPLE_NOTARY_ISSUER_ID" \
+                "$submission_id" \
+                "$NOTARY_LOG_PATH" || true
+              if [ -f "$NOTARY_LOG_PATH" ]; then
+                cat "$NOTARY_LOG_PATH" >&2
+              fi
+            elif [ -s "$NOTARY_RESULT_PATH" ]; then
+              cat "$NOTARY_RESULT_PATH" >&2
+            fi
+            exit 1
+          fi
+
+          rm -f "$NOTARY_ZIP_PATH"
           xcrun stapler staple "$APP_PATH"
           /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ARCHIVE_ZIP_PATH"
 
@@ -354,6 +400,21 @@ jobs:
       - name: Generate Sparkle appcast
         run: |
           set -euo pipefail
+          sparkle_search_roots=("$PWD/.build/DerivedData")
+          if [ -d "$HOME/Library/Caches/org.swift.swiftpm" ]; then
+            sparkle_search_roots+=("$HOME/Library/Caches/org.swift.swiftpm")
+          fi
+
+          GENERATE_APPCAST_PATH="$(find "${sparkle_search_roots[@]}" -path '*Sparkle/bin/generate_appcast' -type f -print -quit)"
+          if [ -z "$GENERATE_APPCAST_PATH" ] || [ ! -x "$GENERATE_APPCAST_PATH" ]; then
+            echo "Could not locate Sparkle generate_appcast." >&2
+            exit 1
+          fi
+          SPARKLE_BIN_DIR="$(dirname "$GENERATE_APPCAST_PATH")"
+          if [ ! -x "$SPARKLE_BIN_DIR/sign_update" ]; then
+            echo "Could not locate Sparkle sign_update." >&2
+            exit 1
+          fi
 
           url_for() {
             local path="$1"
@@ -387,7 +448,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
-          WRANGLER="vp pm --filter @versioneer/web exec wrangler"
+          WRANGLER=(npx --yes wrangler)
 
           object_key() {
             local path="$1"
@@ -399,35 +460,35 @@ jobs:
             fi
           }
 
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/$(object_key "downloads/${ARCHIVE_STEM}.zip")" \
+          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "downloads/${ARCHIVE_STEM}.zip")" \
             --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.zip" \
             --remote \
             --content-type application/zip
 
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/$(object_key "release-notes/${ARCHIVE_STEM}.html")" \
+          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "release-notes/${ARCHIVE_STEM}.html")" \
             --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" \
             --remote \
             --content-type "text/html; charset=utf-8"
 
           if [ "$CHANNEL" = "stable" ] && [ "$ARCHIVE_STEM" != "$VERSION" ]; then
-            $WRANGLER r2 object put "$DOWNLOADS_BUCKET/$(object_key "release-notes/${VERSION}.html")" \
+            "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "release-notes/${VERSION}.html")" \
               --file "$ARCHIVES_DIR/${VERSION}.html" \
               --remote \
               --content-type "text/html; charset=utf-8"
           fi
 
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/$(object_key "appcast.xml")" \
+          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "appcast.xml")" \
             --file "$ARCHIVES_DIR/appcast.xml" \
             --remote \
             --content-type "application/xml; charset=utf-8"
 
-          $WRANGLER r2 object put "$DOWNLOADS_BUCKET/$(object_key "latest/Versioneer.zip")" \
+          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "latest/Versioneer.zip")" \
             --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.zip" \
             --remote \
             --content-type application/zip
 
-      - name: Publish GitHub release asset
-        if: ${{ inputs.upload_github_asset }}
+      - name: Publish GitHub release
+        if: ${{ inputs.upload_github_asset || inputs.channel == 'stable' }}
         run: |
           set -euo pipefail
           ASSET_LABEL="${ARCHIVE_STEM}.zip"
@@ -449,10 +510,20 @@ jobs:
 
           if gh release view "$TAG_NAME" --json id >/dev/null 2>&1; then
             gh release edit "$TAG_NAME" "${release_flags[@]}"
-            gh release upload "$TAG_NAME" "$ARCHIVE_ZIP_PATH#${ASSET_LABEL}" --clobber
+            if [ "$UPLOAD_GITHUB_ASSET" = "true" ]; then
+              gh release upload "$TAG_NAME" "$ARCHIVE_ZIP_PATH#${ASSET_LABEL}" --clobber
+            fi
           else
-            gh release create "$TAG_NAME" \
-              "$ARCHIVE_ZIP_PATH#${ASSET_LABEL}" \
-              "${release_flags[@]}" \
-              --target "${GITHUB_SHA}"
+            if [ "$UPLOAD_GITHUB_ASSET" = "true" ]; then
+              gh release create "$TAG_NAME" \
+                "$ARCHIVE_ZIP_PATH#${ASSET_LABEL}" \
+                "${release_flags[@]}" \
+                --target "${GITHUB_SHA}"
+            else
+              gh release create "$TAG_NAME" \
+                "${release_flags[@]}" \
+                --target "${GITHUB_SHA}"
+            fi
           fi
+        env:
+          UPLOAD_GITHUB_ASSET: ${{ inputs.upload_github_asset }}
