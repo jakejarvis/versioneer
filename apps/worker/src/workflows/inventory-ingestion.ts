@@ -18,6 +18,8 @@ import {
 } from "@versioneer/core/pipeline";
 import { createDb, inventoryIngestionJobs } from "@versioneer/db";
 
+import { createInventoryIngestionHeartbeat } from "../inventory-ingestion-heartbeat";
+
 const INVENTORY_INGESTION_FAILURE_KEYS = [
   "handoff",
   "enqueue",
@@ -83,6 +85,7 @@ export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
     const { ingestionId } = inventoryIngestionWorkflowPayloadSchema.parse(event.payload);
     const db = createDb(this.env.DB);
     const log = createLogger({ workflow: "inventory_ingestion", ingestionId });
+    const heartbeat = createInventoryIngestionHeartbeat({ db, ingestionId });
     const totals: InventoryIngestionTotals = {
       itemsTotal: 0,
       discoveredIcons: emptyStepResult(),
@@ -159,36 +162,45 @@ export class InventoryIngestionWorkflow extends WorkflowEntrypoint<
       totals.discoveredIcons = await step.do<InventoryIngestionStepResult>(
         "store-discovered-icons",
         { retries: { limit: 2, delay: "10 seconds", backoff: "exponential" } },
-        async () =>
-          storeDiscoveredInventoryIcons({
+        async () => {
+          await heartbeat();
+          return storeDiscoveredInventoryIcons({
             db,
             assetsBucket: this.env.ASSETS_BUCKET,
             candidates: loaded.payload!.discoveredIconCandidates,
-          }),
+            onHeartbeat: heartbeat,
+          });
+        },
       );
 
       totals.catalogIcons = await step.do<InventoryCatalogIconResult>(
         "store-catalog-icons",
         { retries: { limit: 2, delay: "10 seconds", backoff: "exponential" } },
-        async () =>
-          storeCatalogInventoryIcons({
+        async () => {
+          await heartbeat();
+          return storeCatalogInventoryIcons({
             db,
             assetsBucket: this.env.ASSETS_BUCKET,
             cacheKv: this.env.CACHE_KV,
             candidates: loaded.payload!.matchedAppCandidates,
             now: loaded.payload!.processedAt,
-          }),
+            onHeartbeat: heartbeat,
+          });
+        },
       );
 
       totals.suggestions = await step.do<InventoryIngestionStepResult>(
         "create-suggestions",
         { retries: { limit: 2, delay: "10 seconds", backoff: "exponential" } },
-        async () =>
-          createInventoryIngestionSuggestions({
+        async () => {
+          await heartbeat();
+          return createInventoryIngestionSuggestions({
             db,
             candidates: loaded.payload!.matchedAppCandidates,
             now: loaded.payload!.processedAt,
-          }),
+            onHeartbeat: heartbeat,
+          });
+        },
       );
 
       await step.do("mark-completed", async () => {

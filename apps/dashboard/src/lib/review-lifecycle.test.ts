@@ -8,17 +8,63 @@ import {
   isActionableCatalogSuggestionStatus,
   isAttentionCatalogSuggestionStatus,
   isCatalogSuggestionApprovalClaimable,
+  isCatalogSuggestionRejectableStatus,
 } from "./review-lifecycle";
 
 describe("review lifecycle helpers", () => {
-  it("marks only pending and failed suggestions as actionable attention items", () => {
-    expect(isActionableCatalogSuggestionStatus("pending")).toBe(true);
-    expect(isActionableCatalogSuggestionStatus("failed")).toBe(true);
-    expect(isActionableCatalogSuggestionStatus("processing")).toBe(false);
-    expect(isActionableCatalogSuggestionStatus("approved")).toBe(false);
-    expect(isAttentionCatalogSuggestionStatus("pending")).toBe(true);
-    expect(isAttentionCatalogSuggestionStatus("failed")).toBe(true);
-    expect(isAttentionCatalogSuggestionStatus("processing")).toBe(false);
+  it("marks stale-or-null processing suggestions as actionable attention items", () => {
+    const now = "2026-04-23T12:30:00.000Z";
+    const staleStartedAt = new Date(Date.parse(now) - REVIEW_APPROVAL_STALE_MS).toISOString();
+    const freshStartedAt = new Date(Date.parse(now) - REVIEW_APPROVAL_STALE_MS + 1).toISOString();
+
+    expect(isActionableCatalogSuggestionStatus({ status: "pending", now })).toBe(true);
+    expect(isActionableCatalogSuggestionStatus({ status: "failed", now })).toBe(true);
+    expect(
+      isActionableCatalogSuggestionStatus({
+        status: "processing",
+        now,
+        processingStartedAt: staleStartedAt,
+      }),
+    ).toBe(true);
+    expect(
+      isActionableCatalogSuggestionStatus({
+        status: "processing",
+        now,
+        processingStartedAt: null,
+      }),
+    ).toBe(true);
+    expect(
+      isActionableCatalogSuggestionStatus({
+        status: "processing",
+        now,
+        processingStartedAt: freshStartedAt,
+      }),
+    ).toBe(false);
+    expect(isActionableCatalogSuggestionStatus({ status: "approved", now })).toBe(false);
+
+    expect(isAttentionCatalogSuggestionStatus({ status: "pending", now })).toBe(true);
+    expect(isAttentionCatalogSuggestionStatus({ status: "failed", now })).toBe(true);
+    expect(
+      isAttentionCatalogSuggestionStatus({
+        status: "processing",
+        now,
+        processingStartedAt: staleStartedAt,
+      }),
+    ).toBe(true);
+    expect(
+      isAttentionCatalogSuggestionStatus({
+        status: "processing",
+        now,
+        processingStartedAt: freshStartedAt,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps rejectability limited to pending and failed suggestions", () => {
+    expect(isCatalogSuggestionRejectableStatus("pending")).toBe(true);
+    expect(isCatalogSuggestionRejectableStatus("failed")).toBe(true);
+    expect(isCatalogSuggestionRejectableStatus("processing")).toBe(false);
+    expect(isCatalogSuggestionRejectableStatus("approved")).toBe(false);
   });
 
   it("uses retry-specific approval copy for failed suggestions", () => {

@@ -106,6 +106,8 @@ export interface InventoryCatalogIconResult extends InventoryIngestionStepResult
   changed: number;
 }
 
+export type InventoryIngestionProgressCallback = () => Promise<void>;
+
 export function parseInventoryIngestionPayload(value: unknown): InventoryIngestionPayload {
   return inventoryIngestionPayloadSchema.parse(value);
 }
@@ -193,6 +195,7 @@ export async function storeDiscoveredInventoryIcons(params: {
   db: Db;
   assetsBucket: R2Bucket;
   candidates: InventoryIngestionDiscoveredIconCandidate[];
+  onHeartbeat?: InventoryIngestionProgressCallback;
 }): Promise<InventoryIngestionStepResult> {
   let succeeded = 0;
 
@@ -207,6 +210,7 @@ export async function storeDiscoveredInventoryIcons(params: {
         );
     }
     succeeded++;
+    await params.onHeartbeat?.();
   }
 
   return { attempted: params.candidates.length, succeeded, failed: 0 };
@@ -218,6 +222,7 @@ export async function storeCatalogInventoryIcons(params: {
   cacheKv: KVNamespace;
   candidates: InventoryIngestionMatchedAppCandidate[];
   now: string;
+  onHeartbeat?: InventoryIngestionProgressCallback;
 }): Promise<InventoryCatalogIconResult> {
   let succeeded = 0;
   let changed = 0;
@@ -231,6 +236,7 @@ export async function storeCatalogInventoryIcons(params: {
     const appRow = appById.get(candidate.appId);
     if (!appRow || appRow.iconR2Key || !candidate.iconBase64) {
       succeeded++;
+      await params.onHeartbeat?.();
       continue;
     }
 
@@ -244,6 +250,7 @@ export async function storeCatalogInventoryIcons(params: {
       changed++;
     }
     succeeded++;
+    await params.onHeartbeat?.();
   }
 
   if (changed > 0) {
@@ -549,6 +556,7 @@ export async function createInventoryIngestionSuggestions(params: {
   db: Db;
   candidates: InventoryIngestionMatchedAppCandidate[];
   now: string;
+  onHeartbeat?: InventoryIngestionProgressCallback;
 }): Promise<InventoryIngestionStepResult> {
   const appRows = await loadInventoryIngestionAppsByIds(
     params.db,
@@ -560,12 +568,14 @@ export async function createInventoryIngestionSuggestions(params: {
   for (const candidate of params.candidates) {
     if (!candidate.createSuggestions) {
       succeeded++;
+      await params.onHeartbeat?.();
       continue;
     }
 
     const appRow = appById.get(candidate.appId);
     if (!appRow) {
       succeeded++;
+      await params.onHeartbeat?.();
       continue;
     }
 
@@ -747,6 +757,7 @@ export async function createInventoryIngestionSuggestions(params: {
     }
 
     succeeded++;
+    await params.onHeartbeat?.();
   }
 
   return { attempted: params.candidates.length, succeeded, failed: 0 };

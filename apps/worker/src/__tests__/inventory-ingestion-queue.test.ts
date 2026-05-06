@@ -13,6 +13,7 @@ import {
 } from "@versioneer/db";
 
 import PipelineWorker, { repairInventoryIngestionQueue } from "../index";
+import { touchInventoryIngestionJob } from "../inventory-ingestion-heartbeat";
 
 const TEST_NOW = new Date("2026-03-31T12:00:00.000Z");
 const TEST_NOW_ISO = TEST_NOW.toISOString();
@@ -268,5 +269,49 @@ describe("inventory ingestion repair", () => {
       .get();
     expect(staleRunningJob?.status).toBe("pending");
     expect(staleRunningJob?.workflowInstanceId).toBeNull();
+  });
+
+  it("does not reclaim a running job whose heartbeat refreshed updatedAt", async () => {
+    const db = createDb(env.DB);
+    const runningIngestionId = await insertIngestionJob(db, {
+      status: "running",
+      attemptCount: 1,
+      workflowInstanceId: "wf-running",
+      updatedAt: TEST_LONG_STALE_ISO,
+      queuedAt: TEST_LONG_STALE_ISO,
+      startedAt: TEST_LONG_STALE_ISO,
+    });
+
+    await touchInventoryIngestionJob({
+      db,
+      ingestionId: runningIngestionId,
+      now: TEST_NOW_ISO,
+    });
+
+    const send = vi.fn<(message: InventoryIngestionQueueMessage) => Promise<QueueSendResponse>>(
+      async () => ({
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+      }),
+    );
+    const queue = { send } as unknown as Queue<InventoryIngestionQueueMessage>;
+
+    const repaired = await repairInventoryIngestionQueue({
+      db,
+      queue,
+      log: createLogger({ test: "inventory_ingestion_repair_heartbeat" }),
+      now: TEST_NOW,
+    });
+
+    expect(repaired).toBe(0);
+    expect(send).not.toHaveBeenCalled();
+
+    const runningJob = await db
+      .select()
+      .from(inventoryIngestionJobs)
+      .where(eq(inventoryIngestionJobs.id, runningIngestionId))
+      .get();
+    expect(runningJob?.status).toBe("running");
+    expect(runningJob?.workflowInstanceId).toBe("wf-running");
+    expect(runningJob?.updatedAt).toBe(TEST_NOW_ISO);
   });
 });

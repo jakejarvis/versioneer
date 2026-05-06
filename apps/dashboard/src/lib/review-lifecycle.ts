@@ -2,23 +2,37 @@ import type { SuggestionStatus } from "@versioneer/schemas/review";
 
 export const REVIEW_APPROVAL_STALE_MS = 15 * 60 * 1000;
 
-export const actionableCatalogSuggestionStatuses = ["pending", "failed"] as const;
-export const attentionCatalogSuggestionStatuses = actionableCatalogSuggestionStatuses;
+export const rejectableCatalogSuggestionStatuses = ["pending", "failed"] as const;
 
-export function isActionableCatalogSuggestionStatus(
+export interface CatalogSuggestionReviewState {
+  status: SuggestionStatus;
+  now: string;
+  processingStartedAt?: string | null;
+}
+
+export function isCatalogSuggestionRejectableStatus(
   status: SuggestionStatus,
-): status is (typeof actionableCatalogSuggestionStatuses)[number] {
-  return actionableCatalogSuggestionStatuses.includes(
-    status as (typeof actionableCatalogSuggestionStatuses)[number],
+): status is (typeof rejectableCatalogSuggestionStatuses)[number] {
+  return rejectableCatalogSuggestionStatuses.includes(
+    status as (typeof rejectableCatalogSuggestionStatuses)[number],
   );
 }
 
-export function isAttentionCatalogSuggestionStatus(
-  status: SuggestionStatus,
-): status is (typeof attentionCatalogSuggestionStatuses)[number] {
-  return attentionCatalogSuggestionStatuses.includes(
-    status as (typeof attentionCatalogSuggestionStatuses)[number],
-  );
+export function getCatalogSuggestionApprovalStaleBefore(now: string) {
+  const nowMs = Date.parse(now);
+  if (Number.isNaN(nowMs)) {
+    return null;
+  }
+
+  return new Date(nowMs - REVIEW_APPROVAL_STALE_MS).toISOString();
+}
+
+export function isActionableCatalogSuggestionStatus(params: CatalogSuggestionReviewState) {
+  return isCatalogSuggestionApprovalClaimable(params);
+}
+
+export function isAttentionCatalogSuggestionStatus(params: CatalogSuggestionReviewState) {
+  return isCatalogSuggestionApprovalClaimable(params);
 }
 
 export function getCatalogSuggestionApprovalLabel(status: SuggestionStatus) {
@@ -63,12 +77,8 @@ export function getCatalogSuggestionRejectResultMessage(status: SuggestionStatus
   return status;
 }
 
-export function isCatalogSuggestionApprovalClaimable(params: {
-  status: SuggestionStatus;
-  now: string;
-  processingStartedAt?: string | null;
-}) {
-  if (params.status === "pending" || params.status === "failed") {
+export function isCatalogSuggestionApprovalClaimable(params: CatalogSuggestionReviewState) {
+  if (isCatalogSuggestionRejectableStatus(params.status)) {
     return true;
   }
 
@@ -80,11 +90,16 @@ export function isCatalogSuggestionApprovalClaimable(params: {
     return true;
   }
 
-  const nowMs = Date.parse(params.now);
-  const startedAtMs = Date.parse(params.processingStartedAt);
-  if (Number.isNaN(nowMs) || Number.isNaN(startedAtMs)) {
+  const staleBefore = getCatalogSuggestionApprovalStaleBefore(params.now);
+  if (!staleBefore) {
     return false;
   }
 
-  return nowMs - startedAtMs >= REVIEW_APPROVAL_STALE_MS;
+  const staleBeforeMs = Date.parse(staleBefore);
+  const startedAtMs = Date.parse(params.processingStartedAt);
+  if (Number.isNaN(staleBeforeMs) || Number.isNaN(startedAtMs)) {
+    return false;
+  }
+
+  return startedAtMs <= staleBeforeMs;
 }

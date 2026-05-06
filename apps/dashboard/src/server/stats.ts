@@ -1,8 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { gt, inArray, sql } from "drizzle-orm";
+import { gt, sql } from "drizzle-orm";
 
-import { attentionCatalogSuggestionStatuses } from "@/lib/review-lifecycle";
 import { createDb } from "@versioneer/db";
 import {
   apps,
@@ -15,12 +14,14 @@ import {
 } from "@versioneer/db";
 
 import { authMiddleware } from "./middleware";
+import { catalogSuggestionAttentionCondition } from "./review-attention";
 
 export const getStats = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async () => {
     const db = createDb(env.DB);
-    const recentReleaseThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const now = new Date();
+    const recentReleaseThreshold = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const [appCount] = await db.select({ count: sql<number>`count(*)` }).from(apps);
     const [activeSourceCount] = await db
@@ -58,7 +59,7 @@ export const getStats = createServerFn({ method: "GET" })
     const [pendingSuggestionCount] = await db
       .select({ count: sql<number>`count(*)` })
       .from(catalogSuggestions)
-      .where(inArray(catalogSuggestions.status, attentionCatalogSuggestionStatuses));
+      .where(catalogSuggestionAttentionCondition(now.toISOString()));
 
     return {
       totalApps: appCount?.count ?? 0,

@@ -260,7 +260,7 @@ function DashboardPage() {
         <div className="space-y-4">
           <SectionCard
             title="Catalog Review"
-            description="Failed suggestions first, then the oldest pending review items."
+            description="Failed suggestions first, then stale processing claims, then the oldest pending review items."
             icon={Workflow}
             action={
               <Link to="/review" search={reviewSearch} className={viewAllClassName}>

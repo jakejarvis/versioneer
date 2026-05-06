@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { REVIEW_APPROVAL_STALE_MS } from "@/lib/review-lifecycle";
 import {
   approveCatalogSuggestion,
   getCatalogSuggestion,
@@ -7,6 +8,8 @@ import {
   rejectCatalogSuggestion,
 } from "@/server/review";
 import type { QueueType, SuggestionStatus } from "@versioneer/schemas/review";
+
+const REVIEW_SUGGESTION_REFETCH_MS = Math.min(REVIEW_APPROVAL_STALE_MS, 60_000);
 
 export function useCatalogSuggestions(
   params: {
@@ -22,6 +25,7 @@ export function useCatalogSuggestions(
     queryKey: ["catalog-suggestions", params],
     queryFn: () => listCatalogSuggestions({ data: params }),
     placeholderData: keepPreviousData,
+    refetchInterval: REVIEW_SUGGESTION_REFETCH_MS,
   });
 }
 
@@ -30,6 +34,7 @@ export function useCatalogSuggestion(id: string) {
     queryKey: ["catalog-suggestions", id],
     queryFn: () => getCatalogSuggestion({ data: { id } }),
     enabled: !!id,
+    refetchInterval: REVIEW_SUGGESTION_REFETCH_MS,
   });
 }
 

@@ -1,9 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { and, desc, eq, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { REVIEW_APPROVAL_STALE_MS } from "@/lib/review-lifecycle";
 import { createLogger } from "@versioneer/core/logger";
 import { createDb } from "@versioneer/db";
 import {
@@ -26,6 +25,7 @@ import {
   type ReviewApprovalResult,
   type ReviewPostCommitJob,
 } from "./review-approval";
+import { catalogSuggestionApprovalClaimableCondition } from "./review-attention";
 
 const suggestionQueueTypeSchema = queueTypeSchema;
 const log = createLogger({ component: "dashboard", module: "review" });
@@ -43,6 +43,24 @@ const listSuggestionsSchema = z.object({
 
 type Db = ReturnType<typeof createDb>;
 type SuggestionRow = typeof catalogSuggestions.$inferSelect;
+type ReviewAdminActor = { id: string };
+type ReviewAnalyticsCapture = (
+  actor: ReviewAdminActor,
+  event: string,
+  properties: Record<string, unknown>,
+) => Promise<void>;
+
+type ReviewApprovalDependencies = {
+  captureAdminEvent: ReviewAnalyticsCapture;
+  invalidateInventoryMatchSnapshot: (env: Pick<Env, "CACHE_KV">) => Promise<void>;
+  scheduleSourceFetch: typeof scheduleSourceFetch;
+  scheduleRecomputeLatest: typeof scheduleRecomputeLatest;
+};
+
+export interface ReviewPostCommitJobFailure {
+  job: ReviewPostCommitJob;
+  errorMessage: string;
+}
 
 function buildSuggestionAuditPayload(
   suggestion: SuggestionRow,
@@ -72,7 +90,6 @@ async function claimCatalogSuggestionApproval(params: {
   reviewer: string;
   now: string;
 }) {
-  const staleBefore = new Date(Date.parse(params.now) - REVIEW_APPROVAL_STALE_MS).toISOString();
   const claimed = await params.db
     .update(catalogSuggestions)
     .set({
@@ -88,17 +105,7 @@ async function claimCatalogSuggestionApproval(params: {
     .where(
       and(
         eq(catalogSuggestions.id, params.id),
-        or(
-          eq(catalogSuggestions.status, "pending"),
-          eq(catalogSuggestions.status, "failed"),
-          and(
-            eq(catalogSuggestions.status, "processing"),
-            or(
-              sql`${catalogSuggestions.processingStartedAt} is null`,
-              lte(catalogSuggestions.processingStartedAt, staleBefore),
-            ),
-          ),
-        ),
+        catalogSuggestionApprovalClaimableCondition(params.now),
       ),
     )
     .returning();
@@ -229,26 +236,36 @@ async function markCatalogSuggestionApprovalFailed(params: {
   ]);
 }
 
-async function runApprovalPostCommitJobs(params: { db: Db; jobs: ReviewPostCommitJob[] }) {
-  let failedJobs = 0;
+export async function runApprovalPostCommitJobs(params: {
+  db: Db;
+  jobs: ReviewPostCommitJob[];
+  scheduleSourceFetchJob?: typeof scheduleSourceFetch;
+  scheduleRecomputeLatestJob?: typeof scheduleRecomputeLatest;
+}) {
+  const failures: ReviewPostCommitJobFailure[] = [];
 
   for (const job of params.jobs) {
+    const scheduleSourceFetchJob = params.scheduleSourceFetchJob ?? scheduleSourceFetch;
+    const scheduleRecomputeLatestJob = params.scheduleRecomputeLatestJob ?? scheduleRecomputeLatest;
     const result =
       job.type === "source-fetch"
-        ? await scheduleSourceFetch({
+        ? await scheduleSourceFetchJob({
             db: params.db,
             sourceId: job.sourceId,
             reason: job.reason,
             force: job.force,
           })
-        : await scheduleRecomputeLatest({
+        : await scheduleRecomputeLatestJob({
             db: params.db,
             appId: job.appId,
             channel: job.channel,
           });
 
     if (!result.ok) {
-      failedJobs += 1;
+      failures.push({
+        job,
+        errorMessage: result.errorMessage ?? "Unknown follow-up queue failure",
+      });
       log.error("review approval post-commit job failed", {
         jobType: job.type,
         relatedId: job.type === "source-fetch" ? job.sourceId : job.appId,
@@ -258,7 +275,22 @@ async function runApprovalPostCommitJobs(params: { db: Db; jobs: ReviewPostCommi
     }
   }
 
-  return failedJobs;
+  return failures;
+}
+
+function describeReviewPostCommitJob(job: ReviewPostCommitJob) {
+  if (job.type === "source-fetch") {
+    return `source fetch for ${job.sourceId}`;
+  }
+
+  const channelLabel = job.channel ? ` (${job.channel})` : "";
+  return `recompute latest for ${job.appId}${channelLabel}`;
+}
+
+export function summarizeReviewPostCommitFailures(failures: ReviewPostCommitJobFailure[]) {
+  return `Failed to queue follow-up jobs: ${failures
+    .map((failure) => `${describeReviewPostCommitJob(failure.job)}: ${failure.errorMessage}`)
+    .join("; ")}`;
 }
 
 async function captureAdminEventSafely(
@@ -275,6 +307,169 @@ async function captureAdminEventSafely(
       error,
     });
   }
+}
+
+async function persistCatalogSuggestionApprovalFailure(params: {
+  db: Db;
+  id: string;
+  reviewer: string;
+  now: string;
+  suggestion: SuggestionRow;
+  errorMessage: string;
+  captureAdminEvent: ReviewAnalyticsCapture;
+  failureStage: "approval" | "post_commit" | "finalize";
+  extraEventProperties?: Record<string, unknown>;
+}) {
+  try {
+    await markCatalogSuggestionApprovalFailed({
+      db: params.db,
+      id: params.id,
+      reviewer: params.reviewer,
+      now: params.now,
+      suggestion: params.suggestion,
+      errorMessage: params.errorMessage,
+    });
+  } catch (markFailedError) {
+    log.error("failed to persist catalog suggestion approval failure", {
+      suggestionId: params.id,
+      errorMessage: params.errorMessage,
+      markFailedError,
+    });
+  }
+
+  await params.captureAdminEvent({ id: params.reviewer }, "review_approval_failed", {
+    target_type: "catalog_suggestion",
+    target_id: params.id,
+    queue_type: params.suggestion.queueType,
+    app_id: params.suggestion.appId ?? null,
+    source_id: params.suggestion.sourceId ?? null,
+    status: "failed",
+    failure_stage: params.failureStage,
+    error_message: params.errorMessage,
+    ...params.extraEventProperties,
+  });
+}
+
+export async function processCatalogSuggestionApproval(params: {
+  db: Db;
+  id: string;
+  reviewer: string;
+  now: string;
+  cacheEnv: Pick<Env, "CACHE_KV">;
+  dependencies?: Partial<ReviewApprovalDependencies>;
+}) {
+  const dependencies: ReviewApprovalDependencies = {
+    captureAdminEvent: captureAdminEventSafely,
+    invalidateInventoryMatchSnapshot,
+    scheduleSourceFetch,
+    scheduleRecomputeLatest,
+    ...params.dependencies,
+  };
+
+  const claim = await claimCatalogSuggestionApproval({
+    db: params.db,
+    id: params.id,
+    reviewer: params.reviewer,
+    now: params.now,
+  });
+
+  if (claim.status === "skipped") {
+    return { status: claim.suggestion.status };
+  }
+
+  let approvalResult: ReviewApprovalResult;
+  try {
+    approvalResult = await applySuggestionApproval({
+      db: params.db,
+      suggestion: claim.suggestion,
+      reviewer: params.reviewer,
+      now: params.now,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await persistCatalogSuggestionApprovalFailure({
+      db: params.db,
+      id: params.id,
+      reviewer: params.reviewer,
+      now: params.now,
+      suggestion: claim.suggestion,
+      errorMessage,
+      captureAdminEvent: dependencies.captureAdminEvent,
+      failureStage: "approval",
+    });
+    throw new Error(errorMessage, { cause: error });
+  }
+
+  if (approvalResult.invalidateInventorySnapshot) {
+    await dependencies.invalidateInventoryMatchSnapshot(params.cacheEnv);
+  }
+
+  const postCommitFailures = await runApprovalPostCommitJobs({
+    db: params.db,
+    jobs: approvalResult.postCommitJobs,
+    scheduleSourceFetchJob: dependencies.scheduleSourceFetch,
+    scheduleRecomputeLatestJob: dependencies.scheduleRecomputeLatest,
+  });
+
+  if (postCommitFailures.length > 0) {
+    const errorMessage = summarizeReviewPostCommitFailures(postCommitFailures);
+    await persistCatalogSuggestionApprovalFailure({
+      db: params.db,
+      id: params.id,
+      reviewer: params.reviewer,
+      now: params.now,
+      suggestion: claim.suggestion,
+      errorMessage,
+      captureAdminEvent: dependencies.captureAdminEvent,
+      failureStage: "post_commit",
+      extraEventProperties: {
+        post_commit_failures: postCommitFailures.map((failure) => ({
+          job_type: failure.job.type,
+          related_id:
+            failure.job.type === "source-fetch" ? failure.job.sourceId : failure.job.appId,
+          job_key: failure.job.type === "recompute-latest" ? failure.job.channel : null,
+          error_message: failure.errorMessage,
+        })),
+      },
+    });
+    throw new Error(errorMessage);
+  }
+
+  try {
+    await finalizeCatalogSuggestionApproval({
+      db: params.db,
+      id: params.id,
+      reviewer: params.reviewer,
+      now: params.now,
+      suggestion: claim.suggestion,
+      result: approvalResult,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await persistCatalogSuggestionApprovalFailure({
+      db: params.db,
+      id: params.id,
+      reviewer: params.reviewer,
+      now: params.now,
+      suggestion: claim.suggestion,
+      errorMessage,
+      captureAdminEvent: dependencies.captureAdminEvent,
+      failureStage: "finalize",
+    });
+    throw new Error(errorMessage, { cause: error });
+  }
+
+  await dependencies.captureAdminEvent({ id: params.reviewer }, "review_approved", {
+    target_type: "catalog_suggestion",
+    target_id: params.id,
+    queue_type: claim.suggestion.queueType,
+    app_id: claim.suggestion.appId ?? null,
+    source_id: claim.suggestion.sourceId ?? null,
+    status: "approved",
+    post_commit_failures: 0,
+  });
+
+  return { status: "approved" as const };
 }
 
 export const listCatalogSuggestions = createServerFn({ method: "GET" })
@@ -383,86 +578,13 @@ export const approveCatalogSuggestion = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data: { id }, context }) => {
-    const db = createDb(env.DB);
-    const now = new Date().toISOString();
-    const claim = await claimCatalogSuggestionApproval({
-      db,
+    return processCatalogSuggestionApproval({
+      db: createDb(env.DB),
       id,
       reviewer: context.user.email,
-      now,
+      now: new Date().toISOString(),
+      cacheEnv: env,
     });
-
-    if (claim.status === "skipped") {
-      return { status: claim.suggestion.status };
-    }
-
-    let approvalResult: ReviewApprovalResult;
-    try {
-      approvalResult = await applySuggestionApproval({
-        db,
-        suggestion: claim.suggestion,
-        reviewer: context.user.email,
-        now,
-      });
-
-      await finalizeCatalogSuggestionApproval({
-        db,
-        id,
-        reviewer: context.user.email,
-        now,
-        suggestion: claim.suggestion,
-        result: approvalResult,
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      try {
-        await markCatalogSuggestionApprovalFailed({
-          db,
-          id,
-          reviewer: context.user.email,
-          now,
-          suggestion: claim.suggestion,
-          errorMessage,
-        });
-      } catch (markFailedError) {
-        log.error("failed to persist catalog suggestion approval failure", {
-          suggestionId: id,
-          errorMessage,
-          markFailedError,
-        });
-      }
-
-      await captureAdminEventSafely(context.user, "review_approval_failed", {
-        target_type: "catalog_suggestion",
-        target_id: id,
-        queue_type: claim.suggestion.queueType,
-        app_id: claim.suggestion.appId ?? null,
-        source_id: claim.suggestion.sourceId ?? null,
-        status: "failed",
-        error_message: errorMessage,
-      });
-      throw new Error(errorMessage, { cause: error });
-    }
-
-    if (approvalResult.invalidateInventorySnapshot) {
-      await invalidateInventoryMatchSnapshot(env);
-    }
-    const postCommitFailures = await runApprovalPostCommitJobs({
-      db,
-      jobs: approvalResult.postCommitJobs,
-    });
-    await captureAdminEventSafely(context.user, "review_approved", {
-      target_type: "catalog_suggestion",
-      target_id: id,
-      queue_type: claim.suggestion.queueType,
-      app_id: claim.suggestion.appId ?? null,
-      source_id: claim.suggestion.sourceId ?? null,
-      status: "approved",
-      post_commit_failures: postCommitFailures,
-    });
-
-    return { status: "approved" };
   });
 
 export const rejectCatalogSuggestion = createServerFn({ method: "POST" })

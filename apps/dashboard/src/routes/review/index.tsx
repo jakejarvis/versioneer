@@ -47,6 +47,7 @@ import {
   getCatalogSuggestionApprovalResultMessage,
   getCatalogSuggestionRejectResultMessage,
   isActionableCatalogSuggestionStatus,
+  isCatalogSuggestionRejectableStatus,
 } from "@/lib/review-lifecycle";
 import type { CatalogSuggestion } from "@/lib/types";
 import { suggestionStatusSchema } from "@versioneer/schemas/review";
@@ -97,6 +98,7 @@ function ReviewPage() {
   const searchState = Route.useSearch();
   const pagination = paginationFromSearch(searchState);
   const sorting = sortingFromSearch(searchState);
+  const now = new Date().toISOString();
   const approveMutation = useApproveCatalogSuggestion();
   const rejectMutation = useRejectCatalogSuggestion();
 
@@ -116,8 +118,21 @@ function ReviewPage() {
   });
 
   const closeDialog = () => setSelectedSuggestionId(null);
+  const isSuggestionActionable = (
+    suggestion: Pick<CatalogSuggestion, "status" | "processingStartedAt">,
+  ) =>
+    isActionableCatalogSuggestionStatus({
+      status: suggestion.status,
+      processingStartedAt: suggestion.processingStartedAt,
+      now,
+    });
+  const isSuggestionRejectable = (suggestion: Pick<CatalogSuggestion, "status">) =>
+    isCatalogSuggestionRejectableStatus(suggestion.status);
   const selectedSuggestionActionable = selectedSuggestion.data
-    ? isActionableCatalogSuggestionStatus(selectedSuggestion.data.status)
+    ? isSuggestionActionable(selectedSuggestion.data)
+    : false;
+  const selectedSuggestionRejectable = selectedSuggestion.data
+    ? isSuggestionRejectable(selectedSuggestion.data)
     : false;
 
   const handleApprove = (id: string) => {
@@ -217,27 +232,34 @@ function ReviewPage() {
       meta: { label: "Actions" },
       enableSorting: false,
       enableHiding: false,
-      cell: ({ row }) =>
-        isActionableCatalogSuggestionStatus(row.original.status) ? (
+      cell: ({ row }) => {
+        const canApprove = isSuggestionActionable(row.original);
+        const canReject = isSuggestionRejectable(row.original);
+        return canApprove || canReject ? (
           <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={approveMutation.isPending || rejectMutation.isPending}
-              onClick={() => handleApprove(row.original.id)}
-            >
-              {getCatalogSuggestionApprovalLabel(row.original.status)}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={approveMutation.isPending || rejectMutation.isPending}
-              onClick={() => handleReject(row.original.id)}
-            >
-              Reject
-            </Button>
+            {canApprove ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={approveMutation.isPending || rejectMutation.isPending}
+                onClick={() => handleApprove(row.original.id)}
+              >
+                {getCatalogSuggestionApprovalLabel(row.original.status)}
+              </Button>
+            ) : null}
+            {canReject ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={approveMutation.isPending || rejectMutation.isPending}
+                onClick={() => handleReject(row.original.id)}
+              >
+                Reject
+              </Button>
+            ) : null}
           </div>
-        ) : null,
+        ) : null;
+      },
     },
   ];
 
@@ -307,7 +329,8 @@ function ReviewPage() {
     <div>
       <h2 className="text-xl font-semibold tracking-tight">Catalog Review</h2>
       <p className="mt-1 text-muted-foreground">
-        Review and action catalog suggestions, including failed approvals that need a retry.
+        Review and action catalog suggestions, including failed approvals and stale processing
+        claims that can be reclaimed safely.
       </p>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -371,7 +394,7 @@ function ReviewPage() {
           }
           manualSorting
           enableColumnVisibility
-          enableRowSelection={(row) => isActionableCatalogSuggestionStatus(row.original.status)}
+          enableRowSelection={(row) => isSuggestionActionable(row.original)}
           bulkActions={bulkActions}
           pagination={
             data
@@ -522,7 +545,7 @@ function ReviewPage() {
               variant="destructive"
               disabled={
                 !selectedSuggestionId ||
-                !selectedSuggestionActionable ||
+                !selectedSuggestionRejectable ||
                 rejectMutation.isPending ||
                 approveMutation.isPending
               }
