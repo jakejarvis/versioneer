@@ -14,7 +14,7 @@
     "@versioneer/db": "workspace:*",
     "@versioneer/schemas": "workspace:*",
     "drizzle-orm": "catalog:",
-    "hono": "^4.12.14",
+    "hono": "^4.12.18",
     "zod": "catalog:"
   },
   "devDependencies": {
