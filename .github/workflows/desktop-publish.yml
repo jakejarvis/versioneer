@@ -24,7 +24,11 @@ on:
         required: true
         type: string
       archive_stem:
-        description: Filename stem for the zip and release notes artifact.
+        description: Filename stem for downloadable artifacts.
+        required: true
+        type: string
+      release_notes_stem:
+        description: Filename stem for release notes HTML.
         required: true
         type: string
       r2_prefix:
@@ -53,7 +57,7 @@ on:
         type: boolean
         default: false
       upload_github_asset:
-        description: Whether to attach the zip to the GitHub release.
+        description: Whether to attach downloadable artifacts to the GitHub release.
         required: false
         type: boolean
         default: false
@@ -94,6 +98,7 @@ jobs:
       DOWNLOADS_HOST: https://dl.versioneer.app
       R2_PREFIX: ${{ inputs.r2_prefix }}
       ARCHIVE_STEM: ${{ inputs.archive_stem }}
+      RELEASE_NOTES_STEM: ${{ inputs.release_notes_stem }}
       TAG_NAME: ${{ inputs.tag_name }}
       RELEASE_TITLE: ${{ inputs.release_title }}
       VERSION: ${{ inputs.version }}
@@ -274,57 +279,97 @@ jobs:
           test -d "$APP_PATH"
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
 
-      - name: Notarize and package app
+      - name: Notarize app and build release artifacts
         run: |
           set -euo pipefail
           NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
           NOTARY_ZIP_PATH="$RUNNER_TEMP/${ARCHIVE_STEM}-notary-upload.zip"
-          NOTARY_RESULT_PATH="$RUNNER_TEMP/notary-result.json"
-          NOTARY_LOG_PATH="$RUNNER_TEMP/notary-log.json"
           ARCHIVES_DIR="$RUNNER_TEMP/sparkle-archives"
           ARCHIVE_ZIP_PATH="$ARCHIVES_DIR/${ARCHIVE_STEM}.zip"
+          # Keep the DMG outside Sparkle's archive directory so generate_appcast only sees the zip artifact.
+          ARCHIVE_DMG_PATH="$RUNNER_TEMP/${ARCHIVE_STEM}.dmg"
+          DMG_STAGING_DIR="$RUNNER_TEMP/${ARCHIVE_STEM}-dmg-root"
 
           mkdir -p "$ARCHIVES_DIR"
           printf '%s' "$APPLE_NOTARY_PRIVATE_KEY" > "$NOTARY_KEY_PATH"
 
-          /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$NOTARY_ZIP_PATH"
+          notarize_distribution() {
+            local artifact_path="$1"
+            local artifact_name artifact_stem result_path log_path submission_id submission_status
+            local submit_status=0
 
-          notary_submit_status=0
-          xcrun notarytool submit "$NOTARY_ZIP_PATH" \
-            --key "$NOTARY_KEY_PATH" \
-            --key-id "$APPLE_NOTARY_KEY_ID" \
-            --issuer "$APPLE_NOTARY_ISSUER_ID" \
-            --wait \
-            --output-format json > "$NOTARY_RESULT_PATH" || notary_submit_status=$?
+            artifact_name="$(basename "$artifact_path")"
+            artifact_stem="${artifact_name%.*}"
+            result_path="$RUNNER_TEMP/${artifact_stem}-notary-result.json"
+            log_path="$RUNNER_TEMP/${artifact_stem}-notary-log.json"
 
-          submission_id="$(plutil -extract id raw -o - "$NOTARY_RESULT_PATH" 2>/dev/null || true)"
-          submission_status="$(plutil -extract status raw -o - "$NOTARY_RESULT_PATH" 2>/dev/null || true)"
+            xcrun notarytool submit "$artifact_path" \
+              --key "$NOTARY_KEY_PATH" \
+              --key-id "$APPLE_NOTARY_KEY_ID" \
+              --issuer "$APPLE_NOTARY_ISSUER_ID" \
+              --wait \
+              --output-format json > "$result_path" || submit_status=$?
 
-          if [ "$notary_submit_status" -ne 0 ] || [ "$submission_status" != "Accepted" ]; then
-            echo "Notarization failed with status: ${submission_status:-Unknown}" >&2
-            if [ -n "$submission_id" ]; then
-              xcrun notarytool log \
-                --key "$NOTARY_KEY_PATH" \
-                --key-id "$APPLE_NOTARY_KEY_ID" \
-                --issuer "$APPLE_NOTARY_ISSUER_ID" \
-                "$submission_id" \
-                "$NOTARY_LOG_PATH" || true
-              if [ -f "$NOTARY_LOG_PATH" ]; then
-                cat "$NOTARY_LOG_PATH" >&2
+            submission_id="$(plutil -extract id raw -o - "$result_path" 2>/dev/null || true)"
+            submission_status="$(plutil -extract status raw -o - "$result_path" 2>/dev/null || true)"
+
+            if [ "$submit_status" -ne 0 ] || [ "$submission_status" != "Accepted" ]; then
+              echo "Notarization failed for ${artifact_name} with status: ${submission_status:-Unknown}" >&2
+              if [ -n "$submission_id" ]; then
+                xcrun notarytool log \
+                  --key "$NOTARY_KEY_PATH" \
+                  --key-id "$APPLE_NOTARY_KEY_ID" \
+                  --issuer "$APPLE_NOTARY_ISSUER_ID" \
+                  "$submission_id" \
+                  "$log_path" || true
+                if [ -f "$log_path" ]; then
+                  cat "$log_path" >&2
+                fi
+              elif [ -s "$result_path" ]; then
+                cat "$result_path" >&2
               fi
-            elif [ -s "$NOTARY_RESULT_PATH" ]; then
-              cat "$NOTARY_RESULT_PATH" >&2
+              exit 1
             fi
-            exit 1
-          fi
+          }
 
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$NOTARY_ZIP_PATH"
+          notarize_distribution "$NOTARY_ZIP_PATH"
           rm -f "$NOTARY_ZIP_PATH"
           xcrun stapler staple "$APP_PATH"
           /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ARCHIVE_ZIP_PATH"
 
+          mkdir -p "$DMG_STAGING_DIR"
+          /usr/bin/ditto "$APP_PATH" "$DMG_STAGING_DIR/Versioneer.app"
+          ln -s /Applications "$DMG_STAGING_DIR/Applications"
+
+          /usr/bin/hdiutil create \
+            -srcfolder "$DMG_STAGING_DIR" \
+            -volname "Versioneer" \
+            -format UDZO \
+            -ov \
+            "$ARCHIVE_DMG_PATH"
+
+          DMG_SIGNING_IDENTIFIER="$(
+            plutil -extract CFBundleIdentifier raw -o - "$APP_PATH/Contents/Info.plist"
+          ).distribution-dmg"
+
+          codesign \
+            --force \
+            --sign "$APPLE_DEVELOPER_IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            --timestamp \
+            --identifier "$DMG_SIGNING_IDENTIFIER" \
+            "$ARCHIVE_DMG_PATH"
+          codesign --verify --verbose=2 "$ARCHIVE_DMG_PATH"
+          spctl -a -t open --context context:primary-signature -v "$ARCHIVE_DMG_PATH"
+
+          notarize_distribution "$ARCHIVE_DMG_PATH"
+          xcrun stapler staple "$ARCHIVE_DMG_PATH"
+
           {
             echo "ARCHIVES_DIR=$ARCHIVES_DIR"
             echo "ARCHIVE_ZIP_PATH=$ARCHIVE_ZIP_PATH"
+            echo "ARCHIVE_DMG_PATH=$ARCHIVE_DMG_PATH"
           } >> "$GITHUB_ENV"
 
       - name: Render release notes HTML
@@ -332,7 +377,7 @@ jobs:
           set -euo pipefail
           BODY_HTML=$(npx --yes marked < "$RUNNER_TEMP/release-notes.md")
 
-          cat > "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" <<HTMLEOF
+          cat > "$ARCHIVES_DIR/${RELEASE_NOTES_STEM}.html" <<HTMLEOF
           <!doctype html>
           <html lang="en">
           <head>
@@ -366,10 +411,6 @@ jobs:
           </body>
           </html>
           HTMLEOF
-
-          if [ "$CHANNEL" = "stable" ] && [ "$ARCHIVE_STEM" != "$VERSION" ]; then
-            cp "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" "$ARCHIVES_DIR/${VERSION}.html"
-          fi
 
       - name: Generate Sparkle appcast
         run: |
@@ -426,9 +467,8 @@ jobs:
             "${generate_appcast_args[@]}" \
             "$ARCHIVES_DIR"
 
-          if [ "$CHANNEL" = "stable" ] && [ "$ARCHIVE_STEM" != "$VERSION" ]; then
-            cp "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" "$ARCHIVES_DIR/${VERSION}.html"
-            perl -0pi -e 's/\Q'"$release_notes_url_prefix/$ARCHIVE_STEM.html"'\E/'"$release_notes_url_prefix/$VERSION.html"'/g' "$ARCHIVES_DIR/appcast.xml"
+          if [ "$ARCHIVE_STEM" != "$RELEASE_NOTES_STEM" ]; then
+            perl -0pi -e 's/\Q'"$release_notes_url_prefix/$ARCHIVE_STEM.html"'\E/'"$release_notes_url_prefix/$RELEASE_NOTES_STEM.html"'/g' "$ARCHIVES_DIR/appcast.xml"
             printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$SPARKLE_BIN_DIR/sign_update" --ed-key-file - "$ARCHIVES_DIR/appcast.xml"
           fi
 
@@ -455,17 +495,15 @@ jobs:
             --remote \
             --content-type application/zip
 
-          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "release-notes/${ARCHIVE_STEM}.html")" \
-            --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" \
+          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "downloads/${ARCHIVE_STEM}.dmg")" \
+            --file "$ARCHIVE_DMG_PATH" \
+            --remote \
+            --content-type application/x-apple-diskimage
+
+          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "release-notes/${RELEASE_NOTES_STEM}.html")" \
+            --file "$ARCHIVES_DIR/${RELEASE_NOTES_STEM}.html" \
             --remote \
             --content-type "text/html; charset=utf-8"
-
-          if [ "$CHANNEL" = "stable" ] && [ "$ARCHIVE_STEM" != "$VERSION" ]; then
-            "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "release-notes/${VERSION}.html")" \
-              --file "$ARCHIVES_DIR/${VERSION}.html" \
-              --remote \
-              --content-type "text/html; charset=utf-8"
-          fi
 
           "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/appcast.xml" \
             --file "$ARCHIVES_DIR/appcast.xml" \
@@ -477,11 +515,17 @@ jobs:
             --remote \
             --content-type application/zip
 
+          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "latest/Versioneer.dmg")" \
+            --file "$ARCHIVE_DMG_PATH" \
+            --remote \
+            --content-type application/x-apple-diskimage
+
       - name: Publish GitHub release
         if: ${{ inputs.upload_github_asset || inputs.channel == 'stable' }}
         run: |
           set -euo pipefail
-          ASSET_LABEL="${ARCHIVE_STEM}.zip"
+          ZIP_ASSET_LABEL="${ARCHIVE_STEM}.zip"
+          DMG_ASSET_LABEL="${ARCHIVE_STEM}.dmg"
 
           release_flags=(
             --title "$RELEASE_TITLE"
@@ -498,15 +542,20 @@ jobs:
             release_flags+=(--latest=false)
           fi
 
+          release_assets=(
+            "$ARCHIVE_ZIP_PATH#${ZIP_ASSET_LABEL}"
+            "$ARCHIVE_DMG_PATH#${DMG_ASSET_LABEL}"
+          )
+
           if gh release view "$TAG_NAME" --json id >/dev/null 2>&1; then
             gh release edit "$TAG_NAME" "${release_flags[@]}"
             if [ "$UPLOAD_GITHUB_ASSET" = "true" ]; then
-              gh release upload "$TAG_NAME" "$ARCHIVE_ZIP_PATH#${ASSET_LABEL}" --clobber
+              gh release upload "$TAG_NAME" "${release_assets[@]}" --clobber
             fi
           else
             if [ "$UPLOAD_GITHUB_ASSET" = "true" ]; then
               gh release create "$TAG_NAME" \
-                "$ARCHIVE_ZIP_PATH#${ASSET_LABEL}" \
+                "${release_assets[@]}" \
                 "${release_flags[@]}" \
                 --target "${GITHUB_SHA}"
             else

@@ -5,9 +5,7 @@ import { getPageSeoHead } from "@/lib/seo";
 export const Route = createFileRoute("/terms")({
   head: () =>
     getPageSeoHead({
-      title: "Terms of Use | Versioneer",
-      description:
-        "Review the Versioneer terms covering the website, desktop app, update sources, acceptable use, and service limitations.",
+      title: "Terms of Use",
       path: "/terms",
     }),
   component: TermsPage,

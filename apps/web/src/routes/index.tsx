@@ -9,9 +9,6 @@ import { getPageSeoHead } from "@/lib/seo";
 export const Route = createFileRoute("/")({
   head: () =>
     getPageSeoHead({
-      title: "Versioneer — Free & open-source macOS app updater",
-      description:
-        "Versioneer is a modern macOS app updater focused on broad compatibility, privacy-friendly crowdsourcing, and safe one-click installs.",
       path: "/",
     }),
   component: IndexPage,

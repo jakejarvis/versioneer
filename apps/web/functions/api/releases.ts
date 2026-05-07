@@ -1,3 +1,5 @@
+import { getReleaseDownloads } from "../../src/lib/releases";
+
 interface GitHubRelease {
   tag_name: string;
   name: string | null;
@@ -14,11 +16,12 @@ interface Release {
   body_html: string | null;
   published_at: string | null;
   html_url: string;
+  downloads: ReturnType<typeof getReleaseDownloads>;
   prerelease: boolean;
 }
 
 const GITHUB_API_URL = "https://api.github.com/repos/jakejarvis/versioneer/releases?per_page=50";
-const CACHE_NAME = "gh-releases-html-v2";
+const CACHE_NAME = "gh-releases-html-v3";
 const CACHE_TTL_SECONDS = 300;
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -77,6 +80,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       body_html: typeof r.body_html === "string" ? r.body_html : null,
       published_at: r.published_at,
       html_url: r.html_url,
+      downloads: getReleaseDownloads({
+        prerelease: r.prerelease,
+        tagName: r.tag_name,
+      }),
       prerelease: r.prerelease,
     }));
 

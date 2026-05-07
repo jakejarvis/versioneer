@@ -17,18 +17,15 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       build_number: ${{ steps.meta.outputs.build_number }}
-      archive_stem: ${{ steps.meta.outputs.archive_stem }}
     steps:
       - name: Generate build metadata
         id: meta
         run: |
           set -euo pipefail
           build_number="$(date -u +%Y%m%d%H%M%S)"
-          archive_stem="Versioneer-${{ inputs.version }}-${build_number}"
 
           {
             echo "build_number=$build_number"
-            echo "archive_stem=$archive_stem"
           } >> "$GITHUB_OUTPUT"
 
   release:
@@ -41,6 +38,8 @@ jobs:
       build_number: ${{ needs.prepare.outputs.build_number }}
       tag_name: v${{ inputs.version }}
       release_title: v${{ inputs.version }}
-      archive_stem: ${{ needs.prepare.outputs.archive_stem }}
+      archive_stem: Versioneer-${{ inputs.version }}
+      release_notes_stem: ${{ inputs.version }}
       mark_latest: true
+      upload_github_asset: true
     secrets: inherit

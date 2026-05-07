@@ -5,9 +5,7 @@ import { getPageSeoHead } from "@/lib/seo";
 export const Route = createFileRoute("/privacy")({
   head: () =>
     getPageSeoHead({
-      title: "Privacy Policy | Versioneer",
-      description:
-        "Read how Versioneer handles website analytics, desktop scan metadata, install diagnostics, and optional crash reporting.",
+      title: "Privacy Policy",
       path: "/privacy",
     }),
   component: PrivacyPage,

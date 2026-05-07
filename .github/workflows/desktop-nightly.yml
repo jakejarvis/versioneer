@@ -25,6 +25,7 @@ jobs:
       tag_name: ${{ steps.meta.outputs.tag_name }}
       release_title: ${{ steps.meta.outputs.release_title }}
       archive_stem: ${{ steps.meta.outputs.archive_stem }}
+      release_notes_stem: ${{ steps.meta.outputs.release_notes_stem }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -61,6 +62,7 @@ jobs:
           tag_name="nightly-${date_stamp}-${short_sha}"
           release_title="$tag_name"
           archive_stem="Versioneer-${tag_name}"
+          release_notes_stem="$tag_name"
 
           {
             echo "should_publish=$should_publish"
@@ -71,6 +73,7 @@ jobs:
             echo "tag_name=$tag_name"
             echo "release_title=$release_title"
             echo "archive_stem=$archive_stem"
+            echo "release_notes_stem=$release_notes_stem"
           } >> "$GITHUB_OUTPUT"
 
   publish:
@@ -85,6 +88,7 @@ jobs:
       tag_name: ${{ needs.prepare.outputs.tag_name }}
       release_title: ${{ needs.prepare.outputs.release_title }}
       archive_stem: ${{ needs.prepare.outputs.archive_stem }}
+      release_notes_stem: ${{ needs.prepare.outputs.release_notes_stem }}
       r2_prefix: nightly
       previous_tag: ${{ needs.prepare.outputs.previous_tag }}
       compare_range: ${{ needs.prepare.outputs.compare_range }}

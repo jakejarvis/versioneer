@@ -1,12 +1,17 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
-import { ArrowUpRightIcon } from "lucide-react";
+import { ArrowUpRightIcon, DownloadIcon } from "lucide-react";
 import posthogClient from "posthog-js";
 import { useEffect, useEffectEvent, useRef } from "react";
 
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { countNightlyReleases, filterChangelogReleases, isNightlyRelease } from "@/lib/changelog";
-import { fetchChangelogReleases, type ChangelogRelease } from "@/lib/releases";
+import {
+  fetchReleases,
+  type Release,
+  countNightlyReleases,
+  filterReleases,
+  isNightlyRelease,
+} from "@/lib/releases";
 import { getPageSeoHead } from "@/lib/seo";
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -26,13 +31,12 @@ export const Route = createFileRoute("/changelog")({
   search: { middlewares: [stripSearchParams(changelogSearchDefaults)] },
   head: () =>
     getPageSeoHead({
-      title: "Changelog | Versioneer",
-      description:
-        "Follow Versioneer releases, changelog entries, and shipping progress for the macOS app updater.",
+      title: "Changelog",
+      description: "Versioneer release notes and downloads.",
       path: "/changelog",
     }),
   loader: ({ abortController }) =>
-    fetchChangelogReleases({
+    fetchReleases({
       signal: abortController.signal,
     }),
   onError: ({ error }) => {
@@ -54,7 +58,7 @@ function ChangelogPage() {
   const { nightly } = Route.useSearch();
   const scrolledRef = useRef(false);
   const nightlySwitchId = "show-nightly-releases";
-  const visibleReleases = filterChangelogReleases(releases, nightly);
+  const visibleReleases = filterReleases(releases, nightly);
   const nightlyReleaseCount = countNightlyReleases(releases);
 
   const setNightly = useEffectEvent((nextNightly: boolean) => {
@@ -133,7 +137,7 @@ function parseBooleanSearchParam(value: unknown): boolean {
   return value === true || value === "true" || value === "1";
 }
 
-function ReleaseEntry({ release }: { release: ChangelogRelease }) {
+function ReleaseEntry({ release }: { release: Release }) {
   const date = release.published_at ? new Date(release.published_at) : null;
 
   return (
@@ -179,16 +183,56 @@ function ReleaseEntry({ release }: { release: ChangelogRelease }) {
           GitHub
           <ArrowUpRightIcon className="size-3" />
         </a>
+        {release.downloads && (
+          <>
+            <span className="text-foreground/35 pointer-events-none">•</span>
+            <div className="inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-foreground/[0.03] px-1 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+              <DownloadIcon className="size-3 text-foreground/45 ml-1" />
+              <DownloadLink href={release.downloads.dmgUrl} release={release} assetType="dmg">
+                DMG
+              </DownloadLink>
+              <span className="h-3.5 w-px bg-foreground/10" />
+              <DownloadLink href={release.downloads.zipUrl} release={release} assetType="zip">
+                ZIP
+              </DownloadLink>
+            </div>
+          </>
+        )}
       </div>
 
       {release.body_html && (
-        <div
-          className="prose"
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: pre-rendered by GitHub API
-          dangerouslySetInnerHTML={{ __html: release.body_html }}
-        />
+        <div className="prose" dangerouslySetInnerHTML={{ __html: release.body_html }} />
       )}
     </article>
+  );
+}
+
+function DownloadLink({
+  assetType,
+  children,
+  href,
+  release,
+}: {
+  assetType: "dmg" | "zip";
+  children: string;
+  href: string;
+  release: Release;
+}) {
+  return (
+    <a
+      href={href}
+      aria-label={`Download ${release.tag_name} as ${assetType.toUpperCase()}`}
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium text-foreground/72 transition-colors hover:text-foreground hover:bg-foreground/[0.05]"
+      onClick={() =>
+        posthogClient.capture("marketing_release_download_clicked", {
+          artifact_type: assetType,
+          target_id: release.tag_name,
+          target_url: href,
+        })
+      }
+    >
+      {children}
+    </a>
   );
 }
 
