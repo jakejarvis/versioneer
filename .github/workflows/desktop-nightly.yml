@@ -21,10 +21,10 @@ jobs:
       previous_tag: ${{ steps.meta.outputs.previous_tag }}
       compare_range: ${{ steps.meta.outputs.compare_range }}
       marketing_version: ${{ steps.meta.outputs.marketing_version }}
+      build_number: ${{ steps.meta.outputs.build_number }}
       tag_name: ${{ steps.meta.outputs.tag_name }}
       release_title: ${{ steps.meta.outputs.release_title }}
       archive_stem: ${{ steps.meta.outputs.archive_stem }}
-      short_sha: ${{ steps.meta.outputs.short_sha }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -35,7 +35,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          previous_tag="$(git tag -l "desktop-nightly-*" --sort=-creatordate | head -n 1)"
+          previous_tag="$(git tag -l --sort=-creatordate "nightly-*" | head -n 1)"
           compare_range=""
           should_publish="true"
 
@@ -55,21 +55,22 @@ jobs:
             exit 1
           fi
 
-          short_sha="$(git rev-parse --short=12 HEAD)"
+          short_sha="$(git rev-parse --short=8 HEAD)"
           date_stamp="$(date -u +%Y%m%d)"
-          tag_name="desktop-nightly-${date_stamp}-${short_sha}"
-          release_title="Versioneer Desktop Nightly ${date_stamp}"
-          archive_stem="Versioneer-nightly-${date_stamp}-${short_sha}"
+          build_number="$(date -u +%Y%m%d%H%M%S)"
+          tag_name="nightly-${date_stamp}-${short_sha}"
+          release_title="$tag_name"
+          archive_stem="Versioneer-${tag_name}"
 
           {
             echo "should_publish=$should_publish"
             echo "previous_tag=$previous_tag"
             echo "compare_range=$compare_range"
             echo "marketing_version=$marketing_version"
+            echo "build_number=$build_number"
             echo "tag_name=$tag_name"
             echo "release_title=$release_title"
             echo "archive_stem=$archive_stem"
-            echo "short_sha=$short_sha"
           } >> "$GITHUB_OUTPUT"
 
   publish:
@@ -80,14 +81,13 @@ jobs:
     with:
       channel: nightly
       version: ${{ needs.prepare.outputs.marketing_version }}
-      build_number: ${{ github.run_number }}
+      build_number: ${{ needs.prepare.outputs.build_number }}
       tag_name: ${{ needs.prepare.outputs.tag_name }}
       release_title: ${{ needs.prepare.outputs.release_title }}
       archive_stem: ${{ needs.prepare.outputs.archive_stem }}
       r2_prefix: nightly
       previous_tag: ${{ needs.prepare.outputs.previous_tag }}
       compare_range: ${{ needs.prepare.outputs.compare_range }}
-      commit_label: ${{ needs.prepare.outputs.short_sha }}
       prerelease: true
       mark_latest: false
       upload_github_asset: true

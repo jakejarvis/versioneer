@@ -7,24 +7,40 @@ on:
         description: Marketing version to ship (for example 1.2.3)
         required: true
         type: string
-      build:
-        description: Internal build number (for example 45)
-        required: true
-        type: string
 
 permissions:
   contents: write
 
 jobs:
+  prepare:
+    name: Compute stable release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      build_number: ${{ steps.meta.outputs.build_number }}
+      archive_stem: ${{ steps.meta.outputs.archive_stem }}
+    steps:
+      - name: Generate build metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          build_number="$(date -u +%Y%m%d%H%M%S)"
+          archive_stem="Versioneer-${{ inputs.version }}-${build_number}"
+
+          {
+            echo "build_number=$build_number"
+            echo "archive_stem=$archive_stem"
+          } >> "$GITHUB_OUTPUT"
+
   release:
     name: Publish desktop release
+    needs: prepare
     uses: ./.github/workflows/desktop-publish.yml
     with:
       channel: stable
       version: ${{ inputs.version }}
-      build_number: ${{ inputs.build }}
+      build_number: ${{ needs.prepare.outputs.build_number }}
       tag_name: v${{ inputs.version }}
-      release_title: Versioneer ${{ inputs.version }}
-      archive_stem: Versioneer-${{ inputs.version }}-${{ inputs.build }}
+      release_title: v${{ inputs.version }}
+      archive_stem: ${{ needs.prepare.outputs.archive_stem }}
       mark_latest: true
     secrets: inherit

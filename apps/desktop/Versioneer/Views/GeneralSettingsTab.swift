@@ -19,6 +19,13 @@ struct GeneralSettingsTab: View {
     )
   }
 
+  private var updateChannelBinding: Binding<SelfUpdateChannel> {
+    Binding(
+      get: { selfUpdateService.channel },
+      set: { selfUpdateService.setChannel($0) }
+    )
+  }
+
   private var updateStatusTitle: String {
     if selfUpdateService.isAvailable {
       return selfUpdateService.automaticallyChecksForUpdates
@@ -32,9 +39,10 @@ struct GeneralSettingsTab: View {
       return configurationIssue
     }
     if let feedURL = selfUpdateService.feedURL {
-      return "Versioneer will check \(feedURL.host ?? "its Sparkle feed") for new stable releases."
+      return
+        "Versioneer will check \(feedURL.host ?? "its Sparkle feed") for \(selfUpdateService.channel.feedScopeDescription)."
     }
-    return "Sparkle is configured and ready to check for new stable releases."
+    return "Sparkle is configured and ready. \(selfUpdateService.channel.statusDescription)"
   }
 
   private var updateStatusTint: Color {
@@ -97,6 +105,24 @@ struct GeneralSettingsTab: View {
         Toggle("Check for updates automatically", isOn: updateChecksBinding)
           .disabled(!selfUpdateService.isAvailable)
 
+        VStack(alignment: .leading, spacing: 8) {
+          Text("Update Channel")
+            .font(.subheadline.weight(.medium))
+
+          Picker("Update Channel", selection: updateChannelBinding) {
+            ForEach(SelfUpdateChannel.allCases) { channel in
+              Text(channel.title).tag(channel)
+            }
+          }
+          .pickerStyle(.segmented)
+          .labelsHidden()
+
+          Text(selfUpdateService.channel.statusDescription)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+
         if let lastUpdateCheckDate = selfUpdateService.lastUpdateCheckDate {
           LabeledContent("Last update check") {
             Text(lastUpdateCheckDate, style: .relative)
@@ -121,7 +147,7 @@ struct GeneralSettingsTab: View {
       } footer: {
         Text(
           selfUpdateService.isAvailable
-            ? "Versioneer checks its Sparkle feed on a schedule, but update installation still requires user approval."
+            ? "Versioneer checks its Sparkle feed on a schedule, but update installation still requires user approval. Switching from Nightly back to Stable does not reinstall an older build; Versioneer returns to stable once a newer stable release is available."
             : "Sparkle self-updates are unavailable until this build is signed with a public Sparkle EdDSA key."
         )
       }

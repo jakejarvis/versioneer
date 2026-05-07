@@ -1,5 +1,9 @@
 # Agent Instructions
 
+## Pre-release note
+
+If this instruction is present, it means this app has not been released publicly yet, so backwards compatibility is not required. Breaking changes are allowed and encouraged when they make the codebase cleaner, simpler, or more correct. Do not preserve legacy code, compatibility shims, deprecated paths, or old APIs unless explicitly asked; update affected call sites and clean up obsolete code as you go.
+
 ## Package Manager
 
 - Use [Vite+](https://viteplus.dev/guide/) (`vp`) for workspace commands and package management.

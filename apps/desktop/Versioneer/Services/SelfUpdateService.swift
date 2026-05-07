@@ -7,6 +7,7 @@ import Sparkle
 protocol SelfUpdateClient: AnyObject {
   var canCheckForUpdates: Bool { get }
   var automaticallyChecksForUpdates: Bool { get set }
+  var channel: SelfUpdateChannel { get set }
   var feedURL: URL? { get }
   var lastUpdateCheckDate: Date? { get }
   var configurationIssue: String? { get }
@@ -25,6 +26,7 @@ final class SelfUpdateService {
 
   private(set) var canCheckForUpdates = false
   private(set) var automaticallyChecksForUpdates = false
+  private(set) var channel: SelfUpdateChannel = .stable
   private(set) var feedURL: URL?
   private(set) var lastUpdateCheckDate: Date?
   private(set) var configurationIssue: String?
@@ -53,6 +55,11 @@ final class SelfUpdateService {
     syncFromClient()
   }
 
+  func setChannel(_ value: SelfUpdateChannel) {
+    client.channel = value
+    syncFromClient()
+  }
+
   func checkForUpdates() {
     guard canCheckForUpdates else { return }
     client.checkForUpdates()
@@ -62,6 +69,7 @@ final class SelfUpdateService {
   private func syncFromClient() {
     canCheckForUpdates = client.canCheckForUpdates
     automaticallyChecksForUpdates = client.automaticallyChecksForUpdates
+    channel = client.channel
     feedURL = client.feedURL
     lastUpdateCheckDate = client.lastUpdateCheckDate
     configurationIssue = client.configurationIssue
@@ -73,6 +81,7 @@ private final class PreviewSelfUpdateClient: SelfUpdateClient {
   var onChange: (() -> Void)?
   var canCheckForUpdates = false
   var automaticallyChecksForUpdates = false
+  var channel: SelfUpdateChannel = .stable
   var feedURL: URL?
   var lastUpdateCheckDate: Date?
   var configurationIssue: String? = "Unavailable in previews."
@@ -86,7 +95,7 @@ private final class PreviewSelfUpdateClient: SelfUpdateClient {
 }
 
 @MainActor
-final class SparkleSelfUpdateClient: SelfUpdateClient {
+final class SparkleSelfUpdateClient: NSObject, SelfUpdateClient, SPUUpdaterDelegate {
   var onChange: (() -> Void)?
 
   var canCheckForUpdates: Bool {
@@ -96,6 +105,16 @@ final class SparkleSelfUpdateClient: SelfUpdateClient {
   var automaticallyChecksForUpdates: Bool {
     get { controller.updater.automaticallyChecksForUpdates }
     set { controller.updater.automaticallyChecksForUpdates = newValue }
+  }
+
+  var channel: SelfUpdateChannel {
+    get { channelStore.channel }
+    set {
+      guard channelStore.channel != newValue else { return }
+      channelStore.channel = newValue
+      Logger.sparkle.info("Self-update channel changed to \(newValue.rawValue)")
+      onChange?()
+    }
   }
 
   var feedURL: URL? {
@@ -108,18 +127,23 @@ final class SparkleSelfUpdateClient: SelfUpdateClient {
 
   private(set) var configurationIssue: String?
 
-  private let controller: SPUStandardUpdaterController
+  private let bundle: Bundle
+  private lazy var controller = SPUStandardUpdaterController(
+    startingUpdater: false,
+    updaterDelegate: self,
+    userDriverDelegate: nil,
+  )
+  private var channelStore: SelfUpdateChannelStore
   private var observations: [NSKeyValueObservation] = []
   private var started = false
 
   init(
-    controller: SPUStandardUpdaterController = SPUStandardUpdaterController(
-      startingUpdater: false,
-      updaterDelegate: nil,
-      userDriverDelegate: nil,
-    )
+    defaults: UserDefaults = .standard,
+    bundle: Bundle = .main,
   ) {
-    self.controller = controller
+    self.bundle = bundle
+    self.channelStore = SelfUpdateChannelStore(defaults: defaults, bundle: bundle)
+    super.init()
     installObservers()
   }
 
@@ -158,6 +182,10 @@ final class SparkleSelfUpdateClient: SelfUpdateClient {
     controller.updater.checkForUpdates()
   }
 
+  func allowedChannels(for updater: SPUUpdater) -> Set<String> {
+    channel.allowedSparkleChannels
+  }
+
   private func installObservers() {
     observations = [
       controller.updater.observe(\.canCheckForUpdates, options: [.initial, .new]) {
@@ -176,13 +204,13 @@ final class SparkleSelfUpdateClient: SelfUpdateClient {
   }
 
   private func validateConfiguration() -> String? {
-    guard let feedURL = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
+    guard let feedURL = bundle.object(forInfoDictionaryKey: "SUFeedURL") as? String,
       !feedURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     else {
       return "SUFeedURL is missing from this build."
     }
 
-    guard let publicKey = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String
+    guard let publicKey = bundle.object(forInfoDictionaryKey: "SUPublicEDKey") as? String
     else {
       return "SUPublicEDKey is missing from this build."
     }

@@ -9,6 +9,7 @@ struct SelfUpdateServiceTests {
     let client = MockSelfUpdateClient(
       canCheckForUpdates: true,
       automaticallyChecksForUpdates: true,
+      channel: .nightly,
       feedURL: URL(string: "https://dl.versioneer.app/appcast.xml"),
       lastUpdateCheckDate: Date(timeIntervalSince1970: 1_742_000_000)
     )
@@ -20,6 +21,7 @@ struct SelfUpdateServiceTests {
     #expect(service.isAvailable)
     #expect(service.canCheckForUpdates)
     #expect(service.automaticallyChecksForUpdates)
+    #expect(service.channel == .nightly)
     #expect(service.feedURL == URL(string: "https://dl.versioneer.app/appcast.xml"))
     #expect(service.lastUpdateCheckDate == Date(timeIntervalSince1970: 1_742_000_000))
   }
@@ -35,6 +37,19 @@ struct SelfUpdateServiceTests {
 
     #expect(client.automaticallyChecksForUpdates)
     #expect(service.automaticallyChecksForUpdates)
+  }
+
+  @Test func updatesChannelPreferenceThroughClient() {
+    let client = MockSelfUpdateClient(
+      canCheckForUpdates: true,
+      channel: .stable
+    )
+
+    let service = SelfUpdateService(client: client)
+    service.setChannel(.nightly)
+
+    #expect(client.channel == .nightly)
+    #expect(service.channel == .nightly)
   }
 
   @Test func checkForUpdatesRoutesToClientOnlyWhenAllowed() {
@@ -66,17 +81,20 @@ struct SelfUpdateServiceTests {
   @Test func reactsToClientStateChanges() {
     let client = MockSelfUpdateClient(
       canCheckForUpdates: true,
-      automaticallyChecksForUpdates: false
+      automaticallyChecksForUpdates: false,
+      channel: .stable
     )
     let service = SelfUpdateService(client: client)
 
     client.canCheckForUpdates = false
     client.automaticallyChecksForUpdates = true
+    client.channel = .nightly
     client.lastUpdateCheckDate = Date(timeIntervalSince1970: 1_743_000_000)
     client.pushChange()
 
     #expect(!service.canCheckForUpdates)
     #expect(service.automaticallyChecksForUpdates)
+    #expect(service.channel == .nightly)
     #expect(service.lastUpdateCheckDate == Date(timeIntervalSince1970: 1_743_000_000))
   }
 
@@ -94,6 +112,7 @@ struct SelfUpdateServiceTests {
 private final class MockSelfUpdateClient: SelfUpdateClient {
   var canCheckForUpdates: Bool
   var automaticallyChecksForUpdates: Bool
+  var channel: SelfUpdateChannel
   var feedURL: URL?
   var lastUpdateCheckDate: Date?
   var configurationIssue: String?
@@ -106,12 +125,14 @@ private final class MockSelfUpdateClient: SelfUpdateClient {
   init(
     canCheckForUpdates: Bool,
     automaticallyChecksForUpdates: Bool = true,
+    channel: SelfUpdateChannel = .stable,
     feedURL: URL? = nil,
     lastUpdateCheckDate: Date? = nil,
     configurationIssue: String? = nil,
   ) {
     self.canCheckForUpdates = canCheckForUpdates
     self.automaticallyChecksForUpdates = automaticallyChecksForUpdates
+    self.channel = channel
     self.feedURL = feedURL
     self.lastUpdateCheckDate = lastUpdateCheckDate
     self.configurationIssue = configurationIssue

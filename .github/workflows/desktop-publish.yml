@@ -33,17 +33,12 @@ on:
         type: string
         default: ""
       previous_tag:
-        description: Previous release tag for generated nightly notes.
+        description: Previous release tag for generated release notes.
         required: false
         type: string
         default: ""
       compare_range:
-        description: Git revision range for generated nightly notes.
-        required: false
-        type: string
-        default: ""
-      commit_label:
-        description: Human-readable commit label for generated nightly notes.
+        description: Git revision range for generated release notes.
         required: false
         type: string
         default: ""
@@ -105,7 +100,6 @@ jobs:
       BUILD_NUMBER: ${{ inputs.build_number }}
       PREVIOUS_TAG: ${{ inputs.previous_tag }}
       COMPARE_RANGE: ${{ inputs.compare_range }}
-      COMMIT_LABEL: ${{ inputs.commit_label }}
       PRERELEASE: ${{ inputs.prerelease }}
       MARK_LATEST: ${{ inputs.mark_latest }}
       GH_TOKEN: ${{ github.token }}
@@ -134,64 +128,43 @@ jobs:
           cache: true
           run-install: true
 
-      - name: Prepare stable release notes
-        if: ${{ inputs.channel == 'stable' }}
+      - name: Generate release notes
         run: |
           set -euo pipefail
 
-          if gh release view "$TAG_NAME" --json body --jq .body > "$RUNNER_TEMP/release-notes.md"; then
-            exit 0
+          release_paths=(
+            apps/desktop
+          )
+
+          previous_tag="$PREVIOUS_TAG"
+          compare_range="$COMPARE_RANGE"
+          changes_file="$RUNNER_TEMP/release-changes.md"
+
+          if [ -z "$previous_tag" ] && [ "$CHANNEL" = "stable" ]; then
+            previous_tag="$(
+              git tag -l 'v*' --sort=-version:refname | awk -v current="$TAG_NAME" '$0 != current { print; exit }'
+            )"
           fi
 
-          gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
-            -f tag_name="$TAG_NAME" \
-            -f target_commitish="$GITHUB_SHA" \
-            -f release_name="$RELEASE_TITLE" \
-            --jq .body > "$RUNNER_TEMP/release-notes.md"
+          if [ -z "$compare_range" ] && [ -n "$previous_tag" ]; then
+            compare_range="${previous_tag}..HEAD"
+          fi
 
-      - name: Render nightly release notes
-        if: ${{ inputs.channel == 'nightly' }}
-        run: |
-          set -euo pipefail
-
-          url_for() {
-            local path="$1"
-
-            if [ -n "$R2_PREFIX" ]; then
-              printf '%s/%s/%s' "$DOWNLOADS_HOST" "$R2_PREFIX" "$path"
-            else
-              printf '%s/%s' "$DOWNLOADS_HOST" "$path"
-            fi
-          }
-
-          display_commit="${COMMIT_LABEL:-$GITHUB_SHA}"
+          : > "$changes_file"
+          if [ -n "$compare_range" ]; then
+            git log --reverse --pretty='- %s (%h)' "$compare_range" -- "${release_paths[@]}" > "$changes_file"
+          fi
 
           {
-            echo "## Nightly build"
+            echo "## Changes"
             echo
-            echo "- Base version: ${VERSION}"
-            echo "- Build number: ${BUILD_NUMBER}"
-            echo "- Commit: \`${display_commit}\`"
-            echo "- Published: $(date -u '+%Y-%m-%d %H:%M UTC')"
-            if [ -n "$PREVIOUS_TAG" ]; then
-              echo "- Previous nightly: \`${PREVIOUS_TAG}\`"
-              echo "- Compare: [${PREVIOUS_TAG}...${display_commit}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${PREVIOUS_TAG}...${GITHUB_SHA})"
-            fi
-            echo
-            echo "## Downloads"
-            echo
-            echo "- Direct download: $(url_for "downloads/${ARCHIVE_STEM}.zip")"
-            echo "- Sparkle appcast: $(url_for "appcast.xml")"
-            echo "- Latest nightly alias: $(url_for "latest/Versioneer.zip")"
-            echo
-            if [ -n "$PREVIOUS_TAG" ]; then
-              echo "## Desktop changes since ${PREVIOUS_TAG}"
-              echo
-              git log --reverse --pretty='- %s (%h)' "$COMPARE_RANGE" -- apps/desktop
+
+            if [ -s "$changes_file" ]; then
+              cat "$changes_file"
+            elif [ -n "$previous_tag" ]; then
+              echo "- No desktop changes since ${previous_tag}."
             else
-              echo "## Desktop changes"
-              echo
-              echo "- First nightly release from the current history."
+              echo "- Initial desktop release."
             fi
           } > "$RUNNER_TEMP/release-notes.md"
 
@@ -265,6 +238,7 @@ jobs:
             ENABLE_USER_SCRIPT_SANDBOXING=NO \
             MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            VERSIONEER_RELEASE_TRACK="$CHANNEL" \
             SPARKLE_PUBLIC_ED_KEY="$SPARKLE_PUBLIC_ED_KEY" \
             POSTHOG_HOST="$POSTHOG_HOST" \
             POSTHOG_PROJECT_TOKEN="$POSTHOG_PROJECT_TOKEN"
@@ -429,11 +403,27 @@ jobs:
           download_url_prefix="$(url_for "downloads")"
           release_notes_url_prefix="$(url_for "release-notes")"
 
+          root_appcast_url="${DOWNLOADS_HOST}/appcast.xml"
+          if curl -fsSL "$root_appcast_url" -o "$ARCHIVES_DIR/appcast.xml"; then
+            echo "Downloaded existing appcast from ${root_appcast_url}"
+          else
+            echo "No existing appcast found at ${root_appcast_url}; generating a new feed."
+            rm -f "$ARCHIVES_DIR/appcast.xml"
+          fi
+
+          generate_appcast_args=(
+            --ed-key-file -
+            --download-url-prefix "${download_url_prefix}/"
+            --release-notes-url-prefix "${release_notes_url_prefix}/"
+            --link "https://versioneer.app"
+          )
+
+          if [ "$CHANNEL" = "nightly" ]; then
+            generate_appcast_args+=(--channel nightly)
+          fi
+
           printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$SPARKLE_BIN_DIR/generate_appcast" \
-            --ed-key-file - \
-            --download-url-prefix "${download_url_prefix}/" \
-            --release-notes-url-prefix "${release_notes_url_prefix}/" \
-            --link "https://versioneer.app" \
+            "${generate_appcast_args[@]}" \
             "$ARCHIVES_DIR"
 
           if [ "$CHANNEL" = "stable" ] && [ "$ARCHIVE_STEM" != "$VERSION" ]; then
@@ -477,7 +467,7 @@ jobs:
               --content-type "text/html; charset=utf-8"
           fi
 
-          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "appcast.xml")" \
+          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/appcast.xml" \
             --file "$ARCHIVES_DIR/appcast.xml" \
             --remote \
             --content-type "application/xml; charset=utf-8"

@@ -16,6 +16,8 @@
 	<string>https://dl.versioneer.app/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>$(SPARKLE_PUBLIC_ED_KEY)</string>
+	<key>VersioneerReleaseTrack</key>
+	<string>$(VERSIONEER_RELEASE_TRACK)</string>
 	<key>SUScheduledCheckInterval</key>
 	<integer>86400</integer>
 	<key>NSApplicationCrashOnExceptions</key>
