@@ -11,13 +11,13 @@ allowBuilds:
   workerd: true
 catalog:
   "@cloudflare/vitest-pool-workers": ^0.14.9
-  "@vitest/runner": npm:@voidzero-dev/vite-plus-test@latest
-  "@vitest/snapshot": npm:@voidzero-dev/vite-plus-test@latest
+  "@vitest/runner": npm:@voidzero-dev/vite-plus-test@0.1.20
+  "@vitest/snapshot": npm:@voidzero-dev/vite-plus-test@0.1.20
   drizzle-orm: ^0.45.2
   typescript: ^6.0.3
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: ^0.1.19
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite: npm:@voidzero-dev/vite-plus-core@0.1.20
+  vite-plus: 0.1.20
+  vitest: npm:@voidzero-dev/vite-plus-test@0.1.20
   wrangler: ^4.84.1
   zod: ^4.3.6
 overrides:

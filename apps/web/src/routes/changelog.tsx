@@ -1,8 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { ArrowUpRightIcon } from "lucide-react";
 import posthogClient from "posthog-js";
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { countNightlyReleases, filterChangelogReleases, isNightlyRelease } from "@/lib/changelog";
 import { fetchChangelogReleases, type ChangelogRelease } from "@/lib/releases";
 import { getPageSeoHead } from "@/lib/seo";
 
@@ -12,7 +15,15 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
 });
 
+const changelogSearchDefaults = {
+  nightly: false,
+} as const;
+
 export const Route = createFileRoute("/changelog")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    nightly: parseBooleanSearchParam(search.nightly),
+  }),
+  search: { middlewares: [stripSearchParams(changelogSearchDefaults)] },
   head: () =>
     getPageSeoHead({
       title: "Changelog | Versioneer",
@@ -38,32 +49,75 @@ export const Route = createFileRoute("/changelog")({
 });
 
 function ChangelogPage() {
+  const navigate = Route.useNavigate();
   const releases = Route.useLoaderData();
+  const { nightly } = Route.useSearch();
   const scrolledRef = useRef(false);
+  const nightlySwitchId = "show-nightly-releases";
+  const visibleReleases = filterChangelogReleases(releases, nightly);
+  const nightlyReleaseCount = countNightlyReleases(releases);
+  const onlyNightliesHidden = visibleReleases.length === 0 && nightlyReleaseCount > 0;
+
+  const setNightly = useEffectEvent((nextNightly: boolean) => {
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        nightly: nextNightly,
+      }),
+      replace: true,
+    });
+  });
 
   useEffect(() => {
     if (scrolledRef.current) return;
-    scrolledRef.current = true;
 
     const hash = window.location.hash.slice(1);
-    if (!hash) return;
+    if (!hash) {
+      scrolledRef.current = true;
+      return;
+    }
+
+    const targetRelease = releases.find((release) => release.tag_name === hash);
+    if (targetRelease && isNightlyRelease(targetRelease) && !nightly) {
+      setNightly(true);
+      return;
+    }
 
     const target = document.getElementById(hash);
     if (target) {
+      scrolledRef.current = true;
       target.scrollIntoView({ behavior: "smooth" });
+      return;
     }
-  }, []);
+
+    scrolledRef.current = true;
+  }, [releases, nightly]);
 
   return (
     <main className="space-y-4">
-      <h2 className="text-lg font-medium">Changelog</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-medium">Changelog</h2>
+        {nightlyReleaseCount > 0 ? (
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            <Switch id={nightlySwitchId} size="sm" checked={nightly} onCheckedChange={setNightly} />
+            <Label htmlFor={nightlySwitchId} className="cursor-pointer text-sm text-foreground/80">
+              Show nightly releases
+              <span className="text-muted-foreground">({nightlyReleaseCount})</span>
+            </Label>
+          </div>
+        ) : null}
+      </div>
 
-      {releases.length > 0 ? (
+      {visibleReleases.length > 0 ? (
         <div className="space-y-10">
-          {releases.map((release) => (
+          {visibleReleases.map((release) => (
             <ReleaseEntry key={release.tag_name} release={release} />
           ))}
         </div>
+      ) : onlyNightliesHidden ? (
+        <p className="text-sm text-muted-foreground">
+          Nightly releases are hidden. Use the switch above to show them.
+        </p>
       ) : (
         <p className="text-sm text-muted-foreground">No releases found.</p>
       )}
@@ -78,6 +132,10 @@ function ChangelogPendingPage() {
       <ChangelogSkeleton />
     </main>
   );
+}
+
+function parseBooleanSearchParam(value: unknown): boolean {
+  return value === true || value === "true" || value === "1";
 }
 
 function ReleaseEntry({ release }: { release: ChangelogRelease }) {

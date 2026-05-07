@@ -22,6 +22,7 @@ export function AppLayout() {
         <nav className="flex items-center gap-3.5 h-5">
           <Link
             to="/changelog"
+            search={{ nightly: false }}
             className="text-[13px] text-foreground/70 hover:text-foreground transition-colors"
           >
             Changelog
