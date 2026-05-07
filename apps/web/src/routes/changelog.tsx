@@ -1,8 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { ArrowUpRightIcon } from "lucide-react";
 import posthogClient from "posthog-js";
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { countNightlyReleases, filterChangelogReleases, isNightlyRelease } from "@/lib/changelog";
 import { fetchChangelogReleases, type ChangelogRelease } from "@/lib/releases";
 import { getPageSeoHead } from "@/lib/seo";
 
@@ -12,7 +15,15 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
 });
 
+const changelogSearchDefaults = {
+  nightly: false,
+} as const;
+
 export const Route = createFileRoute("/changelog")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    nightly: parseBooleanSearchParam(search.nightly),
+  }),
+  search: { middlewares: [stripSearchParams(changelogSearchDefaults)] },
   head: () =>
     getPageSeoHead({
       title: "Changelog | Versioneer",
@@ -38,29 +49,67 @@ export const Route = createFileRoute("/changelog")({
 });
 
 function ChangelogPage() {
+  const navigate = Route.useNavigate();
   const releases = Route.useLoaderData();
+  const { nightly } = Route.useSearch();
   const scrolledRef = useRef(false);
+  const nightlySwitchId = "show-nightly-releases";
+  const visibleReleases = filterChangelogReleases(releases, nightly);
+  const nightlyReleaseCount = countNightlyReleases(releases);
+
+  const setNightly = useEffectEvent((nextNightly: boolean) => {
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        nightly: nextNightly,
+      }),
+      replace: true,
+    });
+  });
 
   useEffect(() => {
     if (scrolledRef.current) return;
-    scrolledRef.current = true;
 
     const hash = window.location.hash.slice(1);
-    if (!hash) return;
+    if (!hash) {
+      scrolledRef.current = true;
+      return;
+    }
+
+    const targetRelease = releases.find((release) => release.tag_name === hash);
+    if (targetRelease && isNightlyRelease(targetRelease) && !nightly) {
+      setNightly(true);
+      return;
+    }
 
     const target = document.getElementById(hash);
     if (target) {
+      scrolledRef.current = true;
       target.scrollIntoView({ behavior: "smooth" });
+      return;
     }
-  }, []);
+
+    scrolledRef.current = true;
+  }, [releases, nightly]);
 
   return (
     <main className="space-y-4">
-      <h2 className="text-lg font-medium">Changelog</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-medium">Changelog</h2>
+        {nightlyReleaseCount > 0 ? (
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            <Switch id={nightlySwitchId} size="sm" checked={nightly} onCheckedChange={setNightly} />
+            <Label htmlFor={nightlySwitchId} className="cursor-pointer text-xs text-foreground/80">
+              Show pre-releases
+              <span className="text-foreground/60">({nightlyReleaseCount})</span>
+            </Label>
+          </div>
+        ) : null}
+      </div>
 
-      {releases.length > 0 ? (
+      {visibleReleases.length > 0 ? (
         <div className="space-y-10">
-          {releases.map((release) => (
+          {visibleReleases.map((release) => (
             <ReleaseEntry key={release.tag_name} release={release} />
           ))}
         </div>
@@ -80,6 +129,10 @@ function ChangelogPendingPage() {
   );
 }
 
+function parseBooleanSearchParam(value: unknown): boolean {
+  return value === true || value === "true" || value === "1";
+}
+
 function ReleaseEntry({ release }: { release: ChangelogRelease }) {
   const date = release.published_at ? new Date(release.published_at) : null;
 
@@ -97,8 +150,19 @@ function ReleaseEntry({ release }: { release: ChangelogRelease }) {
         </a>
         {release.prerelease && (
           <span className="text-[11px] leading-none font-medium px-1.5 py-0.5 rounded-full border border-foreground/15 text-muted-foreground">
-            pre-release
+            Pre-release
           </span>
+        )}
+      </div>
+
+      <div className="flex items-baseline gap-1 flex-wrap">
+        {date && (
+          <>
+            <time dateTime={release.published_at!} className="text-xs text-muted-foreground/80">
+              {dateFormatter.format(date)}
+            </time>
+            <span className="text-foreground/50 pointer-events-none">•</span>
+          </>
         )}
         <a
           href={release.html_url}
@@ -110,18 +174,12 @@ function ReleaseEntry({ release }: { release: ChangelogRelease }) {
               target_url: release.html_url,
             })
           }
-          className="text-muted-foreground/60 hover:text-muted-foreground text-xs inline-flex items-center gap-0.5"
+          className="text-muted-foreground/80 hover:text-muted-foreground text-xs inline-flex items-center gap-0.5"
         >
           GitHub
           <ArrowUpRightIcon className="size-3" />
         </a>
       </div>
-
-      {date && (
-        <time dateTime={release.published_at!} className="block text-xs text-muted-foreground/60">
-          {dateFormatter.format(date)}
-        </time>
-      )}
 
       {release.body_html && (
         <div
