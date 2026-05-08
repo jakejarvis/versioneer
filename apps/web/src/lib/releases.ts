@@ -1,18 +1,20 @@
+import { createServerFn } from "@tanstack/react-start";
+
+const GITHUB_RELEASES_URL =
+  "https://api.github.com/repos/jakejarvis/versioneer/releases?per_page=50";
 const DOWNLOADS_HOST = "https://dl.versioneer.app";
+const FETCH_TIMEOUT_MS = 10_000;
+const MAX_RELEASE_TEXT_LENGTH = 200_000;
+const RELEASE_TAG_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
+const GITHUB_RELEASE_URL_PREFIX = "https://github.com/jakejarvis/versioneer/releases/tag/";
 
 interface ReleaseDownloads {
   dmgUrl: string;
   zipUrl: string;
 }
 
-interface ReleaseDownloadInput {
-  prerelease: boolean;
-  tagName: string;
-}
-
 export interface Release {
   tag_name: string;
-  name: string | null;
   body_html: string | null;
   published_at: string | null;
   html_url: string;
@@ -20,63 +22,111 @@ export interface Release {
   prerelease: boolean;
 }
 
-interface FetchReleasesOptions {
-  signal?: AbortSignal;
-}
+export const getMarketingReleases = createServerFn({ method: "GET" }).handler(
+  async (): Promise<Release[]> => {
+    return fetchReleases();
+  },
+);
 
-export async function fetchReleases({ signal }: FetchReleasesOptions = {}): Promise<Release[]> {
-  const response = await fetch("/api/releases", { signal });
+async function fetchReleases(): Promise<Release[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch releases (${response.status})`);
-  }
+  try {
+    const response = await fetch(GITHUB_RELEASES_URL, {
+      headers: githubHeaders(),
+      signal: controller.signal,
+    });
 
-  return (await response.json()) as Release[];
-}
-
-export function getReleaseDownloads({
-  prerelease,
-  tagName,
-}: ReleaseDownloadInput): ReleaseDownloads | null {
-  if (tagName.startsWith("nightly-")) {
-    return immutableDownloadsFor(`nightly/downloads/Versioneer-${tagName}`);
-  }
-
-  if (!prerelease && tagName.startsWith("v")) {
-    const version = tagName.slice(1);
-    if (version.length > 0) {
-      return immutableDownloadsFor(`downloads/Versioneer-${version}`);
+    if (!response.ok) {
+      throw new Error(`GitHub releases request failed with ${response.status}`);
     }
+
+    return parseReleases(await response.json());
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function githubHeaders(): Headers {
+  const headers = new Headers({
+    Accept: "application/vnd.github.full+json",
+    "User-Agent": "versioneer-web",
+  });
+
+  if (process.env.GITHUB_TOKEN) {
+    headers.set("Authorization", `Bearer ${process.env.GITHUB_TOKEN}`);
+  }
+
+  return headers;
+}
+
+function parseReleases(payload: unknown): Release[] {
+  if (!Array.isArray(payload)) {
+    throw new Error("GitHub releases response was not an array");
+  }
+
+  return payload.flatMap((item) => {
+    const release = parseRelease(item);
+    return release ? [release] : [];
+  });
+}
+
+function parseRelease(item: unknown): Release | null {
+  if (!isRecord(item)) return null;
+  if (item.draft !== false) return null;
+  if (typeof item.prerelease !== "boolean") return null;
+  if (!isReleaseTag(item.tag_name)) return null;
+  if (!isReleaseUrl(item.html_url)) return null;
+
+  return {
+    tag_name: item.tag_name,
+    body_html: optionalText(item.body_html, MAX_RELEASE_TEXT_LENGTH),
+    published_at: optionalDate(item.published_at),
+    html_url: item.html_url,
+    downloads: releaseDownloads(item.tag_name, item.prerelease),
+    prerelease: item.prerelease,
+  };
+}
+
+function releaseDownloads(tag: string, prerelease: boolean): ReleaseDownloads | null {
+  if (tag.startsWith("nightly-")) {
+    return downloads(`nightly/downloads/Versioneer-${tag}`);
+  }
+
+  if (!prerelease && tag.startsWith("v")) {
+    return downloads(`downloads/Versioneer-${tag.slice(1)}`);
   }
 
   return null;
 }
 
-function immutableDownloadsFor(pathStem: string): ReleaseDownloads {
+function downloads(path: string): ReleaseDownloads {
   return {
-    dmgUrl: `${DOWNLOADS_HOST}/${pathStem}.dmg`,
-    zipUrl: `${DOWNLOADS_HOST}/${pathStem}.zip`,
+    dmgUrl: `${DOWNLOADS_HOST}/${path}.dmg`,
+    zipUrl: `${DOWNLOADS_HOST}/${path}.zip`,
   };
 }
 
-const NIGHTLY_RELEASE_PATTERN = /(?:^|[._-])(nightly|dev)(?:$|[._-]|\d)/i;
-
-type ReleaseIdentity = Pick<Release, "tag_name" | "name">;
-
-export function isNightlyRelease(release: ReleaseIdentity): boolean {
-  return looksNightly(release.tag_name) || looksNightly(release.name);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
-export function filterReleases(releases: Release[], nightly: boolean): Release[] {
-  if (nightly) return releases;
-  return releases.filter((release) => !isNightlyRelease(release));
+function isReleaseTag(value: unknown): value is string {
+  return typeof value === "string" && RELEASE_TAG_PATTERN.test(value);
 }
 
-export function countNightlyReleases(releases: Release[]): number {
-  return releases.filter(isNightlyRelease).length;
+function isReleaseUrl(value: unknown): value is string {
+  return typeof value === "string" && value.startsWith(GITHUB_RELEASE_URL_PREFIX);
 }
 
-function looksNightly(value: string | null): boolean {
-  if (!value) return false;
-  return NIGHTLY_RELEASE_PATTERN.test(value.trim().toLowerCase());
+function optionalText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null;
+  if (value.length === 0 || value.length > maxLength) return null;
+  return value;
+}
+
+function optionalDate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return Number.isNaN(Date.parse(value)) ? null : value;
 }

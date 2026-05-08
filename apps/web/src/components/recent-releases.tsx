@@ -1,4 +1,3 @@
-import posthogClient from "posthog-js";
 import { useEffect, useState } from "react";
 
 const API_BASE_URL = "https://api.versioneer.app";
@@ -92,9 +91,7 @@ export function RecentReleases() {
         setLoading(false);
       })
       .catch((catchError) => {
-        posthogClient.captureException(catchError, {
-          flow: "recent_releases",
-        });
+        console.error("Failed to fetch recent releases:", catchError);
         setError(true);
         setLoading(false);
       });

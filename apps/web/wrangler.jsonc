@@ -1,7 +1,51 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "versioneer-landing",
-  "pages_build_output_dir": "dist",
+  "main": "@tanstack/react-start/server-entry",
+
   "compatibility_date": "2026-04-22",
-  "upload_source_maps": true
+  "compatibility_flags": ["nodejs_compat"],
+  "upload_source_maps": true,
+
+  "vars": {
+    "ENVIRONMENT": "dev"
+  },
+
+  "env": {
+    "production": {
+      "secrets": {
+        "required": ["GITHUB_TOKEN"]
+      },
+      "routes": [
+        {
+          "pattern": "versioneer.app",
+          "zone_name": "versioneer.app",
+          "custom_domain": true
+        }
+      ],
+      "workers_dev": false,
+      "preview_urls": false,
+      "vars": {
+        "ENVIRONMENT": "production",
+        "VITE_PUBLIC_POSTHOG_HOST": "https://ingest.versioneer.app",
+        "VITE_PUBLIC_POSTHOG_PROJECT_TOKEN": "phc_sL3nPYKPeXY59UzA3CEJpSrNddaAGKf7nuV9iJoCfZjY"
+      },
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "logs": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "persist": true,
+          "invocation_logs": true,
+          "destinations": ["versioneer-posthog-logs"]
+        },
+        "traces": {
+          "enabled": true,
+          "persist": true,
+          "head_sampling_rate": 1
+        }
+      }
+    }
+  }
 }

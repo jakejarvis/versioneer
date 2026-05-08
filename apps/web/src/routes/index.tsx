@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import posthogClient from "posthog-js";
+import phClient from "posthog-js";
 
 import { RecentReleases } from "@/components/recent-releases";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getPageSeoHead } from "@/lib/seo";
+
+const DOWNLOAD_URL = "https://dl.versioneer.app/latest/Versioneer.zip";
 
 export const Route = createFileRoute("/")({
   head: () =>
@@ -32,8 +34,14 @@ function IndexPage() {
           <TooltipTrigger asChild>
             <Button className="cursor-wait rounded-full" size="lg" asChild>
               <a
-                // href="https://dl.versioneer.app/latest/Versioneer.zip"
-                onClick={() => posthogClient.capture("marketing_download_clicked")}
+                // href={DOWNLOAD_URL}
+                onClick={() =>
+                  phClient.capture("marketing_download_clicked", {
+                    artifact_type: "zip",
+                    target_id: "latest",
+                    target_url: DOWNLOAD_URL,
+                  })
+                }
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"

@@ -1,36 +1,31 @@
-import posthog from "@posthog/rollup-plugin";
+import { cloudflare } from "@cloudflare/vite-plugin";
 import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
-import { tanstackRouter } from "@tanstack/router-plugin/vite";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
-import { defineConfig } from "vite-plus";
+import { defineConfig, lazyPlugins } from "vite-plus";
 
 export default defineConfig({
   plugins: [
-    tanstackRouter({
-      target: "react",
-      autoCodeSplitting: true,
-    }),
+    process.env.VITEST !== "true"
+      ? lazyPlugins(() => [
+          cloudflare({
+            viteEnvironment: { name: "ssr" },
+            inspectorPort: 9235,
+            persistState: { path: "../../.wrangler/state" },
+          }),
+          tanstackStart({
+            prerender: {
+              enabled: true,
+            },
+          }),
+        ])
+      : [],
     react(),
     tailwindcss(),
     babel({
       presets: [reactCompilerPreset()],
     }),
-    process.env.NODE_ENV === "production" &&
-    process.env.POSTHOG_API_KEY &&
-    process.env.POSTHOG_PROJECT_ID
-      ? posthog({
-          personalApiKey: process.env.POSTHOG_API_KEY,
-          projectId: process.env.POSTHOG_PROJECT_ID,
-          host: process.env.POSTHOG_HOST || "https://us.i.posthog.com",
-          sourcemaps: {
-            enabled: true,
-            releaseName: "@versioneer/web",
-            releaseVersion: process.env.GITHUB_SHA,
-            deleteAfterUpload: false,
-          },
-        })
-      : [],
   ],
   build: {
     sourcemap: true,
