@@ -361,10 +361,11 @@ jobs:
             --identifier "$DMG_SIGNING_IDENTIFIER" \
             "$ARCHIVE_DMG_PATH"
           codesign --verify --verbose=2 "$ARCHIVE_DMG_PATH"
-          spctl -a -t open --context context:primary-signature -v "$ARCHIVE_DMG_PATH"
 
           notarize_distribution "$ARCHIVE_DMG_PATH"
           xcrun stapler staple "$ARCHIVE_DMG_PATH"
+          xcrun stapler validate "$ARCHIVE_DMG_PATH"
+          spctl -a -t open --context context:primary-signature -v "$ARCHIVE_DMG_PATH"
 
           {
             echo "ARCHIVES_DIR=$ARCHIVES_DIR"
