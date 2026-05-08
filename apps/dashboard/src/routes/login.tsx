@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
-import { captureDashboardEvent, captureDashboardException } from "@/lib/posthog";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -20,18 +19,12 @@ function LoginPage() {
         size="lg"
         onClick={async () => {
           setIsLoading(true);
-          captureDashboardEvent("admin_sign_in_started", { provider: "github" });
           await authClient.signIn
             .social({
               provider: "github",
               callbackURL: "/",
             })
-            .catch((error) => {
-              captureDashboardException(error, {
-                flow: "github_oauth_login",
-                provider: "github",
-              });
-              captureDashboardEvent("admin_sign_in_failed", { provider: "github" });
+            .catch(() => {
               toast.error("GitHub OAuth failed");
             })
             .finally(() => {

@@ -28,12 +28,3 @@ export type SourcePipelineWorkflow = Workflow<SourceFetchJob>;
  * Typed Workflow binding for the enrichment drain workflow.
  */
 export type EnrichmentDrainWorkflow = Workflow<EnrichmentDrainJob>;
-
-interface ImportMetaEnv {
-  readonly VITE_PUBLIC_POSTHOG_PROJECT_TOKEN?: string;
-  readonly VITE_PUBLIC_POSTHOG_HOST?: string;
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
-}

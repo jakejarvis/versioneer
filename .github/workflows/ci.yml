@@ -81,11 +81,6 @@ jobs:
         run: vp run --filter @versioneer/dashboard build
         env:
           CLOUDFLARE_ENV: production
-          VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ vars.POSTHOG_PROJECT_TOKEN }}
-          VITE_PUBLIC_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
-          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-          POSTHOG_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID }}
-          POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
 
       - name: Deploy dashboard
         uses: cloudflare/wrangler-action@v3
@@ -99,6 +94,7 @@ jobs:
         run: vp run --filter @versioneer/web build
         env:
           CLOUDFLARE_ENV: production
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ vars.POSTHOG_PROJECT_TOKEN }}
           VITE_PUBLIC_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
 

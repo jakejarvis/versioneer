@@ -14,7 +14,6 @@
     "@dnd-kit/react": "^0.4.0",
     "@fontsource-variable/geist": "catalog:",
     "@fontsource-variable/geist-mono": "catalog:",
-    "@posthog/react": "catalog:",
     "@tanstack/react-form": "^1.29.1",
     "@tanstack/react-query": "^5.100.9",
     "@tanstack/react-router": "catalog:",
@@ -30,7 +29,6 @@
     "date-fns": "^4.1.0",
     "drizzle-orm": "catalog:",
     "lucide-react": "catalog:",
-    "posthog-js": "catalog:",
     "radix-ui": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
@@ -43,7 +41,6 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "catalog:",
-    "@posthog/rollup-plugin": "^1.4.3",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query-devtools": "^5.100.9",
     "@tanstack/react-router-devtools": "^1.166.13",

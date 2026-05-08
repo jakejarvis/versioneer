@@ -68,8 +68,7 @@
           "GITHUB_OAUTH_CLIENT_ID",
           "GITHUB_OAUTH_CLIENT_SECRET",
           "ALLOWED_ADMIN_EMAILS",
-          "GITHUB_TOKEN",
-          "POSTHOG_PROJECT_TOKEN"
+          "GITHUB_TOKEN"
         ]
       },
       "routes": [
@@ -83,8 +82,7 @@
       "preview_urls": false,
       "vars": {
         "ENVIRONMENT": "production",
-        "ASSETS_BASE_URL": "https://assets-prod.versioneer.app",
-        "POSTHOG_HOST": "https://us.i.posthog.com"
+        "ASSETS_BASE_URL": "https://assets-prod.versioneer.app"
       },
       "kv_namespaces": [
         {
@@ -136,8 +134,7 @@
           "enabled": true,
           "head_sampling_rate": 1,
           "persist": true,
-          "invocation_logs": true,
-          "destinations": ["versioneer-posthog-logs"]
+          "invocation_logs": true
         },
         "traces": {
           "enabled": true,

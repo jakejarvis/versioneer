@@ -20,7 +20,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { useStats } from "@/hooks/use-stats";
 import { authClient } from "@/lib/auth-client";
 import { navItems } from "@/lib/constants";
-import { captureDashboardEvent, resetDashboardPostHog } from "@/lib/posthog";
 
 import { Button } from "../ui/button";
 
@@ -93,11 +92,7 @@ export function AppSidebar() {
               size="icon-sm"
               className="hover:text-destructive-foreground"
               onClick={async () => {
-                captureDashboardEvent("admin_signed_out", {
-                  actor_id: user?.id,
-                });
                 await authClient.signOut();
-                resetDashboardPostHog();
                 await navigate({ to: "/login" });
               }}
             >

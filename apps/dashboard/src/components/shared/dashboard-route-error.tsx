@@ -1,9 +1,7 @@
 import { AlertTriangle, Home, RotateCcw } from "lucide-react";
-import { useEffect } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { captureDashboardException } from "@/lib/posthog";
 
 function errorMessage(error: unknown) {
   if (error instanceof Response) return `${error.status} ${error.statusText}`.trim();
@@ -12,13 +10,6 @@ function errorMessage(error: unknown) {
 }
 
 export function DashboardRouteError({ error, reset }: { error: unknown; reset?: () => void }) {
-  useEffect(() => {
-    captureDashboardException(error, {
-      component: "dashboard_route_error",
-      status: error instanceof Response ? error.status : undefined,
-    });
-  }, [error]);
-
   return (
     <div className="mx-auto flex min-h-[50vh] max-w-2xl flex-col justify-center gap-4">
       <Alert variant="destructive">

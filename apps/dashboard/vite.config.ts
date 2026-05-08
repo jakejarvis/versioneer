@@ -1,5 +1,4 @@
 import { cloudflare } from "@cloudflare/vite-plugin";
-import posthog from "@posthog/rollup-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
@@ -20,21 +19,6 @@ export default defineConfig({
       : [],
     react(),
     tailwindcss(),
-    process.env.NODE_ENV === "production" &&
-    process.env.POSTHOG_API_KEY &&
-    process.env.POSTHOG_PROJECT_ID
-      ? posthog({
-          personalApiKey: process.env.POSTHOG_API_KEY,
-          projectId: process.env.POSTHOG_PROJECT_ID,
-          host: process.env.POSTHOG_HOST || "https://us.i.posthog.com",
-          sourcemaps: {
-            enabled: true,
-            releaseName: "@versioneer/dashboard",
-            releaseVersion: process.env.GITHUB_SHA,
-            deleteAfterUpload: false,
-          },
-        })
-      : [],
   ],
   build: {
     sourcemap: true,
