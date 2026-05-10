@@ -27,10 +27,6 @@ on:
         description: Filename stem for downloadable artifacts.
         required: true
         type: string
-      release_notes_stem:
-        description: Filename stem for release notes HTML.
-        required: true
-        type: string
       r2_prefix:
         description: Optional R2 prefix for channel-specific artifacts.
         required: false
@@ -98,7 +94,6 @@ jobs:
       DOWNLOADS_HOST: https://dl.versioneer.app
       R2_PREFIX: ${{ inputs.r2_prefix }}
       ARCHIVE_STEM: ${{ inputs.archive_stem }}
-      RELEASE_NOTES_STEM: ${{ inputs.release_notes_stem }}
       TAG_NAME: ${{ inputs.tag_name }}
       RELEASE_TITLE: ${{ inputs.release_title }}
       VERSION: ${{ inputs.version }}
@@ -378,7 +373,7 @@ jobs:
           set -euo pipefail
           BODY_HTML=$(npx --yes marked < "$RUNNER_TEMP/release-notes.md")
 
-          cat > "$ARCHIVES_DIR/${RELEASE_NOTES_STEM}.html" <<HTMLEOF
+          cat > "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" <<HTMLEOF
           <!doctype html>
           <html lang="en">
           <head>
@@ -426,11 +421,6 @@ jobs:
             echo "Could not locate Sparkle generate_appcast." >&2
             exit 1
           fi
-          SPARKLE_BIN_DIR="$(dirname "$GENERATE_APPCAST_PATH")"
-          if [ ! -x "$SPARKLE_BIN_DIR/sign_update" ]; then
-            echo "Could not locate Sparkle sign_update." >&2
-            exit 1
-          fi
 
           url_for() {
             local path="$1"
@@ -464,14 +454,9 @@ jobs:
             generate_appcast_args+=(--channel nightly)
           fi
 
-          printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$SPARKLE_BIN_DIR/generate_appcast" \
+          printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$GENERATE_APPCAST_PATH" \
             "${generate_appcast_args[@]}" \
             "$ARCHIVES_DIR"
-
-          if [ "$ARCHIVE_STEM" != "$RELEASE_NOTES_STEM" ]; then
-            perl -0pi -e 's/\Q'"$release_notes_url_prefix/$ARCHIVE_STEM.html"'\E/'"$release_notes_url_prefix/$RELEASE_NOTES_STEM.html"'/g' "$ARCHIVES_DIR/appcast.xml"
-            printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$SPARKLE_BIN_DIR/sign_update" --ed-key-file - "$ARCHIVES_DIR/appcast.xml"
-          fi
 
       - name: Upload release artifacts to R2
         env:
@@ -501,8 +486,8 @@ jobs:
             --remote \
             --content-type application/x-apple-diskimage
 
-          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "release-notes/${RELEASE_NOTES_STEM}.html")" \
-            --file "$ARCHIVES_DIR/${RELEASE_NOTES_STEM}.html" \
+          "${WRANGLER[@]}" r2 object put "$DOWNLOADS_BUCKET/$(object_key "release-notes/${ARCHIVE_STEM}.html")" \
+            --file "$ARCHIVES_DIR/${ARCHIVE_STEM}.html" \
             --remote \
             --content-type "text/html; charset=utf-8"
 

@@ -39,7 +39,6 @@ jobs:
       tag_name: v${{ inputs.version }}
       release_title: v${{ inputs.version }}
       archive_stem: Versioneer-${{ inputs.version }}
-      release_notes_stem: ${{ inputs.version }}
       mark_latest: true
       upload_github_asset: true
     secrets: inherit
