@@ -22,7 +22,7 @@
     "@versioneer/core": "workspace:*",
     "@versioneer/db": "workspace:*",
     "@versioneer/schemas": "workspace:*",
-    "better-auth": "^1.6.9",
+    "better-auth": "^1.6.10",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "cmdk": "^1.1.1",
