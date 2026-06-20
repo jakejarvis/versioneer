@@ -118,7 +118,7 @@ jobs:
       POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_CLI_PROJECT_ID || secrets.POSTHOG_CLI_PROJECT_ID }}
       POSTHOG_CLI_HOST: ${{ vars.POSTHOG_CLI_HOST }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
