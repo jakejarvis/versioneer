@@ -26,7 +26,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "cmdk": "^1.1.1",
-    "date-fns": "^4.1.0",
+    "date-fns": "^4.4.0",
     "drizzle-orm": "catalog:",
     "lucide-react": "catalog:",
     "radix-ui": "catalog:",
