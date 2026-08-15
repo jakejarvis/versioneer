@@ -29,7 +29,7 @@ catalog:
   drizzle-orm: ^0.45.2
   lucide-react: ^1.14.0
   posthog-js: ^1.372.10
-  radix-ui: ^1.4.3
+  radix-ui: ^1.6.7
   react: ^19.2.6
   react-dom: ^19.2.6
   shadcn: ^4.7.0
