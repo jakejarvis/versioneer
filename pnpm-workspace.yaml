@@ -22,7 +22,7 @@ catalog:
   "@types/react": ^19.2.14
   "@types/react-dom": ^19.2.3
   "@vitejs/plugin-react": ^6.0.1
-  "@vitest/runner": npm:@voidzero-dev/vite-plus-test@0.1.20
+  "@vitest/runner": npm:@voidzero-dev/vite-plus-test@0.1.24
   "@vitest/snapshot": npm:@voidzero-dev/vite-plus-test@0.1.20
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
