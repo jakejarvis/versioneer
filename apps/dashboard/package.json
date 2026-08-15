@@ -11,7 +11,7 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "@dnd-kit/react": "^0.4.0",
+    "@dnd-kit/react": "^0.5.0",
     "@fontsource-variable/geist": "catalog:",
     "@fontsource-variable/geist-mono": "catalog:",
     "@tanstack/react-form": "^1.29.1",
