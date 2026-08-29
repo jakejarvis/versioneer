@@ -36,7 +36,7 @@ catalog:
   tailwind-merge: ^3.5.0
   tailwindcss: ^4.2.4
   typescript: ^6.0.3
-  vite: npm:@voidzero-dev/vite-plus-core@0.1.20
+  vite: npm:@voidzero-dev/vite-plus-core@0.3.0
   vite-plus: 0.1.20
   vitest: npm:@voidzero-dev/vite-plus-test@0.1.20
   wrangler: ^4.90.0
