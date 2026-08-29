@@ -46,7 +46,7 @@
     "@tanstack/react-router-devtools": "^1.166.13",
     "@tanstack/router-plugin": "catalog:",
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@versioneer/tsconfig": "workspace:*",
