@@ -15,7 +15,7 @@
     "@fontsource-variable/geist": "catalog:",
     "@fontsource-variable/geist-mono": "catalog:",
     "@tanstack/react-form": "^1.29.1",
-    "@tanstack/react-query": "^5.100.9",
+    "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-start": "catalog:",
     "@tanstack/react-table": "^8.21.3",
@@ -42,7 +42,7 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "catalog:",
     "@tailwindcss/vite": "catalog:",
-    "@tanstack/react-query-devtools": "^5.100.9",
+    "@tanstack/react-query-devtools": "^5.102.8",
     "@tanstack/react-router-devtools": "^1.166.13",
     "@tanstack/router-plugin": "catalog:",
     "@testing-library/jest-dom": "^6.9.1",
