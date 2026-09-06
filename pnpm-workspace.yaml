@@ -10,7 +10,7 @@ allowBuilds:
   sharp: true
   workerd: true
 catalog:
-  "@cloudflare/vite-plugin": ^1.36.3
+  "@cloudflare/vite-plugin": ^1.54.4
   "@cloudflare/vitest-pool-workers": ^0.16.3
   "@fontsource-variable/geist": ^5.2.8
   "@fontsource-variable/geist-mono": ^5.2.7
