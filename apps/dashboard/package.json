@@ -51,7 +51,7 @@
     "@types/react-dom": "catalog:",
     "@versioneer/tsconfig": "workspace:*",
     "@vitejs/plugin-react": "catalog:",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
