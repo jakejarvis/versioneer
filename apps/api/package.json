@@ -9,7 +9,7 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "@hono/zod-validator": "^0.7.6",
+    "@hono/zod-validator": "^0.9.1",
     "@versioneer/core": "workspace:*",
     "@versioneer/db": "workspace:*",
     "@versioneer/schemas": "workspace:*",
