@@ -36,7 +36,7 @@
     "remark-rehype": "^11.1.2",
     "remark-stringify": "^11.0.0",
     "unified": "^11.0.5",
-    "xpath": "^0.0.34",
+    "xpath": "^0.0.35",
     "zod": "catalog:"
   },
   "devDependencies": {
