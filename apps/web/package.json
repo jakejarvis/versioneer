@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "catalog:",
-    "@rolldown/plugin-babel": "^0.2.3",
+    "@rolldown/plugin-babel": "^0.2.4",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/router-plugin": "catalog:",
     "@types/react": "catalog:",
